@@ -14,6 +14,7 @@
 
 /* Begin PBXFileReference section */
 		52C204512FD4A782002077BC /* Brightglow.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Brightglow.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		52C209A12FE00000002077BC /* Secrets.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Secrets.xcconfig; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
@@ -41,6 +42,7 @@
 		52C204482FD4A782002077BC = {
 			isa = PBXGroup;
 			children = (
+				52C209A12FE00000002077BC /* Secrets.xcconfig */,
 				52C204532FD4A782002077BC /* Brightglow */,
 				52C208822FDF8FF9002077BC /* Frameworks */,
 				52C204522FD4A782002077BC /* Products */,
@@ -265,6 +267,7 @@
 		};
 		52C2045D2FD4A783002077BC /* Debug */ = {
 			isa = XCBuildConfiguration;
+			baseConfigurationReference = 52C209A12FE00000002077BC /* Secrets.xcconfig */;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
@@ -310,6 +313,7 @@
 		};
 		52C2045E2FD4A783002077BC /* Release */ = {
 			isa = XCBuildConfiguration;
+			baseConfigurationReference = 52C209A12FE00000002077BC /* Secrets.xcconfig */;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
