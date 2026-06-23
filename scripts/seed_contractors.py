@@ -4,10 +4,12 @@ Seed script: fetches real contractor data from Google Places API
 and writes FIXR/Models/MockData.swift
 """
 
-import requests, json, time, re, sys
+import requests, json, time, re, sys, os
 from datetime import datetime
 
-API_KEY = "PLACES_API_KEY_REMOVED"
+API_KEY = os.environ.get("PLACES_API_KEY", "")
+if not API_KEY:
+    sys.exit("Set PLACES_API_KEY env var, e.g.  PLACES_API_KEY=xxx python3 scripts/seed_contractors.py")
 CITY    = "San Francisco"
 MAX_PER_CATEGORY = 10
 MAX_PHOTOS       = 4

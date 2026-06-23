@@ -52,7 +52,7 @@ struct CategoryCard: View {
                 }
                 .clipShape(RoundedRectangle(cornerRadius: 32))
             }
-            .frame(height: 242)
+            .frame(height: 240)
         }
         .buttonStyle(PressedButtonStyle())
     }

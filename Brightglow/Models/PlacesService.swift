@@ -9,10 +9,10 @@ import CoreLocation
 /// call behind a backend proxy that holds the key and forwards the query.
 enum PlacesService {
 
-    /// Reads `PLACES_API_KEY` from Info.plist, else the seed-script fallback.
+    /// Reads `PLACES_API_KEY` from Info.plist (injected from the untracked
+    /// Secrets.xcconfig at build time). Empty when not configured.
     private static let apiKey: String =
-        (Bundle.main.object(forInfoDictionaryKey: "PLACES_API_KEY") as? String)
-        ?? "PLACES_API_KEY_REMOVED"
+        (Bundle.main.object(forInfoDictionaryKey: "PLACES_API_KEY") as? String) ?? ""
 
     private static let searchRadius: Double = 40_000   // metres (~25 mi)
     private static let responseTimes: [ResponseTime] = [.fast, .normal, .slow]

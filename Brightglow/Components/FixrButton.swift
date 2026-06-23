@@ -30,7 +30,7 @@ struct FixrButton: View {
                 }
             }
             .frame(maxWidth: .infinity)
-            .frame(height: 54)
+            .frame(height: 56)
         }
         .disabled(loading)
     }

@@ -95,7 +95,7 @@ struct LoginView: View {
     // MARK: - Email field
 
     private var emailField: some View {
-        HStack(spacing: 10) {
+        HStack(spacing: 8) {
             TextField("", text: $email, prompt:
                 Text("Email").foregroundStyle(.white.opacity(0.5))
             )
@@ -167,7 +167,7 @@ struct LoginView: View {
                 onRequest: auth.configureAppleRequest,
                 onCompletion: auth.handleApple)
                 .signInWithAppleButtonStyle(.black)
-                .frame(height: 54)
+                .frame(height: 56)
                 .clipShape(RoundedRectangle(cornerRadius: 32))
                 .opacity(0.011)
 
@@ -178,7 +178,7 @@ struct LoginView: View {
             }, label: "Continue with Apple")
             .allowsHitTesting(false)
         }
-        .frame(height: 54)
+        .frame(height: 56)
     }
 
     private var googleButton: some View {
@@ -191,19 +191,19 @@ struct LoginView: View {
             }, label: "Continue with Google")
         }
         .buttonStyle(.textAction)
-        .frame(height: 54)
+        .frame(height: 56)
     }
 
     @ViewBuilder
     private func frostedButton<I: View>(icon: () -> I, label: String) -> some View {
-        HStack(spacing: 10) {
+        HStack(spacing: 8) {
             icon()
             Text(label)
                 .font(.h3)
                 .foregroundStyle(.white)
         }
         .frame(maxWidth: .infinity)
-        .frame(height: 54)
+        .frame(height: 56)
         .background {
             ZStack {
                 Color.clear.background(.ultraThinMaterial)

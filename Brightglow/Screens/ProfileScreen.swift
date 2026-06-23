@@ -58,7 +58,7 @@ struct ProfileScreen: View {
                         .font(.h3)
                         .foregroundStyle(.white)
                         .frame(maxWidth: .infinity)
-                        .frame(height: 54)
+                        .frame(height: 56)
                 }
                 .buttonStyle(.frosted)
                 .padding(.horizontal, 16)

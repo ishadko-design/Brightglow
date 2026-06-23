@@ -115,7 +115,7 @@ struct SwipeScreen: View {
                 }
                 .buttonStyle(.plain)
 
-                VStack(alignment: .leading, spacing: 2) {
+                VStack(alignment: .leading, spacing: 4) {
                     Text(headerTitle)
                         .font(.h2)
                         .foregroundStyle(.white)
@@ -135,18 +135,9 @@ struct SwipeScreen: View {
                         withAnimation(.easeInOut(duration: 0.2)) { sentToAll = true }
                     } label: {
                         Text(sentToAll ? "Sent ✓" : "Send to all")
-                            .font(.bodySmall)
-                            .foregroundStyle(.white)
-                            .padding(.horizontal, 18)
+                            .font(.h3)
+                            .foregroundStyle(AppColors.ctaBlue)
                             .frame(height: 36)
-                            .background {
-                                ZStack {
-                                    Color.clear.background(.ultraThinMaterial)
-                                    Color.white.opacity(sentToAll ? 0.32 : 0.16)
-                                }
-                            }
-                            .clipShape(Capsule())
-                            .overlay(Capsule().stroke(Color.white.opacity(0.18), lineWidth: 1))
                     }
                     .buttonStyle(.plain)
                 }
@@ -187,18 +178,20 @@ struct SwipeScreen: View {
                             onSkip: skipTop,
                             onQuote: quoteTop
                         )
-                        .zIndex(Double(i))
-                        .scaleEffect(1.0 - CGFloat(depth) * 0.05, anchor: .top)
-                        // Each card peeks only 8px above the one in front.
-                        .offset(y: CGFloat(-depth) * 8)
                         // Cards behind the top one get a black overlay: 60% each,
                         // and 80% for the last (back-most) card in the stack.
+                        // Applied before the geometric transforms so it moves with
+                        // the card (incl. the 8px peek), rather than staying put.
                         .overlay(
                             depth > 0
                                 ? RoundedRectangle(cornerRadius: 32, style: .continuous)
                                     .fill(Color.black.opacity(i == 0 ? 0.8 : 0.6))
                                 : nil
                         )
+                        .zIndex(Double(i))
+                        .scaleEffect(1.0 - CGFloat(depth) * 0.05, anchor: .top)
+                        // Each card peeks only 8px above the one in front.
+                        .offset(y: CGFloat(-depth) * 8)
                     }
                 }
             }
@@ -255,7 +248,8 @@ struct ContractorCardView: View {
             // The frosted footer panel begins here and scrolls up over the image.
             let imagePeek = cardH * 0.60
             // Height of the pinned frosted buttons bar at the bottom of the card.
-            let buttonBarH: CGFloat = 86
+            // 48pt buttons + 12pt top/bottom padding = 72 (4px grid).
+            let buttonBarH: CGFloat = 72
             // As the user scrolls up, the frosted glass spreads to cover the whole
             // card: 0 at rest → 1 once scrolled roughly past the image area.
             let coverProgress = min(1, max(0, scrollOffset / (imagePeek * 0.85)))
@@ -321,12 +315,13 @@ struct ContractorCardView: View {
                                         ForEach(photos.indices, id: \.self) { i in
                                             Circle()
                                                 .fill(i == photoIndex
-                                                      ? Color(hex: "#D9D9D9")
-                                                      : Color(hex: "#D9D9D9").opacity(0.2))
+                                                      ? AppColors.dotActive
+                                                      : AppColors.dotInactive)
                                                 .frame(width: 8, height: 8)
                                                 .animation(.easeInOut(duration: 0.2), value: photoIndex)
                                         }
                                     }
+                                    .frame(maxWidth: .infinity, alignment: .center)
                                     .padding(.bottom, 4)
                                 }
 
@@ -360,33 +355,41 @@ struct ContractorCardView: View {
                             .frame(maxWidth: .infinity, alignment: .leading)
                             .padding(.horizontal, 16)
                             .padding(.top, 28)
-                            .padding(.bottom, 4)
+                            .padding(.bottom, 0)
 
-                            // Reviews (up to 10)
+                            // Reviews (up to 10) — 4px below the info block.
                             VStack(spacing: 0) {
                                 ForEach(reviews) { review in
                                     ReviewRow(review: review)
                                 }
                             }
-                            .padding(.top, 8)
+                            .padding(.top, 4)
 
                             // Clear the pinned buttons bar so the last review is reachable.
                             Color.clear.frame(height: buttonBarH + 12)
                         }
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .background {
-                            // Rest-state footer glass, masked to fade in over the
-                            // first ~90pt. Fades out as the full-card cover takes
-                            // over on scroll, so the final frost stays uniform.
+                            // Rest-state footer glass, masked with a tall eased fade
+                            // so the frost blends smoothly out of the photo instead of
+                            // ending on a hard edge. Fades out as the full-card cover
+                            // takes over on scroll, so the final frost stays uniform.
                             ZStack {
                                 Rectangle().fill(.ultraThinMaterial)
                                 AppColors.bg.opacity(0.45)
                             }
                             .mask(
                                 VStack(spacing: 0) {
-                                    LinearGradient(colors: [.clear, .black],
-                                                   startPoint: .top, endPoint: .bottom)
-                                        .frame(height: 90)
+                                    LinearGradient(
+                                        stops: [
+                                            .init(color: .clear, location: 0.0),
+                                            .init(color: .black.opacity(0.15), location: 0.4),
+                                            .init(color: .black.opacity(0.6), location: 0.7),
+                                            .init(color: .black, location: 1.0)
+                                        ],
+                                        startPoint: .top, endPoint: .bottom
+                                    )
+                                    .frame(height: 160)
                                     Color.black
                                 }
                             )
@@ -410,7 +413,7 @@ struct ContractorCardView: View {
 
                 // ── 4. Buttons — pinned to the card bottom, above everything,
                 //     on their own frosted-glass bar. Comments scroll beneath. ──
-                let gap:   CGFloat = 14
+                let gap:   CGFloat = 10
                 let availW         = cardW - 32
                 let skipW          = (availW - gap) * (131.0 / 323.0)
                 let quoteW         = (availW - gap) * (192.0 / 323.0)
@@ -420,7 +423,7 @@ struct ContractorCardView: View {
                         Text("Skip")
                             .font(.h3)
                             .foregroundStyle(.white)
-                            .frame(width: skipW, height: 54)
+                            .frame(width: skipW, height: 48)
                     }
                     .buttonStyle(.frosted)
 
@@ -428,13 +431,13 @@ struct ContractorCardView: View {
                         Text("Request quote")
                             .font(.h3)
                             .foregroundStyle(.white)
-                            .frame(width: quoteW, height: 54)
+                            .frame(width: quoteW, height: 48)
                     }
                     .buttonStyle(.gradient)
                 }
                 .padding(.horizontal, 16)
-                .padding(.top, 16)
-                .padding(.bottom, 16)
+                .padding(.top, 12)
+                .padding(.bottom, 12)
                 .frame(width: cardW, height: buttonBarH, alignment: .top)
                 .frame(maxHeight: .infinity, alignment: .bottom)
                 .background(alignment: .bottom) {
@@ -527,10 +530,10 @@ private struct ReviewRow: View {
                     initialsCircle
                 }
             }
-            .frame(width: 34, height: 34)
+            .frame(width: 32, height: 32)
             .clipShape(Circle())
 
-            VStack(alignment: .leading, spacing: 6) {
+            VStack(alignment: .leading, spacing: 8) {
                 // Same size as the review body (14), semi-bold.
                 Text(review.author)
                     .font(.system(size: 14, weight: .semibold))
@@ -539,14 +542,14 @@ private struct ReviewRow: View {
                 Text(review.text)
                     .font(.bodySmall)
                     .foregroundStyle(.white.opacity(0.7))
-                    .lineSpacing(3)
+                    .lineSpacing(4)
                     .fixedSize(horizontal: false, vertical: true)
 
-                HStack(spacing: 3) {
+                HStack(spacing: 4) {
                     ForEach(0..<5) { i in
                         Image(systemName: i < review.rating ? "star.fill" : "star")
                             .resizable()
-                            .frame(width: 11, height: 11)
+                            .frame(width: 12, height: 12)
                             .foregroundStyle(i < review.rating ? AppColors.starFilled : AppColors.starEmpty)
                     }
                 }
@@ -555,7 +558,7 @@ private struct ReviewRow: View {
             Spacer(minLength: 0)
         }
         .padding(.horizontal, 16)
-        .padding(.vertical, 14)
+        .padding(.vertical, 12)
     }
 
     private var initialsCircle: some View {

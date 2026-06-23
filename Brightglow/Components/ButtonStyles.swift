@@ -6,7 +6,7 @@ import SwiftUI
 // Usage:
 //   Button { ... } label: {
 //       Text("Label").font(.h3).foregroundStyle(.white)
-//           .frame(maxWidth: .infinity).frame(height: 54)
+//           .frame(maxWidth: .infinity).frame(height: 56)
 //   }
 //   .buttonStyle(.gradient)          // primary action
 //   .buttonStyle(.frosted)           // secondary action

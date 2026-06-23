@@ -76,7 +76,7 @@ struct DrawModeView: View {
                     // Back + Profile — explicitly below the status bar
                     HStack {
                         Button(action: onBack) {
-                            HStack(spacing: 5) {
+                            HStack(spacing: 4) {
                                 Image(systemName: "chevron.left")
                                     .font(.system(size: 17, weight: .semibold))
                                 Text("Back")
@@ -94,15 +94,15 @@ struct DrawModeView: View {
                                     paths.removeLast()
                                 }
                             } label: {
-                                HStack(spacing: 5) {
+                                HStack(spacing: 4) {
                                     Image(systemName: "arrow.uturn.backward")
                                         .font(.system(size: 14, weight: .semibold))
                                     Text("Undo")
                                         .font(.bodySmall)
                                 }
                                 .foregroundStyle(.white)
-                                .padding(.horizontal, 14)
-                                .padding(.vertical, 7)
+                                .padding(.horizontal, 16)
+                                .padding(.vertical, 8)
                                 .background {
                                     ZStack {
                                         Color.clear.background(.ultraThinMaterial)
@@ -142,7 +142,7 @@ struct DrawModeView: View {
                         Text(classifyError)
                             .font(.bodySmall)
                             .foregroundStyle(.white)
-                            .padding(.horizontal, 14)
+                            .padding(.horizontal, 16)
                             .padding(.vertical, 8)
                             .background(Color.black.opacity(0.6))
                             .clipShape(Capsule())
@@ -164,11 +164,11 @@ struct DrawModeView: View {
 
                     // Input bar — chip(s) pinned top-left, text field below, buttons right.
                     HStack(alignment: selectedTags.isEmpty ? .center : .bottom, spacing: 8) {
-                        VStack(alignment: .leading, spacing: 6) {
+                        VStack(alignment: .leading, spacing: 8) {
                             if !selectedTags.isEmpty {
-                                HStack(spacing: 6) {
+                                HStack(spacing: 8) {
                                     ForEach(selectedTags, id: \.self) { tag in
-                                        HStack(spacing: 5) {
+                                        HStack(spacing: 4) {
                                             Text(tag)
                                                 .font(.bodySmall)
                                                 .foregroundStyle(.white)
@@ -180,13 +180,13 @@ struct DrawModeView: View {
                                                 Image(systemName: "xmark")
                                                     .font(.system(size: 10, weight: .bold))
                                                     .foregroundStyle(.white)
-                                                    .frame(width: 18, height: 18)
+                                                    .frame(width: 16, height: 16)
                                                     .background(Circle().fill(.white.opacity(0.25)))
                                             }
                                         }
                                         .padding(.leading, 12)
-                                        .padding(.trailing, 6)
-                                        .padding(.vertical, 6)
+                                        .padding(.trailing, 8)
+                                        .padding(.vertical, 8)
                                         .background(Capsule().fill(AppColors.accentGradient))
                                     }
                                 }
@@ -229,7 +229,7 @@ struct DrawModeView: View {
                     }
                     .animation(.easeInOut(duration: 0.15), value: selectedTags)
                     .padding(.horizontal, 16)
-                    .padding(.vertical, 10)
+                    .padding(.vertical, 8)
                     .frame(minHeight: 60)
                     .background {
                         ZStack {
@@ -327,7 +327,7 @@ struct DrawModeView: View {
                 .lineLimit(1)
                 .fixedSize(horizontal: true, vertical: false)
                 .padding(.horizontal, 12)
-                .padding(.vertical, 6)
+                .padding(.vertical, 8)
                 .background {
                     if isSelected {
                         AppColors.accentGradient

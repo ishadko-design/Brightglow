@@ -52,7 +52,7 @@ struct QuoteRequestScreen: View {
                 Image(systemName: "arrow.left")
                     .font(.system(size: 16, weight: .bold))
                     .foregroundStyle(.white)
-                    .frame(width: 54, height: 54)
+                    .frame(width: 56, height: 56)
                     .background(Circle().fill(Color.white.opacity(0.1)))
             }
             .padding(.leading, 16)
@@ -151,7 +151,7 @@ struct QuoteRequestScreen: View {
                     .font(.h3)
                     .foregroundStyle(.white)
                     .frame(maxWidth: .infinity)
-                    .frame(height: 54)
+                    .frame(height: 56)
             }
             .buttonStyle(.gradient)
             .disabled(!emailValid)
@@ -182,7 +182,7 @@ struct QuoteRequestScreen: View {
                     .font(.h3)
                     .foregroundStyle(.white)
                     .frame(maxWidth: .infinity)
-                    .frame(height: 54)
+                    .frame(height: 56)
             }
             .buttonStyle(.gradient)
             .padding(.horizontal, 16)
@@ -210,7 +210,7 @@ struct QuoteRequestScreen: View {
         Text(text)
             .font(.bodySmall)
             .foregroundStyle(Color(hex: "#E5A000"))
-            .padding(.top, 2)
+            .padding(.top, 4)
     }
 
     /// Stub: real sending is server-side. For now, transition to the sent state.

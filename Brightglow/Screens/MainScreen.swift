@@ -51,7 +51,7 @@ struct MainScreen: View {
                             }
                             .padding(.trailing, 16)
                         }
-                        .frame(height: 54)
+                        .frame(height: 56)
                         Spacer()
                     }
                     .ignoresSafeArea(edges: .bottom)
@@ -170,7 +170,7 @@ struct MainScreen: View {
                     }
                     .animation(.easeInOut(duration: 0.15), value: searchText.isEmpty)
                     .padding(.horizontal, 16)
-                    .padding(.vertical, 10)
+                    .padding(.vertical, 8)
                     .frame(minHeight: 60)
                     .background {
                         ZStack {

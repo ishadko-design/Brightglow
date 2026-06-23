@@ -71,7 +71,7 @@ struct HomeScreen: View {
 
                 }
                 .padding(.horizontal, 16)
-                .padding(.vertical, 10)
+                .padding(.vertical, 8)
                 .frame(minHeight: 60)
                 .background {
                     ZStack {

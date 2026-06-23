@@ -84,7 +84,7 @@ struct OTPVerifyView: View {
                         }
                     }
                     .frame(maxWidth: .infinity)
-                    .frame(height: 54)
+                    .frame(height: 56)
                 }
                 .buttonStyle(.gradient)
                 .disabled(code.count < 6 || auth.isLoading)

@@ -22,6 +22,7 @@ struct AppColors {
     )
 
     // ── Generic CTA ──────────────────────────────────────────────────────────
+    static let ctaBlue         = Color(hex: "#617AFF")   // primary blue (Figma)
     static let ctaPrimary      = Color(hex: "#0039F5")   // fallback solid
     static let ctaSecondary    = Color(hex: "#333640")
     static let ctaText         = Color.white
