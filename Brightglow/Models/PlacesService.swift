@@ -84,7 +84,15 @@ enum PlacesService {
         guard let name = place.displayName?.text else { return nil }
 
         // Every card must have an image — skip placeless results.
-        let photos = (place.photos ?? []).prefix(4).map { photoURL(for: $0.name) }
+        // Cheap pre-filter: drop low-resolution source photos (small originals
+        // are usually logos, screenshots, or poor uploads) before downloading.
+        // Fall back to the unfiltered set so a card is never left blank.
+        // Pull the full candidate pool (Places returns up to 10) so the on-device
+        // screen has plenty to choose from after rejecting weak images.
+        let allPhotos = place.photos ?? []
+        var usable = allPhotos.filter { min($0.widthPx ?? 0, $0.heightPx ?? 0) >= 600 }
+        if usable.isEmpty { usable = allPhotos }
+        let photos = usable.prefix(10).map { photoURL(for: $0.name) }
         guard !photos.isEmpty else { return nil }
 
         return Contractor(
@@ -124,7 +132,7 @@ enum PlacesService {
     /// Places photo-media URL. `skipHttpRedirect` is omitted so the endpoint
     /// 302-redirects straight to the image — `AsyncImage` follows it, no extra call.
     private static func photoURL(for photoName: String) -> String {
-        "https://places.googleapis.com/v1/\(photoName)/media?maxWidthPx=800&key=\(apiKey)"
+        "https://places.googleapis.com/v1/\(photoName)/media?maxWidthPx=1200&key=\(apiKey)"
     }
 
     /// Best-effort locality from a formatted address
@@ -161,7 +169,11 @@ private struct Place: Decodable {
 }
 
 private struct LocalizedText: Decodable { let text: String }
-private struct Photo: Decodable { let name: String }
+private struct Photo: Decodable {
+    let name: String
+    let widthPx: Int?
+    let heightPx: Int?
+}
 
 private struct PlaceReview: Decodable {
     let rating: Int?

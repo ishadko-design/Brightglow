@@ -115,7 +115,7 @@ struct SwipeScreen: View {
                 }
                 .buttonStyle(.plain)
 
-                VStack(alignment: .leading, spacing: 4) {
+                VStack(alignment: .leading, spacing: 0) {
                     Text(headerTitle)
                         .font(.h2)
                         .foregroundStyle(.white)
@@ -135,7 +135,7 @@ struct SwipeScreen: View {
                         withAnimation(.easeInOut(duration: 0.2)) { sentToAll = true }
                     } label: {
                         Text(sentToAll ? "Sent ✓" : "Send to all")
-                            .font(.h3)
+                            .font(.h4)
                             .foregroundStyle(AppColors.ctaBlue)
                             .frame(height: 36)
                     }
@@ -383,16 +383,20 @@ struct ContractorCardView: View {
                                     LinearGradient(
                                         stops: [
                                             .init(color: .clear, location: 0.0),
-                                            .init(color: .black.opacity(0.15), location: 0.4),
-                                            .init(color: .black.opacity(0.6), location: 0.7),
+                                            .init(color: .black.opacity(0.15), location: 0.45),
+                                            .init(color: .black.opacity(0.6), location: 0.75),
                                             .init(color: .black, location: 1.0)
                                         ],
                                         startPoint: .top, endPoint: .bottom
                                     )
-                                    .frame(height: 160)
+                                    .frame(height: 180)
                                     Color.black
                                 }
                             )
+                            // Extend the frosted glass 80pt above the panel (over the
+                            // photo) so the blur is already present above the name and
+                            // estimate, fading smoothly up into the image.
+                            .padding(.top, -80)
                             .opacity(1 - coverProgress)
                             .allowsHitTesting(false)
                         }
