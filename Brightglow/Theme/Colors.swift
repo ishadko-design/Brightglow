@@ -1,38 +1,41 @@
 import SwiftUI
 
+// Token-backed values (bg, accents, text, stars, dots, border) come from
+// DesignTokens, generated from design/tokens.json — the Figma-synced source of
+// truth. App-specific extras below stay literal. Run `npm run tokens` to refresh.
 struct AppColors {
     // ── Backgrounds ──────────────────────────────────────────────────────────
-    static let bg              = Color(hex: "#131315")
-    static let bgPrimary       = Color(hex: "#131315")
-    static let bgSurface       = Color(hex: "#131315")
+    static let bg              = DesignTokens.colorBg
+    static let bgPrimary       = DesignTokens.colorBg
+    static let bgSurface       = DesignTokens.colorBg
     static let bgOverlay       = Color.black.opacity(0.55)
-    static let surface         = Color(hex: "#131315")
-    static let cardFallback    = Color(hex: "#1E1E22")
+    static let surface         = DesignTokens.colorBg
+    static let cardFallback    = DesignTokens.colorCardFallback
 
     // ── Text ─────────────────────────────────────────────────────────────────
-    static let textPrimary     = Color.white
-    static let textSecondary   = Color.white.opacity(0.5)
+    static let textPrimary     = DesignTokens.colorTextPrimary
+    static let textSecondary   = DesignTokens.colorTextSecondary
 
     // ── Accent / primary button (gradient) ───────────────────────────────────
-    static let accentStart     = Color(hex: "#0039F5")
-    static let accentEnd       = Color(hex: "#1528FF")
+    static let accentStart     = DesignTokens.colorAccentStart
+    static let accentEnd       = DesignTokens.colorAccentEnd
     static let accentGradient  = LinearGradient(
-        colors: [Color(hex: "#0039F5"), Color(hex: "#1528FF")],
+        colors: [DesignTokens.colorAccentStart, DesignTokens.colorAccentEnd],
         startPoint: .leading, endPoint: .trailing
     )
 
     // ── Generic CTA ──────────────────────────────────────────────────────────
-    static let ctaBlue         = Color(hex: "#617AFF")   // primary blue (Figma)
-    static let ctaPrimary      = Color(hex: "#0039F5")   // fallback solid
-    static let ctaSecondary    = Color(hex: "#333640")
+    static let ctaBlue         = DesignTokens.colorCtaBlue     // primary blue (Figma)
+    static let ctaPrimary      = DesignTokens.colorAccentStart // fallback solid
+    static let ctaSecondary    = DesignTokens.colorCtaSecondary
     static let ctaText         = Color.white
 
     // ── Stars ─────────────────────────────────────────────────────────────────
-    static let starFilled      = Color(hex: "#D3A500")
-    static let starEmpty       = Color.white.opacity(0.2)
+    static let starFilled      = DesignTokens.colorStarFilled
+    static let starEmpty       = DesignTokens.colorStarEmpty
 
     // ── Border ───────────────────────────────────────────────────────────────
-    static let border          = Color.white.opacity(0.12)
+    static let border          = DesignTokens.colorBorder
 
     // ── Search bar ───────────────────────────────────────────────────────────
     static let searchBg        = Color(hex: "#1E1E22").opacity(0.6)   // tinted base under blur
@@ -60,8 +63,8 @@ struct AppColors {
     static let btnSecondaryText = Color.white
 
     // ── Pagination dots ───────────────────────────────────────────────────────
-    static let dotActive       = Color.white
-    static let dotInactive     = Color.white.opacity(0.3)
+    static let dotActive       = DesignTokens.colorDotActive
+    static let dotInactive     = DesignTokens.colorDotInactive
 
     // ── Sheet drag handle ─────────────────────────────────────────────────────
     static let handle          = Color.white.opacity(0.12)

@@ -1,0 +1,9 @@
+{
+  "name": "brightglow-tokens",
+  "private": true,
+  "description": "Design-token generation for Brightglow. Source of truth: design/tokens.json (synced with Figma via Tokens Studio).",
+  "type": "module",
+  "scripts": {
+    "tokens": "node design/build-tokens.mjs"
+  }
+}
