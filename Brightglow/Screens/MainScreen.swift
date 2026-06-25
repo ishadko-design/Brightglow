@@ -210,10 +210,10 @@ struct MainScreen: View {
                     get: { goSwipe != nil },
                     set: { if !$0 { goSwipe = nil } }
                 )) {
-                    SwipeScreen(category: goSwipe?.rawValue ?? "")
+                    ContractorGalleryScreen(category: goSwipe?.rawValue ?? "")
                 }
                 .navigationDestination(isPresented: $goSearch) {
-                    SwipeScreen(searchQuery: submittedQuery)
+                    ContractorGalleryScreen(searchQuery: submittedQuery)
                 }
             }
         }
