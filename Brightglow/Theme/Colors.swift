@@ -1,73 +1,74 @@
 import SwiftUI
 
-// Token-backed values (bg, accents, text, stars, dots, border) come from
-// DesignTokens, generated from design/tokens.json — the Figma-synced source of
-// truth. App-specific extras below stay literal. Run `npm run tokens` to refresh.
+// Semantic layer over the 8-color palette in design/tokens.json (Figma source of
+// truth): white, gray50, gray20, bg, bgSecondary, accent, orange, magenta.
+// Every value below resolves to one of those eight tokens. Run `npm run tokens`
+// to refresh DesignTokens from the source.
 struct AppColors {
     // ── Backgrounds ──────────────────────────────────────────────────────────
     static let bg              = DesignTokens.colorBg
     static let bgPrimary       = DesignTokens.colorBg
     static let bgSurface       = DesignTokens.colorBg
-    static let bgOverlay       = Color.black.opacity(0.55)
+    static let bgOverlay       = DesignTokens.colorBgSecondary
     static let surface         = DesignTokens.colorBg
-    static let cardFallback    = DesignTokens.colorCardFallback
+    static let cardFallback    = DesignTokens.colorGray20
 
     // ── Text ─────────────────────────────────────────────────────────────────
-    static let textPrimary     = DesignTokens.colorTextPrimary
-    static let textSecondary   = DesignTokens.colorTextSecondary
+    static let textPrimary     = DesignTokens.colorWhite
+    static let textSecondary   = DesignTokens.colorGray50
 
-    // ── Accent / primary button (gradient) ───────────────────────────────────
-    static let accentStart     = DesignTokens.colorAccentStart
-    static let accentEnd       = DesignTokens.colorAccentEnd
+    // ── Accent / primary button (flat solid blue) ────────────────────────────
+    static let accentStart     = DesignTokens.colorAccent
+    static let accentEnd       = DesignTokens.colorAccent
     static let accentGradient  = LinearGradient(
-        colors: [DesignTokens.colorAccentStart, DesignTokens.colorAccentEnd],
+        colors: [DesignTokens.colorAccent, DesignTokens.colorAccent],
         startPoint: .leading, endPoint: .trailing
     )
 
     // ── Generic CTA ──────────────────────────────────────────────────────────
-    static let ctaBlue         = DesignTokens.colorCtaBlue     // primary blue (Figma)
-    static let ctaPrimary      = DesignTokens.colorAccentStart // fallback solid
-    static let ctaSecondary    = DesignTokens.colorCtaSecondary
-    static let ctaText         = Color.white
+    static let ctaBlue         = DesignTokens.colorAccent
+    static let ctaPrimary      = DesignTokens.colorAccent
+    static let ctaSecondary    = DesignTokens.colorGray20
+    static let ctaText         = DesignTokens.colorWhite
 
     // ── Stars ─────────────────────────────────────────────────────────────────
-    static let starFilled      = DesignTokens.colorStarFilled
-    static let starEmpty       = DesignTokens.colorStarEmpty
+    static let starFilled      = DesignTokens.colorOrange
+    static let starEmpty       = DesignTokens.colorGray20
 
     // ── Border ───────────────────────────────────────────────────────────────
-    static let border          = DesignTokens.colorBorder
+    static let border          = DesignTokens.colorGray20
 
     // ── Search bar ───────────────────────────────────────────────────────────
-    static let searchBg        = Color(hex: "#1E1E22").opacity(0.6)   // tinted base under blur
-    static let searchBorder    = Color.white.opacity(0.3)
+    static let searchBg        = DesignTokens.colorBgSecondary
+    static let searchBorder    = DesignTokens.colorGray20
 
     // ── Shutter button ────────────────────────────────────────────────────────
-    static let shutterBg       = Color.white.opacity(0.18)
-    static let shutterBorder   = Color.white
-    static let shutterRing     = Color.white.opacity(0.3)
+    static let shutterBg       = DesignTokens.colorGray20
+    static let shutterBorder   = DesignTokens.colorWhite
+    static let shutterRing     = DesignTokens.colorGray20
 
     // ── Profile icon ──────────────────────────────────────────────────────────
-    static let iconBg          = Color.black.opacity(0.1)
+    static let iconBg          = DesignTokens.colorBgSecondary
 
     // ── Card gradient (used for contractor card fade) ─────────────────────────
-    static let gradientTop     = Color(hex: "#131315").opacity(0)
-    static let gradientBottom  = Color(hex: "#131315")
+    static let gradientTop     = DesignTokens.colorBg.opacity(0)
+    static let gradientBottom  = DesignTokens.colorBg
 
     // ── Drawing stroke ────────────────────────────────────────────────────────
-    static let drawingStroke   = Color(hex: "#FF00BB")
+    static let drawingStroke   = DesignTokens.colorMagenta
 
     // ── Swipe screen buttons ──────────────────────────────────────────────────
-    static let btnPrimary      = Color(hex: "#0039F5")        // solid fallback
-    static let btnPrimaryText  = Color.white
-    static let btnSecondary    = Color(hex: "#333640")
-    static let btnSecondaryText = Color.white
+    static let btnPrimary      = DesignTokens.colorAccent
+    static let btnPrimaryText  = DesignTokens.colorWhite
+    static let btnSecondary    = DesignTokens.colorGray20
+    static let btnSecondaryText = DesignTokens.colorWhite
 
     // ── Pagination dots ───────────────────────────────────────────────────────
-    static let dotActive       = DesignTokens.colorDotActive
-    static let dotInactive     = DesignTokens.colorDotInactive
+    static let dotActive       = DesignTokens.colorWhite
+    static let dotInactive     = DesignTokens.colorGray20
 
     // ── Sheet drag handle ─────────────────────────────────────────────────────
-    static let handle          = Color.white.opacity(0.12)
+    static let handle          = DesignTokens.colorGray20
 }
 
 extension Color {

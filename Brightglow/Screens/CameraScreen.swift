@@ -10,7 +10,7 @@ struct CameraScreen: View {
                 CameraPreview(session: camera.session)
                     .ignoresSafeArea()
             } else {
-                Color(hex: "#1A1A1A").ignoresSafeArea()
+                AppColors.bg.ignoresSafeArea()
                 if camera.permissionDenied {
                     VStack(spacing: 12) {
                         Image(systemName: "camera.slash")

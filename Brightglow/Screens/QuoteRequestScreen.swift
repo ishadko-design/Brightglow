@@ -209,7 +209,7 @@ struct QuoteRequestScreen: View {
     private func warning(_ text: String) -> some View {
         Text(text)
             .font(.bodySmall)
-            .foregroundStyle(Color(hex: "#E5A000"))
+            .foregroundStyle(AppColors.starFilled)
             .padding(.top, 4)
     }
 

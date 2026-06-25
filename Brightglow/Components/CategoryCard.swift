@@ -33,7 +33,7 @@ struct CategoryCard: View {
                             .scaledToFill()
                             .frame(width: geo.size.width, height: geo.size.height)
                     } else {
-                        Color(hex: "#353535")
+                        AppColors.cardFallback
                     }
 
                     // Gradient

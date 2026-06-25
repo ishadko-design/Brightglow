@@ -10,7 +10,7 @@ struct HomeScreen: View {
             ZStack(alignment: .bottom) {
 
                 // Dark background
-                Color(hex: "#1A1A1A").ignoresSafeArea()
+                AppColors.bg.ignoresSafeArea()
 
                 // Main scrollable content
                 ScrollView {

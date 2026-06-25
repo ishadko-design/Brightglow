@@ -5,19 +5,14 @@ import SwiftUI
 enum DesignTokens {
 
     // MARK: - Colors
+    static let colorWhite = Color(hex: "#FFFFFF")
+    static let colorGray50 = Color(.sRGB, red: 1.0000, green: 1.0000, blue: 1.0000, opacity: 0.5)
+    static let colorGray20 = Color(.sRGB, red: 1.0000, green: 1.0000, blue: 1.0000, opacity: 0.2)
     static let colorBg = Color(hex: "#131315")
-    static let colorCardFallback = Color(hex: "#1E1E22")
-    static let colorAccentStart = Color(hex: "#0039F5")
-    static let colorAccentEnd = Color(hex: "#1528FF")
-    static let colorCtaBlue = Color(hex: "#617AFF")
-    static let colorCtaSecondary = Color(hex: "#333640")
-    static let colorTextPrimary = Color(hex: "#FFFFFF")
-    static let colorTextSecondary = Color(.sRGB, red: 1.0000, green: 1.0000, blue: 1.0000, opacity: 0.5)
-    static let colorStarFilled = Color(hex: "#D3A500")
-    static let colorStarEmpty = Color(.sRGB, red: 1.0000, green: 1.0000, blue: 1.0000, opacity: 0.2)
-    static let colorDotActive = Color(hex: "#FFFFFF")
-    static let colorDotInactive = Color(.sRGB, red: 1.0000, green: 1.0000, blue: 1.0000, opacity: 0.3)
-    static let colorBorder = Color(.sRGB, red: 1.0000, green: 1.0000, blue: 1.0000, opacity: 0.12)
+    static let colorBgSecondary = Color(.sRGB, red: 0.0745, green: 0.0745, blue: 0.0824, opacity: 0.9)
+    static let colorAccent = Color(hex: "#0039F5")
+    static let colorOrange = Color(hex: "#D4A600")
+    static let colorMagenta = Color(hex: "#FF00BB")
 
     // MARK: - Spacing
     static let space1: CGFloat = 4

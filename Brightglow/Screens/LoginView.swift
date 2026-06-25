@@ -122,7 +122,7 @@ struct LoginView: View {
                 .frame(width: 44, height: 44)
                 .background(
                     LinearGradient(
-                        colors: [Color(hex: "#0039F5"), Color(hex: "#1528FF")],
+                        colors: [AppColors.accentStart, AppColors.accentEnd],
                         startPoint: .top, endPoint: .bottom
                     )
                 )
@@ -139,7 +139,7 @@ struct LoginView: View {
                 RoundedRectangle(cornerRadius: 32).fill(Color.black.opacity(0.85))
                 RoundedRectangle(cornerRadius: 32)
                     .fill(LinearGradient(
-                        colors: [.black, Color(hex: "#666666")],
+                        colors: [.black, Color.white.opacity(0.4)],
                         startPoint: .leading, endPoint: .trailing
                     ).opacity(0.5))
                 RoundedRectangle(cornerRadius: 32).fill(.ultraThinMaterial.opacity(0.2))
