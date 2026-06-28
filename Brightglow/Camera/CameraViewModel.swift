@@ -19,15 +19,24 @@ class CameraViewModel: NSObject, ObservableObject {
 
     override init() {
         super.init()
-        Task { await requestPermissionAndStart() }
+        // Do NOT prompt for camera access on launch. The viewfinder stays black
+        // until the user taps the camera to grant access. Only attach to the
+        // camera here if access was already granted in a previous session.
+        switch AVCaptureDevice.authorizationStatus(for: .video) {
+        case .authorized:
+            isAuthorized = true
+            startSession()
+        case .denied, .restricted:
+            permissionDenied = true
+        default:
+            break   // .notDetermined → stay black, wait for the user to tap
+        }
     }
 
     /// Call when the camera becomes active (sheet pulled down to expose viewfinder).
+    /// Never prompts — that only happens on an explicit tap.
     func activateIfNeeded() {
-        guard configured else {
-            Task { await requestPermissionAndStart() }
-            return
-        }
+        guard isAuthorized else { return }
         if !session.isRunning {
             DispatchQueue.global(qos: .userInitiated).async { self.session.startRunning() }
         }

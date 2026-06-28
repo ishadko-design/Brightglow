@@ -42,7 +42,7 @@ enum PlacesService {
                               maxResults: Int) async -> [Contractor] {
         guard let url = URL(string: "https://places.googleapis.com/v1/places:searchText") else { return [] }
 
-        var req = URLRequest(url: url, timeoutInterval: 20)
+        var req = URLRequest(url: url, timeoutInterval: 10)
         req.httpMethod = "POST"
         req.setValue("application/json", forHTTPHeaderField: "Content-Type")
         req.setValue(apiKey, forHTTPHeaderField: "X-Goog-Api-Key")
@@ -55,9 +55,15 @@ enum PlacesService {
         req.setValue(
             "places.id,places.displayName,places.rating,places.userRatingCount,"
             + "places.formattedAddress,places.nationalPhoneNumber,places.photos,"
-            + "places.businessStatus,places.reviews",
+            + "places.businessStatus,places.reviews,places.location",
             forHTTPHeaderField: "X-Goog-FieldMask")
 
+        // Bias (not hard-restrict) results to the searched area. A `locationBias`
+        // circle returns the most relevant nearby businesses — including non-US
+        // ones named in their local language — whereas a strict rectangle
+        // `locationRestriction` returns nothing in areas Google can't confidently
+        // box. Combined with dropping the mock fallback, changing the city now
+        // genuinely changes the results.
         let body: [String: Any] = [
             "textQuery": textQuery,
             "maxResultCount": maxResults,
@@ -73,8 +79,17 @@ enum PlacesService {
               let decoded = try? JSONDecoder().decode(PlacesResponse.self, from: data)
         else { return [] }
 
-        return decoded.places.enumerated().compactMap { idx, place in
-            contractor(from: place, index: idx, category: category)
+        // `locationBias` only *ranks* by proximity — it can still return far-away
+        // businesses (e.g. an Indian shop for a Kyiv search). Hard-filter by actual
+        // distance so results truly belong to the searched area.
+        let center = CLLocation(latitude: coord.latitude, longitude: coord.longitude)
+        let maxDistance = searchRadius * 1.5
+        return decoded.places.enumerated().compactMap { idx, place -> Contractor? in
+            if let loc = place.location {
+                let d = center.distance(from: CLLocation(latitude: loc.latitude, longitude: loc.longitude))
+                guard d <= maxDistance else { return nil }
+            }
+            return contractor(from: place, index: idx, category: category)
         }
     }
 
@@ -90,7 +105,7 @@ enum PlacesService {
         // Pull the full candidate pool (Places returns up to 10) so the on-device
         // screen has plenty to choose from after rejecting weak images.
         let allPhotos = place.photos ?? []
-        var usable = allPhotos.filter { min($0.widthPx ?? 0, $0.heightPx ?? 0) >= 600 }
+        var usable = allPhotos.filter { min($0.widthPx ?? 0, $0.heightPx ?? 0) >= 800 }
         if usable.isEmpty { usable = allPhotos }
         let photos = usable.prefix(10).map { photoURL(for: $0.name) }
         guard !photos.isEmpty else { return nil }
@@ -114,25 +129,46 @@ enum PlacesService {
     }
 
     /// Map Places reviews → our model, keeping those with real written text.
+    ///
+    /// `text` is Google's translation into the request locale; `originalText` is
+    /// the author's original language. We show the translation by default but keep
+    /// the original (and its language name) so the UI can offer a "See original"
+    /// toggle — translation is the default, reverting to original is the choice.
     private static func reviews(from raw: [PlaceReview]?) -> [Review] {
         (raw ?? []).compactMap { r in
-            let body = (r.text?.text ?? r.originalText?.text ?? "")
+            let display = (r.text?.text ?? r.originalText?.text ?? "")
                 .trimmingCharacters(in: .whitespacesAndNewlines)
-            guard !body.isEmpty else { return nil }
+            guard !display.isEmpty else { return nil }
+
+            // Offer the original only when it actually differs from what we show.
+            let original = r.originalText?.text.trimmingCharacters(in: .whitespacesAndNewlines)
+            let origLang = r.originalText?.languageCode
+            let hasDistinctOriginal = original.map { !$0.isEmpty && $0 != display } ?? false
+
             return Review(
                 author: r.authorAttribution?.displayName ?? "Google user",
                 authorPhotoURL: r.authorAttribution?.photoUri,
                 rating: r.rating ?? 5,
-                text: body,
-                relativeTime: r.relativePublishTimeDescription ?? ""
+                text: display,
+                relativeTime: r.relativePublishTimeDescription ?? "",
+                originalText: hasDistinctOriginal ? original : nil,
+                originalLanguageName: hasDistinctOriginal ? languageName(origLang) : nil
             )
         }
+    }
+
+    /// "uk" → "Ukrainian" (localized to the device). nil/unknown → nil.
+    private static func languageName(_ code: String?) -> String? {
+        guard let code, !code.isEmpty else { return nil }
+        return Locale.current.localizedString(forLanguageCode: code)?.capitalized
     }
 
     /// Places photo-media URL. `skipHttpRedirect` is omitted so the endpoint
     /// 302-redirects straight to the image — `AsyncImage` follows it, no extra call.
     private static func photoURL(for photoName: String) -> String {
-        "https://places.googleapis.com/v1/\(photoName)/media?maxWidthPx=1200&key=\(apiKey)"
+        // Request a large rendition so the full-bleed photo stays crisp on 3x
+        // screens. Places caps at the source size, so this never upscales.
+        "https://places.googleapis.com/v1/\(photoName)/media?maxWidthPx=1600&key=\(apiKey)"
     }
 
     /// Best-effort locality from a formatted address
@@ -166,9 +202,18 @@ private struct Place: Decodable {
     let photos: [Photo]?
     let businessStatus: String?
     let reviews: [PlaceReview]?
+    let location: LatLng?
 }
 
-private struct LocalizedText: Decodable { let text: String }
+private struct LatLng: Decodable {
+    let latitude: Double
+    let longitude: Double
+}
+
+private struct LocalizedText: Decodable {
+    let text: String
+    let languageCode: String?
+}
 private struct Photo: Decodable {
     let name: String
     let widthPx: Int?

@@ -34,7 +34,9 @@ struct CategoriesSheet: View {
                     }
                 }
                 .padding(.horizontal, 16)
-                .padding(.bottom, 160)
+                // Extra clearance so the last cards scroll clear of the search
+                // input / gradient at the bottom instead of hiding behind it.
+                .padding(.bottom, 280)
             }
             .padding(.top, 4)
         }

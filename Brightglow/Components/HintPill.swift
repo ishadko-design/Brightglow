@@ -8,10 +8,9 @@ struct HintPill: View {
         Text(text)
             .font(.bodyLight)
             .foregroundStyle(.white)
-            .lineLimit(1)
-            .fixedSize(horizontal: true, vertical: false)
+            .multilineTextAlignment(.center)
             .padding(.horizontal, 16)
-            .padding(.vertical, 4)
+            .padding(.vertical, 8)
             .background {
                 ZStack {
                     Color.clear.background(.ultraThinMaterial)

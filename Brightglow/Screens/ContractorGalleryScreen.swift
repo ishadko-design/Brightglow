@@ -1,26 +1,40 @@
 import SwiftUI
 import CoreLocation
 
+/// Tracks the sheet ScrollView's top offset so the BottomSheet knows when the
+/// content is scrolled to the top (and an over-pull can collapse it).
+private struct SheetScrollKey: PreferenceKey {
+    static var defaultValue: CGFloat = 0
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) { value = nextValue() }
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // MARK: - ContractorGalleryScreen
 //
-// A redesign of the card-stack screen ("contractor gallery"). Differences from
-// the original SwipeScreen, per the Figma source of truth (node 345-734 collapsed
-// / 351-892 expanded):
-//   • The card photo fills the entire screen (full-bleed). Rounded corners only
-//     appear while the user swipes the card left/right.
-//   • A solid #131315 bottom sheet (not frosted glass) carries the contractor
-//     info + reviews. It drags between a collapsed and an expanded detent.
-//   • The contractor logo (from the Places API) sits beside the name.
-//   • The header is a fading blurred gradient with a background blur applied.
+// New layout (Figma node 364-800 "Open category - contractor"):
+//   • One contractor at a time — no card stack, no swipe. Navigation between
+//     contractors is via the pinned Skip / Request quote buttons only, which are
+//     the same size.
+//   • A full-width photo that is NOT full-screen: it ends ~40pt behind the bottom
+//     sheet's lowest (collapsed) position so it never peeks past the rounded
+//     corners.
+//   • A horizontal "gallery image viewer" strip of every photo in the stack sits
+//     just above the sheet, replacing the old pagination dots.
+//   • The bottom sheet reuses the shared `BottomSheet` component, so its rounded
+//     corners and drag / over-pull-to-collapse behavior are identical to the
+//     main screen.
+//   • The top bar matches the main screen's header treatment.
 // ─────────────────────────────────────────────────────────────────────────────
 
 struct ContractorGalleryScreen: View {
     var category: String = ""
     var searchQuery: String = ""
     var aiResult: AIResult? = nil
+    /// When set (manual ZIP/city or an already-resolved fix), used instead of GPS.
+    var presetCoordinate: CLLocationCoordinate2D? = nil
 
     @Environment(\.dismiss) var dismiss
+    @Environment(\.openURL) private var openURL
     @StateObject private var location = LocationProvider()
     @State private var contractors: [Contractor] = []
     @State private var isLoading   = false
@@ -30,7 +44,14 @@ struct ContractorGalleryScreen: View {
     @State private var sentToAll   = false
     @State private var totalCount  = 0
 
-    private var visibleContractors: [Contractor] { Array(contractors.suffix(3)) }
+    @State private var sheetDetent: SheetDetent = .collapsed
+    @State private var sheetScrolledToTop = true
+    /// Screened work-photo URLs per contractor id. nil = not yet screened
+    /// (show loading); [] = no work photos (show placeholder). Populated ahead of
+    /// time so a newly-surfaced contractor doesn't stall on the screen.
+    @State private var screenedByID: [String: [String]] = [:]
+
+    private var topContractor: Contractor? { contractors.last }
 
     private var headerTitle: String {
         let q = searchQuery.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -38,52 +59,85 @@ struct ContractorGalleryScreen: View {
     }
 
     var body: some View {
-        ZStack(alignment: .top) {
-            AppColors.bg.ignoresSafeArea()
+        GeometryReader { proxy in
+            let topInset    = proxy.safeAreaInsets.top
+            let bottomInset = proxy.safeAreaInsets.bottom
+            let fullHeight  = topInset + proxy.size.height + bottomInset
 
-            // ── Full-screen card stack ────────────────────────────────────────
-            ZStack {
+            // Collapsed sheet height (lowest position). The photo ends 40pt behind
+            // this line so it tucks under the rounded corners. Tuned so the first
+            // line of the first review peeks above the pinned buttons.
+            let collapsedSheetH = fullHeight * 0.305
+            let imageHeight     = fullHeight - collapsedSheetH + 40
+            // Leave the header visible when the sheet is fully expanded (same as
+            // the main screen: ~60pt header + 16pt gap).
+            let headerInset: CGFloat = topInset + 16
+
+            ZStack(alignment: .bottom) {
+                AppColors.bg.ignoresSafeArea()
+
                 if isLoading && contractors.isEmpty {
                     statusView(spinner: true, text: "Finding contractors near you…")
+                } else if contractors.isEmpty && totalCount == 0 {
+                    // Resolved a location but the area returned no contractors.
+                    notFoundView
                 } else if contractors.isEmpty {
                     statusView(spinner: false, text: "No more contractors")
-                } else {
-                    ForEach(Array(visibleContractors.enumerated()), id: \.element.id) { i, contractor in
-                        let isTop = i == visibleContractors.count - 1
-                        let depth = visibleContractors.count - 1 - i
+                } else if let contractor = topContractor {
 
-                        GalleryCardView(
-                            contractor: contractor,
-                            estimate: estimate,
-                            isTop: isTop,
-                            onSkip: skipTop,
-                            onQuote: quoteTop
-                        )
-                        // Cards behind the top one darken with depth.
-                        .overlay(
-                            depth > 0 ? Color.black.opacity(i == 0 ? 0.5 : 0.3) : nil
-                        )
-                        .zIndex(Double(i))
-                        .scaleEffect(1.0 - CGFloat(depth) * 0.04, anchor: .center)
+                    // ── Photo + thumbnail strip (resets per contractor) ───────
+                    GalleryPhotoView(
+                        photos: screenedByID[contractor.id],
+                        width: proxy.size.width,
+                        imageHeight: imageHeight,
+                        stripBottomPadding: collapsedSheetH + 12
+                    )
+                    .id(contractor.id)
+                    .ignoresSafeArea()
+
+                    // ── Bottom sheet (shared component) ───────────────────────
+                    BottomSheet(
+                        detent: $sheetDetent,
+                        contentIsAtTop: sheetScrolledToTop,
+                        collapsedHeight: collapsedSheetH,
+                        midHeight: collapsedSheetH,
+                        fullTopInset: headerInset
+                    ) {
+                        sheetBody(for: contractor, bottomInset: bottomInset)
                     }
-                }
-            }
-            .ignoresSafeArea()
 
-            // ── Header: fading blurred gradient + background blur ─────────────
-            GalleryHeader(
-                title: headerTitle,
-                countText: contractors.isEmpty
-                    ? nil
-                    : "\(totalCount - contractors.count + 1)/\(totalCount) businesses",
-                sentToAll: sentToAll,
-                showSendToAll: !contractors.isEmpty,
-                onBack: { dismiss() },
-                onSendAll: {
-                    guard !sentToAll else { return }
-                    withAnimation(.easeInOut(duration: 0.2)) { sentToAll = true }
+                    // ── Pinned Skip / Request quote — equal sizes ─────────────
+                    VStack(spacing: 0) {
+                        Spacer(minLength: 0)
+                        ctaFooter(width: proxy.size.width, bottomInset: bottomInset)
+                    }
+                    .zIndex(50)
+                    // The bar is always pinned at the bottom at a fixed width, so
+                    // it must never inherit the skip/quote spring or the sheet's
+                    // drag animation — otherwise it slides around horizontally.
+                    .transaction { $0.animation = nil }
                 }
-            )
+
+                // ── Header — matches the main screen's top bar ────────────────
+                GalleryHeader(
+                    title: headerTitle,
+                    countText: contractors.isEmpty
+                        ? nil
+                        : "\(totalCount - contractors.count + 1)/\(totalCount) businesses",
+                    sentToAll: sentToAll,
+                    showSendToAll: !contractors.isEmpty,
+                    onBack: { dismiss() },
+                    onSendAll: {
+                        guard !sentToAll else { return }
+                        withAnimation(.easeInOut(duration: 0.2)) { sentToAll = true }
+                    }
+                )
+                .frame(maxHeight: .infinity, alignment: .top)
+                .zIndex(100)
+            }
+            // The shared BottomSheet expects to own the bottom safe area (same as
+            // MainScreen); without this the sheet sits short and the footer lifts.
+            .ignoresSafeArea(.container, edges: .bottom)
         }
         .navigationBarBackButtonHidden(true)
         .toolbar(.hidden, for: .navigationBar)
@@ -91,9 +145,134 @@ struct ContractorGalleryScreen: View {
             await loadContractors()
             totalCount = contractors.count
         }
+        // Screen the current contractor + the next couple ahead of time, so the
+        // photo is ready the instant a contractor is surfaced (no load stall).
+        .task(id: topContractor?.id) { await prefetchUpcoming() }
         .navigationDestination(isPresented: $showQuote) {
             QuoteRequestScreen(contractor: selectedContractor, requestSummary: headerTitle)
         }
+    }
+
+    // ── Sheet content (handle is supplied by BottomSheet) ─────────────────────
+    private func sheetBody(for contractor: Contractor, bottomInset: CGFloat) -> some View {
+        ScrollView(.vertical, showsIndicators: false) {
+            VStack(alignment: .leading, spacing: 16) {
+                infoBlock(for: contractor)
+                if contractor.reviews.isEmpty {
+                    Text("No reviews yet")
+                        .font(.bodySmall)
+                        .foregroundStyle(.white.opacity(0.4))
+                        .padding(.top, 4)
+                } else {
+                    ForEach(Array(contractor.reviews.prefix(5))) { ReviewRowGallery(review: $0) }
+                }
+                // Clear the pinned CTAs at the bottom.
+                Color.clear.frame(height: 48 + 32 + bottomInset)
+            }
+            .padding(.horizontal, 24)
+            .padding(.top, 8)
+            .background(GeometryReader { g in
+                Color.clear.preference(
+                    key: SheetScrollKey.self,
+                    value: g.frame(in: .named("sheetScroll")).minY)
+            })
+        }
+        .coordinateSpace(name: "sheetScroll")
+        .scrollDisabled(sheetDetent != .full)
+        .onPreferenceChange(SheetScrollKey.self) { minY in
+            sheetScrolledToTop = minY > -2
+        }
+    }
+
+    private func infoBlock(for contractor: Contractor) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text(contractor.name)
+                .font(.h3)
+                .foregroundStyle(.white)
+                .lineLimit(1)
+
+            if let tier = estimate ?? contractor.priceTiers.first {
+                Text("\(estimate == nil ? "Price range" : "Est. price"): $\(money(tier.min))–\(money(tier.max))")
+                    .font(.bodySmall)
+                    .foregroundStyle(.white.opacity(0.5))
+            }
+
+            // Stars + rating/review count → opens the contractor's Google reviews.
+            Button {
+                if let url = googleReviewsURL(for: contractor) { openURL(url) }
+            } label: {
+                HStack(spacing: 8) {
+                    StarRow(rating: contractor.rating)
+                    if contractor.reviewCount > 0 {
+                        (Text("\(contractor.rating, specifier: "%.1f") • \(contractor.reviewCount) ")
+                            + Text("reviews").underline())
+                            .font(.bodySmall)
+                            .foregroundStyle(.white.opacity(0.5))
+                    }
+                }
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+        }
+    }
+
+    private func money(_ v: Int) -> String { v >= 1000 ? "\(v / 1000)k" : "\(v)" }
+
+    /// Deep link to the contractor's Google reviews. `id` is the Google place id
+    /// on the live path (mock contractors won't resolve, which is fine here).
+    private func googleReviewsURL(for contractor: Contractor) -> URL? {
+        URL(string: "https://search.google.com/local/reviews?placeid=\(contractor.id)")
+    }
+
+    // Pinned Skip / Request quote — equal-width buttons on a fading floor
+    // (Figma "CTAs": two 48pt-tall buttons, radius 32, 8pt gap).
+    private func ctaFooter(width: CGFloat, bottomInset: CGFloat) -> some View {
+        // Exact equal widths from the known screen width — no reliance on the
+        // parent's width proposal (which has overflowed past the screen edges).
+        let buttonWidth = max(0, (width - 32 - 8) / 2)
+        return HStack(spacing: 8) {
+            Button(action: skipTop) {
+                Text("Skip")
+                    .font(.h3)
+                    .foregroundStyle(.white)
+                    .frame(width: buttonWidth, height: 48)
+                    .background {
+                        ZStack {
+                            Rectangle().fill(.ultraThinMaterial)
+                            AppColors.btnSecondary
+                        }
+                    }
+                    .clipShape(RoundedRectangle(cornerRadius: 32, style: .continuous))
+            }
+            .buttonStyle(.plain)
+
+            Button(action: quoteTop) {
+                Text("Request quote")
+                    .font(.h3)
+                    .foregroundStyle(.white)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.8)
+                    .frame(width: buttonWidth, height: 48)
+                    .background(AppColors.btnPrimary, in: RoundedRectangle(cornerRadius: 32, style: .continuous))
+            }
+            .buttonStyle(.plain)
+        }
+        .padding(.top, 16)
+        .padding(.bottom, 16 + bottomInset)
+        .frame(width: width)
+        // Opaque floor (matches the sheet color) that fades in at the top, so the
+        // reviews behind never show through around the buttons.
+        .background(
+            LinearGradient(
+                stops: [
+                    .init(color: AppColors.bg.opacity(0), location: 0.0),
+                    .init(color: AppColors.bg,            location: 0.45),
+                    .init(color: AppColors.bg,            location: 1.0)
+                ],
+                startPoint: .top, endPoint: .bottom
+            )
+            .allowsHitTesting(false)
+        )
     }
 
     private func statusView(spinner: Bool, text: String) -> some View {
@@ -109,17 +288,70 @@ struct ContractorGalleryScreen: View {
                 .font(.h3)
                 .foregroundStyle(AppColors.textSecondary)
         }
+        .frame(maxHeight: .infinity)
     }
 
-    // ── Top-card actions ──────────────────────────────────────────────────────
+    // Empty state when a location resolved but no contractors were found there.
+    private var notFoundView: some View {
+        VStack(spacing: 12) {
+            Image(systemName: "mappin.slash")
+                .font(.system(size: 56, weight: .light))
+                .foregroundStyle(AppColors.textSecondary)
+            Text("No contractors found in this area")
+                .font(.h3)
+                .foregroundStyle(.white)
+                .multilineTextAlignment(.center)
+            Text("Try a different location or category.")
+                .font(.bodySmall)
+                .foregroundStyle(AppColors.textSecondary)
+                .multilineTextAlignment(.center)
+            Button(action: { dismiss() }) {
+                Text("Change location")
+                    .font(.h4)
+                    .foregroundStyle(.white)
+                    .padding(.horizontal, 20)
+                    .frame(height: 44)
+                    .secondaryButtonBackground()
+            }
+            .buttonStyle(.plain)
+            .padding(.top, 8)
+        }
+        .padding(.horizontal, 40)
+        .frame(maxHeight: .infinity)
+    }
+
+    // ── Top-contractor actions ────────────────────────────────────────────────
+    // Note: no `withAnimation` here. Wrapping the contractor swap in a spring
+    // animated the *entire* view tree (header, sheet, footer) on every change,
+    // which is what made everything jump. The sheet collapse animates on its own
+    // (BottomSheet animates its detent internally); the photo swap is instant.
     private func skipTop() {
-        withAnimation(.spring()) { if !contractors.isEmpty { contractors.removeLast() } }
+        sheetDetent = .collapsed
+        if !contractors.isEmpty { contractors.removeLast() }
     }
 
     private func quoteTop() {
         selectedContractor = contractors.last
-        withAnimation(.spring()) { if !contractors.isEmpty { contractors.removeLast() } }
+        sheetDetent = .collapsed
+        if !contractors.isEmpty { contractors.removeLast() }
         showQuote = true
+    }
+
+    // ── Photo screening / prefetch ────────────────────────────────────────────
+    // Screens the current contractor (shown last in the array) first, then the
+    // two that will be surfaced next, warming their images into the cache. Each
+    // contractor is screened at most once. Runs on contractor change, so the
+    // window of prefetched contractors slides forward as the user skips.
+    private func prefetchUpcoming() async {
+        let upcoming = Array(contractors.suffix(3).reversed())   // current, then next two
+        for contractor in upcoming {
+            if screenedByID[contractor.id] != nil { continue }
+            let kept = await PhotoFilter.screen(contractor.photos)
+            screenedByID[contractor.id] = kept
+            for s in kept {
+                if let u = URL(string: s) { await ImageCache.shared.prefetch(u) }
+            }
+        }
     }
 
     // ── Data loading (mirrors SwipeScreen) ────────────────────────────────────
@@ -128,14 +360,37 @@ struct ContractorGalleryScreen: View {
         isLoading = true
         defer { isLoading = false }
 
-        if let coord = await location.currentCoordinate() {
-            async let liveTask     = fetchLive(near: coord)
-            async let estimateTask = localEstimate(near: coord)
-            let live = await liveTask
-            estimate = await estimateTask
-            if !live.isEmpty { contractors = live; return }
+        let resolved = await resolveCoordinate()
+
+        if let coord = resolved {
+            // We have a real location: trust the live result for that area. If it
+            // comes back empty, show an empty state — do NOT mask it with the
+            // location-independent mock list (that's what made changing the city,
+            // e.g. to Kyiv, appear to do nothing).
+            let live = await fetchLive(near: coord)
+            contractors = live
+            if !live.isEmpty {
+                Task { @MainActor in estimate = await localEstimate(near: coord) }
+            }
+            return
         }
+        // Only with no resolvable location at all (denied / offline) do we show
+        // the built-in demo contractors.
         loadFallback()
+    }
+
+    private func resolveCoordinate() async -> CLLocationCoordinate2D? {
+        if let preset = presetCoordinate { return preset }
+        return await withTaskGroup(of: CLLocationCoordinate2D?.self) { group in
+            group.addTask { await location.currentCoordinate() }
+            group.addTask {
+                try? await Task.sleep(nanoseconds: 3_000_000_000)
+                return nil
+            }
+            let first = await group.next() ?? nil
+            group.cancelAll()
+            return first
+        }
     }
 
     private func localEstimate(near coord: CLLocationCoordinate2D) async -> PriceTier? {
@@ -172,9 +427,161 @@ struct ContractorGalleryScreen: View {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// MARK: - GalleryPhotoView
+// Full-width photo (not full-screen) + the horizontal image-stack viewer that
+// replaces the pagination dots. State is encapsulated so it resets per contractor.
+// ─────────────────────────────────────────────────────────────────────────────
+
+private struct GalleryPhotoView: View {
+    /// Screened work-photo URLs, supplied by the screen (prefetched & cached).
+    /// nil = still screening (loading); [] = no work photos (placeholder).
+    let photos: [String]?
+    /// Fixed content width (screen width). Sizing the photo with a *fixed* width
+    /// rather than `maxWidth: .infinity` is essential: `scaledToFill` + a fixed
+    /// height otherwise proposes a width of height×aspectRatio, which leaks into
+    /// the layout and makes the whole screen (header/footer/sheet) fluctuate as
+    /// the displayed image's aspect ratio changes.
+    let width: CGFloat
+    let imageHeight: CGFloat
+    /// Distance from the bottom of the screen to the bottom of the strip — places
+    /// it just above the collapsed sheet.
+    let stripBottomPadding: CGFloat
+
+    @State private var photoIndex = 0
+
+    private var shownPhotos: [String] { photos ?? [] }
+
+    var body: some View {
+        let photoURL = shownPhotos.indices.contains(photoIndex)
+            ? URL(string: shownPhotos[photoIndex]) : nil
+
+        ZStack(alignment: .top) {
+            // ── Full-width photo, anchored to the top ─────────────────────────
+            Group {
+                if photos == nil {
+                    // Still screening — show a neutral loading surface, not the
+                    // unfiltered pool.
+                    loadingSurface
+                } else if shownPhotos.isEmpty {
+                    // Whole pool was non-work imagery (filtered out) — branded
+                    // placeholder rather than the rejected junk.
+                    placeholder
+                } else {
+                    PlacesImage(url: photoURL) { Color.black }
+                        .scaledToFill()
+                        .frame(width: width, height: imageHeight)
+                        .clipped()
+                        .id(photoIndex)
+                        .transition(.opacity)
+                        .animation(.easeInOut(duration: 0.3), value: photoIndex)
+                        .overlay(photoTapZones)
+                        // Swipe left / right to cycle through the photos.
+                        .contentShape(Rectangle())
+                        .gesture(swipeGesture)
+                }
+            }
+            .frame(width: width, height: imageHeight)
+            .frame(maxHeight: .infinity, alignment: .top)
+
+            // ── Gallery image viewer (thumbnail strip) ────────────────────────
+            if shownPhotos.count > 1 {
+                thumbnailStrip
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
+                    .padding(.bottom, stripBottomPadding)
+            }
+        }
+    }
+
+    private var loadingSurface: some View {
+        ZStack {
+            LinearGradient(
+                colors: [Color(white: 0.16), Color(white: 0.08)],
+                startPoint: .top, endPoint: .bottom
+            )
+            ProgressView().tint(.white.opacity(0.6))
+        }
+    }
+
+    private var placeholder: some View {
+        ZStack {
+            LinearGradient(
+                colors: [Color(white: 0.16), Color(white: 0.08)],
+                startPoint: .top, endPoint: .bottom
+            )
+            VStack(spacing: 12) {
+                Image(systemName: "photo.on.rectangle.angled")
+                    .font(.system(size: 44, weight: .light))
+                    .foregroundStyle(.white.opacity(0.35))
+                Text("No work photos yet")
+                    .font(.bodySmall)
+                    .foregroundStyle(.white.opacity(0.4))
+            }
+        }
+    }
+
+    private var thumbnailStrip: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 8) {
+                ForEach(Array(shownPhotos.enumerated()), id: \.offset) { i, s in
+                    let active = i == photoIndex
+                    Button {
+                        withAnimation(.easeInOut(duration: 0.2)) { photoIndex = i }
+                    } label: {
+                        PlacesImage(url: URL(string: s)) { Color.black }
+                            .scaledToFill()
+                            .frame(width: 52, height: 64)
+                            .clipped()
+                            .overlay(Color.black.opacity(active ? 0 : 0.4))
+                            .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 16, style: .continuous)
+                                    .stroke(active ? Color.white : Color.white.opacity(0.5),
+                                            lineWidth: 1)
+                            )
+                            .shadow(color: .black.opacity(0.25), radius: 4, x: 0, y: 4)
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+            .padding(.horizontal, 16)
+        }
+        .animation(.easeInOut(duration: 0.2), value: photoIndex)
+    }
+
+    // Left / right halves page through the photos.
+    private var photoTapZones: some View {
+        HStack(spacing: 0) {
+            Color.clear.contentShape(Rectangle()).onTapGesture { page(-1) }
+            Color.clear.contentShape(Rectangle()).onTapGesture { page(1) }
+        }
+        .frame(height: imageHeight)
+        .frame(maxHeight: .infinity, alignment: .top)
+    }
+
+    private func page(_ dir: Int) {
+        let count = shownPhotos.count
+        guard count > 1 else { return }
+        withAnimation(.easeInOut(duration: 0.2)) {
+            photoIndex = (photoIndex + dir + count) % count
+        }
+    }
+
+    // Horizontal swipe pages photos; commit once on end so it doesn't fight the
+    // tap zones. Vertical-dominant drags are ignored (they belong to the sheet).
+    private var swipeGesture: some Gesture {
+        DragGesture(minimumDistance: 20)
+            .onEnded { v in
+                guard abs(v.translation.width) > abs(v.translation.height),
+                      abs(v.translation.width) > 40 else { return }
+                page(v.translation.width < 0 ? 1 : -1)   // swipe left → next
+            }
+    }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // MARK: - GalleryHeader
-// Fading blurred gradient with a background blur (Figma: "Blurred bg" rect with
-// BACKGROUND_BLUR 8 + a top→bottom gradient that fades out).
+// Matches the main screen's top bar: horizontal 16 / vertical 8 padding over the
+// shared BlurredHeaderBackground.
 // ─────────────────────────────────────────────────────────────────────────────
 
 private struct GalleryHeader: View {
@@ -192,6 +599,7 @@ private struct GalleryHeader: View {
                     .font(.system(size: 18, weight: .semibold))
                     .foregroundStyle(.white)
                     .frame(width: 44, height: 44)
+                    .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
 
@@ -200,288 +608,36 @@ private struct GalleryHeader: View {
                     .font(.h2)
                     .foregroundStyle(.white)
                     .lineLimit(1)
+                    .truncationMode(.tail)
                 if let countText {
                     Text(countText)
                         .font(.bodySmall)
                         .foregroundStyle(.white.opacity(0.6))
+                        .lineLimit(1)
                 }
             }
-
-            Spacer(minLength: 0)
+            // Absorbs the slack and truncates, so a long title can never push the
+            // Send-to-all button off the right edge.
+            .frame(maxWidth: .infinity, alignment: .leading)
 
             if showSendToAll {
                 Button(action: onSendAll) {
                     Text(sentToAll ? "Sent ✓" : "Send to all")
                         .font(.h4)
                         .foregroundStyle(.white)
+                        .fixedSize()
                         .padding(.horizontal, 14)
                         .frame(height: 29)
-                        .background(AppColors.btnSecondary, in: Capsule())
+                        .secondaryButtonBackground()
                 }
                 .buttonStyle(.plain)
             }
         }
         .padding(.horizontal, 16)
-        .padding(.bottom, 12)
+        .padding(.vertical, 8)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(alignment: .top) {
-            // Background blur of the photo behind, masked to fade out downward, with
-            // a dark gradient for legibility under the title.
-            ZStack {
-                Rectangle().fill(.ultraThinMaterial)
-                LinearGradient(
-                    colors: [AppColors.bg.opacity(0.55), .clear],
-                    startPoint: .top, endPoint: .bottom
-                )
-            }
-            .mask(
-                LinearGradient(
-                    stops: [
-                        .init(color: .black, location: 0.0),
-                        .init(color: .black, location: 0.55),
-                        .init(color: .clear, location: 1.0)
-                    ],
-                    startPoint: .top, endPoint: .bottom
-                )
-            )
-            .frame(height: 132)
-            .frame(maxWidth: .infinity)
-            .ignoresSafeArea(edges: .top)
-            .allowsHitTesting(false)
-        }
-    }
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// MARK: - GalleryCardView
-// Full-bleed photo + a draggable solid bottom sheet. Horizontal swipe = skip /
-// request quote; corners round only while swiping.
-// ─────────────────────────────────────────────────────────────────────────────
-
-struct GalleryCardView: View {
-    let contractor: Contractor
-    var estimate: PriceTier? = nil
-    let isTop: Bool
-    let onSkip: () -> Void
-    let onQuote: () -> Void
-
-    @State private var offset: CGSize = .zero
-    @State private var photoIndex = 0
-    @State private var screenedPhotos: [String]? = nil
-    @State private var expanded = false
-    @GestureState private var sheetDrag: CGFloat = 0   // live vertical drag, +down
-
-    private var photos: [String] { screenedPhotos ?? contractor.photos }
-    private var reviews: [Review] { Array(contractor.reviews.prefix(5)) }
-    private var swipeProgress: Double { Double(offset.width) / 150 }
-    private var isSwiping: Bool { abs(offset.width) > 1 }
-
-    var body: some View {
-        GeometryReader { geo in
-            let W = geo.size.width
-            let H = geo.size.height
-            let collapsedH = H * 0.25   // sits ~30% lower than the first pass
-            let expandedH  = H * 0.93
-            let base = expanded ? expandedH : collapsedH
-            let sheetH = min(expandedH, max(collapsedH, base - sheetDrag))
-            // 0 collapsed → 1 expanded, used to fade the photo dots out.
-            let expandProgress = (sheetH - collapsedH) / max(1, expandedH - collapsedH)
-
-            let photoURL = photos.indices.contains(photoIndex)
-                ? URL(string: photos[photoIndex]) : nil
-
-            ZStack(alignment: .bottom) {
-
-                // ── 1. Full-bleed photo with tap-to-page zones ────────────────
-                PlacesImage(url: photoURL) { AppColors.cardFallback }
-                    .scaledToFill()
-                    .frame(width: W, height: H)
-                    .clipped()
-                    .animation(.easeInOut(duration: 0.2), value: photoIndex)
-                    .overlay(photoTapZones)
-                    // Horizontal swipe lives on the photo so it never fights the
-                    // sheet's vertical drag / review scrolling.
-                    .simultaneousGesture(isTop ? swipeGesture : nil)
-
-                // ── 2. Photo pagination dots, just above the sheet ────────────
-                if photos.count > 1 {
-                    HStack(spacing: 8) {
-                        ForEach(photos.indices, id: \.self) { i in
-                            Circle()
-                                .fill(i == photoIndex ? AppColors.dotActive : AppColors.dotInactive)
-                                .frame(width: 8, height: 8)
-                                .animation(.easeInOut(duration: 0.2), value: photoIndex)
-                        }
-                    }
-                    .padding(.bottom, sheetH + 16)
-                    .opacity(1 - expandProgress)
-                    .allowsHitTesting(false)
-                }
-
-                // ── 3. Solid bottom sheet ─────────────────────────────────────
-                bottomSheet(width: W, height: sheetH)
-            }
-            .frame(width: W, height: H)
-            // Corners round only while swiping the card left/right.
-            .clipShape(RoundedRectangle(cornerRadius: isSwiping ? 32 : 0, style: .continuous))
-            .shadow(color: .black.opacity(isSwiping ? 0.25 : 0), radius: 8, x: 0, y: 4)
-        }
-        .ignoresSafeArea()
-        .rotationEffect(.degrees(isTop ? swipeProgress * 4 : 0))
-        .offset(isTop ? offset : .zero)
-        .animation(.spring(response: 0.35, dampingFraction: 0.85), value: expanded)
-        .task(priority: .background) {
-            guard screenedPhotos == nil else { return }
-            let current = photos.indices.contains(photoIndex) ? photos[photoIndex] : nil
-            let kept = await PhotoFilter.screen(contractor.photos)
-            screenedPhotos = kept
-            photoIndex = current.flatMap { kept.firstIndex(of: $0) } ?? 0
-        }
-    }
-
-    // Left / right halves page through the photos.
-    private var photoTapZones: some View {
-        HStack(spacing: 0) {
-            Color.clear.contentShape(Rectangle()).onTapGesture { page(-1) }
-            Color.clear.contentShape(Rectangle()).onTapGesture { page(1) }
-        }
-    }
-
-    private func page(_ dir: Int) {
-        guard photos.count > 1 else { return }
-        withAnimation(.easeInOut(duration: 0.2)) {
-            photoIndex = (photoIndex + dir + photos.count) % photos.count
-        }
-    }
-
-    // ── Bottom sheet ──────────────────────────────────────────────────────────
-    private func bottomSheet(width: CGFloat, height: CGFloat) -> some View {
-        VStack(spacing: 0) {
-            // Grab handle — also the drag target for expand / collapse.
-            Capsule()
-                .fill(AppColors.handle)
-                .frame(width: 44, height: 8)
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 8)
-                .contentShape(Rectangle())
-                .gesture(sheetDragGesture)
-
-            ScrollView(.vertical, showsIndicators: false) {
-                VStack(alignment: .leading, spacing: 16) {
-                    infoBlock
-                    ForEach(reviews) { ReviewRowGallery(review: $0) }
-                    Color.clear.frame(height: 112) // clear the pinned CTAs
-                }
-                .padding(.horizontal, 24)
-                .padding(.top, 8)
-            }
-            .scrollDisabled(!expanded)
-            // While collapsed, scrolling is off so a drag on the body pulls the
-            // sheet up instead. Once expanded, the ScrollView takes over.
-            .simultaneousGesture(expanded ? nil : sheetDragGesture)
-        }
-        .frame(width: width, height: height, alignment: .top)
-        .background(AppColors.bg)                       // solid color sheet
-        .clipShape(.rect(topLeadingRadius: 24, topTrailingRadius: 24))
-        .overlay(alignment: .bottom) { ctaFooter(width: width) }
-    }
-
-    private var infoBlock: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text(contractor.name)
-                .font(.h2)
-                .foregroundStyle(.white)
-                .lineLimit(1)
-
-            if let tier = estimate ?? contractor.priceTiers.first {
-                Text("\(estimate == nil ? "Price range" : "Est. price"): $\(money(tier.min))–\(money(tier.max))")
-                    .font(.bodySmall)
-                    .foregroundStyle(.white.opacity(0.5))
-            }
-
-            HStack(spacing: 8) {
-                StarRow(rating: contractor.rating)
-                if contractor.reviewCount > 0 {
-                    Text("\(contractor.rating, specifier: "%.1f") • \(contractor.reviewCount) reviews")
-                        .font(.bodySmall)
-                        .foregroundStyle(.white.opacity(0.5))
-                }
-            }
-        }
-    }
-
-    private func money(_ v: Int) -> String { v >= 1000 ? "\(v / 1000)k" : "\(v)" }
-
-    // Pinned Skip / Request quote — a centered, content-sized button group on a
-    // solid floor that fades up into the reviews (Figma "Footer": Skip 99×48 +
-    // 8pt gap + Request quote, radius 32, Lato 700/18).
-    private func ctaFooter(width: CGFloat) -> some View {
-        HStack(spacing: 8) {
-            Button(action: onSkip) {
-                Text("Skip")
-                    .font(.h3)
-                    .foregroundStyle(.white)
-                    .frame(width: 99, height: 48)
-                    .background(AppColors.btnSecondary, in: Capsule())
-            }
-            .buttonStyle(.plain)
-
-            Button(action: onQuote) {
-                Text("Request quote")
-                    .font(.h3)
-                    .foregroundStyle(.white)
-                    .fixedSize()                 // hug the text, don't stretch
-                    .padding(.horizontal, 28)
-                    .frame(height: 48)
-                    .background(AppColors.btnPrimary, in: Capsule())
-            }
-            .buttonStyle(.plain)
-        }
-        .frame(maxWidth: .infinity)              // center the group
-        .padding(.top, 16)
-        .padding(.bottom, 24)
-        .frame(width: width)
-        .background(alignment: .bottom) {
-            // Solid floor behind the buttons with a short fade at the top edge.
-            VStack(spacing: 0) {
-                LinearGradient(colors: [.clear, AppColors.bg],
-                               startPoint: .top, endPoint: .bottom)
-                    .frame(height: 28)
-                AppColors.bg
-            }
-            .allowsHitTesting(false)
-        }
-    }
-
-    // ── Gestures ──────────────────────────────────────────────────────────────
-    private var sheetDragGesture: some Gesture {
-        DragGesture(minimumDistance: 5)
-            .updating($sheetDrag) { v, state, _ in state = v.translation.height }
-            .onEnded { v in
-                // Up → expand, down → collapse (with a velocity assist).
-                if v.translation.height < -40 { expanded = true }
-                else if v.translation.height > 40 { expanded = false }
-            }
-    }
-
-    private var swipeGesture: some Gesture {
-        DragGesture(minimumDistance: 12)
-            .onChanged { v in
-                guard abs(v.translation.width) > abs(v.translation.height) else { return }
-                offset = CGSize(width: v.translation.width, height: 0)
-            }
-            .onEnded { v in
-                let t: CGFloat = 110
-                if v.translation.width > t {
-                    withAnimation(.spring()) { offset = CGSize(width: 700, height: 0) }
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) { onQuote() }
-                } else if v.translation.width < -t {
-                    withAnimation(.spring()) { offset = CGSize(width: -700, height: 0) }
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) { onSkip() }
-                } else {
-                    withAnimation(.spring()) { offset = .zero }
-                }
-            }
+        .contentShape(Rectangle())
+        .background(alignment: .top) { BlurredHeaderBackground() }
     }
 }
 
@@ -505,6 +661,8 @@ private struct StarRow: View {
 
 private struct ReviewRowGallery: View {
     let review: Review
+    @State private var showingOriginal = false
+
     var body: some View {
         HStack(alignment: .top, spacing: 12) {
             Group {
@@ -522,12 +680,26 @@ private struct ReviewRowGallery: View {
                 Text(review.author)
                     .font(.h4)
                     .foregroundStyle(Color(hex: "#ECEBED"))
-                Text(review.text)
+                StarRow(rating: Double(review.rating))
+                Text(showingOriginal ? (review.originalText ?? review.text) : review.text)
                     .font(.bodySmall)
                     .foregroundStyle(.white.opacity(0.5))
                     .lineSpacing(4)
                     .fixedSize(horizontal: false, vertical: true)
-                StarRow(rating: Double(review.rating))
+
+                // Only when the review was translated from another language.
+                if let original = review.originalText, !original.isEmpty {
+                    Button {
+                        withAnimation(.easeInOut(duration: 0.15)) { showingOriginal.toggle() }
+                    } label: {
+                        Text(showingOriginal
+                             ? "See translation"
+                             : "See original (\(review.originalLanguageName ?? "original"))")
+                            .font(.bodySmall)
+                            .foregroundStyle(AppColors.accentStart)
+                    }
+                    .buttonStyle(.plain)
+                }
             }
             Spacer(minLength: 0)
         }

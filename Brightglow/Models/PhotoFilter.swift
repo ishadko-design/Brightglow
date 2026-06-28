@@ -26,10 +26,17 @@ enum PhotoFilter {
     /// Reject when recognized text covers more than this fraction of the frame
     /// (menus, flyers, screenshots, heavily-watermarked images).
     private static let maxTextAreaFraction: Double = 0.05
-    /// A single face covering more than this share of the frame = a portrait.
-    private static let maxFaceAreaFraction: Double = 0.03
+    /// A single face covering more than this share of the frame = a posed
+    /// portrait / selfie (the person, not their work, is the subject).
+    private static let maxFaceAreaFraction: Double = 0.06
     /// Two or more faces = a group / staff photo, not the work.
     private static let maxFaces = 1
+    /// Two or more detected human bodies = a group / staff / crowd photo. Body
+    /// detection catches standing or distant people that face detection misses.
+    /// A *single* person is allowed — that's typically someone doing the work.
+    private static let maxHumans = 1
+    /// Minimum confidence for a human-body detection to count.
+    private static let humanConfidence: Float = 0.5
     /// Classification confidence at which a reject token vetoes the image.
     private static let rejectConfidence: Float = 0.35
 
@@ -68,11 +75,19 @@ enum PhotoFilter {
 
         let handler = VNImageRequestHandler(cgImage: cg, options: [:])
         let faceReq  = VNDetectFaceRectanglesRequest()
+        let humanReq = VNDetectHumanRectanglesRequest()
+        if #available(iOS 15.0, *) { humanReq.upperBodyOnly = false }
         let classReq = VNClassifyImageRequest()
         let textReq  = VNRecognizeTextRequest()
         textReq.recognitionLevel = .fast
         textReq.usesLanguageCorrection = false
-        try? handler.perform([faceReq, classReq, textReq])
+        // Perform each request independently: if one type is unsupported on the
+        // current device/simulator it throws, and a single batched `perform`
+        // would then void *every* gate (letting all photos through).
+        try? handler.perform([faceReq])
+        try? handler.perform([humanReq])
+        try? handler.perform([classReq])
+        try? handler.perform([textReq])
 
         // 3. Face / people gate — a prominent face, or more than one face, means
         //    the subject is people rather than the work.
@@ -82,6 +97,16 @@ enum PhotoFilter {
         }
         if faces.contains(where: { $0.boundingBox.width * $0.boundingBox.height > maxFaceAreaFraction }) {
             log(cg, reject: "prominent face"); return false
+        }
+
+        // 3b. Human-body gate — catches standing / distant / posed people that
+        //     face detection misses (staff line-ups, group/office shots). Only a
+        //     *group* (2+ bodies) is rejected; a single person is kept, since
+        //     that's usually a worker doing the job — and a posed solo portrait
+        //     is already caught by the prominent-face check above.
+        let humans = (humanReq.results ?? []).filter { $0.confidence >= humanConfidence }
+        if humans.count > maxHumans {
+            log(cg, reject: "\(humans.count) people"); return false
         }
 
         // 4. Text gate — reject images dominated by text.
@@ -145,21 +170,30 @@ enum PhotoFilter {
     /// Screen a candidate pool of photo URLs, returning up to `maxKept` genuine
     /// work examples (full-size display URLs). Each candidate is analysed on a
     /// medium screening rendition so blur stays detectable while the pool review
-    /// stays cheap. Never returns empty — falls back to the original list.
+    /// stays cheap.
+    ///
+    /// May return an empty array: when a contractor's entire pool is non-work
+    /// imagery (branded vehicles, staff portraits, flyers/menus, logos) every
+    /// candidate is rejected, and we deliberately return nothing rather than
+    /// re-adding the junk — the gallery then shows a placeholder. Only a *failed
+    /// download* (which we can't judge) is kept, so transient network errors
+    /// don't blank an otherwise-good gallery.
     static func screen(_ urls: [String]) async -> [String] {
         var kept: [String] = []
         for displayURL in urls {
             if kept.count >= maxKept { break }
             let scrURLStr = screeningURL(from: displayURL)
             guard let url = URL(string: scrURLStr) else { continue }
-            if let (data, _) = try? await URLSession.shared.data(from: url),
-               let img = UIImage(data: data) {
+            // Use the shared authenticated loader: Places' bundle-restricted API
+            // key 403s a plain URLSession request, so a raw fetch here would fail
+            // every time and silently keep all photos unscreened.
+            if let img = await ImageCache.download(url) {
                 if isWorkExample(img) { kept.append(displayURL) }   // display full-size
             } else {
-                kept.append(displayURL)
+                kept.append(displayURL)   // couldn't fetch to judge → keep
             }
         }
-        return kept.isEmpty ? Array(urls.prefix(maxKept)) : kept
+        return kept
     }
 
     /// Derives the screening rendition URL from a full-size display URL by

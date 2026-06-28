@@ -116,8 +116,16 @@ struct Review: Codable, Identifiable {
     let author: String
     let authorPhotoURL: String?
     let rating: Int
+    /// Shown by default — Google's translation into the device locale when the
+    /// original is in another language, otherwise the original.
     let text: String
     let relativeTime: String    // e.g. "3 weeks ago"
+    /// The author's original-language text, set only when it differs from `text`
+    /// (i.e. the review was translated). Drives the "See original" toggle.
+    var originalText: String? = nil
+    /// Localized display name of the original language (e.g. "Ukrainian"), shown
+    /// in the toggle CTA. Set only when `originalText` is.
+    var originalLanguageName: String? = nil
 }
 
 struct Contractor: Codable, Identifiable {

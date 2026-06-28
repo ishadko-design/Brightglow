@@ -76,14 +76,14 @@ struct DrawModeView: View {
                     // Back + Profile — explicitly below the status bar
                     HStack {
                         Button(action: onBack) {
+                            // Match the gallery header's back control: arrow.left, 18pt semibold.
                             HStack(spacing: 4) {
-                                Image(systemName: "chevron.left")
-                                    .font(.system(size: 17, weight: .semibold))
+                                Image(systemName: "arrow.left")
+                                    .font(.system(size: 18, weight: .semibold))
                                 Text("Back")
-                                    .font(.bodyLight)
+                                    .font(.system(size: 18, weight: .semibold))
                             }
                             .foregroundStyle(.white)
-                            .shadow(color: .black.opacity(0.5), radius: 4, x: 0, y: 2)
                         }
 
                         Spacer()
@@ -114,20 +114,12 @@ struct DrawModeView: View {
                             }
                             .transition(.opacity.combined(with: .scale(scale: 0.85)))
                         }
-
-                        Button(action: {}) {
-                            Image(systemName: "person.circle.fill")
-                                .font(.system(size: 26))
-                                .foregroundStyle(.white.opacity(0.8))
-                                .iconTapTarget()
-                                .background(.ultraThinMaterial)
-                                .clipShape(Circle())
-                        }
                     }
                     .animation(.easeInOut(duration: 0.2), value: paths.isEmpty)
                     .padding(.horizontal, 16)
                     .frame(height: 44)
                     .padding(.top, safeTop)
+                    .background(alignment: .top) { BlurredHeaderBackground() }
 
                     Spacer()
 

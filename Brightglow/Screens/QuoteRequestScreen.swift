@@ -47,15 +47,15 @@ struct QuoteRequestScreen: View {
     private var reviewState: some View {
         VStack(alignment: .leading, spacing: 0) {
 
-            // Back
+            // Back — same as every other header: plain arrow, no circle.
             Button(action: { dismiss() }) {
                 Image(systemName: "arrow.left")
-                    .font(.system(size: 16, weight: .bold))
+                    .font(.system(size: 18, weight: .semibold))
                     .foregroundStyle(.white)
-                    .frame(width: 56, height: 56)
-                    .background(Circle().fill(Color.white.opacity(0.1)))
+                    .frame(width: 44, height: 44)
+                    .contentShape(Rectangle())
             }
-            .padding(.leading, 16)
+            .padding(.leading, 8)
             .padding(.top, 8)
 
             ScrollView {
@@ -63,7 +63,7 @@ struct QuoteRequestScreen: View {
 
                     VStack(alignment: .leading, spacing: 8) {
                         Text("Send your request?")
-                            .font(.h2)
+                            .font(.h3)
                             .foregroundStyle(.white)
                         Text("We'll email your request\(contractor != nil ? " to \(contractor!.name)" : " to this contractor"). They'll reply to you directly.")
                             .font(.bodyLight)

@@ -23,3 +23,6 @@ Secrets.xcconfig
 # CocoaPods / Carthage (if ever used)
 Pods/
 Carthage/Build/
+
+# Claude Code local settings (may contain tokens)
+.claude/
