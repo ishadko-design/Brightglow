@@ -23,9 +23,11 @@ struct BlurredHeaderBackground: View {
             .overlay(alignment: .top) {
                 LinearGradient(
                     stops: [
+                        // Darker, and the dark region is held lower before fading,
+                        // so header text stays legible over bright photo content.
                         .init(color: .black,               location: 0.0),
-                        .init(color: .black.opacity(0.7),  location: 0.4),
-                        .init(color: .black.opacity(0.3),  location: 0.72),
+                        .init(color: .black.opacity(0.88), location: 0.5),
+                        .init(color: .black.opacity(0.5),  location: 0.82),
                         .init(color: .clear,               location: 1.0)
                     ],
                     startPoint: .top, endPoint: .bottom

@@ -35,6 +35,7 @@ struct QuoteRequestScreen: View {
         }
         .navigationBarBackButtonHidden(true)
         .toolbar(.hidden, for: .navigationBar)
+        .enableSwipeBack()
         .preferredColorScheme(.dark)
         .onAppear {
             if email.isEmpty { email = auth.user?.email ?? "" }

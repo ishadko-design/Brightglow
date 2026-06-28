@@ -9,6 +9,8 @@ enum Category: String, CaseIterable, Codable {
     case roofing       = "Roofing"
     case flooring      = "Flooring"
     case windowsDoors  = "Windows & Doors"
+    case landscaping   = "Landscaping"
+    case pestControl   = "Mold & Pest Control"
 
     /// Keywords a user might free-form type that map to this category.
     var keywords: [String] {
@@ -22,6 +24,8 @@ enum Category: String, CaseIterable, Codable {
         case .roofing:      return ["roof", "roofing", "shingle", "gutter", "leak roof"]
         case .flooring:     return ["floor", "flooring", "hardwood", "tile", "laminate", "carpet", "vinyl", "lvp", "epoxy"]
         case .windowsDoors: return ["window", "door", "glass", "sash", "screen", "frame"]
+        case .landscaping:  return ["landscap", "lawn", "garden", "yard", "grass", "mowing", "mow", "hedge", "tree", "shrub", "mulch", "sod", "irrigation", "sprinkler", "patio", "hardscape", "weed", "leaves"]
+        case .pestControl:  return ["pest", "mold", "mildew", "termite", "rodent", "rat", "mice", "mouse", "roach", "cockroach", "ant", "bug", "insect", "exterminat", "fumigat", "spider", "wasp", "bee", "bed bug", "infestation", "moisture"]
         }
     }
 
@@ -61,6 +65,8 @@ extension Category {
         case .roofing:      return "roofing contractor"
         case .flooring:     return "flooring contractor"
         case .windowsDoors: return "window door installation contractor"
+        case .landscaping:  return "landscaping lawn care contractor"
+        case .pestControl:  return "pest control mold remediation contractor"
         }
     }
 
@@ -75,6 +81,8 @@ extension Category {
         case .roofing:      return [PriceTier(label: "Patch / repair", min: 300, max: 800), PriceTier(label: "Partial replace", min: 3000, max: 7000), PriceTier(label: "Full roof", min: 8000, max: 20000)]
         case .flooring:     return [PriceTier(label: "Single room", min: 500, max: 1500), PriceTier(label: "Whole floor", min: 2000, max: 6000), PriceTier(label: "Full home", min: 8000, max: 20000)]
         case .windowsDoors: return [PriceTier(label: "Single unit", min: 300, max: 800), PriceTier(label: "Multiple units", min: 1500, max: 4000), PriceTier(label: "Full install", min: 5000, max: 12000)]
+        case .landscaping:  return [PriceTier(label: "Lawn / cleanup", min: 100, max: 400), PriceTier(label: "Garden redesign", min: 1500, max: 5000), PriceTier(label: "Full landscape", min: 8000, max: 25000)]
+        case .pestControl:  return [PriceTier(label: "Single treatment", min: 150, max: 400), PriceTier(label: "Mold remediation", min: 1000, max: 4000), PriceTier(label: "Full fumigation", min: 2000, max: 6000)]
         }
     }
 }

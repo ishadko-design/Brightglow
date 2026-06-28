@@ -241,6 +241,8 @@ struct DrawModeView: View {
         }
         .ignoresSafeArea()
         .preferredColorScheme(.dark)
+        // Modal (full-screen cover) → no system pop gesture; left-edge swipe = back.
+        .edgeSwipeBack(perform: onBack)
         .onAppear {
             applyDefaultSelection()
             DispatchQueue.main.asyncAfter(deadline: .now() + 3) {

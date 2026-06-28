@@ -33,6 +33,20 @@ struct ContractorGalleryScreen: View {
     /// When set (manual ZIP/city or an already-resolved fix), used instead of GPS.
     var presetCoordinate: CLLocationCoordinate2D? = nil
 
+    /// When the gallery is opened from the List view, the already-loaded
+    /// contractors and their screened work photos are handed over so we don't
+    /// re-fetch or re-screen. `startContractorID` is the contractor whose photo
+    /// was tapped — it's surfaced first. `presetEstimate` keeps the price line in
+    /// step with the list.
+    var preloadedContractors: [Contractor]? = nil
+    var preScreened: [String: [String]] = [:]
+    var startContractorID: String? = nil
+    var presetEstimate: PriceTier? = nil
+    /// Reports the contractor currently on top, so the List view can restore to
+    /// the spot the user navigated to (they may have skipped past the one they
+    /// opened) when they go back.
+    var lastViewedID: Binding<String?>? = nil
+
     @Environment(\.dismiss) var dismiss
     @Environment(\.openURL) private var openURL
     @StateObject private var location = LocationProvider()
@@ -41,7 +55,6 @@ struct ContractorGalleryScreen: View {
     @State private var showQuote   = false
     @State private var selectedContractor: Contractor? = nil
     @State private var estimate: PriceTier? = nil
-    @State private var sentToAll   = false
     @State private var totalCount  = 0
 
     @State private var sheetDetent: SheetDetent = .collapsed
@@ -120,17 +133,9 @@ struct ContractorGalleryScreen: View {
 
                 // ── Header — matches the main screen's top bar ────────────────
                 GalleryHeader(
-                    title: headerTitle,
-                    countText: contractors.isEmpty
-                        ? nil
-                        : "\(totalCount - contractors.count + 1)/\(totalCount) businesses",
-                    sentToAll: sentToAll,
-                    showSendToAll: !contractors.isEmpty,
-                    onBack: { dismiss() },
-                    onSendAll: {
-                        guard !sentToAll else { return }
-                        withAnimation(.easeInOut(duration: 0.2)) { sentToAll = true }
-                    }
+                    title: topContractor?.name ?? headerTitle,
+                    subtitle: priceText(for: topContractor),
+                    onBack: { dismiss() }
                 )
                 .frame(maxHeight: .infinity, alignment: .top)
                 .zIndex(100)
@@ -141,6 +146,7 @@ struct ContractorGalleryScreen: View {
         }
         .navigationBarBackButtonHidden(true)
         .toolbar(.hidden, for: .navigationBar)
+        .enableSwipeBack()
         .task {
             await loadContractors()
             totalCount = contractors.count
@@ -148,16 +154,20 @@ struct ContractorGalleryScreen: View {
         // Screen the current contractor + the next couple ahead of time, so the
         // photo is ready the instant a contractor is surfaced (no load stall).
         .task(id: topContractor?.id) { await prefetchUpcoming() }
+        // Keep the List view's restore target in step with the contractor on top.
+        .onChange(of: topContractor?.id, initial: true) { _, id in
+            if let id { lastViewedID?.wrappedValue = id }
+        }
         .navigationDestination(isPresented: $showQuote) {
             QuoteRequestScreen(contractor: selectedContractor, requestSummary: headerTitle)
         }
     }
 
-    // ── Sheet content (handle is supplied by BottomSheet) ─────────────────────
+    // ── Sheet content — reviews only (handle is supplied by BottomSheet) ───────
     private func sheetBody(for contractor: Contractor, bottomInset: CGFloat) -> some View {
         ScrollView(.vertical, showsIndicators: false) {
             VStack(alignment: .leading, spacing: 16) {
-                infoBlock(for: contractor)
+                reviewsHeader(for: contractor)
                 if contractor.reviews.isEmpty {
                     Text("No reviews yet")
                         .font(.bodySmall)
@@ -184,36 +194,36 @@ struct ContractorGalleryScreen: View {
         }
     }
 
-    private func infoBlock(for contractor: Contractor) -> some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text(contractor.name)
-                .font(.h3)
+    // "Reviews" section title (enlarged) with the rating summary on the right —
+    // the summary opens the contractor's Google reviews.
+    private func reviewsHeader(for contractor: Contractor) -> some View {
+        HStack(alignment: .firstTextBaseline, spacing: 12) {
+            Text("Reviews")
+                .font(.h2)
                 .foregroundStyle(.white)
-                .lineLimit(1)
-
-            if let tier = estimate ?? contractor.priceTiers.first {
-                Text("\(estimate == nil ? "Price range" : "Est. price"): $\(money(tier.min))–\(money(tier.max))")
-                    .font(.bodySmall)
-                    .foregroundStyle(.white.opacity(0.5))
-            }
-
-            // Stars + rating/review count → opens the contractor's Google reviews.
-            Button {
-                if let url = googleReviewsURL(for: contractor) { openURL(url) }
-            } label: {
-                HStack(spacing: 8) {
-                    StarRow(rating: contractor.rating)
-                    if contractor.reviewCount > 0 {
+            Spacer(minLength: 0)
+            if contractor.reviewCount > 0 {
+                Button {
+                    if let url = googleReviewsURL(for: contractor) { openURL(url) }
+                } label: {
+                    HStack(spacing: 8) {
+                        StarRow(rating: contractor.rating)
                         (Text("\(contractor.rating, specifier: "%.1f") • \(contractor.reviewCount) ")
                             + Text("reviews").underline())
                             .font(.bodySmall)
                             .foregroundStyle(.white.opacity(0.5))
                     }
+                    .contentShape(Rectangle())
                 }
-                .contentShape(Rectangle())
+                .buttonStyle(.plain)
             }
-            .buttonStyle(.plain)
         }
+    }
+
+    // Price line shown under the contractor name in the header.
+    private func priceText(for contractor: Contractor?) -> String? {
+        guard let contractor, let tier = estimate ?? contractor.priceTiers.first else { return nil }
+        return "Est prices: $\(money(tier.min))–\(money(tier.max))"
     }
 
     private func money(_ v: Int) -> String { v >= 1000 ? "\(v / 1000)k" : "\(v)" }
@@ -232,7 +242,7 @@ struct ContractorGalleryScreen: View {
         let buttonWidth = max(0, (width - 32 - 8) / 2)
         return HStack(spacing: 8) {
             Button(action: skipTop) {
-                Text("Skip")
+                Text("Next")
                     .font(.h3)
                     .foregroundStyle(.white)
                     .frame(width: buttonWidth, height: 48)
@@ -337,6 +347,16 @@ struct ContractorGalleryScreen: View {
         showQuote = true
     }
 
+    /// Puts the tapped contractor last (the gallery shows `contractors.last` as
+    /// the top contractor), so opening a photo from the list lands on it.
+    private func orderedForGallery(_ list: [Contractor]) -> [Contractor] {
+        guard let startID = startContractorID,
+              let idx = list.firstIndex(where: { $0.id == startID }) else { return list }
+        var rest = list
+        let selected = rest.remove(at: idx)
+        return rest + [selected]
+    }
+
     // ── Photo screening / prefetch ────────────────────────────────────────────
     // Screens the current contractor (shown last in the array) first, then the
     // two that will be surfaced next, warming their images into the cache. Each
@@ -347,6 +367,15 @@ struct ContractorGalleryScreen: View {
         for contractor in upcoming {
             if screenedByID[contractor.id] != nil { continue }
             let kept = await PhotoFilter.screen(contractor.photos)
+            guard !kept.isEmpty else {
+                // No usable work photos → drop the business entirely rather than
+                // showing an empty placeholder. Keep totalCount in step so the
+                // "x/y businesses" counter stays correct.
+                screenedByID[contractor.id] = []
+                contractors.removeAll { $0.id == contractor.id }
+                if totalCount > 0 { totalCount -= 1 }
+                continue
+            }
             screenedByID[contractor.id] = kept
             for s in kept {
                 if let u = URL(string: s) { await ImageCache.shared.prefetch(u) }
@@ -357,72 +386,41 @@ struct ContractorGalleryScreen: View {
     // ── Data loading (mirrors SwipeScreen) ────────────────────────────────────
     private func loadContractors() async {
         guard contractors.isEmpty else { return }
+
+        // Handed over from the List view — reuse its contractors and screened
+        // photos verbatim, surfacing the tapped contractor first.
+        if let preloaded = preloadedContractors {
+            screenedByID = preScreened
+            estimate = presetEstimate
+            contractors = orderedForGallery(preloaded)
+            return
+        }
+
         isLoading = true
         defer { isLoading = false }
 
-        let resolved = await resolveCoordinate()
+        let resolved = await ContractorLoader.resolveCoordinate(
+            preset: presetCoordinate, location: location)
 
         if let coord = resolved {
             // We have a real location: trust the live result for that area. If it
             // comes back empty, show an empty state — do NOT mask it with the
             // location-independent mock list (that's what made changing the city,
             // e.g. to Kyiv, appear to do nothing).
-            let live = await fetchLive(near: coord)
+            let live = await ContractorLoader.fetchLive(
+                category: category, searchQuery: searchQuery, near: coord)
             contractors = live
             if !live.isEmpty {
-                Task { @MainActor in estimate = await localEstimate(near: coord) }
+                Task { @MainActor in
+                    estimate = await ContractorLoader.estimate(
+                        category: category, searchQuery: searchQuery, near: coord)
+                }
             }
             return
         }
         // Only with no resolvable location at all (denied / offline) do we show
         // the built-in demo contractors.
-        loadFallback()
-    }
-
-    private func resolveCoordinate() async -> CLLocationCoordinate2D? {
-        if let preset = presetCoordinate { return preset }
-        return await withTaskGroup(of: CLLocationCoordinate2D?.self) { group in
-            group.addTask { await location.currentCoordinate() }
-            group.addTask {
-                try? await Task.sleep(nanoseconds: 3_000_000_000)
-                return nil
-            }
-            let first = await group.next() ?? nil
-            group.cancelAll()
-            return first
-        }
-    }
-
-    private func localEstimate(near coord: CLLocationCoordinate2D) async -> PriceTier? {
-        let q   = searchQuery.trimmingCharacters(in: .whitespacesAndNewlines)
-        let cat = !q.isEmpty
-            ? (Category.matching(query: q).first ?? .plumbing)
-            : (Category(rawValue: category) ?? .plumbing)
-        let locality = await EstimateService.locality(for: coord)
-        return await EstimateService.estimate(category: cat, job: q, locality: locality)
-    }
-
-    private func fetchLive(near coord: CLLocationCoordinate2D) async -> [Contractor] {
-        let q = searchQuery.trimmingCharacters(in: .whitespacesAndNewlines)
-        if !q.isEmpty {
-            return await PlacesService.fetch(searchText: q, near: coord)
-        } else if let cat = Category(rawValue: category) {
-            return await PlacesService.fetch(category: cat, near: coord)
-        } else {
-            return await PlacesService.fetch(searchText: "home repair", near: coord)
-        }
-    }
-
-    private func loadFallback() {
-        let q = searchQuery.trimmingCharacters(in: .whitespacesAndNewlines)
-        if !q.isEmpty {
-            let matched = Set(Category.matching(query: q))
-            contractors = mockContractors.filter { !Set($0.category).isDisjoint(with: matched) }
-        } else if !category.isEmpty {
-            contractors = mockContractors.filter { $0.category.map(\.rawValue).contains(category) }
-        } else {
-            contractors = mockContractors
-        }
+        contractors = ContractorLoader.fallback(category: category, searchQuery: searchQuery)
     }
 }
 
@@ -533,10 +531,11 @@ private struct GalleryPhotoView: View {
                             .clipped()
                             .overlay(Color.black.opacity(active ? 0 : 0.4))
                             .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+                            // Only the selected thumbnail gets a white outline;
+                            // unselected ones are borderless.
                             .overlay(
                                 RoundedRectangle(cornerRadius: 16, style: .continuous)
-                                    .stroke(active ? Color.white : Color.white.opacity(0.5),
-                                            lineWidth: 1)
+                                    .stroke(Color.white, lineWidth: active ? 1 : 0)
                             )
                             .shadow(color: .black.opacity(0.25), radius: 4, x: 0, y: 4)
                     }
@@ -586,11 +585,8 @@ private struct GalleryPhotoView: View {
 
 private struct GalleryHeader: View {
     let title: String
-    let countText: String?
-    let sentToAll: Bool
-    let showSendToAll: Bool
+    let subtitle: String?
     let onBack: () -> Void
-    let onSendAll: () -> Void
 
     var body: some View {
         HStack(alignment: .center, spacing: 12) {
@@ -609,31 +605,19 @@ private struct GalleryHeader: View {
                     .foregroundStyle(.white)
                     .lineLimit(1)
                     .truncationMode(.tail)
-                if let countText {
-                    Text(countText)
+                if let subtitle {
+                    Text(subtitle)
                         .font(.bodySmall)
-                        .foregroundStyle(.white.opacity(0.6))
+                        .foregroundStyle(.white)
                         .lineLimit(1)
                 }
             }
-            // Absorbs the slack and truncates, so a long title can never push the
-            // Send-to-all button off the right edge.
+            // Absorbs the slack and truncates so a long name never overflows.
             .frame(maxWidth: .infinity, alignment: .leading)
-
-            if showSendToAll {
-                Button(action: onSendAll) {
-                    Text(sentToAll ? "Sent ✓" : "Send to all")
-                        .font(.h4)
-                        .foregroundStyle(.white)
-                        .fixedSize()
-                        .padding(.horizontal, 14)
-                        .frame(height: 29)
-                        .secondaryButtonBackground()
-                }
-                .buttonStyle(.plain)
-            }
         }
-        .padding(.horizontal, 16)
+        // 4pt before the 44×44 back button; content keeps 16pt off the right edge.
+        .padding(.leading, 4)
+        .padding(.trailing, 16)
         .padding(.vertical, 8)
         .frame(maxWidth: .infinity, alignment: .leading)
         .contentShape(Rectangle())
@@ -696,7 +680,8 @@ private struct ReviewRowGallery: View {
                              ? "See translation"
                              : "See original (\(review.originalLanguageName ?? "original"))")
                             .font(.bodySmall)
-                            .foregroundStyle(AppColors.accentStart)
+                            .underline()
+                            .foregroundStyle(.white.opacity(0.5))
                     }
                     .buttonStyle(.plain)
                 }

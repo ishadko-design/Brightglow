@@ -27,11 +27,15 @@ enum ImageClassifier {
 
     private static let model = "Qwen/Qwen3-VL-8B-Instruct"
 
-    private static let prompt =
-        "You route home-repair requests to the right contractor. Looking at the main "
-        + "subject of this photo, choose exactly ONE trade from this list: "
-        + "Plumbing, Electrical, HVAC, Painting, Carpentry, Roofing, Flooring, Windows & Doors. "
-        + "Reply with only the category name, exactly as written."
+    /// Built from `Category.allCases` so the trade list the model picks from
+    /// always matches the app's categories (no hand-maintained list to drift).
+    private static let prompt: String = {
+        let trades = Category.allCases.map(\.rawValue).joined(separator: ", ")
+        return "You route home-repair requests to the right contractor. Looking at the main "
+            + "subject of this photo, choose exactly ONE trade from this list: "
+            + "\(trades). "
+            + "Reply with only the category name, exactly as written."
+    }()
 
     // MARK: - Public API
 

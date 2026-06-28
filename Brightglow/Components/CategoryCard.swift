@@ -15,6 +15,8 @@ let categoryItems: [CategoryItem] = [
     CategoryItem(category: .roofing,      assetName: "fig_roofing"),
     CategoryItem(category: .flooring,     assetName: "fig_flooring"),
     CategoryItem(category: .windowsDoors, assetName: "fig_windows"),
+    CategoryItem(category: .landscaping,  assetName: "fig_landscaping"),
+    CategoryItem(category: .pestControl,  assetName: "fig_pest"),
 ]
 
 struct CategoryCard: View {

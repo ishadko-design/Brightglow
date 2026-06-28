@@ -1,5 +1,6 @@
 import SwiftUI
 import CoreLocation
+import PhotosUI
 
 struct MainScreen: View {
     @StateObject private var camera = CameraViewModel()
@@ -19,6 +20,13 @@ struct MainScreen: View {
     @State private var drawnPaths: [DrawnPath] = []
     @State private var showCameraHint = false
     @State private var showProfile = false
+    /// Native photo-picker selection (raw items) and the decoded images shown
+    /// as thumbnails above the input bar.
+    @State private var pickedItems: [PhotosPickerItem] = []
+    @State private var pickedImages: [UIImage] = []
+    /// Measured height of the input pill — drives the shutter's clearance so it
+    /// always sits ≥16pt above the bar, even when it grows (thumbnails, multi-line).
+    @State private var inputBarHeight: CGFloat = 60
     @FocusState private var searchFocused: Bool
     @FocusState private var locationFocused: Bool
 
@@ -29,9 +37,13 @@ struct MainScreen: View {
                 let midHeight: CGFloat = geo.size.height - 100
                 let collapsedHeight: CGFloat = 180
                 let headerInset: CGFloat = 76   // 60pt header (44 + 8/8 padding) + 16pt gap to the sheet
+                // True whenever a text field (search OR the location/ZIP field) has
+                // raised the keyboard — both should dock the input bar to it.
+                let keyboardActive = searchFocused || locationFocused
                 // 16pt above the sheet when keyboard is hidden;
-                // 16pt above the input bar (60pt tall, 8pt bottom padding) when keyboard is shown.
-                let shutterPad: CGFloat = searchFocused ? (60 + 8 + 16) : (collapsedHeight + 16)
+                // 16pt above the (measured) input bar when keyboard is shown:
+                // bar sits 16pt above the keyboard, so clear = 16 + barHeight + 16.
+                let shutterPad: CGFloat = keyboardActive ? (inputBarHeight + 16 + 16) : (collapsedHeight + 16)
 
                 ZStack(alignment: .bottom) {
 
@@ -117,8 +129,23 @@ struct MainScreen: View {
                     }
                     .allowsHitTesting(!searchFocused)
 
-                    // ── Gradient fade into search bar — hidden when keyboard is active
-                    // (keyboard pushes the ZStack up, making the gradient float mid-screen)
+                    // ── Solid fill behind the keyboard ───────────────────────────
+                    // The gradient/search bar are pushed up with the keyboard, so
+                    // without this their bg ends at the keyboard's rounded top and
+                    // visibly "stacks". This strip ignores the keyboard inset, so it
+                    // stays pinned to the screen bottom and the bg continues behind
+                    // the (translucent) keyboard — no seam at the rounded corners.
+                    if keyboardActive {
+                        AppColors.bg
+                            .frame(height: 400)
+                            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
+                            .ignoresSafeArea(.keyboard, edges: .bottom)
+                            .ignoresSafeArea(.container, edges: .bottom)
+                            .allowsHitTesting(false)
+                    }
+
+                    // ── Gradient fade into search bar — hidden when the SEARCH field
+                    // is focused (it expands and the fade would float mid-screen)
                     if !searchFocused {
                         LinearGradient(
                             stops: [
@@ -136,7 +163,34 @@ struct MainScreen: View {
                     }
 
                     // ── Search / input bar
-                    HStack(alignment: .center, spacing: 12) {
+                    VStack(spacing: 10) {
+                      // Picked-photo thumbnails — horizontal strip above the field
+                      if !pickedImages.isEmpty {
+                          ScrollView(.horizontal, showsIndicators: false) {
+                              HStack(spacing: 8) {
+                                  ForEach(Array(pickedImages.enumerated()), id: \.offset) { index, image in
+                                      ZStack(alignment: .topTrailing) {
+                                          Image(uiImage: image)
+                                              .resizable()
+                                              .scaledToFill()
+                                              .frame(width: 56, height: 56)
+                                              .clipShape(RoundedRectangle(cornerRadius: 12))
+                                          Button {
+                                              removePickedImage(at: index)
+                                          } label: {
+                                              Image(systemName: "xmark.circle.fill")
+                                                  .font(.system(size: 18))
+                                                  .foregroundStyle(.white, .black.opacity(0.5))
+                                                  .padding(2)
+                                          }
+                                      }
+                                  }
+                              }
+                              .padding(.horizontal, 4)
+                          }
+                          .frame(height: 56)
+                      }
+                      HStack(alignment: .center, spacing: 12) {
                         TextField("What you need help with?", text: $searchText, axis: .vertical)
                             .font(.bodyLight)
                             .foregroundStyle(.white)
@@ -153,10 +207,17 @@ struct MainScreen: View {
                             }
                         if searchText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                             HStack(spacing: 0) {
-                                Image(systemName: "plus.circle")
-                                    .font(.system(size: 22))
-                                    .foregroundStyle(.white.opacity(0.5))
-                                    .iconTapTarget()
+                                PhotosPicker(
+                                    selection: $pickedItems,
+                                    maxSelectionCount: 5,
+                                    matching: .images,
+                                    photoLibrary: .shared()
+                                ) {
+                                    Image(systemName: "plus.circle")
+                                        .font(.system(size: 22))
+                                        .foregroundStyle(.white.opacity(0.5))
+                                        .iconTapTarget()
+                                }
                                 Image(systemName: "mic")
                                     .font(.system(size: 22))
                                     .foregroundStyle(.white.opacity(0.5))
@@ -181,8 +242,12 @@ struct MainScreen: View {
                             }
                             .frame(width: 44, height: 44)
                         }
+                      }
+                      .animation(.easeInOut(duration: 0.15), value: searchText.isEmpty)
                     }
-                    .animation(.easeInOut(duration: 0.15), value: searchText.isEmpty)
+                    .onChange(of: pickedItems) { _, items in
+                        loadPickedImages(items)
+                    }
                     .padding(.horizontal, 16)
                     .padding(.vertical, 8)
                     .frame(minHeight: 60)
@@ -194,9 +259,11 @@ struct MainScreen: View {
                     }
                     .clipShape(RoundedRectangle(cornerRadius: 32))
                     .overlay(RoundedRectangle(cornerRadius: 32).stroke(AppColors.searchBorder, lineWidth: 1.5))
+                    .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { inputBarHeight = $0 }
                     .padding(.horizontal, 16)
-                    .padding(.bottom, searchFocused ? 8 : 34)
+                    .padding(.bottom, keyboardActive ? 16 : 34)
                     .animation(.easeOut(duration: 0.25), value: searchFocused)
+                    .animation(.easeOut(duration: 0.25), value: locationFocused)
                 }
                 .ignoresSafeArea(.container, edges: .bottom)
                 .gesture(
@@ -224,12 +291,12 @@ struct MainScreen: View {
                     get: { goSwipe != nil },
                     set: { if !$0 { goSwipe = nil } }
                 )) {
-                    ContractorGalleryScreen(category: goSwipe?.rawValue ?? "",
-                                            presetCoordinate: locationStore.coordinate)
+                    ContractorListScreen(category: goSwipe?.rawValue ?? "",
+                                         presetCoordinate: locationStore.coordinate)
                 }
                 .navigationDestination(isPresented: $goSearch) {
-                    ContractorGalleryScreen(searchQuery: submittedQuery,
-                                            presetCoordinate: locationStore.coordinate)
+                    ContractorListScreen(searchQuery: submittedQuery,
+                                         presetCoordinate: locationStore.coordinate)
                 }
                 // Once a location resolves (GPS fix or manual ZIP/city), continue
                 // to the category the user tapped while it was still missing.
@@ -389,6 +456,29 @@ struct MainScreen: View {
         default:                                            // .notDetermined
             pendingCategory = category
             locationStore.useCurrentLocation()              // system prompt, then navigate
+        }
+    }
+
+    /// Decode the picker's selected items into UIImages for the thumbnail strip.
+    private func loadPickedImages(_ items: [PhotosPickerItem]) {
+        Task {
+            var images: [UIImage] = []
+            for item in items {
+                if let data = try? await item.loadTransferable(type: Data.self),
+                   let image = UIImage(data: data) {
+                    images.append(image)
+                }
+            }
+            await MainActor.run { pickedImages = images }
+        }
+    }
+
+    /// Remove one thumbnail and keep the picker selection in sync.
+    private func removePickedImage(at index: Int) {
+        guard pickedImages.indices.contains(index) else { return }
+        pickedImages.remove(at: index)
+        if pickedItems.indices.contains(index) {
+            pickedItems.remove(at: index)
         }
     }
 }
