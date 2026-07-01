@@ -21,6 +21,9 @@ enum PlacesService {
         (Bundle.main.object(forInfoDictionaryKey: "SUPABASE_REF") as? String) ?? ""
     private static let supabaseAnonKey: String =
         (Bundle.main.object(forInfoDictionaryKey: "SUPABASE_ANON_KEY") as? String) ?? ""
+    /// Shared token gating the backend functions (matches the APP_TOKEN secret).
+    private static let appToken: String =
+        (Bundle.main.object(forInfoDictionaryKey: "APP_TOKEN") as? String) ?? ""
     private static var useBackend: Bool { !supabaseRef.isEmpty && !supabaseAnonKey.isEmpty }
 
     private static let searchRadius: Double = 40_000   // metres (~25 mi)
@@ -131,6 +134,7 @@ enum PlacesService {
         req.setValue("application/json", forHTTPHeaderField: "Content-Type")
         req.setValue(supabaseAnonKey, forHTTPHeaderField: "apikey")
         req.setValue("Bearer \(supabaseAnonKey)", forHTTPHeaderField: "Authorization")
+        if !appToken.isEmpty { req.setValue(appToken, forHTTPHeaderField: "x-app-token") }
         var body: [String: Any] = [
             "textQuery": textQuery,
             "latitude": coord.latitude,

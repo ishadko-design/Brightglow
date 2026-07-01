@@ -10,6 +10,8 @@
 	<string>$(SUPABASE_REF)</string>
 	<key>SUPABASE_ANON_KEY</key>
 	<string>$(SUPABASE_ANON_KEY)</string>
+	<key>APP_TOKEN</key>
+	<string>$(APP_TOKEN)</string>
 	<key>CFBundleURLTypes</key>
 	<array>
 		<dict>

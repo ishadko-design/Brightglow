@@ -20,6 +20,8 @@ import { createClient } from "jsr:@supabase/supabase-js@2";
 const SUPA_URL = Deno.env.get("SUPABASE_URL") ?? "";
 const SERVICE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
 const db = SUPA_URL && SERVICE_KEY ? createClient(SUPA_URL, SERVICE_KEY) : null;
+// Shared-token gate (Phase 4). Enforced only when APP_TOKEN is set — fail-open.
+const APP_TOKEN = Deno.env.get("APP_TOKEN") ?? "";
 
 const FRESH_MS = 30 * 24 * 60 * 60 * 1000;   // verdicts valid for 30 days
 
@@ -32,6 +34,9 @@ function json(payload: unknown, status = 200): Response {
 
 Deno.serve(async (req) => {
   if (req.method !== "POST") return json({ error: "method not allowed" }, 405);
+  if (APP_TOKEN && req.headers.get("x-app-token") !== APP_TOKEN) {
+    return json({ error: "unauthorized" }, 401);
+  }
   if (!db) return json({ error: "db not configured" }, 500);
 
   let payload: Record<string, unknown>;

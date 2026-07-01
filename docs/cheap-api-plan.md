@@ -29,8 +29,15 @@ on every visit on every device.
   app keeps on-device Apple Vision screening but uploads each place's verdict to
   the `verdicts` Edge Function / `place_verdicts` table, so the first user to view
   a place screens it and everyone else reuses the result. Verified put → get.
-- Remaining: Phase 4 hardening (auth on the functions — currently public/bounded
-  by the Google quota cap; photo proxy to remove the last key from the binary).
+- Phase 4 (partial): **shared-token auth** on both `search` + `verdicts` added.
+  The app sends `x-app-token`; functions enforce it only when the `APP_TOKEN`
+  secret is set (fail-open, so no lockout during rollout). Set with
+  `supabase secrets set APP_TOKEN=…`.
+- Deferred: the **photo proxy** (remove the bundle-restricted iOS key from the
+  binary) — it touches the just-stabilized photo hot path and buys little now
+  (the key is already iOS-bundle + Places-API restricted). Do it later as a
+  device-tested task. Real per-user auth (verify_jwt) waits on the app's own
+  Supabase Auth login being built.
 
 ---
 

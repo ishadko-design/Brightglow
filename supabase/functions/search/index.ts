@@ -19,6 +19,9 @@
 import { createClient } from "jsr:@supabase/supabase-js@2";
 
 const GOOGLE_KEY = Deno.env.get("GOOGLE_PLACES_KEY") ?? "";
+// Shared-token gate (Phase 4). Enforced only when APP_TOKEN is set as a secret,
+// so the function stays open until you opt in — no lockout during rollout.
+const APP_TOKEN = Deno.env.get("APP_TOKEN") ?? "";
 const SUPA_URL = Deno.env.get("SUPABASE_URL") ?? "";
 const SERVICE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
 // Service-role client bypasses RLS to read/write the cache. Nil if env missing —
@@ -53,6 +56,9 @@ function cacheKey(textQuery: string, lat: number, lng: number, pageSize: number)
 
 Deno.serve(async (req) => {
   if (req.method !== "POST") return json({ error: "method not allowed" }, 405);
+  if (APP_TOKEN && req.headers.get("x-app-token") !== APP_TOKEN) {
+    return json({ error: "unauthorized" }, 401);
+  }
   if (!GOOGLE_KEY) return json({ error: "server key not configured" }, 500);
 
   let payload: Record<string, unknown>;

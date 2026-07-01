@@ -12,6 +12,8 @@ enum VerdictService {
         (Bundle.main.object(forInfoDictionaryKey: "SUPABASE_REF") as? String) ?? ""
     private static let anonKey: String =
         (Bundle.main.object(forInfoDictionaryKey: "SUPABASE_ANON_KEY") as? String) ?? ""
+    private static let appToken: String =
+        (Bundle.main.object(forInfoDictionaryKey: "APP_TOKEN") as? String) ?? ""
     static var isConfigured: Bool { !ref.isEmpty && !anonKey.isEmpty }
 
     struct Verdict { let kept: [String]; let scanned: Int }
@@ -25,6 +27,7 @@ enum VerdictService {
         req.setValue("application/json", forHTTPHeaderField: "Content-Type")
         req.setValue(anonKey, forHTTPHeaderField: "apikey")
         req.setValue("Bearer \(anonKey)", forHTTPHeaderField: "Authorization")
+        if !appToken.isEmpty { req.setValue(appToken, forHTTPHeaderField: "x-app-token") }
         req.httpBody = try? JSONSerialization.data(withJSONObject: body)
         return req
     }
