@@ -70,8 +70,12 @@ enum PlacesService {
         // Serve repeat first-page searches from a short-lived cache so re-entering
         // a category or flipping the Auto⇄Moto filter back doesn't re-bill a Text
         // Search. Only first pages are cached (continuation tokens are one-shot).
+        // ~5km location buckets, matching the backend cache key so both layers
+        // dedupe the same nearby searches.
+        let latBucket = (coord.latitude / 0.05).rounded() * 0.05
+        let lngBucket = (coord.longitude / 0.05).rounded() * 0.05
         let cacheKey: String? = pageToken == nil
-            ? "\(textQuery)|\(Int(coord.latitude * 100))|\(Int(coord.longitude * 100))|\(pageSize)"
+            ? "\(textQuery)|\(String(format: "%.2f", latBucket))|\(String(format: "%.2f", lngBucket))|\(pageSize)"
             : nil
         if let cacheKey, let cached = SearchCache.shared.page(for: cacheKey) { return cached }
 

@@ -424,13 +424,26 @@ struct ContractorGalleryScreen: View {
                 }
                 continue
             }
-            // Unscreened (arrived via pagination, never shown in the list): screen a
-            // capped slice rather than the whole pool, so a business the user may
-            // skip past costs only a handful of photo fetches.
+            // Shared verdict from another user — reuse, no download.
+            if let v = await VerdictService.fetch(ids: [contractor.id], allowVehicles: allowVehicles)[contractor.id] {
+                ScreeningStore.shared.save(contractor.id, allowVehicles: allowVehicles,
+                                           kept: v.kept, scanned: v.scanned)
+                screenedByID[contractor.id] = v.kept
+                if v.kept.isEmpty {
+                    contractors.removeAll { $0.id == contractor.id }
+                    if totalCount > 0 { totalCount -= 1 }
+                } else if let first = v.kept.first, let u = URL(string: first) {
+                    await ImageCache.shared.prefetch(u)
+                }
+                continue
+            }
+            // Unscreened (never seen by any user): screen a capped slice rather than
+            // the whole pool, then share the verdict so others skip it.
             let kept = await PhotoFilter.screen(contractor.photos, allowVehicles: allowVehicles,
                                                 limit: galleryMaxKept, scanLimit: galleryScanLimit)
-            ScreeningStore.shared.save(contractor.id, allowVehicles: allowVehicles,
-                                       kept: kept, scanned: min(galleryScanLimit, contractor.photos.count))
+            let scanned = min(galleryScanLimit, contractor.photos.count)
+            ScreeningStore.shared.save(contractor.id, allowVehicles: allowVehicles, kept: kept, scanned: scanned)
+            VerdictService.upload(id: contractor.id, allowVehicles: allowVehicles, kept: kept, scanned: scanned)
             guard !kept.isEmpty else {
                 // No usable work photos → drop the business entirely rather than
                 // showing an empty placeholder. Keep totalCount in step so the

@@ -20,11 +20,17 @@ on every visit on every device.
 
 - [ ] not started  ·  [~] in progress  ·  [x] done
 
-**Progress (2026-06-30):** Phases 0–2 done and deployed to project
-`qxoseyrlbvblpwqzwvvk` — the `search` Edge Function proxies Google with a
-server-held key and caches responses in the `search_cache` table (one search per
-area/category/day). Verified `x-cache: miss → hit`. Phase 3 (screen photos once)
-is next.
+**Progress (2026-06-30):** Phases 0–3 done and deployed to project
+`qxoseyrlbvblpwqzwvvk`.
+- `search` Edge Function proxies Google with a server-held key and caches
+  responses in `search_cache` (one search per area/category/day). Verified
+  `x-cache: miss → hit`.
+- Phase 3 uses a **shared verdict cache** (chosen over full server-side ML): the
+  app keeps on-device Apple Vision screening but uploads each place's verdict to
+  the `verdicts` Edge Function / `place_verdicts` table, so the first user to view
+  a place screens it and everyone else reuses the result. Verified put → get.
+- Remaining: Phase 4 hardening (auth on the functions — currently public/bounded
+  by the Google quota cap; photo proxy to remove the last key from the binary).
 
 ---
 

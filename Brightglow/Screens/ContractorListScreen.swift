@@ -308,6 +308,16 @@ struct ContractorListScreen: View {
                     scannedCount[c.id] = v.scanned
                 }
             }
+            // Pull shared verdicts for anything not already known locally, so a
+            // place screened by ANY other user is reused here without re-screening.
+            let unknownIDs = contractors.map(\.id).filter { scannedCount[$0] == nil }
+            let remote = await VerdictService.fetch(ids: unknownIDs, allowVehicles: allowVehicles)
+            for (id, v) in remote {
+                scannedCount[id] = v.scanned
+                if !v.kept.isEmpty { screenedByID[id] = v.kept }
+                ScreeningStore.shared.save(id, allowVehicles: allowVehicles, kept: v.kept, scanned: v.scanned)
+            }
+
             // Drop businesses confirmed to have no work photos in their whole pool,
             // so they don't reappear as blank rows on a later visit.
             contractors.removeAll { c in
@@ -377,6 +387,8 @@ struct ContractorListScreen: View {
         kept = Array(kept.prefix(stripMaxKept))
         scannedCount[c.id] = scanned
         ScreeningStore.shared.save(c.id, allowVehicles: allowVehicles, kept: kept, scanned: scanned)
+        // Share this verdict so other users skip screening this place.
+        VerdictService.upload(id: c.id, allowVehicles: allowVehicles, kept: kept, scanned: scanned)
 
         if kept.isEmpty {
             // Whole pool was non-work imagery → drop the business rather than show

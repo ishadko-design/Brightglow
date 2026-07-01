@@ -4,3 +4,6 @@ project_id = "brightglow"
 # quota cap. Real auth is a Phase 4 hardening step (see docs/cheap-api-plan.md).
 [functions.search]
 verify_jwt = false
+
+[functions.verdicts]
+verify_jwt = false
