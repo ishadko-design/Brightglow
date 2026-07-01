@@ -42,6 +42,9 @@ struct ContractorGalleryScreen: View {
     var preScreened: [String: [String]] = [:]
     var startContractorID: String? = nil
     var presetEstimate: PriceTier? = nil
+    /// Next-page token from the List view's fetch, so the gallery can keep
+    /// loading more contractors as the user swipes through the stack.
+    var initialPageToken: String? = nil
     /// Reports the contractor currently on top, so the List view can restore to
     /// the spot the user navigated to (they may have skipped past the one they
     /// opened) when they go back.
@@ -63,6 +66,10 @@ struct ContractorGalleryScreen: View {
     /// (show loading); [] = no work photos (show placeholder). Populated ahead of
     /// time so a newly-surfaced contractor doesn't stall on the screen.
     @State private var screenedByID: [String: [String]] = [:]
+    /// Pagination — keep loading more contractors as the stack runs low.
+    @State private var nextPageToken: String? = nil
+    @State private var pagingCoord: CLLocationCoordinate2D? = nil
+    @State private var isLoadingMore = false
 
     private var topContractor: Contractor? { contractors.last }
 
@@ -197,25 +204,31 @@ struct ContractorGalleryScreen: View {
     // "Reviews" section title (enlarged) with the rating summary on the right —
     // the summary opens the contractor's Google reviews.
     private func reviewsHeader(for contractor: Contractor) -> some View {
-        HStack(alignment: .firstTextBaseline, spacing: 12) {
+        HStack(alignment: .center, spacing: 12) {
             Text("Reviews")
                 .font(.h2)
                 .foregroundStyle(.white)
             Spacer(minLength: 0)
             if contractor.reviewCount > 0 {
-                Button {
-                    if let url = googleReviewsURL(for: contractor) { openURL(url) }
-                } label: {
-                    HStack(spacing: 8) {
-                        StarRow(rating: contractor.rating)
-                        (Text("\(contractor.rating, specifier: "%.1f") • \(contractor.reviewCount) ")
-                            + Text("reviews").underline())
+                // Stars + rating number are display-only; only "reviews" is the
+                // link (with a ≥44pt-tall tap box to avoid accidental taps).
+                HStack(spacing: 8) {
+                    StarRow(rating: contractor.rating)
+                    Text("\(contractor.rating, specifier: "%.1f") • \(contractor.reviewCount)")
+                        .font(.bodySmall)
+                        .foregroundStyle(.white.opacity(0.5))
+                    Button {
+                        if let url = googleReviewsURL(for: contractor) { openURL(url) }
+                    } label: {
+                        Text("reviews")
                             .font(.bodySmall)
                             .foregroundStyle(.white.opacity(0.5))
+                            .underline()
+                            .frame(minHeight: 44)
+                            .contentShape(Rectangle())
                     }
-                    .contentShape(Rectangle())
+                    .buttonStyle(.plain)
                 }
-                .buttonStyle(.plain)
             }
         }
     }
@@ -288,7 +301,7 @@ struct ContractorGalleryScreen: View {
     private func statusView(spinner: Bool, text: String) -> some View {
         VStack(spacing: 16) {
             if spinner {
-                ProgressView().tint(AppColors.accentStart).scaleEffect(1.4)
+                ProgressView().tint(.white).scaleEffect(1.4)
             } else {
                 Image(systemName: "checkmark.circle")
                     .font(.system(size: 60))
@@ -338,6 +351,7 @@ struct ContractorGalleryScreen: View {
     private func skipTop() {
         sheetDetent = .collapsed
         if !contractors.isEmpty { contractors.removeLast() }
+        loadMoreIfNeeded()
     }
 
     private func quoteTop() {
@@ -345,6 +359,27 @@ struct ContractorGalleryScreen: View {
         sheetDetent = .collapsed
         if !contractors.isEmpty { contractors.removeLast() }
         showQuote = true
+        loadMoreIfNeeded()
+    }
+
+    /// Fetch the next page of contractors as the stack runs low, so swiping keeps
+    /// surfacing fresh results while Google still has content for this search.
+    /// New results are prepended (the top card is `contractors.last`), so they're
+    /// shown only after the current ones are consumed.
+    private func loadMoreIfNeeded() {
+        guard !isLoadingMore, contractors.count <= 4,
+              let token = nextPageToken, let coord = pagingCoord else { return }
+        isLoadingMore = true
+        Task { @MainActor in
+            let page = await ContractorLoader.fetchLivePage(
+                category: category, searchQuery: searchQuery, near: coord, pageToken: token)
+            let existing = Set(contractors.map(\.id))
+            let fresh = page.contractors.filter { !existing.contains($0.id) }
+            contractors.insert(contentsOf: fresh, at: 0)
+            totalCount += fresh.count
+            nextPageToken = page.nextPageToken
+            isLoadingMore = false
+        }
     }
 
     /// Puts the tapped contractor last (the gallery shows `contractors.last` as
@@ -358,15 +393,44 @@ struct ContractorGalleryScreen: View {
     }
 
     // ── Photo screening / prefetch ────────────────────────────────────────────
-    // Screens the current contractor (shown last in the array) first, then the
-    // two that will be surfaced next, warming their images into the cache. Each
-    // contractor is screened at most once. Runs on contractor change, so the
-    // window of prefetched contractors slides forward as the user skips.
+    // Reuses the screening the List view already did: contractors handed over from
+    // the list carry their screened photos in `preScreened`, so we never download
+    // their pool again to re-classify it. We only screen contractors that arrived
+    // here via pagination (and so were never in the list), and we warm the first
+    // photo at display resolution. Runs on contractor change, covering the current
+    // contractor and the next one so a skip doesn't stall.
+    @MainActor
     private func prefetchUpcoming() async {
-        let upcoming = Array(contractors.suffix(3).reversed())   // current, then next two
+        let upcoming = Array(contractors.suffix(2).reversed())   // current, then next
+        // Auto & moto providers: keep vehicle photos (they're the work examples).
+        let allowVehicles = isAutoService(category: category, searchQuery: searchQuery)
         for contractor in upcoming {
-            if screenedByID[contractor.id] != nil { continue }
-            let kept = await PhotoFilter.screen(contractor.photos)
+            // Already screened in this session — reused from the list hand-off or
+            // an earlier surface. Just warm the first photo; no re-download.
+            if let existing = screenedByID[contractor.id] {
+                if let first = existing.first, let u = URL(string: first) {
+                    await ImageCache.shared.prefetch(u)
+                }
+                continue
+            }
+            // Persisted verdict from a previous launch — reuse, no download.
+            if let v = ScreeningStore.shared.get(contractor.id, allowVehicles: allowVehicles) {
+                screenedByID[contractor.id] = v.kept
+                if v.kept.isEmpty {
+                    contractors.removeAll { $0.id == contractor.id }
+                    if totalCount > 0 { totalCount -= 1 }
+                } else if let first = v.kept.first, let u = URL(string: first) {
+                    await ImageCache.shared.prefetch(u)
+                }
+                continue
+            }
+            // Unscreened (arrived via pagination, never shown in the list): screen a
+            // capped slice rather than the whole pool, so a business the user may
+            // skip past costs only a handful of photo fetches.
+            let kept = await PhotoFilter.screen(contractor.photos, allowVehicles: allowVehicles,
+                                                limit: galleryMaxKept, scanLimit: galleryScanLimit)
+            ScreeningStore.shared.save(contractor.id, allowVehicles: allowVehicles,
+                                       kept: kept, scanned: min(galleryScanLimit, contractor.photos.count))
             guard !kept.isEmpty else {
                 // No usable work photos → drop the business entirely rather than
                 // showing an empty placeholder. Keep totalCount in step so the
@@ -377,13 +441,19 @@ struct ContractorGalleryScreen: View {
                 continue
             }
             screenedByID[contractor.id] = kept
-            for s in kept {
-                if let u = URL(string: s) { await ImageCache.shared.prefetch(u) }
+            // Warm only the FIRST photo at full resolution — the one shown when the
+            // business surfaces. The rest load on demand as the user pages photos,
+            // so we don't fetch high-res shots nobody looks at.
+            if let first = kept.first, let u = URL(string: first) {
+                await ImageCache.shared.prefetch(u)
             }
         }
+        // Dropping no-photo businesses can thin the stack — top up if we can.
+        loadMoreIfNeeded()
     }
 
     // ── Data loading (mirrors SwipeScreen) ────────────────────────────────────
+    @MainActor
     private func loadContractors() async {
         guard contractors.isEmpty else { return }
 
@@ -393,6 +463,9 @@ struct ContractorGalleryScreen: View {
             screenedByID = preScreened
             estimate = presetEstimate
             contractors = orderedForGallery(preloaded)
+            // Continue the List view's search as the user swipes past its results.
+            nextPageToken = initialPageToken
+            pagingCoord = presetCoordinate
             return
         }
 
@@ -407,13 +480,18 @@ struct ContractorGalleryScreen: View {
             // comes back empty, show an empty state — do NOT mask it with the
             // location-independent mock list (that's what made changing the city,
             // e.g. to Kyiv, appear to do nothing).
-            let live = await ContractorLoader.fetchLive(
+            let page = await ContractorLoader.fetchLivePage(
                 category: category, searchQuery: searchQuery, near: coord)
+            let live = page.contractors
             contractors = live
+            nextPageToken = page.nextPageToken
+            pagingCoord = coord
             if !live.isEmpty {
+                let hints = EstimateService.priceMentions(in: live.flatMap(\.reviews))
                 Task { @MainActor in
                     estimate = await ContractorLoader.estimate(
-                        category: category, searchQuery: searchQuery, near: coord)
+                        category: category, searchQuery: searchQuery, near: coord,
+                        priceHints: hints)
                 }
             }
             return
@@ -423,6 +501,12 @@ struct ContractorGalleryScreen: View {
         contractors = ContractorLoader.fallback(category: category, searchQuery: searchQuery)
     }
 }
+
+/// Screening budget for contractors that reach the gallery via pagination (the
+/// rest reuse the list's screening). Scan a capped slice of the pool and keep a
+/// few work photos, instead of downloading all ~10 to classify.
+private let galleryMaxKept = 6
+private let galleryScanLimit = 8
 
 // ─────────────────────────────────────────────────────────────────────────────
 // MARK: - GalleryPhotoView

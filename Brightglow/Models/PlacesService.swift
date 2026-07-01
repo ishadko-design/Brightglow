@@ -19,28 +19,54 @@ enum PlacesService {
 
     // MARK: - Public API
 
-    /// Contractors of a single trade near the user.
+    /// One page of results plus the token to fetch the next page (`nil` when
+    /// there are no more results).
+    struct Page { let contractors: [Contractor]; let nextPageToken: String? }
+
+    /// Contractors of a single trade near the user (first page only).
     static func fetch(category: Category, near coord: CLLocationCoordinate2D,
-                      maxResults: Int = 12) async -> [Contractor] {
-        await fetch(textQuery: category.searchQuery, category: category,
-                    near: coord, maxResults: maxResults)
+                      maxResults: Int = 20) async -> [Contractor] {
+        await fetchPage(category: category, near: coord, pageSize: maxResults).contractors
     }
 
     /// Contractors for a free-form query (e.g. "leaky tap") near the user.
     /// The matched trade drives price tiers and the category tag.
     static func fetch(searchText query: String, near coord: CLLocationCoordinate2D,
-                      maxResults: Int = 12) async -> [Contractor] {
+                      maxResults: Int = 20) async -> [Contractor] {
+        await fetchPage(searchText: query, near: coord, pageSize: maxResults).contractors
+    }
+
+    /// A page of trade results plus the next-page token.
+    static func fetchPage(category: Category, near coord: CLLocationCoordinate2D,
+                          pageSize: Int = 20, pageToken: String? = nil) async -> Page {
+        await search(textQuery: category.searchQuery, category: category,
+                     near: coord, pageSize: pageSize, pageToken: pageToken)
+    }
+
+    /// A page of free-form results plus the next-page token.
+    static func fetchPage(searchText query: String, near coord: CLLocationCoordinate2D,
+                          pageSize: Int = 20, pageToken: String? = nil) async -> Page {
         let category = Category.matching(query: query).first ?? .plumbing
-        return await fetch(textQuery: "\(query) contractor", category: category,
-                           near: coord, maxResults: maxResults)
+        return await search(textQuery: "\(query) contractor", category: category,
+                            near: coord, pageSize: pageSize, pageToken: pageToken)
     }
 
     // MARK: - Core request
 
-    private static func fetch(textQuery: String, category: Category,
-                              near coord: CLLocationCoordinate2D,
-                              maxResults: Int) async -> [Contractor] {
-        guard let url = URL(string: "https://places.googleapis.com/v1/places:searchText") else { return [] }
+    private static func search(textQuery: String, category: Category,
+                               near coord: CLLocationCoordinate2D,
+                               pageSize: Int, pageToken: String?) async -> Page {
+        let empty = Page(contractors: [], nextPageToken: nil)
+
+        // Serve repeat first-page searches from a short-lived cache so re-entering
+        // a category or flipping the Auto⇄Moto filter back doesn't re-bill a Text
+        // Search. Only first pages are cached (continuation tokens are one-shot).
+        let cacheKey: String? = pageToken == nil
+            ? "\(textQuery)|\(Int(coord.latitude * 100))|\(Int(coord.longitude * 100))|\(pageSize)"
+            : nil
+        if let cacheKey, let cached = SearchCache.shared.page(for: cacheKey) { return cached }
+
+        guard let url = URL(string: "https://places.googleapis.com/v1/places:searchText") else { return empty }
 
         var req = URLRequest(url: url, timeoutInterval: 10)
         req.httpMethod = "POST"
@@ -52,10 +78,11 @@ enum PlacesService {
         if let bundleID = Bundle.main.bundleIdentifier {
             req.setValue(bundleID, forHTTPHeaderField: "X-Ios-Bundle-Identifier")
         }
+        // `nextPageToken` must be in the field mask for pagination to come back.
         req.setValue(
             "places.id,places.displayName,places.rating,places.userRatingCount,"
             + "places.formattedAddress,places.nationalPhoneNumber,places.photos,"
-            + "places.businessStatus,places.reviews,places.location",
+            + "places.businessStatus,places.reviews,places.location,nextPageToken",
             forHTTPHeaderField: "X-Goog-FieldMask")
 
         // Bias (not hard-restrict) results to the searched area. A `locationBias`
@@ -64,33 +91,38 @@ enum PlacesService {
         // `locationRestriction` returns nothing in areas Google can't confidently
         // box. Combined with dropping the mock fallback, changing the city now
         // genuinely changes the results.
-        let body: [String: Any] = [
+        var body: [String: Any] = [
             "textQuery": textQuery,
-            "maxResultCount": maxResults,
+            "maxResultCount": pageSize,
             "locationBias": ["circle": [
                 "center": ["latitude": coord.latitude, "longitude": coord.longitude],
                 "radius": searchRadius,
             ]],
         ]
+        // Continuation request: fetch the next page of the same search.
+        if let pageToken { body["pageToken"] = pageToken }
         req.httpBody = try? JSONSerialization.data(withJSONObject: body)
 
         guard let (data, resp) = try? await URLSession.shared.data(for: req),
               (resp as? HTTPURLResponse)?.statusCode == 200,
               let decoded = try? JSONDecoder().decode(PlacesResponse.self, from: data)
-        else { return [] }
+        else { return empty }
 
         // `locationBias` only *ranks* by proximity — it can still return far-away
         // businesses (e.g. an Indian shop for a Kyiv search). Hard-filter by actual
         // distance so results truly belong to the searched area.
         let center = CLLocation(latitude: coord.latitude, longitude: coord.longitude)
         let maxDistance = searchRadius * 1.5
-        return decoded.places.enumerated().compactMap { idx, place -> Contractor? in
+        let contractors = decoded.places.enumerated().compactMap { idx, place -> Contractor? in
             if let loc = place.location {
                 let d = center.distance(from: CLLocation(latitude: loc.latitude, longitude: loc.longitude))
                 guard d <= maxDistance else { return nil }
             }
             return contractor(from: place, index: idx, category: category)
         }
+        let page = Page(contractors: contractors, nextPageToken: decoded.nextPageToken)
+        if let cacheKey { SearchCache.shared.save(page, for: cacheKey) }
+        return page
     }
 
     // MARK: - Mapping
@@ -163,12 +195,26 @@ enum PlacesService {
         return Locale.current.localizedString(forLanguageCode: code)?.capitalized
     }
 
+    /// Display rendition for the full-screen gallery (crisp on 3x screens).
+    static let fullPhotoWidth = 1600
+    /// Small rendition for list strips + on-device screening (≈3x of a 112pt
+    /// thumbnail). Screening and the list reuse the SAME rendition so a strip
+    /// photo costs one Places Photo request, not two.
+    static let listPhotoWidth = 512
+
     /// Places photo-media URL. `skipHttpRedirect` is omitted so the endpoint
     /// 302-redirects straight to the image — `AsyncImage` follows it, no extra call.
     private static func photoURL(for photoName: String) -> String {
-        // Request a large rendition so the full-bleed photo stays crisp on 3x
-        // screens. Places caps at the source size, so this never upscales.
-        "https://places.googleapis.com/v1/\(photoName)/media?maxWidthPx=1600&key=\(apiKey)"
+        // Stored at full width; the list re-renders smaller via `photoURL(_:width:)`.
+        "https://places.googleapis.com/v1/\(photoName)/media?maxWidthPx=\(fullPhotoWidth)&key=\(apiKey)"
+    }
+
+    /// Re-render an existing photo URL at a different width. Works on Places media
+    /// URLs (swaps `maxWidthPx`); any other URL (e.g. seeded mock CDN URLs) is
+    /// returned unchanged.
+    static func photoURL(_ url: String, width: Int) -> String {
+        guard let range = url.range(of: #"maxWidthPx=\d+"#, options: .regularExpression) else { return url }
+        return url.replacingCharacters(in: range, with: "maxWidthPx=\(width)")
     }
 
     /// Best-effort locality from a formatted address
@@ -180,16 +226,80 @@ enum PlacesService {
     }
 }
 
+// MARK: - Search cache
+
+/// Disk-persisted cache of first-page search results, keyed by query + coarse
+/// location. Spares a Text Search when the user re-enters a category, flips the
+/// Auto⇄Moto filter back, or reopens the app within a day — so a cold launch
+/// doesn't re-bill the search. 24h TTL keeps within Places caching terms (place
+/// data ≤30 days). Cross-user reuse still needs the backend.
+private final class SearchCache: @unchecked Sendable {
+    static let shared = SearchCache()
+
+    private struct Entry: Codable {
+        let contractors: [Contractor]
+        let nextPageToken: String?
+        let at: Double
+    }
+
+    private let ttl: TimeInterval = 24 * 3600
+    private let lock = NSLock()
+    private var store: [String: Entry] = [:]
+    private let fileURL: URL
+    private let io = DispatchQueue(label: "searchcache.io", qos: .utility)
+    private var pendingWrite: DispatchWorkItem?
+
+    init() {
+        let caches = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask)[0]
+        fileURL = caches.appendingPathComponent("search_results.json")
+        if let data = try? Data(contentsOf: fileURL),
+           let decoded = try? JSONDecoder().decode([String: Entry].self, from: data) {
+            store = decoded
+        }
+    }
+
+    func page(for key: String) -> PlacesService.Page? {
+        lock.lock(); defer { lock.unlock() }
+        guard let e = store[key], Date().timeIntervalSince1970 - e.at < ttl else { return nil }
+        return PlacesService.Page(contractors: e.contractors, nextPageToken: e.nextPageToken)
+    }
+
+    func save(_ page: PlacesService.Page, for key: String) {
+        lock.lock()
+        store[key] = Entry(contractors: page.contractors, nextPageToken: page.nextPageToken,
+                           at: Date().timeIntervalSince1970)
+        lock.unlock()
+        scheduleWrite()
+    }
+
+    /// Coalesce writes into a single debounced disk flush.
+    private func scheduleWrite() {
+        pendingWrite?.cancel()
+        let item = DispatchWorkItem { [weak self] in self?.writeNow() }
+        pendingWrite = item
+        io.asyncAfter(deadline: .now() + 1.0, execute: item)
+    }
+
+    private func writeNow() {
+        lock.lock(); let snapshot = store; lock.unlock()
+        if let data = try? JSONEncoder().encode(snapshot) {
+            try? data.write(to: fileURL, options: .atomic)
+        }
+    }
+}
+
 // MARK: - Places JSON
 
 private struct PlacesResponse: Decodable {
     let places: [Place]
+    let nextPageToken: String?
 
     init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         places = (try? c.decode([Place].self, forKey: .places)) ?? []
+        nextPageToken = try? c.decode(String.self, forKey: .nextPageToken)
     }
-    enum CodingKeys: String, CodingKey { case places }
+    enum CodingKeys: String, CodingKey { case places, nextPageToken }
 }
 
 private struct Place: Decodable {

@@ -3,26 +3,19 @@ import Supabase
 
 struct ProfileScreen: View {
     @EnvironmentObject private var auth: AuthService
-    @Environment(\.dismiss) private var dismiss
 
     var body: some View {
         ZStack {
-            AppColors.bg.ignoresSafeArea()
+            AppColors.bgSurface.ignoresSafeArea()
 
             VStack(spacing: 0) {
-                // Header with close
+                // Title — the grab handle (drag indicator) is the dismiss affordance,
+                // matching the app's other bottom sheets.
                 HStack {
                     Text("Profile")
                         .font(.h2)
                         .foregroundStyle(.white)
                     Spacer()
-                    Button(action: { dismiss() }) {
-                        Image(systemName: "xmark")
-                            .font(.system(size: 15, weight: .bold))
-                            .foregroundStyle(.white)
-                            .frame(width: 36, height: 36)
-                            .background(Circle().fill(Color.white.opacity(0.1)))
-                    }
                 }
                 .padding(.horizontal, 16)
                 .padding(.top, 8)
@@ -66,5 +59,10 @@ struct ProfileScreen: View {
             }
         }
         .preferredColorScheme(.dark)
+        // Match the app's bottom-sheet affordance: grab handle, rounded surface.
+        .presentationDetents([.large])
+        .presentationDragIndicator(.visible)
+        .presentationCornerRadius(32)
+        .presentationBackground(AppColors.bgSurface)
     }
 }

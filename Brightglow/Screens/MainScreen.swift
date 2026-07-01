@@ -2,28 +2,43 @@ import SwiftUI
 import CoreLocation
 import PhotosUI
 
+/// A contractor destination awaiting a resolved location before it can open.
+private enum PendingDestination {
+    case home(Category)
+    case auto(AutoCategory)
+}
+
 struct MainScreen: View {
     @StateObject private var camera = CameraViewModel()
     @StateObject private var locationStore = LocationStore()
-    @State private var sheetDetent: SheetDetent = .full
+    /// Landing opens compact (just the two vertical tiles); expands to .full when
+    /// a vertical is opened so its category grid can scroll.
+    @State private var sheetDetent: SheetDetent = .mid
     @State private var sheetScrolledToTop = true
     @State private var goSwipe: Category? = nil
     @State private var goSearch = false
+    /// Landing sheet drill-down: nil = vertical chooser, else that vertical's grid.
+    @State private var selectedVertical: Vertical? = nil
+    /// Auto & moto category the user tapped; drives the contractor list.
+    @State private var goAuto: AutoCategory? = nil
     @State private var submittedQuery = ""
     @State private var searchText = ""
     @State private var locationQuery = ""
     /// True while the user is editing the location (typing a ZIP) — kept separate
     /// from @FocusState so the "Current location" CTA shows reliably on tap.
     @State private var editingLocation = false
-    /// Category the user tapped before a location was available; navigates once resolved.
-    @State private var pendingCategory: Category? = nil
+    /// Destination the user tapped before a location was available; navigates once
+    /// a location resolves. Contractors are never shown without a location.
+    @State private var pendingDestination: PendingDestination? = nil
     @State private var drawnPaths: [DrawnPath] = []
-    @State private var showCameraHint = false
     @State private var showProfile = false
     /// Native photo-picker selection (raw items) and the decoded images shown
     /// as thumbnails above the input bar.
     @State private var pickedItems: [PhotosPickerItem] = []
     @State private var pickedImages: [UIImage] = []
+    /// Live keyboard height — drives the dark fill behind the keyboard so it
+    /// covers exactly the keyboard (not the camera/input above it).
+    @State private var keyboardHeight: CGFloat = 0
     /// Measured height of the input pill — drives the shutter's clearance so it
     /// always sits ≥16pt above the bar, even when it grows (thumbnails, multi-line).
     @State private var inputBarHeight: CGFloat = 60
@@ -33,17 +48,25 @@ struct MainScreen: View {
     var body: some View {
         NavigationStack {
             GeometryReader { geo in
-                // Sheet nearly full-screen in default state; CTA only appears when collapsed
-                let midHeight: CGFloat = geo.size.height - 100
+                // Fixed landing height (Figma node 466:1813). The sheet's bottom ==
+                // screen bottom and its content is top-anchored, so the tiles' lower
+                // edge sits 126pt above the screen bottom:
+                //   midHeight = 126 (tile-bottom inset) + 242 (tile height)
+                //             + 12 (title→grid spacing) + 29 (h2 title line)
+                //             + 4 (grid top pad) + 25 (grab handle) = 438
+                // Not retractable (only two categories) — this is its only height.
+                let midHeight: CGFloat = 438
                 let collapsedHeight: CGFloat = 180
                 let headerInset: CGFloat = 76   // 60pt header (44 + 8/8 padding) + 16pt gap to the sheet
                 // True whenever a text field (search OR the location/ZIP field) has
                 // raised the keyboard — both should dock the input bar to it.
                 let keyboardActive = searchFocused || locationFocused
-                // 16pt above the sheet when keyboard is hidden;
-                // 16pt above the (measured) input bar when keyboard is shown:
-                // bar sits 16pt above the keyboard, so clear = 16 + barHeight + 16.
-                let shutterPad: CGFloat = keyboardActive ? (inputBarHeight + 16 + 16) : (collapsedHeight + 16)
+                // The landing sheet rests at midHeight but can be dragged down to
+                // collapsed (full camera). The shutter tracks it: 16pt above the
+                // sheet's current resting height — or, when the keyboard is up, above
+                // the input bar (which sits 16pt above the keyboard) with a 24pt gap.
+                let restingSheetHeight = sheetDetent == .collapsed ? collapsedHeight : midHeight
+                let shutterPad: CGFloat = keyboardActive ? (inputBarHeight + 16 + 24) : (restingSheetHeight + 16)
 
                 ZStack(alignment: .bottom) {
 
@@ -64,12 +87,12 @@ struct MainScreen: View {
                             locationPicker
                             Spacer(minLength: 0)
                             Button(action: { showProfile = true }) {
-                                Image(systemName: "person.circle.fill")
-                                    .font(.system(size: 26))
-                                    .foregroundStyle(.white.opacity(0.8))
+                                // Plain glyph, no background — same flat style as the
+                                // location pin (white, line icon).
+                                Image(systemName: "person.crop.circle")
+                                    .font(.system(size: 24, weight: .regular))
+                                    .foregroundStyle(.white)
                                     .iconTapTarget()
-                                    .background(.ultraThinMaterial)
-                                    .clipShape(Circle())
                             }
                         }
                         .padding(.horizontal, 16)
@@ -80,17 +103,16 @@ struct MainScreen: View {
                     .ignoresSafeArea(edges: .bottom)
                     .allowsHitTesting(!searchFocused)
 
-                    // ── Shutter button + hint — only once the camera is authorized
-                    // and the sheet is collapsed. Before access is granted the
-                    // CameraScreen's centered "tap to grant" button is the CTA.
-                    if sheetDetent == .collapsed && camera.isAuthorized {
+                    // ── Shutter button + hint — always shown on the landing chooser
+                    // once the camera is authorized (it sits 16pt above the fixed
+                    // categories sheet). Before access is granted the CameraScreen's
+                    // centered "tap to grant" button is the CTA instead.
+                    if selectedVertical == nil && camera.isAuthorized {
                         VStack(spacing: 0) {
                             Spacer()
                             HintPill(text: "Take a picture and explain your task for a smart estimate")
                                 .padding(.horizontal, 16)
                                 .padding(.bottom, 16)
-                                .opacity(showCameraHint ? 1 : 0)
-                                .animation(.easeInOut(duration: 0.4), value: showCameraHint)
                             Button(action: { camera.capturePhoto() }) {
                                 ZStack {
                                     Circle()
@@ -107,37 +129,84 @@ struct MainScreen: View {
                             .padding(.bottom, shutterPad)
                         }
                         .transition(.opacity.combined(with: .scale(scale: 0.8)))
+                        .animation(.interpolatingSpring(stiffness: 320, damping: 32), value: selectedVertical)
                         .animation(.interpolatingSpring(stiffness: 320, damping: 32), value: sheetDetent)
                         .animation(.easeOut(duration: 0.25), value: searchFocused)
-                        .animation(.easeInOut(duration: 0.4), value: showCameraHint)
                         .allowsHitTesting(!searchFocused)
                     }
 
-                    // ── Draggable categories sheet
+                    // ── Categories sheet — rests at midHeight; on the landing it can
+                    // be dragged down to expose the full camera, but not expanded
+                    // (only two categories). Drilled-in grids are full + button-driven.
                     BottomSheet(
                         detent: $sheetDetent,
                         contentIsAtTop: sheetScrolledToTop,
                         collapsedHeight: collapsedHeight,
                         midHeight: midHeight,
-                        fullTopInset: headerInset
+                        fullTopInset: headerInset,
+                        dragEnabled: true,
+                        expandable: false,
+                        // In a drilled-in grid (.full), a downward drag pops back to
+                        // the chooser instead of collapsing to the camera.
+                        onDismiss: selectedVertical == nil ? nil : {
+                            withAnimation(.interpolatingSpring(stiffness: 320, damping: 32)) {
+                                selectedVertical = nil
+                                sheetDetent = .mid
+                            }
+                        }
                     ) {
-                        CategoriesSheet(
-                            onCategoryTap: handleCategoryTap,
-                            onProfileTap: {},
-                            isScrolledToTop: $sheetScrolledToTop
-                        )
+                        Group {
+                            switch selectedVertical {
+                            case .none:
+                                // Landing: top-level vertical chooser
+                                GridSheet(title: "Categories",
+                                          isScrolledToTop: $sheetScrolledToTop) {
+                                    ForEach(Vertical.allCases) { vertical in
+                                        TaskCard(title: vertical.rawValue,
+                                                 assetName: vertical.assetName,
+                                                 height: 242) {
+                                            withAnimation(.interpolatingSpring(stiffness: 320, damping: 32)) {
+                                                selectedVertical = vertical
+                                                sheetDetent = .full
+                                            }
+                                        }
+                                    }
+                                }
+                            case .home:
+                                GridSheet(title: "Home",
+                                          onBack: { withAnimation(.interpolatingSpring(stiffness: 320, damping: 32)) { selectedVertical = nil; sheetDetent = .mid } },
+                                          isScrolledToTop: $sheetScrolledToTop) {
+                                    ForEach(categoryItems) { item in
+                                        TaskCard(title: item.category.rawValue,
+                                                 assetName: item.assetName) {
+                                            openIfLocated(.home(item.category))
+                                        }
+                                    }
+                                }
+                            case .auto:
+                                GridSheet(title: "Auto and moto",
+                                          onBack: { withAnimation(.interpolatingSpring(stiffness: 320, damping: 32)) { selectedVertical = nil; sheetDetent = .mid } },
+                                          isScrolledToTop: $sheetScrolledToTop) {
+                                    ForEach(autoCategoryItems) { item in
+                                        TaskCard(title: item.name,
+                                                 assetName: item.assetName) {
+                                            openIfLocated(.auto(item))
+                                        }
+                                    }
+                                }
+                            }
+                        }
                     }
                     .allowsHitTesting(!searchFocused)
 
-                    // ── Solid fill behind the keyboard ───────────────────────────
-                    // The gradient/search bar are pushed up with the keyboard, so
-                    // without this their bg ends at the keyboard's rounded top and
-                    // visibly "stacks". This strip ignores the keyboard inset, so it
-                    // stays pinned to the screen bottom and the bg continues behind
-                    // the (translucent) keyboard — no seam at the rounded corners.
-                    if keyboardActive {
+                    // ── Solid fill behind the (translucent) keyboard ─────────────
+                    // Sized to the exact keyboard height and pinned to the screen
+                    // bottom, so it fills ONLY behind the keyboard — it must not reach
+                    // above the input bar, or it shows as a dark block that hides the
+                    // floating input's rounded corners.
+                    if keyboardHeight > 0 {
                         AppColors.bg
-                            .frame(height: 400)
+                            .frame(height: keyboardHeight)
                             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
                             .ignoresSafeArea(.keyboard, edges: .bottom)
                             .ignoresSafeArea(.container, edges: .bottom)
@@ -276,16 +345,26 @@ struct MainScreen: View {
                     including: searchFocused ? .all : .none
                 )
                 .navigationBarHidden(true)
-                .onChange(of: sheetDetent) { _, newDetent in
-                    if newDetent == .collapsed {
-                        camera.activateIfNeeded()
-                        showCameraHint = true
-                        DispatchQueue.main.asyncAfter(deadline: .now() + 3) {
-                            withAnimation { showCameraHint = false }
-                        }
-                    } else {
-                        showCameraHint = false
+                // Camera viewfinder is always exposed above the fixed sheet, so
+                // resume the session whenever the landing reappears. Also grab the
+                // user's location automatically when permission is already granted.
+                .onAppear {
+                    camera.activateIfNeeded()
+                    autoFetchLocationIfGranted()
+                }
+                // Power the camera down when leaving the landing (drilling into a
+                // category/gallery) so the green in-use dot disappears; onAppear
+                // resumes it on return.
+                .onDisappear {
+                    camera.deactivate()
+                }
+                .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillShowNotification)) { notif in
+                    if let frame = notif.userInfo?[UIResponder.keyboardFrameEndUserInfoKey] as? CGRect {
+                        keyboardHeight = frame.height
                     }
+                }
+                .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillHideNotification)) { _ in
+                    keyboardHeight = 0
                 }
                 .navigationDestination(isPresented: Binding(
                     get: { goSwipe != nil },
@@ -298,18 +377,30 @@ struct MainScreen: View {
                     ContractorListScreen(searchQuery: submittedQuery,
                                          presetCoordinate: locationStore.coordinate)
                 }
+                .navigationDestination(isPresented: Binding(
+                    get: { goAuto != nil },
+                    set: { if !$0 { goAuto = nil } }
+                )) {
+                    ContractorListScreen(category: goAuto?.name ?? "",
+                                         searchQuery: goAuto?.searchQuery ?? "",
+                                         presetCoordinate: locationStore.coordinate)
+                }
                 // Once a location resolves (GPS fix or manual ZIP/city), continue
-                // to the category the user tapped while it was still missing.
+                // to the destination the user tapped while it was still missing.
                 .onChange(of: locationStore.coordinate?.latitude) { _, _ in
-                    if locationStore.coordinate != nil, let pending = pendingCategory {
-                        pendingCategory = nil
-                        goSwipe = pending
+                    if locationStore.coordinate != nil, let pending = pendingDestination {
+                        pendingDestination = nil
+                        navigate(to: pending)
                     }
                 }
-                // If they deny the system prompt, fall back to manual entry.
                 .onChange(of: locationStore.authorization) { _, status in
-                    if (status == .denied || status == .restricted), pendingCategory != nil {
-                        locationFocused = true
+                    switch status {
+                    case .authorizedWhenInUse, .authorizedAlways:
+                        autoFetchLocationIfGranted()              // just granted → capture location
+                    case .denied, .restricted:
+                        if pendingDestination != nil { locationFocused = true }   // can't use GPS → type a ZIP
+                    default:
+                        break
                     }
                 }
                 .onChange(of: locationStore.label) { _, newLabel in
@@ -331,25 +422,33 @@ struct MainScreen: View {
                         drawnPaths = []
                     },
                     onSubmit: { word in
-                        // Dismiss the capture cover, then open the matching card deck:
-                        // typed word wins; else the photo's detected category; else mixed.
+                        // Dismiss the capture cover, then open the matching results:
+                        // typed word wins (free-text search); else route by the
+                        // photo's detected trade — auto → auto providers, home →
+                        // the home category deck; else a mixed search.
                         let q = word.trimmingCharacters(in: .whitespacesAndNewlines)
-                        let detected = camera.detectedCategory
+                        let detected = camera.detectedMatch
                         camera.retake()
                         drawnPaths = []
                         DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
                             if !q.isEmpty {
                                 submittedQuery = q
                                 goSearch = true
-                            } else if let cat = detected {
-                                goSwipe = cat
                             } else {
-                                submittedQuery = ""
-                                goSearch = true
+                                switch detected {
+                                case .home(let cat): goSwipe = cat
+                                case .auto(let auto): goAuto = auto
+                                case nil:
+                                    submittedQuery = ""
+                                    goSearch = true
+                                }
                             }
                         }
                     },
-                    prefill: camera.detectedCategory?.rawValue ?? "",
+                    prefill: camera.detectedMatch?.label ?? "",
+                    categorySuggestions: autoSuggestionsActive
+                        ? autoCategoryItems.map(\.name)
+                        : Category.allCases.map(\.rawValue),
                     objects: camera.detectedObjects,
                     paths: $drawnPaths
                 )
@@ -363,6 +462,13 @@ struct MainScreen: View {
     // the CTA hides and the city is tappable to type a ZIP.
     // CTA shows when there's no location yet, while editing, or during a fetch —
     // so tapping the city always surfaces a way to re-fetch.
+    /// True when the captured photo was recognised as an Auto & moto subject —
+    /// drives the in-capture category carousel to suggest auto services.
+    private var autoSuggestionsActive: Bool {
+        if case .auto = camera.detectedMatch { return true }
+        return false
+    }
+
     private var showLocationCTA: Bool {
         !locationStore.hasLocation || editingLocation || locationStore.isResolving
     }
@@ -374,7 +480,7 @@ struct MainScreen: View {
                     .renderingMode(.template)
                     .resizable()
                     .scaledToFit()
-                    .frame(width: 20, height: 20)
+                    .frame(width: 24, height: 24)
                     .foregroundStyle(.white)
 
                 if locationStore.hasLocation && !editingLocation {
@@ -436,26 +542,40 @@ struct MainScreen: View {
         locationStore.useCurrentLocation()
     }
 
-    // ── Category tap → ensure we have a location first ────────────────────────
-    private func handleCategoryTap(_ category: Category) {
-        // A location lookup is in flight (e.g. a city was just typed) — wait for
-        // the new coordinate before opening results, so we don't show contractors
-        // for the previous location. onChange(of: coordinate) navigates once it lands.
-        if locationStore.isResolving {
-            pendingCategory = category
+    /// Auto-capture the user's location on open / when permission is granted, so a
+    /// fix is ready before they pick a category. No-op if we already have one or a
+    /// fix is in flight; never prompts here (only an explicit tap can prompt).
+    private func autoFetchLocationIfGranted() {
+        guard !locationStore.hasLocation, !locationStore.isResolving else { return }
+        if locationStore.authorization == .authorizedWhenInUse
+            || locationStore.authorization == .authorizedAlways {
+            locationStore.useCurrentLocation()
+        }
+    }
+
+    // ── Category tap → contractors are gated on having a location ──────────────
+    /// Open a destination only once a location is available; otherwise remember the
+    /// intent and obtain a location (GPS, prompting if needed, or manual ZIP entry).
+    /// `onChange(of: coordinate)` navigates once a location lands.
+    private func openIfLocated(_ destination: PendingDestination) {
+        if locationStore.hasLocation {
+            navigate(to: destination)
             return
         }
+        pendingDestination = destination
+        guard !locationStore.isResolving else { return }   // a fix is already in flight
         switch locationStore.authorization {
-        case _ where locationStore.hasLocation:
-            goSwipe = category                              // already resolved
-        case .authorizedWhenInUse, .authorizedAlways:
-            goSwipe = category                              // permitted; gallery resolves GPS
-        case .denied, .restricted:
-            pendingCategory = category                      // can't use GPS → type a location
-            locationFocused = true
-        default:                                            // .notDetermined
-            pendingCategory = category
-            locationStore.useCurrentLocation()              // system prompt, then navigate
+        case .authorizedWhenInUse, .authorizedAlways, .notDetermined:
+            locationStore.useCurrentLocation()             // GPS (prompts if undetermined)
+        default:                                           // .denied / .restricted
+            locationFocused = true                         // can't use GPS → type a ZIP
+        }
+    }
+
+    private func navigate(to destination: PendingDestination) {
+        switch destination {
+        case .home(let category): goSwipe = category
+        case .auto(let auto):     goAuto = auto
         }
     }
 

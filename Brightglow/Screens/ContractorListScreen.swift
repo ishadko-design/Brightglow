@@ -31,6 +31,14 @@ struct ContractorListScreen: View {
     /// the list once it has a non-nil entry; an empty result drops it entirely
     /// (mirrors the gallery's no-work-photos handling).
     @State private var screenedByID: [String: [String]] = [:]
+    /// Contractors whose photos are mid-screening (dedupe lazy per-row screening).
+    @State private var screening: Set<String> = []
+    /// How many of each contractor's source photos have been screened so far
+    /// (drives the strip's "load more as you scroll" batching).
+    @State private var scannedCount: [String: Int] = [:]
+    /// Captured from the live fetch so the gallery can keep paginating this search.
+    @State private var nextPageToken: String? = nil
+    @State private var resolvedCoord: CLLocationCoordinate2D? = nil
     @State private var isLoading   = false
     @State private var estimate: PriceTier? = nil
 
@@ -41,10 +49,20 @@ struct ContractorListScreen: View {
     /// back to that exact spot when the user returns (they may have skipped past
     /// the one they opened).
     @State private var lastViewedID: String? = nil
+    /// Auto & moto only: which vehicle type to show (defaults to cars).
+    @State private var vehicle: VehicleFilter = .auto
 
     private var headerTitle: String {
         let q = searchQuery.trimmingCharacters(in: .whitespacesAndNewlines)
         return q.isEmpty ? category : q
+    }
+
+    /// The Auto & moto category being viewed, if any (drives the vehicle filter).
+    private var autoCategory: AutoCategory? { autoCategoryItems.first { $0.name == category } }
+
+    /// Query actually sent to Places — the moto variant when the filter is on Moto.
+    private var effectiveSearchQuery: String {
+        autoCategory?.query(for: vehicle) ?? searchQuery
     }
 
     var body: some View {
@@ -70,16 +88,21 @@ struct ContractorListScreen: View {
         .toolbar(.hidden, for: .navigationBar)
         .enableSwipeBack()
         .task { await load() }
+        // Switching Auto ⇄ Moto re-runs the search for the other vehicle type.
+        .onChange(of: vehicle) { _, _ in Task { await reload() } }
         .navigationDestination(isPresented: $goGallery) {
             ContractorGalleryScreen(
                 category: category,
-                searchQuery: searchQuery,
+                // The effective (auto/moto) query so the gallery paginates the same
+                // search the user is viewing.
+                searchQuery: effectiveSearchQuery,
                 aiResult: aiResult,
-                presetCoordinate: presetCoordinate,
+                presetCoordinate: resolvedCoord ?? presetCoordinate,
                 preloadedContractors: contractors,
                 preScreened: screenedByID,
                 startContractorID: startContractorID,
                 presetEstimate: estimate,
+                initialPageToken: nextPageToken,
                 lastViewedID: $lastViewedID
             )
         }
@@ -98,9 +121,13 @@ struct ContractorListScreen: View {
                             photos: screenedByID[contractor.id],
                             priceTier: estimate ?? contractor.priceTiers.first,
                             onOpen: { open(contractor) },
-                            onReviews: { openReviews(for: contractor) }
+                            onReviews: { openReviews(for: contractor) },
+                            onNearEnd: { Task { await screenMore(contractor) } }
                         )
                         .id(contractor.id)
+                        // Lazy: screen this contractor's photos only when its row
+                        // scrolls into view (LazyVStack renders rows on demand).
+                        .task { await screenIfNeeded(contractor) }
                     }
                 }
                 // Clears the header bar (~64pt) + a 12pt gap. The ScrollView
@@ -118,6 +145,28 @@ struct ContractorListScreen: View {
                 DispatchQueue.main.async { proxy.scrollTo(id, anchor: .center) }
             }
         }
+    }
+
+    // ── Auto/Moto segmented filter (pill) ─────────────────────────────────────
+    private var vehicleFilter: some View {
+        HStack(spacing: 2) {
+            ForEach(VehicleFilter.allCases) { v in
+                Text(v.rawValue)
+                    .font(.bodySmall)
+                    .fontWeight(.semibold)
+                    .foregroundStyle(vehicle == v ? AppColors.bg : .white.opacity(0.7))
+                    .padding(.horizontal, 10)
+                    .frame(height: 25)
+                    .background { if vehicle == v { Capsule().fill(.white) } }
+                    .contentShape(Capsule())
+                    .onTapGesture {
+                        if vehicle != v { withAnimation(.easeInOut(duration: 0.15)) { vehicle = v } }
+                    }
+            }
+        }
+        .padding(2)
+        .background(Capsule().fill(.white.opacity(0.12)))
+        .fixedSize()
     }
 
     // ── Header — matches the gallery / main screen top bar ────────────────────
@@ -145,8 +194,11 @@ struct ContractorListScreen: View {
                         .lineLimit(1)
                 }
             }
-            // Absorbs the slack so the Send-to-all button stays pinned right.
+            // Absorbs the slack so the right-hand controls stay pinned right.
             .frame(maxWidth: .infinity, alignment: .leading)
+
+            // Auto ⇄ Moto filter — only for Auto & moto categories.
+            if autoCategory != nil { vehicleFilter }
 
             if !contractors.isEmpty {
                 Button(action: sendToAll) {
@@ -171,7 +223,7 @@ struct ContractorListScreen: View {
 
     private func statusView(spinner: Bool, text: String) -> some View {
         VStack(spacing: 16) {
-            if spinner { ProgressView().tint(AppColors.accentStart).scaleEffect(1.4) }
+            if spinner { ProgressView().tint(.white).scaleEffect(1.4) }
             Text(text)
                 .font(.h3)
                 .foregroundStyle(AppColors.textSecondary)
@@ -225,6 +277,7 @@ struct ContractorListScreen: View {
     }
 
     // ── Data loading + progressive photo screening ────────────────────────────
+    @MainActor
     private func load() async {
         guard contractors.isEmpty else { return }
         isLoading = true
@@ -232,62 +285,147 @@ struct ContractorListScreen: View {
         let resolved = await ContractorLoader.resolveCoordinate(
             preset: presetCoordinate, location: location)
 
+        let query = effectiveSearchQuery
         if let coord = resolved {
-            contractors = await ContractorLoader.fetchLive(
-                category: category, searchQuery: searchQuery, near: coord)
+            let page = await ContractorLoader.fetchLivePage(
+                category: category, searchQuery: query, near: coord)
+            contractors = page.contractors
+            nextPageToken = page.nextPageToken
+            resolvedCoord = coord
+            // Reuse verdicts from a previous launch so businesses screened before
+            // show their photos immediately without re-downloading the pool.
+            let allowVehicles = isAutoService(category: category, searchQuery: query)
+            for c in contractors {
+                guard let v = ScreeningStore.shared.get(c.id, allowVehicles: allowVehicles) else { continue }
+                if !v.kept.isEmpty {
+                    // Cached work photos → show them immediately.
+                    screenedByID[c.id] = v.kept
+                    scannedCount[c.id] = v.scanned
+                } else if v.scanned >= c.photos.count {
+                    // Whole pool scanned, no work photos → mark scanned (skip
+                    // re-screening); dropped just below. A *partial* empty verdict
+                    // is left unprimed so the row re-scans deeper this time.
+                    scannedCount[c.id] = v.scanned
+                }
+            }
+            // Drop businesses confirmed to have no work photos in their whole pool,
+            // so they don't reappear as blank rows on a later visit.
+            contractors.removeAll { c in
+                (scannedCount[c.id] ?? 0) >= c.photos.count && (screenedByID[c.id]?.isEmpty ?? true)
+            }
             if !contractors.isEmpty {
+                let hints = EstimateService.priceMentions(in: contractors.flatMap(\.reviews))
                 Task { @MainActor in
                     estimate = await ContractorLoader.estimate(
-                        category: category, searchQuery: searchQuery, near: coord)
+                        category: category, searchQuery: query, near: coord,
+                        priceHints: hints)
                 }
             }
         } else {
             contractors = ContractorLoader.fallback(
-                category: category, searchQuery: searchQuery)
+                category: category, searchQuery: query)
         }
         isLoading = false
-
-        await screenAll()
+        // Photos are screened lazily per row (see `screenIfNeeded`) so we only pay
+        // for the businesses the user actually scrolls to.
     }
 
-    /// Screens contractors' photos concurrently (bounded), revealing each row as
-    /// soon as its work photos are ready. Contractors whose whole pool is non-work
-    /// imagery are dropped (same as the gallery).
-    ///
-    /// Screening each photo is a download + on-device Vision pass; running it one
-    /// contractor at a time (and blocking on a prefetch per kept photo) made the
-    /// list trickle in. Here up to `maxConcurrent` contractors screen at once and
-    /// prefetch is fire-and-forget, so the first screenful appears quickly.
-    private func screenAll() async {
-        let pending = contractors.filter { screenedByID[$0.id] == nil }
-        guard !pending.isEmpty else { return }
-        let maxConcurrent = 6
+    /// Re-run the search from scratch (used when the Auto ⇄ Moto filter changes).
+    private func reload() async {
+        contractors = []
+        screenedByID = [:]
+        scannedCount = [:]
+        nextPageToken = nil
+        estimate = nil
+        sentToAll = false
+        await load()
+    }
 
-        await withTaskGroup(of: (String, [String]).self) { group in
-            var next = 0
-            func schedule() {
-                guard next < pending.count else { return }
-                let c = pending[next]; next += 1
-                group.addTask { (c.id, await PhotoFilter.screen(c.photos)) }
-            }
-            for _ in 0..<min(maxConcurrent, pending.count) { schedule() }
+    /// Lazily screen one contractor's photos when its row appears (LazyVStack only
+    /// renders visible rows), so we issue Places Photo requests only for businesses
+    /// the user scrolls to. The list pass is cheap: scan a few photos, keep a few —
+    /// the full pool is screened later in the gallery if the business is opened.
+    /// First strip fill — runs once when the row scrolls into view. Keeps scanning
+    /// deeper into the pool until ~4 work photos are found (or the pool is
+    /// exhausted), so a business whose first few photos are logos/people/blurry
+    /// still shows its work shots instead of a blank strip. Scroll-to-load-more
+    /// then grows it beyond these four.
+    /// `@MainActor` so the `@State` writes resume on the main actor after the
+    /// off-main screening work — otherwise SwiftUI doesn't observe the update and
+    /// the photos only appear after the screen is rebuilt (reopening the category).
+    @MainActor
+    private func screenIfNeeded(_ c: Contractor) async {
+        guard scannedCount[c.id] == nil, !screening.contains(c.id) else { return }
+        screening.insert(c.id)
+        defer { screening.remove(c.id) }
 
-            for await (id, kept) in group {
-                if kept.isEmpty {
-                    contractors.removeAll { $0.id == id }
-                } else {
-                    screenedByID[id] = kept
-                    // Warm the first photo for the thumbnail / gallery handoff
-                    // without blocking the screening pipeline.
-                    if let s = kept.first, let u = URL(string: s) {
-                        Task.detached { await ImageCache.shared.prefetch(u) }
-                    }
-                }
-                schedule()   // backfill as each finishes → steady concurrency
-            }
+        // Accumulate locally and leave `screenedByID[c.id]` nil until done, so the
+        // row shows placeholders (not a blank strip) while scanning. Scan deeper
+        // into the pool if early photos are rejected, so a business whose first
+        // shots are logos/people still surfaces its work photos.
+        let allowVehicles = isAutoService(category: category, searchQuery: effectiveSearchQuery)
+        var kept: [String] = []
+        var scanned = 0
+        while kept.count < stripInitialFill && scanned < c.photos.count {
+            let slice = Array(c.photos.dropFirst(scanned).prefix(stripBatchScan))
+            if slice.isEmpty { break }
+            let batch = await PhotoFilter.screen(slice, allowVehicles: allowVehicles,
+                                                 limit: slice.count, scanLimit: slice.count)
+            kept.append(contentsOf: batch)
+            scanned += slice.count
+        }
+        kept = Array(kept.prefix(stripMaxKept))
+        scannedCount[c.id] = scanned
+        ScreeningStore.shared.save(c.id, allowVehicles: allowVehicles, kept: kept, scanned: scanned)
+
+        if kept.isEmpty {
+            // Whole pool was non-work imagery → drop the business rather than show
+            // a blank strip (mirrors the gallery).
+            contractors.removeAll { $0.id == c.id }
+        } else {
+            screenedByID[c.id] = kept   // reveal once, replacing the placeholders
         }
     }
+
+    /// Reveal more strip photos as the user scrolls the strip toward its end —
+    /// up to `stripMaxKept`, a batch at a time, so we only fetch what's viewed.
+    @MainActor
+    private func screenMore(_ c: Contractor) async {
+        guard (scannedCount[c.id] ?? 0) < c.photos.count,
+              (screenedByID[c.id]?.count ?? 0) < stripMaxKept else { return }
+        await screenBatch(c)
+    }
+
+    /// Screen the next window of a contractor's source photos and append keepers.
+    @MainActor
+    private func screenBatch(_ c: Contractor) async {
+        guard !screening.contains(c.id) else { return }
+        screening.insert(c.id)
+        defer { screening.remove(c.id) }
+        let start = scannedCount[c.id] ?? 0
+        let slice = Array(c.photos.dropFirst(start).prefix(stripBatchScan))
+        guard !slice.isEmpty else { scannedCount[c.id] = start; return }
+        let allowVehicles = isAutoService(category: category, searchQuery: effectiveSearchQuery)
+        let kept = await PhotoFilter.screen(slice, allowVehicles: allowVehicles,
+                                            limit: slice.count, scanLimit: slice.count)
+        var current = screenedByID[c.id] ?? []
+        current.append(contentsOf: kept)
+        screenedByID[c.id] = Array(current.prefix(stripMaxKept))   // [] until a keeper lands
+        scannedCount[c.id] = start + slice.count
+        // Persist so a later launch reuses this verdict instead of re-screening.
+        ScreeningStore.shared.save(c.id, allowVehicles: allowVehicles,
+                                   kept: screenedByID[c.id] ?? [], scanned: scannedCount[c.id] ?? 0)
+    }
 }
+
+/// Strip budget: the first batch screens `stripBatchScan` source photos (so a row
+/// the user never scrolls costs only ~4 photo fetches), then each scroll of the
+/// strip toward its end screens the next batch, growing up to `stripMaxKept`.
+private let stripBatchScan = 4
+private let stripMaxKept = 10
+/// Target number of work photos for the initial strip fill (scan deeper if early
+/// photos are rejected, so a row isn't left blank).
+private let stripInitialFill = 4
 
 // ─────────────────────────────────────────────────────────────────────────────
 // MARK: - ContractorListRow
@@ -304,6 +442,8 @@ private struct ContractorListRow: View {
     let priceTier: PriceTier?
     let onOpen: () -> Void
     let onReviews: () -> Void
+    /// Fired when the last loaded strip photo appears — cue to load the next batch.
+    var onNearEnd: () -> Void = {}
 
     // Exact Figma values.
     private let sideInset: CGFloat = 24      // content left/right margin
@@ -333,29 +473,43 @@ private struct ContractorListRow: View {
                         .foregroundStyle(.white)
                 }
 
-                Button(action: onReviews) {
-                    HStack(spacing: 8) {
-                        ListStarRow(rating: contractor.rating)
-                        if contractor.reviewCount > 0 {
-                            (Text("\(contractor.rating, specifier: "%.1f") • \(contractor.reviewCount) ")
-                                + Text("reviews").underline())
+                HStack(spacing: 8) {
+                    // Stars + rating number are display-only; only the word
+                    // "reviews" is the tappable link to the Google reviews.
+                    ListStarRow(rating: contractor.rating)
+                    if contractor.reviewCount > 0 {
+                        Text("\(contractor.rating, specifier: "%.1f") • \(contractor.reviewCount)")
+                            .font(.bodySmall)
+                            .foregroundStyle(.white.opacity(0.5))
+                        Button(action: onReviews) {
+                            Text("reviews")
                                 .font(.bodySmall)
                                 .foregroundStyle(.white.opacity(0.5))
+                                .underline()
+                                .contentShape(Rectangle())
                         }
+                        .buttonStyle(.plain)
                     }
-                    .contentShape(Rectangle())
                 }
-                .buttonStyle(.plain)
             }
             .padding(.horizontal, sideInset)
 
             // ── Horizontal photo strip — 112×136, r16, 8pt gap ────────────────
+            // Plain HStack (not LazyHStack): a LazyHStack fails to re-realize its
+            // tiles when `photos` flips from nil (placeholders) to the screened set,
+            // so the photos never appear until the screen is rebuilt. The HStack
+            // renders only what's been screened so far; we screen the next batch
+            // when the user scrolls the strip near its end (see onScrollGeometry
+            // change below), which is the lazy-load trigger — not eager onAppear.
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 8) {
                     if let photos {
                         ForEach(Array(photos.enumerated()), id: \.offset) { _, s in
                             Button(action: onOpen) {
-                                tile { PlacesImage(url: URL(string: s)) { placeholderFill }
+                                // Small rendition — same URL the screener already
+                                // downloaded, so the thumbnail is a cache hit (no
+                                // extra Places Photo request).
+                                tile { PlacesImage(url: URL(string: PlacesService.photoURL(s, width: PlacesService.listPhotoWidth))) { placeholderFill }
                                         .scaledToFill() }
                             }
                             .buttonStyle(.plain)
@@ -368,6 +522,17 @@ private struct ContractorListRow: View {
                     }
                 }
                 .padding(.horizontal, sideInset)
+                .frame(height: imageSize.height)
+            }
+            .frame(height: imageSize.height)
+            // Lazy-load more photos only when the strip is actually scrollable and
+            // the user scrolls it within ~120pt of the end. Reliable horizontal
+            // pagination without LazyHStack's realization bug.
+            .onScrollGeometryChange(for: Bool.self) { geo in
+                geo.contentSize.width > geo.containerSize.width &&
+                geo.contentOffset.x + geo.containerSize.width >= geo.contentSize.width - 120
+            } action: { wasNearEnd, isNearEnd in
+                if isNearEnd && !wasNearEnd { onNearEnd() }
             }
         }
     }

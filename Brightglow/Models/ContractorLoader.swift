@@ -31,13 +31,24 @@ enum ContractorLoader {
         searchQuery: String,
         near coord: CLLocationCoordinate2D
     ) async -> [Contractor] {
+        await fetchLivePage(category: category, searchQuery: searchQuery, near: coord).contractors
+    }
+
+    /// A page of live results plus the token to fetch the next page — lets a
+    /// swipe-through view keep loading more contractors while content remains.
+    static func fetchLivePage(
+        category: String,
+        searchQuery: String,
+        near coord: CLLocationCoordinate2D,
+        pageToken: String? = nil
+    ) async -> PlacesService.Page {
         let q = searchQuery.trimmingCharacters(in: .whitespacesAndNewlines)
         if !q.isEmpty {
-            return await PlacesService.fetch(searchText: q, near: coord)
+            return await PlacesService.fetchPage(searchText: q, near: coord, pageToken: pageToken)
         } else if let cat = Category(rawValue: category) {
-            return await PlacesService.fetch(category: cat, near: coord)
+            return await PlacesService.fetchPage(category: cat, near: coord, pageToken: pageToken)
         } else {
-            return await PlacesService.fetch(searchText: "home repair", near: coord)
+            return await PlacesService.fetchPage(searchText: "home repair", near: coord, pageToken: pageToken)
         }
     }
 
@@ -59,13 +70,14 @@ enum ContractorLoader {
     static func estimate(
         category: String,
         searchQuery: String,
-        near coord: CLLocationCoordinate2D
+        near coord: CLLocationCoordinate2D,
+        priceHints: [Int] = []
     ) async -> PriceTier? {
         let q   = searchQuery.trimmingCharacters(in: .whitespacesAndNewlines)
         let cat = !q.isEmpty
             ? (Category.matching(query: q).first ?? .plumbing)
             : (Category(rawValue: category) ?? .plumbing)
         let locality = await EstimateService.locality(for: coord)
-        return await EstimateService.estimate(category: cat, job: q, locality: locality)
+        return await EstimateService.estimate(category: cat, job: q, locality: locality, priceHints: priceHints)
     }
 }

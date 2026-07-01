@@ -1,12 +1,12 @@
 import Vision
 import UIKit
 
-/// A salient object found in a photo, with its inferred category.
+/// A salient object found in a photo, with its inferred trade (home or auto).
 /// `rect` is normalized (0–1) in Vision coords (origin bottom-left).
 struct DetectedObject: Identifiable {
     let id = UUID()
     let rect: CGRect
-    let category: Category
+    let match: TradeMatch
 }
 
 /// Photo → Category classifier.
@@ -27,26 +27,31 @@ enum ImageClassifier {
 
     private static let model = "Qwen/Qwen3-VL-8B-Instruct"
 
-    /// Built from `Category.allCases` so the trade list the model picks from
-    /// always matches the app's categories (no hand-maintained list to drift).
+    /// Built from the live category lists so the options always match the app
+    /// (no hand-maintained list to drift). The model first decides the vertical
+    /// (vehicle vs home), then picks one category from that vertical.
     private static let prompt: String = {
-        let trades = Category.allCases.map(\.rawValue).joined(separator: ", ")
-        return "You route home-repair requests to the right contractor. Looking at the main "
-            + "subject of this photo, choose exactly ONE trade from this list: "
-            + "\(trades). "
-            + "Reply with only the category name, exactly as written."
+        let home = Category.allCases.map(\.rawValue).joined(separator: ", ")
+        let auto = autoCategoryItems.map(\.name).joined(separator: ", ")
+        return "You route a repair request to the right contractor from one photo. "
+            + "First decide whether the main subject is a VEHICLE (car, truck, or "
+            + "motorcycle, or a part of one) or a HOME / property. Then choose exactly "
+            + "ONE category:\n"
+            + "- If it's a vehicle, choose from: \(auto).\n"
+            + "- If it's a home/property, choose from: \(home).\n"
+            + "Reply with only the chosen category name, exactly as written."
     }()
 
     // MARK: - Public API
 
-    /// Best-guess category — cloud first, on-device Vision fallback.
-    static func classify(_ image: UIImage) async throws -> Category {
+    /// Best-guess trade (home or auto) — cloud first, on-device Vision fallback.
+    static func classify(_ image: UIImage) async throws -> TradeMatch {
         if let cloud = try? await classifyCloud(image) { return cloud }
         return try classifyOnDevice(image)
     }
 
     /// Classify only the region the user circled.
-    static func classify(_ image: UIImage, regionInView rect: CGRect, viewSize: CGSize) async throws -> Category {
+    static func classify(_ image: UIImage, regionInView rect: CGRect, viewSize: CGSize) async throws -> TradeMatch {
         let target = crop(image, viewRect: rect, viewSize: viewSize) ?? image
         return try await classify(target)
     }
@@ -71,8 +76,8 @@ enum ImageClassifier {
         var out: [DetectedObject] = []
         for box in boxes {
             guard let region = cropNormalized(image, box),
-                  let cat = try? classifyOnDevice(region) else { continue }
-            out.append(DetectedObject(rect: box, category: cat))
+                  let match = try? classifyOnDevice(region) else { continue }
+            out.append(DetectedObject(rect: box, match: match))
         }
         // Only worth showing tags when there's genuine ambiguity.
         return out.count >= 2 ? dedupe(out) : []
@@ -80,7 +85,7 @@ enum ImageClassifier {
 
     // MARK: - Cloud (vision LLM)
 
-    private static func classifyCloud(_ image: UIImage) async throws -> Category {
+    private static func classifyCloud(_ image: UIImage) async throws -> TradeMatch {
         guard !hfToken.isEmpty else { throw ClassifyError.noMatch }
         guard let jpeg = image.downscaled(maxDimension: 512).jpegData(compressionQuality: 0.7),
               let url = URL(string: "https://router.huggingface.co/v1/chat/completions")
@@ -108,43 +113,64 @@ enum ImageClassifier {
               let content = message["content"] as? String
         else { throw ClassifyError.noMatch }
 
-        let text = content.lowercased()
-        if let exact = Category.allCases.first(where: { text.contains($0.rawValue.lowercased()) }) { return exact }
-        let matched = Category.matching(query: content)
-        if matched.count == 1 { return matched[0] }
+        return try matchTrade(in: content)
+    }
+
+    /// Map a free-text classification reply to a home or auto category. Exact
+    /// category names win; keyword hits are the fallback. Auto is checked first so
+    /// vehicle-specific replies aren't swallowed by a looser home keyword.
+    private static func matchTrade(in text: String) throws -> TradeMatch {
+        let t = text.lowercased()
+        if let auto = autoCategoryItems.first(where: { t.contains($0.name.lowercased()) }) { return .auto(auto) }
+        if let home = Category.allCases.first(where: { t.contains($0.rawValue.lowercased()) }) { return .home(home) }
+        if let auto = autoCategoryItems.first(where: { a in a.keywords.contains { t.contains($0) } }) { return .auto(auto) }
+        let matched = Category.matching(query: text)
+        if matched.count == 1 { return .home(matched[0]) }
         throw ClassifyError.noMatch
     }
 
     // MARK: - On-device Vision fallback
 
-    private static func classifyOnDevice(_ image: UIImage) throws -> Category {
+    private static func classifyOnDevice(_ image: UIImage) throws -> TradeMatch {
         guard let cg = image.cgImage else { throw ClassifyError.noImage }
         let request = VNClassifyImageRequest()
         let handler = VNImageRequestHandler(cgImage: cg, orientation: cgOrientation(image.imageOrientation), options: [:])
         try handler.perform([request])
         guard let observations = request.results else { throw ClassifyError.noMatch }
 
-        var scores: [Category: Float] = [:]
+        var homeScores: [Category: Float] = [:]
+        var autoScores: [Int: Float] = [:]   // index into autoCategoryItems
         for obs in observations where obs.confidence > 0.05 {
             let label = obs.identifier.lowercased().replacingOccurrences(of: "_", with: " ")
             for cat in Category.allCases where cat.keywords.contains(where: { label.contains($0) }) || label.contains(cat.rawValue.lowercased()) {
-                scores[cat, default: 0] += obs.confidence
+                homeScores[cat, default: 0] += obs.confidence
+            }
+            for (i, a) in autoCategoryItems.enumerated() where a.keywords.contains(where: { label.contains($0) }) {
+                autoScores[i, default: 0] += obs.confidence
             }
         }
-        guard let best = scores.max(by: { $0.value < $1.value })?.key else { throw ClassifyError.noMatch }
-        return best
+
+        let bestHome = homeScores.max(by: { $0.value < $1.value })
+        let bestAuto = autoScores.max(by: { $0.value < $1.value })
+        switch (bestHome, bestAuto) {
+        case let (h?, a?):   // tie favours auto — its keywords are vehicle-specific
+            return a.value >= h.value ? .auto(autoCategoryItems[a.key]) : .home(h.key)
+        case let (h?, nil):  return .home(h.key)
+        case let (nil, a?):  return .auto(autoCategoryItems[a.key])
+        default:             throw ClassifyError.noMatch
+        }
     }
 
     // MARK: - Geometry
 
-    /// Keep only the highest-area box per category.
+    /// Keep only the highest-area box per trade.
     private static func dedupe(_ objs: [DetectedObject]) -> [DetectedObject] {
-        var byCat: [Category: DetectedObject] = [:]
+        var byMatch: [TradeMatch: DetectedObject] = [:]
         for o in objs {
-            if let e = byCat[o.category], e.rect.width * e.rect.height >= o.rect.width * o.rect.height { continue }
-            byCat[o.category] = o
+            if let e = byMatch[o.match], e.rect.width * e.rect.height >= o.rect.width * o.rect.height { continue }
+            byMatch[o.match] = o
         }
-        return Array(byCat.values)
+        return Array(byMatch.values)
     }
 
     /// Crop a normalized Vision rect (origin bottom-left) from the image.

@@ -20,6 +20,9 @@ struct DrawModeView: View {
     /// What the model understood from the photo — pre-fills the input so the
     /// user sees (and can edit) the detected term before sending.
     var prefill: String = ""
+    /// Category names offered in the quick-pick carousel — home trades by default,
+    /// or the Auto & moto services when the photo was recognised as a vehicle.
+    var categorySuggestions: [String] = Category.allCases.map(\.rawValue)
     /// Multiple detected objects — shown as tappable tags for disambiguation.
     var objects: [DetectedObject] = []
     @Binding var paths: [DrawnPath]
@@ -55,10 +58,10 @@ struct DrawModeView: View {
                     classifyError = nil
                     Task {
                         do {
-                            let cat = try await ImageClassifier.classify(image, regionInView: box, viewSize: viewSize)
+                            let match = try await ImageClassifier.classify(image, regionInView: box, viewSize: viewSize)
                             await MainActor.run {
                                 classifying = false
-                                addTag(cat.rawValue)
+                                addTag(match.label)
                             }
                         } catch {
                             await MainActor.run {
@@ -145,8 +148,8 @@ struct DrawModeView: View {
                     // ── Category carousel — 12pt above input bar (unselected only)
                     ScrollView(.horizontal, showsIndicators: false) {
                         HStack(spacing: 8) {
-                            ForEach(Category.allCases.filter { !selectedTags.contains($0.rawValue) }, id: \.self) { cat in
-                                categoryTag(cat.rawValue)
+                            ForEach(categorySuggestions.filter { !selectedTags.contains($0) }, id: \.self) { name in
+                                categoryTag(name)
                             }
                         }
                         .padding(.horizontal, 16)
@@ -285,7 +288,7 @@ struct DrawModeView: View {
     private func applyDefaultSelection() {
         guard !userTouched else { return }
         if let best = objects.max(by: { $0.rect.width * $0.rect.height < $1.rect.width * $1.rect.height }) {
-            selectedTags = [best.category.rawValue]
+            selectedTags = [best.match.label]
         } else if !prefill.isEmpty {
             selectedTags = [prefill]
         }

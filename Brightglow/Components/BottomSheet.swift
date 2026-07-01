@@ -12,6 +12,15 @@ struct BottomSheet<Content: View>: View {
     var collapsedHeight: CGFloat = 80
     var midHeight: CGFloat = 400
     var fullTopInset: CGFloat = 0   // gap left above the sheet when fully expanded
+    /// When false the sheet can't be dragged — it stays at its current detent and
+    /// only moves when `detent` is set programmatically. Inner scrolling still works.
+    var dragEnabled: Bool = true
+    /// When false the sheet can't expand past `.mid` by dragging — it only toggles
+    /// between `.mid` and `.collapsed` (e.g. a fixed-height chooser over a camera).
+    var expandable: Bool = true
+    /// If set, a downward drag-to-dismiss from `.full` calls this instead of going
+    /// to `.collapsed` — used to pop a drilled-in screen back to its parent.
+    var onDismiss: (() -> Void)? = nil
     let content: Content
 
     init(
@@ -20,6 +29,9 @@ struct BottomSheet<Content: View>: View {
         collapsedHeight: CGFloat = 80,
         midHeight: CGFloat = 400,
         fullTopInset: CGFloat = 0,
+        dragEnabled: Bool = true,
+        expandable: Bool = true,
+        onDismiss: (() -> Void)? = nil,
         @ViewBuilder content: () -> Content
     ) {
         self._detent = detent
@@ -27,6 +39,9 @@ struct BottomSheet<Content: View>: View {
         self.collapsedHeight = collapsedHeight
         self.midHeight = midHeight
         self.fullTopInset = fullTopInset
+        self.dragEnabled = dragEnabled
+        self.expandable = expandable
+        self.onDismiss = onDismiss
         self.content = content()
     }
 
@@ -79,8 +94,9 @@ struct BottomSheet<Content: View>: View {
                             // Only allow upward drag to expand
                             state = min(0, dy)
                         case .mid:
-                            // Up = expand; down = collapse (always allowed from mid)
-                            state = dy
+                            // Down = collapse (always allowed). Up = expand only when
+                            // expandable; otherwise rubber-band is suppressed.
+                            state = expandable ? dy : max(0, dy)
                         case .full:
                             // Down only when content is scrolled to top
                             if dy > 0 { state = contentIsAtTop ? dy : 0 }
@@ -93,15 +109,20 @@ struct BottomSheet<Content: View>: View {
                         withAnimation(.interpolatingSpring(stiffness: 320, damping: 32)) {
                             switch detent {
                             case .collapsed:
-                                if v < -250 || t < -60 { detent = .full }
+                                // Drag up restores the resting detent (mid when the
+                                // sheet can't fully expand, otherwise full).
+                                if v < -250 || t < -60 { detent = expandable ? .full : .mid }
                             case .mid:
-                                if      v < -250 || t < -60 { detent = .full }
-                                else if v >  250 || t >  60 { detent = .collapsed }
+                                if      expandable && (v < -250 || t < -60) { detent = .full }
+                                else if v >  250 || t >  60                 { detent = .collapsed }
                             case .full:
-                                if contentIsAtTop && (v > 250 || t > 60) { detent = .collapsed }
+                                if contentIsAtTop && (v > 250 || t > 60) {
+                                    if let onDismiss { onDismiss() } else { detent = .collapsed }
+                                }
                             }
                         }
-                    }
+                    },
+                including: dragEnabled ? .all : .subviews
             )
             .animation(.interpolatingSpring(stiffness: 320, damping: 32), value: detent)
         }

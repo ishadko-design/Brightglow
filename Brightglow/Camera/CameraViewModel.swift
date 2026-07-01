@@ -8,8 +8,9 @@ class CameraViewModel: NSObject, ObservableObject {
     @Published var capturedImage: UIImage? = nil
     @Published var showDrawingCanvas = false
     @Published var permissionDenied = false
-    /// Category inferred from the captured photo (nil until classified / if no match).
-    @Published var detectedCategory: Category? = nil
+    /// Trade inferred from the captured photo — home or auto (nil until
+    /// classified / if no match).
+    @Published var detectedMatch: TradeMatch? = nil
     /// Multiple salient objects (only populated when the frame is ambiguous).
     @Published var detectedObjects: [DetectedObject] = []
 
@@ -39,6 +40,15 @@ class CameraViewModel: NSObject, ObservableObject {
         guard isAuthorized else { return }
         if !session.isRunning {
             DispatchQueue.global(qos: .userInitiated).async { self.session.startRunning() }
+        }
+    }
+
+    /// Stop the capture session when the viewfinder is no longer on screen (e.g.
+    /// the user drilled into a category/gallery), so the camera powers down and
+    /// the green in-use indicator goes away. The landing's `onAppear` resumes it.
+    func deactivate() {
+        if session.isRunning {
+            DispatchQueue.global(qos: .userInitiated).async { self.session.stopRunning() }
         }
     }
 
@@ -91,7 +101,7 @@ class CameraViewModel: NSObject, ObservableObject {
 
     func retake() {
         capturedImage = nil
-        detectedCategory = nil
+        detectedMatch = nil
         detectedObjects = []
         showDrawingCanvas = false
         DispatchQueue.global(qos: .userInitiated).async { self.session.startRunning() }
@@ -121,7 +131,7 @@ extension CameraViewModel: AVCapturePhotoCaptureDelegate {
         // multiple salient objects for disambiguation tags.
         Task {
             let detected = try? await ImageClassifier.classify(image)
-            await MainActor.run { self.detectedCategory = detected }
+            await MainActor.run { self.detectedMatch = detected }
         }
         Task {
             let objects = await ImageClassifier.detectObjects(image)

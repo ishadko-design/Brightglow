@@ -13,13 +13,9 @@ enum PhotoFilter {
     /// thumbnail. Source resolution is already gated server-side via the photo
     /// metadata pre-filter (≥600px) in PlacesService.
     private static let minPixelDimension = 300
-    /// Most good photos to keep per contractor for the card gallery.
-    private static let maxKept = 6
-    /// Width (px) of the rendition downloaded for screening. Big enough that blur
-    /// is still detectable (small thumbnails smooth blur away), small enough that
-    /// reviewing the whole 10-photo pool stays cheap. The full-size URL is what
-    /// actually gets displayed.
-    private static let screeningWidthPx = 800
+    /// Keep every work photo a business has so the user can page through them all.
+    /// Bounded by the Google Places API, which returns at most 10 photos per place.
+    private static let maxKept = 10
     /// Laplacian variance below this reads as out-of-focus / blurry. Sharp photos
     /// score in the hundreds–thousands; soft / blurry ones below ~100.
     private static let minSharpness: Double = 110
@@ -46,31 +42,47 @@ enum PhotoFilter {
     private static let rejectTokens: Set<String> = [
         // people
         "people", "person", "portrait", "selfie", "crowd", "face",
-        // vehicles
-        "vehicle", "car", "automobile", "truck", "van", "motorcycle",
-        "bicycle", "wheel", "tire", "traffic",
         // signage / documents
         "logo", "text", "document", "screenshot", "poster", "sign",
         "signage", "menu", "advertisement", "label",
-        // food / animals (clearly off-topic for home work)
+        // food / animals (clearly off-topic)
         "food", "meal", "drink", "fruit", "animal", "pet", "dog", "cat",
+    ]
+
+    /// Vehicle tokens — rejected for HOME trades (a car isn't the work), but kept
+    /// for AUTO & moto services where the vehicle *is* the work example.
+    private static let vehicleTokens: Set<String> = [
+        "vehicle", "car", "automobile", "truck", "van", "motorcycle",
+        "bicycle", "wheel", "tire", "traffic",
     ]
 
     // MARK: - Per-image decision
 
+    /// Outcome of screening one photo: whether to keep it, and whether its subject
+    /// is a vehicle (used to rank vehicle/work shots first for auto & moto).
+    struct Decision { let keep: Bool; let isVehicle: Bool }
+    private static let reject = Decision(keep: false, isVehicle: false)
+
     /// True when the photo looks like a genuine, good-quality work example.
-    static func isWorkExample(_ image: UIImage) -> Bool {
-        guard let cg = image.cgImage else { return true }   // can't tell → keep
+    /// `allowVehicles` keeps car/truck/motorcycle photos (auto & moto work).
+    static func isWorkExample(_ image: UIImage, allowVehicles: Bool = false) -> Bool {
+        evaluate(image, allowVehicles: allowVehicles).keep
+    }
+
+    /// Full screening decision for one photo.
+    static func evaluate(_ image: UIImage, allowVehicles: Bool = false) -> Decision {
+        let rejects = allowVehicles ? rejectTokens : rejectTokens.union(vehicleTokens)
+        guard let cg = image.cgImage else { return Decision(keep: true, isVehicle: false) }   // can't tell → keep
 
         // 1. Resolution backstop.
         if min(cg.width, cg.height) < minPixelDimension {
-            log(cg, reject: "low-res \(cg.width)x\(cg.height)"); return false
+            log(cg, reject: "low-res \(cg.width)x\(cg.height)"); return reject
         }
 
         // 2. Sharpness gate — reject blurry / out-of-focus images.
         let sharp = laplacianVariance(cg)
         if sharp < minSharpness {
-            log(cg, reject: "blurry (sharpness \(Int(sharp)))"); return false
+            log(cg, reject: "blurry (sharpness \(Int(sharp)))"); return reject
         }
 
         let handler = VNImageRequestHandler(cgImage: cg, options: [:])
@@ -93,10 +105,10 @@ enum PhotoFilter {
         //    the subject is people rather than the work.
         let faces = faceReq.results ?? []
         if faces.count > maxFaces {
-            log(cg, reject: "\(faces.count) faces"); return false
+            log(cg, reject: "\(faces.count) faces"); return reject
         }
         if faces.contains(where: { $0.boundingBox.width * $0.boundingBox.height > maxFaceAreaFraction }) {
-            log(cg, reject: "prominent face"); return false
+            log(cg, reject: "prominent face"); return reject
         }
 
         // 3b. Human-body gate — catches standing / distant / posed people that
@@ -106,28 +118,31 @@ enum PhotoFilter {
         //     is already caught by the prominent-face check above.
         let humans = (humanReq.results ?? []).filter { $0.confidence >= humanConfidence }
         if humans.count > maxHumans {
-            log(cg, reject: "\(humans.count) people"); return false
+            log(cg, reject: "\(humans.count) people"); return reject
         }
 
         // 4. Text gate — reject images dominated by text.
         if let lines = textReq.results {
             let textArea = lines.reduce(0.0) { $0 + Double($1.boundingBox.width * $1.boundingBox.height) }
             if textArea > maxTextAreaFraction {
-                log(cg, reject: "text-heavy (\(Int(textArea * 100))%)"); return false
+                log(cg, reject: "text-heavy (\(Int(textArea * 100))%)"); return reject
             }
         }
 
-        // 5. Scene gate — reject car / people / logo / food etc. classifications,
-        //    matching whole identifier tokens (not substrings).
+        // 5. Scene gate — reject people / logo / food etc. (and vehicles unless
+        //    allowed). Also note whether the subject IS a vehicle, so auto & moto
+        //    results can rank those work shots first.
+        var isVehicle = false
         if let obs = classReq.results {
             for o in obs where o.confidence > rejectConfidence {
-                let tokens = o.identifier.lowercased().split(whereSeparator: { !$0.isLetter })
-                if tokens.contains(where: { rejectTokens.contains(String($0)) }) {
-                    log(cg, reject: "scene: \(o.identifier) \(Int(o.confidence * 100))%"); return false
+                let tokens = o.identifier.lowercased().split(whereSeparator: { !$0.isLetter }).map(String.init)
+                if tokens.contains(where: { vehicleTokens.contains($0) }) { isVehicle = true }
+                if tokens.contains(where: { rejects.contains($0) }) {
+                    log(cg, reject: "scene: \(o.identifier) \(Int(o.confidence * 100))%"); return reject
                 }
             }
         }
-        return true
+        return Decision(keep: true, isVehicle: isVehicle)
     }
 
     // MARK: - Sharpness (variance of the Laplacian)
@@ -178,30 +193,53 @@ enum PhotoFilter {
     /// re-adding the junk — the gallery then shows a placeholder. Only a *failed
     /// download* (which we can't judge) is kept, so transient network errors
     /// don't blank an otherwise-good gallery.
-    static func screen(_ urls: [String]) async -> [String] {
-        var kept: [String] = []
+    /// - Parameters:
+    ///   - limit: max photos to keep (the list strip needs only a few; the
+    ///     full-screen gallery wants all available).
+    ///   - scanLimit: max photos to download/evaluate. Caps Places Photo requests
+    ///     for the cheap list pass; the gallery scans the whole pool to rank well.
+    /// Screening downloads the small **list** rendition, so a kept strip photo is
+    /// already cached — no second request for the thumbnail.
+    static func screen(_ urls: [String], allowVehicles: Bool = false,
+                       limit: Int = maxKept, scanLimit: Int = .max) async -> [String] {
+        // Two buckets so auto & moto results lead with the actual vehicle/work
+        // shots; non-vehicle keepers (and unjudged) follow in original order.
+        var vehicle: [String] = []
+        var other: [String] = []
+        var scanned = 0
         for displayURL in urls {
-            if kept.count >= maxKept { break }
-            let scrURLStr = screeningURL(from: displayURL)
-            guard let url = URL(string: scrURLStr) else { continue }
+            if scanned >= scanLimit { break }
+            scanned += 1
+            let screenURL = PlacesService.photoURL(displayURL, width: PlacesService.listPhotoWidth)
+            guard let url = URL(string: screenURL) else { continue }
             // Use the shared authenticated loader: Places' bundle-restricted API
             // key 403s a plain URLSession request, so a raw fetch here would fail
             // every time and silently keep all photos unscreened.
             if let img = await ImageCache.download(url) {
-                if isWorkExample(img) { kept.append(displayURL) }   // display full-size
+                let decision = await evaluateOffPool(img, allowVehicles: allowVehicles)
+                guard decision.keep else { continue }
+                if allowVehicles && decision.isVehicle { vehicle.append(displayURL) }
+                else { other.append(displayURL) }
             } else {
-                kept.append(displayURL)   // couldn't fetch to judge → keep
+                other.append(displayURL)   // couldn't fetch to judge → keep
             }
         }
-        return kept
+        return Array((vehicle + other).prefix(limit))   // display full-size, work shots first
     }
 
-    /// Derives the screening rendition URL from a full-size display URL by
-    /// shrinking the Places `maxWidthPx` parameter.
-    private static func screeningURL(from displayURL: String) -> String {
-        guard let range = displayURL.range(of: #"maxWidthPx=\d+"#, options: .regularExpression)
-        else { return displayURL }
-        return displayURL.replacingCharacters(in: range, with: "maxWidthPx=\(screeningWidthPx)")
+    /// Vision screening is heavy synchronous CPU work (four ML requests per photo).
+    /// Running it inline leaves it on Swift's cooperative thread pool — the small
+    /// pool every `async` task shares — so screening many businesses at once
+    /// saturates it and starves everything else: image downloads stall and a
+    /// pushed screen (the gallery) can't get a thread to load, so it looks like it
+    /// won't open. Hop to a dedicated GCD queue so the cooperative pool stays free.
+    private static let visionQueue = DispatchQueue(
+        label: "photofilter.vision", qos: .userInitiated, attributes: .concurrent)
+
+    private static func evaluateOffPool(_ image: UIImage, allowVehicles: Bool) async -> Decision {
+        await withCheckedContinuation { cont in
+            visionQueue.async { cont.resume(returning: evaluate(image, allowVehicles: allowVehicles)) }
+        }
     }
 
     // MARK: - Debug
