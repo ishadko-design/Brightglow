@@ -20,6 +20,12 @@ on every visit on every device.
 
 - [ ] not started  ·  [~] in progress  ·  [x] done
 
+**Progress (2026-06-30):** Phases 0–2 done and deployed to project
+`qxoseyrlbvblpwqzwvvk` — the `search` Edge Function proxies Google with a
+server-held key and caches responses in the `search_cache` table (one search per
+area/category/day). Verified `x-cache: miss → hit`. Phase 3 (screen photos once)
+is next.
+
 ---
 
 ## Phase 0 — Setup (½ day) — prerequisite
