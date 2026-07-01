@@ -14,6 +14,15 @@ enum PlacesService {
     private static let apiKey: String =
         (Bundle.main.object(forInfoDictionaryKey: "PLACES_API_KEY") as? String) ?? ""
 
+    /// Supabase backend (project ref + publishable key), injected the same way as
+    /// the Places key. When both are present, searches route through the backend
+    /// proxy so the Google key stays server-side; empty → direct Google calls.
+    private static let supabaseRef: String =
+        (Bundle.main.object(forInfoDictionaryKey: "SUPABASE_REF") as? String) ?? ""
+    private static let supabaseAnonKey: String =
+        (Bundle.main.object(forInfoDictionaryKey: "SUPABASE_ANON_KEY") as? String) ?? ""
+    private static var useBackend: Bool { !supabaseRef.isEmpty && !supabaseAnonKey.isEmpty }
+
     private static let searchRadius: Double = 40_000   // metres (~25 mi)
     private static let responseTimes: [ResponseTime] = [.fast, .normal, .slow]
 
@@ -66,45 +75,10 @@ enum PlacesService {
             : nil
         if let cacheKey, let cached = SearchCache.shared.page(for: cacheKey) { return cached }
 
-        guard let url = URL(string: "https://places.googleapis.com/v1/places:searchText") else { return empty }
-
-        var req = URLRequest(url: url, timeoutInterval: 10)
-        req.httpMethod = "POST"
-        req.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        req.setValue(apiKey, forHTTPHeaderField: "X-Goog-Api-Key")
-        // The API key is restricted to this app's iOS bundle ID. A raw URLSession
-        // request must send it explicitly, or Google returns 403 and we'd silently
-        // fall back to mock data.
-        if let bundleID = Bundle.main.bundleIdentifier {
-            req.setValue(bundleID, forHTTPHeaderField: "X-Ios-Bundle-Identifier")
-        }
-        // `nextPageToken` must be in the field mask for pagination to come back.
-        req.setValue(
-            "places.id,places.displayName,places.rating,places.userRatingCount,"
-            + "places.formattedAddress,places.nationalPhoneNumber,places.photos,"
-            + "places.businessStatus,places.reviews,places.location,nextPageToken",
-            forHTTPHeaderField: "X-Goog-FieldMask")
-
-        // Bias (not hard-restrict) results to the searched area. A `locationBias`
-        // circle returns the most relevant nearby businesses — including non-US
-        // ones named in their local language — whereas a strict rectangle
-        // `locationRestriction` returns nothing in areas Google can't confidently
-        // box. Combined with dropping the mock fallback, changing the city now
-        // genuinely changes the results.
-        var body: [String: Any] = [
-            "textQuery": textQuery,
-            "maxResultCount": pageSize,
-            "locationBias": ["circle": [
-                "center": ["latitude": coord.latitude, "longitude": coord.longitude],
-                "radius": searchRadius,
-            ]],
-        ]
-        // Continuation request: fetch the next page of the same search.
-        if let pageToken { body["pageToken"] = pageToken }
-        req.httpBody = try? JSONSerialization.data(withJSONObject: body)
-
-        guard let (data, resp) = try? await URLSession.shared.data(for: req),
-              (resp as? HTTPURLResponse)?.statusCode == 200,
+        // Fetch the raw Places JSON — via the backend proxy when configured,
+        // otherwise (or on failure) straight from Google.
+        guard let data = await searchJSON(textQuery: textQuery, near: coord,
+                                          pageSize: pageSize, pageToken: pageToken),
               let decoded = try? JSONDecoder().decode(PlacesResponse.self, from: data)
         else { return empty }
 
@@ -123,6 +97,82 @@ enum PlacesService {
         let page = Page(contractors: contractors, nextPageToken: decoded.nextPageToken)
         if let cacheKey { SearchCache.shared.save(page, for: cacheKey) }
         return page
+    }
+
+    // MARK: - Raw request (backend proxy → Google fallback)
+
+    /// Raw Places `searchText` JSON. Tries the Supabase backend proxy first (which
+    /// holds the API key server-side); falls back to a direct Google call if the
+    /// backend is disabled or unreachable, so the app keeps working (kill-switch).
+    private static func searchJSON(textQuery: String, near coord: CLLocationCoordinate2D,
+                                   pageSize: Int, pageToken: String?) async -> Data? {
+        if useBackend,
+           let data = await backendSearchJSON(textQuery: textQuery, near: coord,
+                                              pageSize: pageSize, pageToken: pageToken) {
+            return data
+        }
+        return await googleSearchJSON(textQuery: textQuery, near: coord,
+                                      pageSize: pageSize, pageToken: pageToken)
+    }
+
+    /// Search via the Supabase Edge Function, which forwards to Google with the
+    /// server-held key. Returns Google's raw response shape (decodable as
+    /// `PlacesResponse`), or nil to trigger the direct-Google fallback.
+    private static func backendSearchJSON(textQuery: String, near coord: CLLocationCoordinate2D,
+                                          pageSize: Int, pageToken: String?) async -> Data? {
+        guard let url = URL(string: "https://\(supabaseRef).supabase.co/functions/v1/search")
+        else { return nil }
+        var req = URLRequest(url: url, timeoutInterval: 10)
+        req.httpMethod = "POST"
+        req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        req.setValue(supabaseAnonKey, forHTTPHeaderField: "apikey")
+        req.setValue("Bearer \(supabaseAnonKey)", forHTTPHeaderField: "Authorization")
+        var body: [String: Any] = [
+            "textQuery": textQuery,
+            "latitude": coord.latitude,
+            "longitude": coord.longitude,
+            "pageSize": pageSize,
+        ]
+        if let pageToken { body["pageToken"] = pageToken }
+        req.httpBody = try? JSONSerialization.data(withJSONObject: body)
+        guard let (data, resp) = try? await URLSession.shared.data(for: req),
+              (resp as? HTTPURLResponse)?.statusCode == 200 else { return nil }
+        return data
+    }
+
+    /// Direct Google Places call — the fallback path and the pre-backend default.
+    private static func googleSearchJSON(textQuery: String, near coord: CLLocationCoordinate2D,
+                                         pageSize: Int, pageToken: String?) async -> Data? {
+        guard let url = URL(string: "https://places.googleapis.com/v1/places:searchText")
+        else { return nil }
+        var req = URLRequest(url: url, timeoutInterval: 10)
+        req.httpMethod = "POST"
+        req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        req.setValue(apiKey, forHTTPHeaderField: "X-Goog-Api-Key")
+        // The API key is restricted to this app's iOS bundle ID. A raw URLSession
+        // request must send it explicitly, or Google returns 403.
+        if let bundleID = Bundle.main.bundleIdentifier {
+            req.setValue(bundleID, forHTTPHeaderField: "X-Ios-Bundle-Identifier")
+        }
+        // `nextPageToken` must be in the field mask for pagination to come back.
+        req.setValue(
+            "places.id,places.displayName,places.rating,places.userRatingCount,"
+            + "places.formattedAddress,places.nationalPhoneNumber,places.photos,"
+            + "places.businessStatus,places.reviews,places.location,nextPageToken",
+            forHTTPHeaderField: "X-Goog-FieldMask")
+        var body: [String: Any] = [
+            "textQuery": textQuery,
+            "maxResultCount": pageSize,
+            "locationBias": ["circle": [
+                "center": ["latitude": coord.latitude, "longitude": coord.longitude],
+                "radius": searchRadius,
+            ]],
+        ]
+        if let pageToken { body["pageToken"] = pageToken }
+        req.httpBody = try? JSONSerialization.data(withJSONObject: body)
+        guard let (data, resp) = try? await URLSession.shared.data(for: req),
+              (resp as? HTTPURLResponse)?.statusCode == 200 else { return nil }
+        return data
     }
 
     // MARK: - Mapping

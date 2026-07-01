@@ -1,0 +1,6 @@
+project_id = "brightglow"
+
+# The search proxy is public for now (Phase 1) — protected by the Google per-day
+# quota cap. Real auth is a Phase 4 hardening step (see docs/cheap-api-plan.md).
+[functions.search]
+verify_jwt = false

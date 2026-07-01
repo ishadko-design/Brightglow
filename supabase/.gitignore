@@ -1,0 +1,9 @@
+# Supabase local state — machine-specific, never commit
+.branches
+.temp
+
+# Env files
+.env
+.env.keys
+.env.local
+.env.*.local
