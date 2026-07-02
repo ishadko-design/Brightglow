@@ -260,6 +260,20 @@ struct MainScreen: View {
                           .frame(height: 56)
                       }
                       HStack(alignment: .center, spacing: 12) {
+                        // + is always on the left and stays put while typing — add
+                        // a photo at any point in the search.
+                        PhotosPicker(
+                            selection: $pickedItems,
+                            maxSelectionCount: 5,
+                            matching: .images,
+                            photoLibrary: .shared()
+                        ) {
+                            Image(systemName: "plus.circle")
+                                .font(.system(size: 22))
+                                .foregroundStyle(.white.opacity(0.5))
+                                .iconTapTarget()
+                        }
+
                         TextField("What you need help with?", text: $searchText, axis: .vertical)
                             .font(.bodyLight)
                             .foregroundStyle(.white)
@@ -274,26 +288,14 @@ struct MainScreen: View {
                                 searchFocused = false
                                 goSearch = true
                             }
+
+                        // Trailing: mic when empty, send arrow once there's text.
                         if searchText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                            HStack(spacing: 0) {
-                                PhotosPicker(
-                                    selection: $pickedItems,
-                                    maxSelectionCount: 5,
-                                    matching: .images,
-                                    photoLibrary: .shared()
-                                ) {
-                                    Image(systemName: "plus.circle")
-                                        .font(.system(size: 22))
-                                        .foregroundStyle(.white.opacity(0.5))
-                                        .iconTapTarget()
-                                }
-                                Image(systemName: "mic")
-                                    .font(.system(size: 22))
-                                    .foregroundStyle(.white.opacity(0.5))
-                                    .iconTapTarget()
-                            }
+                            Image(systemName: "mic")
+                                .font(.system(size: 22))
+                                .foregroundStyle(.white.opacity(0.5))
+                                .iconTapTarget()
                         } else {
-                            // Send CTA — right-pointing white arrow on blue background
                             Button(action: {
                                 let q = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
                                 guard !q.isEmpty else { return }

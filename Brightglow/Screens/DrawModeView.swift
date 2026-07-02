@@ -1,4 +1,5 @@
 import SwiftUI
+import PhotosUI
 
 private var safeTop: CGFloat {
     UIApplication.shared.connectedScenes
@@ -40,6 +41,7 @@ struct DrawModeView: View {
     @State private var classifying = false
     @State private var classifyError: String? = nil
     @State private var showDrawHint = true
+    @State private var pickedItems: [PhotosPickerItem] = []
 
     var body: some View {
         GeometryReader { geo in
@@ -159,6 +161,15 @@ struct DrawModeView: View {
 
                     // Input bar — chip(s) pinned top-left, text field below, buttons right.
                     HStack(alignment: selectedTags.isEmpty ? .center : .bottom, spacing: 8) {
+                        // + always on the left — add another photo mid-flow.
+                        PhotosPicker(selection: $pickedItems, maxSelectionCount: 1,
+                                     matching: .images, photoLibrary: .shared()) {
+                            Image(systemName: "plus.circle")
+                                .font(.system(size: 22))
+                                .foregroundStyle(.white.opacity(0.5))
+                                .iconTapTarget()
+                        }
+
                         VStack(alignment: .leading, spacing: 8) {
                             if !selectedTags.isEmpty {
                                 HStack(spacing: 8) {
@@ -264,12 +275,31 @@ struct DrawModeView: View {
                 description = ""
             }
         }
+        .onChange(of: pickedItems) { _, items in addPickedPhoto(items) }
         .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillShowNotification)) { notif in
             guard let frame = notif.userInfo?[UIResponder.keyboardFrameEndUserInfoKey] as? CGRect else { return }
             keyboardHeight = frame.height
         }
         .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillHideNotification)) { _ in
             keyboardHeight = 0
+        }
+    }
+
+    /// Classify a photo added via the + and add it as a tag (best-effort).
+    private func addPickedPhoto(_ items: [PhotosPickerItem]) {
+        guard let item = items.last else { return }
+        classifying = true
+        Task {
+            var match: TradeMatch? = nil
+            if let data = try? await item.loadTransferable(type: Data.self),
+               let img = UIImage(data: data) {
+                match = try? await ImageClassifier.classify(img)
+            }
+            await MainActor.run {
+                classifying = false
+                if let match { addTag(match.label) }
+                pickedItems = []
+            }
         }
     }
 
