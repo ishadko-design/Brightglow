@@ -475,7 +475,7 @@ struct ContractorCardView: View {
         .task(priority: .background) {
             guard screenedPhotos == nil else { return }
             let current = photos.indices.contains(photoIndex) ? photos[photoIndex] : nil
-            let kept = await PhotoFilter.screen(contractor.photos)
+            let kept = await PhotoFilter.screen(contractor.photos).map(\.url)
             screenedPhotos = kept
             photoIndex = current.flatMap { kept.firstIndex(of: $0) } ?? 0
         }

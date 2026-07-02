@@ -94,16 +94,92 @@ enum PlacesService {
         // distance so results truly belong to the searched area.
         let center = CLLocation(latitude: coord.latitude, longitude: coord.longitude)
         let maxDistance = searchRadius * 1.5
-        let contractors = decoded.places.enumerated().compactMap { idx, place -> Contractor? in
+        var scored: [(contractor: Contractor, distance: Double, googleIdx: Int)] = []
+        for (idx, place) in decoded.places.enumerated() {
+            var distance = -1.0   // unknown location → neutral proximity
             if let loc = place.location {
-                let d = center.distance(from: CLLocation(latitude: loc.latitude, longitude: loc.longitude))
-                guard d <= maxDistance else { return nil }
+                distance = center.distance(from: CLLocation(latitude: loc.latitude, longitude: loc.longitude))
+                guard distance <= maxDistance else { continue }
             }
-            return contractor(from: place, index: idx, category: category)
+            guard let c = contractor(from: place, index: idx, category: category) else { continue }
+            scored.append((c, distance, idx))
         }
-        let page = Page(contractors: contractors, nextPageToken: decoded.nextPageToken)
+        let ranked = rankByRelevance(scored, query: textQuery, maxDistance: maxDistance)
+        let page = Page(contractors: ranked, nextPageToken: decoded.nextPageToken)
         if let cacheKey { SearchCache.shared.save(page, for: cacheKey) }
         return page
+    }
+
+    // MARK: - Relevance ranking
+    //
+    // Re-orders a page by a transparent weighted blend of free signals (no extra
+    // API calls, no dependency on the lazy photo screening). Google's own order is
+    // kept as a prior so we nudge rather than discard its relevance. Weights are
+    // tunable. Price is intentionally NOT a factor — per-business prices aren't
+    // reliable and the "right" price depends on a budget we don't have yet.
+
+    private static let rankStopwords: Set<String> = [
+        "contractor", "contractors", "repair", "service", "services", "shop", "store",
+        "and", "the", "near", "me", "in", "for", "of", "auto", "home", "maintenance",
+        "company", "best", "top", "need", "want", "get", "fix", "my", "with",
+    ]
+
+    private static func queryKeywords(_ query: String) -> [String] {
+        query.lowercased()
+            .split { !$0.isLetter }
+            .map(String.init)
+            .filter { $0.count > 2 && !rankStopwords.contains($0) }
+    }
+
+    private static func rankByRelevance(
+        _ items: [(contractor: Contractor, distance: Double, googleIdx: Int)],
+        query: String, maxDistance: Double
+    ) -> [Contractor] {
+        let terms = queryKeywords(query)
+        let total = Double(max(items.count, 1))
+        return items
+            .map { item -> (Contractor, Double) in
+                let c = item.contractor
+                // Proximity: linear decay to 0 at the max distance (neutral if unknown).
+                let proximity = item.distance < 0 ? 0.5 : max(0, 1 - item.distance / maxDistance)
+                // Keyword: query terms in the name (strong) or reviews (specialist signal).
+                let keyword = keywordScore(c, terms: terms)
+                // Quality: Bayesian rating so a 5.0 with 3 reviews can't beat a 4.8 with 500.
+                let quality = qualityScore(rating: c.rating, count: c.reviewCount)
+                // More photos ⇒ more active/legit (metadata only, no download).
+                let photos = min(Double(c.photos.count) / 6.0, 1)
+                let prior = 1 - Double(item.googleIdx) / total
+                let trust = (c.isVerified || c.licenseNumber != nil) ? 1.0 : 0.0
+                let score = 0.30 * proximity
+                          + 0.25 * keyword
+                          + 0.22 * quality
+                          + 0.10 * photos
+                          + 0.10 * prior
+                          + 0.03 * trust
+                return (c, score)
+            }
+            .sorted { $0.1 > $1.1 }
+            .map(\.0)
+    }
+
+    private static func keywordScore(_ c: Contractor, terms: [String]) -> Double {
+        guard !terms.isEmpty else { return 0 }
+        let name = c.name.lowercased()
+        let reviews = c.reviews.map { $0.text.lowercased() }.joined(separator: " ")
+        var hits = 0.0
+        for t in terms {
+            if name.contains(t) { hits += 1.0 }            // name match = strong
+            else if reviews.contains(t) { hits += 0.6 }    // review mention = specialist
+        }
+        return min(hits / Double(terms.count), 1)
+    }
+
+    private static func qualityScore(rating: Double, count: Int) -> Double {
+        guard count > 0 else { return 0.3 }                // unknown → neutral-low
+        let m = 4.3, C = 20.0                               // prior mean & strength
+        let bayes = (C * m + rating * Double(count)) / (C + Double(count))   // 0…5
+        let trust = min(log10(Double(count) + 1) / 3.0, 1) // ~1000 reviews → 1
+        return 0.7 * (bayes / 5.0) + 0.3 * trust
     }
 
     // MARK: - Raw request (backend proxy → Google fallback)

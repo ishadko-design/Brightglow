@@ -1,6 +1,14 @@
 import Vision
 import UIKit
 
+/// A kept work photo plus its Vision scene labels. Carrying the labels (through
+/// the on-device store and the shared verdict cache) lets the app order photos by
+/// relevance to the user's query at display time — no re-download, no re-classify.
+struct ScreenedPhoto: Codable, Hashable {
+    let url: String
+    let labels: [String]
+}
+
 /// Screens contractor gallery photos so the card stack shows actual work
 /// examples (rooms, fixtures, installations) rather than staff portraits,
 /// cars, logos/signage, flyers/menus, or blurry / low-resolution uploads.
@@ -60,8 +68,8 @@ enum PhotoFilter {
 
     /// Outcome of screening one photo: whether to keep it, and whether its subject
     /// is a vehicle (used to rank vehicle/work shots first for auto & moto).
-    struct Decision { let keep: Bool; let isVehicle: Bool }
-    private static let reject = Decision(keep: false, isVehicle: false)
+    struct Decision { let keep: Bool; let isVehicle: Bool; let labels: [String] }
+    private static let reject = Decision(keep: false, isVehicle: false, labels: [])
 
     /// True when the photo looks like a genuine, good-quality work example.
     /// `allowVehicles` keeps car/truck/motorcycle photos (auto & moto work).
@@ -72,7 +80,7 @@ enum PhotoFilter {
     /// Full screening decision for one photo.
     static func evaluate(_ image: UIImage, allowVehicles: Bool = false) -> Decision {
         let rejects = allowVehicles ? rejectTokens : rejectTokens.union(vehicleTokens)
-        guard let cg = image.cgImage else { return Decision(keep: true, isVehicle: false) }   // can't tell → keep
+        guard let cg = image.cgImage else { return Decision(keep: true, isVehicle: false, labels: []) }   // can't tell → keep
 
         // 1. Resolution backstop.
         if min(cg.width, cg.height) < minPixelDimension {
@@ -133,6 +141,7 @@ enum PhotoFilter {
         //    allowed). Also note whether the subject IS a vehicle, so auto & moto
         //    results can rank those work shots first.
         var isVehicle = false
+        var labels: [String] = []
         if let obs = classReq.results {
             for o in obs where o.confidence > rejectConfidence {
                 let tokens = o.identifier.lowercased().split(whereSeparator: { !$0.isLetter }).map(String.init)
@@ -141,8 +150,13 @@ enum PhotoFilter {
                     log(cg, reject: "scene: \(o.identifier) \(Int(o.confidence * 100))%"); return reject
                 }
             }
+            // Scene labels (kitchen, bathroom, roof…) so the app can order photos by
+            // relevance to the user's query later, without re-classifying.
+            labels = Array(Set(obs
+                .filter { $0.confidence > 0.10 }
+                .flatMap { $0.identifier.lowercased().split(whereSeparator: { !$0.isLetter }).map(String.init) }))
         }
-        return Decision(keep: true, isVehicle: isVehicle)
+        return Decision(keep: true, isVehicle: isVehicle, labels: labels)
     }
 
     // MARK: - Sharpness (variance of the Laplacian)
@@ -201,11 +215,11 @@ enum PhotoFilter {
     /// Screening downloads the small **list** rendition, so a kept strip photo is
     /// already cached — no second request for the thumbnail.
     static func screen(_ urls: [String], allowVehicles: Bool = false,
-                       limit: Int = maxKept, scanLimit: Int = .max) async -> [String] {
+                       limit: Int = maxKept, scanLimit: Int = .max) async -> [ScreenedPhoto] {
         // Two buckets so auto & moto results lead with the actual vehicle/work
         // shots; non-vehicle keepers (and unjudged) follow in original order.
-        var vehicle: [String] = []
-        var other: [String] = []
+        var vehicle: [ScreenedPhoto] = []
+        var other: [ScreenedPhoto] = []
         var scanned = 0
         for displayURL in urls {
             if scanned >= scanLimit { break }
@@ -218,13 +232,38 @@ enum PhotoFilter {
             if let img = await ImageCache.download(url) {
                 let decision = await evaluateOffPool(img, allowVehicles: allowVehicles)
                 guard decision.keep else { continue }
-                if allowVehicles && decision.isVehicle { vehicle.append(displayURL) }
-                else { other.append(displayURL) }
+                let photo = ScreenedPhoto(url: displayURL, labels: decision.labels)
+                if allowVehicles && decision.isVehicle { vehicle.append(photo) }
+                else { other.append(photo) }
             } else {
-                other.append(displayURL)   // couldn't fetch to judge → keep
+                other.append(ScreenedPhoto(url: displayURL, labels: []))   // couldn't fetch to judge → keep
             }
         }
         return Array((vehicle + other).prefix(limit))   // display full-size, work shots first
+    }
+
+    /// Order kept photos so those whose scene labels match the query lead (stable
+    /// for ties); returns display URLs. No meaningful query terms → original order.
+    /// This is what surfaces the kitchen shot first for a "kitchen remodel" search,
+    /// working off stored labels so it needs no re-download or re-classification.
+    static func order(_ photos: [ScreenedPhoto], query: String) -> [String] {
+        let terms = query.lowercased()
+            .split { !$0.isLetter }.map(String.init)
+            .filter { $0.count > 3 }
+        guard !terms.isEmpty else { return photos.map(\.url) }
+        return photos.enumerated()
+            .sorted { a, b in
+                let sa = matchScore(a.element.labels, terms)
+                let sb = matchScore(b.element.labels, terms)
+                return sa != sb ? sa > sb : a.offset < b.offset
+            }
+            .map { $0.element.url }
+    }
+
+    private static func matchScore(_ labels: [String], _ terms: [String]) -> Int {
+        terms.reduce(0) { acc, t in
+            acc + (labels.contains { $0.contains(t) || t.contains($0) } ? 1 : 0)
+        }
     }
 
     /// Vision screening is heavy synchronous CPU work (four ML requests per photo).

@@ -16,7 +16,7 @@ enum VerdictService {
         (Bundle.main.object(forInfoDictionaryKey: "APP_TOKEN") as? String) ?? ""
     static var isConfigured: Bool { !ref.isEmpty && !anonKey.isEmpty }
 
-    struct Verdict { let kept: [String]; let scanned: Int }
+    struct Verdict { let kept: [ScreenedPhoto]; let scanned: Int }
 
     private static func vertical(_ allowVehicles: Bool) -> String { allowVehicles ? "auto" : "home" }
 
@@ -44,14 +44,15 @@ enum VerdictService {
     }
 
     /// Upload a verdict after on-device screening (fire-and-forget).
-    static func upload(id: String, allowVehicles: Bool, kept: [String], scanned: Int) {
+    static func upload(id: String, allowVehicles: Bool, kept: [ScreenedPhoto], scanned: Int) {
+        let keptJSON = kept.map { ["url": $0.url, "labels": $0.labels] as [String: Any] }
         guard isConfigured,
               let req = request(["op": "put", "vertical": vertical(allowVehicles),
-                                 "id": id, "kept": kept, "scanned": scanned])
+                                 "id": id, "kept": keptJSON, "scanned": scanned])
         else { return }
         Task { _ = try? await URLSession.shared.data(for: req) }
     }
 
     private struct FetchResponse: Decodable { let verdicts: [String: Entry] }
-    private struct Entry: Decodable { let kept: [String]; let scanned: Int }
+    private struct Entry: Decodable { let kept: [ScreenedPhoto]; let scanned: Int }
 }

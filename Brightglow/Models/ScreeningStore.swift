@@ -12,7 +12,7 @@ import Foundation
 final class ScreeningStore: @unchecked Sendable {
     static let shared = ScreeningStore()
 
-    struct Entry: Codable { let kept: [String]; let scanned: Int; let at: Double }
+    struct Entry: Codable { let kept: [ScreenedPhoto]; let scanned: Int; let at: Double }
 
     private let ttl: TimeInterval = 30 * 24 * 3600
     private let lock = NSLock()
@@ -35,14 +35,14 @@ final class ScreeningStore: @unchecked Sendable {
     }
 
     /// A still-valid verdict for this place, or nil (never screened / expired).
-    func get(_ id: String, allowVehicles: Bool) -> (kept: [String], scanned: Int)? {
+    func get(_ id: String, allowVehicles: Bool) -> (kept: [ScreenedPhoto], scanned: Int)? {
         lock.lock(); defer { lock.unlock() }
         guard let e = map[key(id, allowVehicles: allowVehicles)],
               Date().timeIntervalSince1970 - e.at < ttl else { return nil }
         return (e.kept, e.scanned)
     }
 
-    func save(_ id: String, allowVehicles: Bool, kept: [String], scanned: Int) {
+    func save(_ id: String, allowVehicles: Bool, kept: [ScreenedPhoto], scanned: Int) {
         lock.lock()
         map[key(id, allowVehicles: allowVehicles)] =
             Entry(kept: kept, scanned: scanned, at: Date().timeIntervalSince1970)

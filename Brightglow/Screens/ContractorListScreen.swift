@@ -1,5 +1,6 @@
 import SwiftUI
 import CoreLocation
+import PhotosUI
 
 // ─────────────────────────────────────────────────────────────────────────────
 // MARK: - ContractorListScreen
@@ -51,8 +52,22 @@ struct ContractorListScreen: View {
     @State private var lastViewedID: String? = nil
     /// Auto & moto only: which vehicle type to show (defaults to cars).
     @State private var vehicle: VehicleFilter = .auto
+    /// Editable query shown in the bottom input — lets the user refine the search
+    /// (e.g. add "marble") and re-run it, or add a photo, without leaving the list.
+    @State private var queryText = ""
+    @State private var editedQuery: String? = nil
+    @State private var didInitQuery = false
+    @State private var pickedItems: [PhotosPickerItem] = []
+    @FocusState private var inputFocused: Bool
+    /// Contractors whose rows have actually scrolled into view — gates photo
+    /// loading so an off-screen business costs nothing until the user reaches it.
+    @State private var revealedIDs: Set<String> = []
+    /// Kept work photos + their scene labels per contractor (the source of truth);
+    /// `screenedByID` is this list ordered by the current query for display.
+    @State private var keptPhotos: [String: [ScreenedPhoto]] = [:]
 
     private var headerTitle: String {
+        if let editedQuery, !editedQuery.isEmpty { return editedQuery }
         let q = searchQuery.trimmingCharacters(in: .whitespacesAndNewlines)
         return q.isEmpty ? category : q
     }
@@ -62,7 +77,8 @@ struct ContractorListScreen: View {
 
     /// Query actually sent to Places — the moto variant when the filter is on Moto.
     private var effectiveSearchQuery: String {
-        autoCategory?.query(for: vehicle) ?? searchQuery
+        if let editedQuery, !editedQuery.isEmpty { return editedQuery }
+        return autoCategory?.query(for: vehicle) ?? searchQuery
     }
 
     var body: some View {
@@ -73,7 +89,7 @@ struct ContractorListScreen: View {
                 AppColors.bg.ignoresSafeArea()
 
                 if isLoading && contractors.isEmpty {
-                    statusView(spinner: true, text: "Finding contractors near you…")
+                    statusView(spinner: true, text: "Finding businesses near you")
                 } else if contractors.isEmpty {
                     notFoundView
                 } else {
@@ -82,14 +98,23 @@ struct ContractorListScreen: View {
                 }
 
                 header(topInset: topInset)
+
+                // Editable query input, pinned to the bottom — refine and re-run
+                // the search (or add a photo) without leaving the list.
+                inputBar(bottomInset: proxy.safeAreaInsets.bottom)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
             }
         }
         .navigationBarBackButtonHidden(true)
         .toolbar(.hidden, for: .navigationBar)
         .enableSwipeBack()
-        .task { await load() }
+        .task {
+            if !didInitQuery { queryText = searchQuery; didInitQuery = true }
+            await load()
+        }
         // Switching Auto ⇄ Moto re-runs the search for the other vehicle type.
         .onChange(of: vehicle) { _, _ in Task { await reload() } }
+        .onChange(of: pickedItems) { _, items in addPhoto(items) }
         .navigationDestination(isPresented: $goGallery) {
             ContractorGalleryScreen(
                 category: category,
@@ -117,24 +142,32 @@ struct ContractorListScreen: View {
                     ForEach(contractors) { contractor in
                         ContractorListRow(
                             contractor: contractor,
-                            // nil = not screened yet → row shows gray placeholders.
-                            photos: screenedByID[contractor.id],
+                            // Photos load only once the row is actually on screen
+                            // (revealed); until then it shows gray placeholders — so
+                            // fetching a 20-business list only downloads photos for
+                            // the ~4 businesses in view, then more as the user scrolls.
+                            photos: revealedIDs.contains(contractor.id) ? screenedByID[contractor.id] : nil,
                             priceTier: estimate ?? contractor.priceTiers.first,
                             onOpen: { open(contractor) },
                             onReviews: { openReviews(for: contractor) },
                             onNearEnd: { Task { await screenMore(contractor) } }
                         )
                         .id(contractor.id)
-                        // Lazy: screen this contractor's photos only when its row
-                        // scrolls into view (LazyVStack renders rows on demand).
-                        .task { await screenIfNeeded(contractor) }
+                        // Strictly lazy: reveal (and screen) a row's photos only when
+                        // it genuinely scrolls into view — not LazyVStack's render buffer.
+                        .onScrollVisibilityChange(threshold: 0.05) { visible in
+                            guard visible, !revealedIDs.contains(contractor.id) else { return }
+                            revealedIDs.insert(contractor.id)
+                            Task { await screenIfNeeded(contractor) }
+                        }
                     }
                 }
                 // Clears the header bar (~64pt) + a 12pt gap. The ScrollView
                 // already starts below the safe area, so topInset is NOT added
                 // here (doing so double-counts it and leaves a large gap).
                 .padding(.top, 64 + 12)
-                .padding(.bottom, bottomInset + 24)
+                // Clear the pinned bottom input (~60pt) plus a gap.
+                .padding(.bottom, bottomInset + 84)
             }
             // On returning from the gallery, jump to whichever contractor the user
             // left off on so the list resumes at that exact spot.
@@ -276,6 +309,79 @@ struct ContractorListScreen: View {
         }
     }
 
+    // ── Bottom input — refine query / add a photo ─────────────────────────────
+    private func inputBar(bottomInset: CGFloat) -> some View {
+        HStack(spacing: 8) {
+            // + is always on the left: add a photo to refine the results.
+            PhotosPicker(selection: $pickedItems, maxSelectionCount: 1,
+                         matching: .images, photoLibrary: .shared()) {
+                Image(systemName: "plus.circle")
+                    .font(.system(size: 24))
+                    .foregroundStyle(.white.opacity(0.7))
+                    .frame(width: 44, height: 44)
+            }
+
+            TextField("Describe what you need…", text: $queryText, axis: .vertical)
+                .font(.bodyLight)
+                .foregroundStyle(.white)
+                .tint(AppColors.accentStart)
+                .focused($inputFocused)
+                .lineLimit(1...4)
+                .submitLabel(.search)
+                .onSubmit(submitQuery)
+
+            if !queryText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                Button(action: submitQuery) {
+                    ZStack {
+                        Circle().fill(AppColors.accentGradient)
+                        Image(systemName: "arrow.right")
+                            .font(.system(size: 15, weight: .bold))
+                            .foregroundStyle(.white)
+                    }
+                    .frame(width: 36, height: 36)
+                }
+                .frame(width: 44, height: 44)
+            }
+        }
+        .padding(.horizontal, 8)
+        .padding(.vertical, 6)
+        .background {
+            ZStack {
+                Color.clear.background(.ultraThinMaterial)
+                AppColors.searchBg
+            }
+        }
+        .clipShape(RoundedRectangle(cornerRadius: 32))
+        .overlay(RoundedRectangle(cornerRadius: 32).stroke(AppColors.searchBorder, lineWidth: 1.5))
+        .padding(.horizontal, 16)
+        .padding(.bottom, bottomInset + 12)
+    }
+
+    /// Re-run the search with the edited query text.
+    private func submitQuery() {
+        inputFocused = false
+        editedQuery = queryText.trimmingCharacters(in: .whitespacesAndNewlines)
+        Task { await reload() }
+    }
+
+    /// Classify an added photo and append its term to the query so the results can
+    /// be refined with a picture (best-effort — a failed classify is ignored).
+    private func addPhoto(_ items: [PhotosPickerItem]) {
+        guard let item = items.last else { return }
+        Task {
+            guard let data = try? await item.loadTransferable(type: Data.self),
+                  let img = UIImage(data: data),
+                  let match = try? await ImageClassifier.classify(img) else {
+                await MainActor.run { pickedItems = [] }
+                return
+            }
+            await MainActor.run {
+                queryText = queryText.isEmpty ? match.label : "\(queryText), \(match.label)"
+                pickedItems = []
+            }
+        }
+    }
+
     // ── Data loading + progressive photo screening ────────────────────────────
     @MainActor
     private func load() async {
@@ -298,8 +404,9 @@ struct ContractorListScreen: View {
             for c in contractors {
                 guard let v = ScreeningStore.shared.get(c.id, allowVehicles: allowVehicles) else { continue }
                 if !v.kept.isEmpty {
-                    // Cached work photos → show them immediately.
-                    screenedByID[c.id] = v.kept
+                    // Cached work photos → show them, ordered by the current query.
+                    keptPhotos[c.id] = v.kept
+                    screenedByID[c.id] = PhotoFilter.order(v.kept, query: query)
                     scannedCount[c.id] = v.scanned
                 } else if v.scanned >= c.photos.count {
                     // Whole pool scanned, no work photos → mark scanned (skip
@@ -314,7 +421,10 @@ struct ContractorListScreen: View {
             let remote = await VerdictService.fetch(ids: unknownIDs, allowVehicles: allowVehicles)
             for (id, v) in remote {
                 scannedCount[id] = v.scanned
-                if !v.kept.isEmpty { screenedByID[id] = v.kept }
+                if !v.kept.isEmpty {
+                    keptPhotos[id] = v.kept
+                    screenedByID[id] = PhotoFilter.order(v.kept, query: query)
+                }
                 ScreeningStore.shared.save(id, allowVehicles: allowVehicles, kept: v.kept, scanned: v.scanned)
             }
 
@@ -344,7 +454,9 @@ struct ContractorListScreen: View {
     private func reload() async {
         contractors = []
         screenedByID = [:]
+        keptPhotos = [:]
         scannedCount = [:]
+        revealedIDs = []
         nextPageToken = nil
         estimate = nil
         sentToAll = false
@@ -374,7 +486,7 @@ struct ContractorListScreen: View {
         // into the pool if early photos are rejected, so a business whose first
         // shots are logos/people still surfaces its work photos.
         let allowVehicles = isAutoService(category: category, searchQuery: effectiveSearchQuery)
-        var kept: [String] = []
+        var kept: [ScreenedPhoto] = []
         var scanned = 0
         while kept.count < stripInitialFill && scanned < c.photos.count {
             let slice = Array(c.photos.dropFirst(scanned).prefix(stripBatchScan))
@@ -395,7 +507,9 @@ struct ContractorListScreen: View {
             // a blank strip (mirrors the gallery).
             contractors.removeAll { $0.id == c.id }
         } else {
-            screenedByID[c.id] = kept   // reveal once, replacing the placeholders
+            keptPhotos[c.id] = kept
+            // Reveal once, ordered so query-matching photos (e.g. the kitchen) lead.
+            screenedByID[c.id] = PhotoFilter.order(kept, query: effectiveSearchQuery)
         }
     }
 
@@ -418,15 +532,16 @@ struct ContractorListScreen: View {
         let slice = Array(c.photos.dropFirst(start).prefix(stripBatchScan))
         guard !slice.isEmpty else { scannedCount[c.id] = start; return }
         let allowVehicles = isAutoService(category: category, searchQuery: effectiveSearchQuery)
-        let kept = await PhotoFilter.screen(slice, allowVehicles: allowVehicles,
-                                            limit: slice.count, scanLimit: slice.count)
-        var current = screenedByID[c.id] ?? []
-        current.append(contentsOf: kept)
-        screenedByID[c.id] = Array(current.prefix(stripMaxKept))   // [] until a keeper lands
+        let batch = await PhotoFilter.screen(slice, allowVehicles: allowVehicles,
+                                             limit: slice.count, scanLimit: slice.count)
+        var current = keptPhotos[c.id] ?? []
+        current.append(contentsOf: batch)
+        let merged = Array(current.prefix(stripMaxKept))
+        keptPhotos[c.id] = merged
+        screenedByID[c.id] = PhotoFilter.order(merged, query: effectiveSearchQuery)   // [] until a keeper lands
         scannedCount[c.id] = start + slice.count
         // Persist so a later launch reuses this verdict instead of re-screening.
-        ScreeningStore.shared.save(c.id, allowVehicles: allowVehicles,
-                                   kept: screenedByID[c.id] ?? [], scanned: scannedCount[c.id] ?? 0)
+        ScreeningStore.shared.save(c.id, allowVehicles: allowVehicles, kept: merged, scanned: scannedCount[c.id] ?? 0)
     }
 }
 

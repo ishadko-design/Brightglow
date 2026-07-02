@@ -97,7 +97,7 @@ struct ContractorGalleryScreen: View {
                 AppColors.bg.ignoresSafeArea()
 
                 if isLoading && contractors.isEmpty {
-                    statusView(spinner: true, text: "Finding contractors near you…")
+                    statusView(spinner: true, text: "Finding businesses near you")
                 } else if contractors.isEmpty && totalCount == 0 {
                     // Resolved a location but the area returned no contractors.
                     notFoundView
@@ -415,11 +415,12 @@ struct ContractorGalleryScreen: View {
             }
             // Persisted verdict from a previous launch — reuse, no download.
             if let v = ScreeningStore.shared.get(contractor.id, allowVehicles: allowVehicles) {
-                screenedByID[contractor.id] = v.kept
-                if v.kept.isEmpty {
+                let ordered = PhotoFilter.order(v.kept, query: searchQuery)
+                screenedByID[contractor.id] = ordered
+                if ordered.isEmpty {
                     contractors.removeAll { $0.id == contractor.id }
                     if totalCount > 0 { totalCount -= 1 }
-                } else if let first = v.kept.first, let u = URL(string: first) {
+                } else if let first = ordered.first, let u = URL(string: first) {
                     await ImageCache.shared.prefetch(u)
                 }
                 continue
@@ -428,11 +429,12 @@ struct ContractorGalleryScreen: View {
             if let v = await VerdictService.fetch(ids: [contractor.id], allowVehicles: allowVehicles)[contractor.id] {
                 ScreeningStore.shared.save(contractor.id, allowVehicles: allowVehicles,
                                            kept: v.kept, scanned: v.scanned)
-                screenedByID[contractor.id] = v.kept
-                if v.kept.isEmpty {
+                let ordered = PhotoFilter.order(v.kept, query: searchQuery)
+                screenedByID[contractor.id] = ordered
+                if ordered.isEmpty {
                     contractors.removeAll { $0.id == contractor.id }
                     if totalCount > 0 { totalCount -= 1 }
-                } else if let first = v.kept.first, let u = URL(string: first) {
+                } else if let first = ordered.first, let u = URL(string: first) {
                     await ImageCache.shared.prefetch(u)
                 }
                 continue
@@ -444,7 +446,8 @@ struct ContractorGalleryScreen: View {
             let scanned = min(galleryScanLimit, contractor.photos.count)
             ScreeningStore.shared.save(contractor.id, allowVehicles: allowVehicles, kept: kept, scanned: scanned)
             VerdictService.upload(id: contractor.id, allowVehicles: allowVehicles, kept: kept, scanned: scanned)
-            guard !kept.isEmpty else {
+            let ordered = PhotoFilter.order(kept, query: searchQuery)
+            guard !ordered.isEmpty else {
                 // No usable work photos → drop the business entirely rather than
                 // showing an empty placeholder. Keep totalCount in step so the
                 // "x/y businesses" counter stays correct.
@@ -453,11 +456,11 @@ struct ContractorGalleryScreen: View {
                 if totalCount > 0 { totalCount -= 1 }
                 continue
             }
-            screenedByID[contractor.id] = kept
+            screenedByID[contractor.id] = ordered
             // Warm only the FIRST photo at full resolution — the one shown when the
             // business surfaces. The rest load on demand as the user pages photos,
             // so we don't fetch high-res shots nobody looks at.
-            if let first = kept.first, let u = URL(string: first) {
+            if let first = ordered.first, let u = URL(string: first) {
                 await ImageCache.shared.prefetch(u)
             }
         }
@@ -543,6 +546,8 @@ private struct GalleryPhotoView: View {
     let stripBottomPadding: CGFloat
 
     @State private var photoIndex = 0
+    /// The photo tapped for full-screen zoom (nil = viewer closed).
+    @State private var zoomItem: ZoomItem? = nil
 
     private var shownPhotos: [String] { photos ?? [] }
 
@@ -569,9 +574,9 @@ private struct GalleryPhotoView: View {
                         .id(photoIndex)
                         .transition(.opacity)
                         .animation(.easeInOut(duration: 0.3), value: photoIndex)
-                        .overlay(photoTapZones)
-                        // Swipe left / right to cycle through the photos.
+                        // Tap opens the full-screen zoomable viewer; swipe pages.
                         .contentShape(Rectangle())
+                        .onTapGesture { if let photoURL { zoomItem = ZoomItem(url: photoURL) } }
                         .gesture(swipeGesture)
                 }
             }
@@ -584,6 +589,9 @@ private struct GalleryPhotoView: View {
                     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
                     .padding(.bottom, stripBottomPadding)
             }
+        }
+        .fullScreenCover(item: $zoomItem) { item in
+            PhotoZoomViewer(url: item.url) { zoomItem = nil }
         }
     }
 
@@ -644,16 +652,6 @@ private struct GalleryPhotoView: View {
         .animation(.easeInOut(duration: 0.2), value: photoIndex)
     }
 
-    // Left / right halves page through the photos.
-    private var photoTapZones: some View {
-        HStack(spacing: 0) {
-            Color.clear.contentShape(Rectangle()).onTapGesture { page(-1) }
-            Color.clear.contentShape(Rectangle()).onTapGesture { page(1) }
-        }
-        .frame(height: imageHeight)
-        .frame(maxHeight: .infinity, alignment: .top)
-    }
-
     private func page(_ dir: Int) {
         let count = shownPhotos.count
         guard count > 1 else { return }
@@ -671,6 +669,82 @@ private struct GalleryPhotoView: View {
                       abs(v.translation.width) > 40 else { return }
                 page(v.translation.width < 0 ? 1 : -1)   // swipe left → next
             }
+    }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// MARK: - PhotoZoomViewer
+// Full-screen, pinch-to-zoom + pan photo viewer. The header is just a close (X)
+// button, per the design. Reuses the already-cached full-size photo so it opens
+// instantly. Double-tap toggles zoom.
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// Identifiable wrapper so the tapped photo drives a `fullScreenCover(item:)`.
+private struct ZoomItem: Identifiable {
+    let id = UUID()
+    let url: URL
+}
+
+private struct PhotoZoomViewer: View {
+    let url: URL
+    let onClose: () -> Void
+
+    @State private var scale: CGFloat = 1
+    @GestureState private var pinch: CGFloat = 1
+    @State private var offset: CGSize = .zero
+    @State private var lastOffset: CGSize = .zero
+
+    private let maxScale: CGFloat = 4
+
+    var body: some View {
+        ZStack(alignment: .topLeading) {
+            Color.black.ignoresSafeArea()
+
+            PlacesImage(url: url) { Color.black }
+                .scaledToFit()
+                .scaleEffect(scale * pinch)
+                .offset(offset)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .ignoresSafeArea()
+                .gesture(
+                    MagnificationGesture()
+                        .updating($pinch) { value, state, _ in state = value }
+                        .onEnded { value in
+                            scale = min(max(scale * value, 1), maxScale)
+                            if scale <= 1 {
+                                withAnimation(.easeOut(duration: 0.2)) { offset = .zero; lastOffset = .zero }
+                            }
+                        }
+                )
+                .simultaneousGesture(
+                    DragGesture()
+                        .onChanged { v in
+                            guard scale > 1 else { return }   // pan only when zoomed in
+                            offset = CGSize(width: lastOffset.width + v.translation.width,
+                                            height: lastOffset.height + v.translation.height)
+                        }
+                        .onEnded { _ in lastOffset = offset }
+                )
+                .onTapGesture(count: 2) {
+                    withAnimation(.easeInOut(duration: 0.25)) {
+                        if scale > 1 { scale = 1; offset = .zero; lastOffset = .zero }
+                        else { scale = 2.5 }
+                    }
+                }
+
+            // Header — only the close (cross) button.
+            Button(action: onClose) {
+                Image(systemName: "xmark")
+                    .font(.system(size: 18, weight: .semibold))
+                    .foregroundStyle(.white)
+                    .frame(width: 44, height: 44)
+                    .background(Circle().fill(.black.opacity(0.35)))
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .padding(.leading, 8)
+            .padding(.top, 8)
+        }
     }
 }
 
