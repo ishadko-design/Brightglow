@@ -146,7 +146,8 @@ struct ContractorListScreen: View {
                 // Clears the header bar (~64pt) + a 12pt gap. The ScrollView
                 // already starts below the safe area, so topInset is NOT added
                 // here (doing so double-counts it and leaves a large gap).
-                .padding(.top, 64 + 12)
+                // Clears the taller two-row header (~93pt) + a small gap.
+                .padding(.top, 96 + 12)
                 .padding(.bottom, bottomInset + 24)
             }
             // On returning from the gallery, jump to whichever contractor the user
@@ -184,50 +185,56 @@ struct ContractorListScreen: View {
 
     // ── Header — matches the gallery / main screen top bar ────────────────────
     private func header(topInset: CGFloat) -> some View {
-        HStack(alignment: .center, spacing: 12) {
-            Button(action: { dismiss() }) {
-                Image(systemName: "arrow.left")
-                    .font(.system(size: 18, weight: .semibold))
-                    .foregroundStyle(.white)
-                    .frame(width: 44, height: 44)
-                    .contentShape(Rectangle())
-            }
-            .buttonStyle(.plain)
+        VStack(alignment: .leading, spacing: 4) {
+            // Row 1 — back button + full-width title (edge to edge).
+            HStack(alignment: .center, spacing: 4) {
+                Button(action: { dismiss() }) {
+                    Image(systemName: "arrow.left")
+                        .font(.system(size: 18, weight: .semibold))
+                        .foregroundStyle(.white)
+                        .frame(width: 44, height: 44)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
 
-            VStack(alignment: .leading, spacing: 0) {
                 Text(headerTitle)
                     .font(.h2)
                     .foregroundStyle(.white)
                     .lineLimit(1)
                     .truncationMode(.tail)
-                if !contractors.isEmpty {
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            }
+
+            // Row 2 — business count on the left, actions on the right, aligned
+            // under the title (Figma: left inset 20).
+            if !contractors.isEmpty {
+                HStack(alignment: .center, spacing: 12) {
                     Text("\(contractors.count) businesses")
                         .font(.bodySmall)
                         .foregroundStyle(.white.opacity(0.6))
                         .lineLimit(1)
-                }
-            }
-            // Absorbs the slack so the right-hand controls stay pinned right.
-            .frame(maxWidth: .infinity, alignment: .leading)
 
-            // Auto ⇄ Moto filter — only for Auto & moto categories.
-            if autoCategory != nil { vehicleFilter }
+                    Spacer(minLength: 8)
 
-            if !contractors.isEmpty {
-                Button(action: sendToAll) {
-                    Text(sentToAll ? "Sent ✓" : "Send to all")
-                        .font(.h4)
-                        .foregroundStyle(.white)
-                        .fixedSize()
-                        .padding(.horizontal, 14)
-                        .frame(height: 29)
-                        .secondaryButtonBackground()
+                    // Auto ⇄ Moto filter — only for Auto & moto categories.
+                    if autoCategory != nil { vehicleFilter }
+
+                    Button(action: sendToAll) {
+                        Text(sentToAll ? "Sent ✓" : "Send to top 3")
+                            .font(.bodySmall)
+                            .fontWeight(.semibold)
+                            .foregroundStyle(.white)
+                            .fixedSize()
+                            .padding(.horizontal, 16)
+                            .frame(height: 29)
+                            .background(AppColors.btnPrimary, in: Capsule())
+                    }
+                    .buttonStyle(.plain)
                 }
-                .buttonStyle(.plain)
+                .padding(.leading, 20)
             }
         }
-        .padding(.leading, 4)
-        .padding(.trailing, 16)
+        .padding(.trailing, 8)
         .padding(.vertical, 8)
         .frame(maxWidth: .infinity, alignment: .leading)
         .contentShape(Rectangle())
