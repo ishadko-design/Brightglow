@@ -1,6 +1,5 @@
 import SwiftUI
 import CoreLocation
-import PhotosUI
 
 // ─────────────────────────────────────────────────────────────────────────────
 // MARK: - ContractorListScreen
@@ -52,13 +51,6 @@ struct ContractorListScreen: View {
     @State private var lastViewedID: String? = nil
     /// Auto & moto only: which vehicle type to show (defaults to cars).
     @State private var vehicle: VehicleFilter = .auto
-    /// Editable query shown in the bottom input — lets the user refine the search
-    /// (e.g. add "marble") and re-run it, or add a photo, without leaving the list.
-    @State private var queryText = ""
-    @State private var editedQuery: String? = nil
-    @State private var didInitQuery = false
-    @State private var pickedItems: [PhotosPickerItem] = []
-    @FocusState private var inputFocused: Bool
     /// Contractors whose rows have actually scrolled into view — gates photo
     /// loading so an off-screen business costs nothing until the user reaches it.
     @State private var revealedIDs: Set<String> = []
@@ -67,7 +59,6 @@ struct ContractorListScreen: View {
     @State private var keptPhotos: [String: [ScreenedPhoto]] = [:]
 
     private var headerTitle: String {
-        if let editedQuery, !editedQuery.isEmpty { return editedQuery }
         let q = searchQuery.trimmingCharacters(in: .whitespacesAndNewlines)
         return q.isEmpty ? category : q
     }
@@ -77,8 +68,7 @@ struct ContractorListScreen: View {
 
     /// Query actually sent to Places — the moto variant when the filter is on Moto.
     private var effectiveSearchQuery: String {
-        if let editedQuery, !editedQuery.isEmpty { return editedQuery }
-        return autoCategory?.query(for: vehicle) ?? searchQuery
+        autoCategory?.query(for: vehicle) ?? searchQuery
     }
 
     var body: some View {
@@ -98,23 +88,14 @@ struct ContractorListScreen: View {
                 }
 
                 header(topInset: topInset)
-
-                // Editable query input, pinned to the bottom — refine and re-run
-                // the search (or add a photo) without leaving the list.
-                inputBar(bottomInset: proxy.safeAreaInsets.bottom)
-                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
             }
         }
         .navigationBarBackButtonHidden(true)
         .toolbar(.hidden, for: .navigationBar)
         .enableSwipeBack()
-        .task {
-            if !didInitQuery { queryText = searchQuery; didInitQuery = true }
-            await load()
-        }
+        .task { await load() }
         // Switching Auto ⇄ Moto re-runs the search for the other vehicle type.
         .onChange(of: vehicle) { _, _ in Task { await reload() } }
-        .onChange(of: pickedItems) { _, items in addPhoto(items) }
         .navigationDestination(isPresented: $goGallery) {
             ContractorGalleryScreen(
                 category: category,
@@ -166,8 +147,7 @@ struct ContractorListScreen: View {
                 // already starts below the safe area, so topInset is NOT added
                 // here (doing so double-counts it and leaves a large gap).
                 .padding(.top, 64 + 12)
-                // Clear the pinned bottom input (~60pt) plus a gap.
-                .padding(.bottom, bottomInset + 84)
+                .padding(.bottom, bottomInset + 24)
             }
             // On returning from the gallery, jump to whichever contractor the user
             // left off on so the list resumes at that exact spot.
@@ -306,79 +286,6 @@ struct ContractorListScreen: View {
     private func openReviews(for contractor: Contractor) {
         if let url = URL(string: "https://search.google.com/local/reviews?placeid=\(contractor.id)") {
             openURL(url)
-        }
-    }
-
-    // ── Bottom input — refine query / add a photo ─────────────────────────────
-    private func inputBar(bottomInset: CGFloat) -> some View {
-        HStack(spacing: 8) {
-            // + is always on the left: add a photo to refine the results.
-            PhotosPicker(selection: $pickedItems, maxSelectionCount: 1,
-                         matching: .images, photoLibrary: .shared()) {
-                Image(systemName: "plus.circle")
-                    .font(.system(size: 24))
-                    .foregroundStyle(.white.opacity(0.7))
-                    .frame(width: 44, height: 44)
-            }
-
-            TextField("Describe what you need…", text: $queryText, axis: .vertical)
-                .font(.bodyLight)
-                .foregroundStyle(.white)
-                .tint(AppColors.accentStart)
-                .focused($inputFocused)
-                .lineLimit(1...4)
-                .submitLabel(.search)
-                .onSubmit(submitQuery)
-
-            if !queryText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                Button(action: submitQuery) {
-                    ZStack {
-                        Circle().fill(AppColors.accentGradient)
-                        Image(systemName: "arrow.right")
-                            .font(.system(size: 15, weight: .bold))
-                            .foregroundStyle(.white)
-                    }
-                    .frame(width: 36, height: 36)
-                }
-                .frame(width: 44, height: 44)
-            }
-        }
-        .padding(.horizontal, 8)
-        .padding(.vertical, 6)
-        .background {
-            ZStack {
-                Color.clear.background(.ultraThinMaterial)
-                AppColors.searchBg
-            }
-        }
-        .clipShape(RoundedRectangle(cornerRadius: 32))
-        .overlay(RoundedRectangle(cornerRadius: 32).stroke(AppColors.searchBorder, lineWidth: 1.5))
-        .padding(.horizontal, 16)
-        .padding(.bottom, bottomInset + 12)
-    }
-
-    /// Re-run the search with the edited query text.
-    private func submitQuery() {
-        inputFocused = false
-        editedQuery = queryText.trimmingCharacters(in: .whitespacesAndNewlines)
-        Task { await reload() }
-    }
-
-    /// Classify an added photo and append its term to the query so the results can
-    /// be refined with a picture (best-effort — a failed classify is ignored).
-    private func addPhoto(_ items: [PhotosPickerItem]) {
-        guard let item = items.last else { return }
-        Task {
-            guard let data = try? await item.loadTransferable(type: Data.self),
-                  let img = UIImage(data: data),
-                  let match = try? await ImageClassifier.classify(img) else {
-                await MainActor.run { pickedItems = [] }
-                return
-            }
-            await MainActor.run {
-                queryText = queryText.isEmpty ? match.label : "\(queryText), \(match.label)"
-                pickedItems = []
-            }
         }
     }
 
