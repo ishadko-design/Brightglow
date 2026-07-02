@@ -181,7 +181,7 @@ struct ContractorGalleryScreen: View {
                         .foregroundStyle(.white.opacity(0.4))
                         .padding(.top, 4)
                 } else {
-                    ForEach(Array(contractor.reviews.prefix(5))) { ReviewRowGallery(review: $0) }
+                    ForEach(Array(orderedReviews(for: contractor).prefix(5))) { ReviewRowGallery(review: $0) }
                 }
                 // Clear the pinned CTAs at the bottom.
                 Color.clear.frame(height: 48 + 32 + bottomInset)
@@ -199,6 +199,37 @@ struct ContractorGalleryScreen: View {
         .onPreferenceChange(SheetScrollKey.self) { minY in
             sheetScrolledToTop = minY > -2
         }
+    }
+
+    /// Reviews ordered so those mentioning the user's query lead — e.g. searching
+    /// "vanity cabinet" surfaces reviews about that first, "bmw engine" surfaces
+    /// engine ones. Stable for ties; falls back to original order when the query
+    /// has no meaningful terms (e.g. a plain category browse).
+    private func orderedReviews(for contractor: Contractor) -> [Review] {
+        let terms = reviewQueryTerms
+        guard !terms.isEmpty else { return contractor.reviews }
+        return contractor.reviews.enumerated()
+            .sorted { a, b in
+                let sa = reviewMatchScore(a.element, terms)
+                let sb = reviewMatchScore(b.element, terms)
+                return sa != sb ? sa > sb : a.offset < b.offset
+            }
+            .map(\.element)
+    }
+
+    private var reviewQueryTerms: [String] {
+        let stop: Set<String> = ["the", "and", "for", "near", "with", "contractor",
+                                 "contractors", "shop", "service", "services"]
+        let q = searchQuery.trimmingCharacters(in: .whitespacesAndNewlines)
+        let source = q.isEmpty ? category : q
+        return source.lowercased()
+            .split { !$0.isLetter }.map(String.init)
+            .filter { $0.count >= 3 && !stop.contains($0) }
+    }
+
+    private func reviewMatchScore(_ r: Review, _ terms: [String]) -> Int {
+        let text = (r.text + " " + (r.originalText ?? "")).lowercased()
+        return terms.reduce(0) { $0 + (text.contains($1) ? 1 : 0) }
     }
 
     // "Reviews" section title (enlarged) with the rating summary on the right —
