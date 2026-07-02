@@ -9,8 +9,11 @@ class CameraViewModel: NSObject, ObservableObject {
     @Published var showDrawingCanvas = false
     @Published var permissionDenied = false
     /// Trade inferred from the captured photo — home or auto (nil until
-    /// classified / if no match).
+    /// classified, or when the model isn't confident enough to preselect).
     @Published var detectedMatch: TradeMatch? = nil
+    /// Vehicle type inferred from the photo (car vs motorcycle) — labels the auto
+    /// tags "Car repair" / "Moto repair". nil when no vehicle is recognised.
+    @Published var detectedVehicle: VehicleFilter? = nil
     /// Multiple salient objects (only populated when the frame is ambiguous).
     @Published var detectedObjects: [DetectedObject] = []
 
@@ -102,6 +105,7 @@ class CameraViewModel: NSObject, ObservableObject {
     func retake() {
         capturedImage = nil
         detectedMatch = nil
+        detectedVehicle = nil
         detectedObjects = []
         showDrawingCanvas = false
         DispatchQueue.global(qos: .userInitiated).async { self.session.startRunning() }
@@ -130,8 +134,13 @@ extension CameraViewModel: AVCapturePhotoCaptureDelegate {
         // Identify immediately: whole-image category for the prefill, plus any
         // multiple salient objects for disambiguation tags.
         Task {
-            let detected = try? await ImageClassifier.classify(image)
+            // Confidence-gated: nil (no preselection) when the model isn't sure.
+            let detected = await ImageClassifier.classifyConfident(image)
             await MainActor.run { self.detectedMatch = detected }
+        }
+        Task {
+            let vehicle = ImageClassifier.detectVehicleType(image)
+            await MainActor.run { self.detectedVehicle = vehicle }
         }
         Task {
             let objects = await ImageClassifier.detectObjects(image)

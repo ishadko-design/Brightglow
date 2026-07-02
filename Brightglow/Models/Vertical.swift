@@ -90,4 +90,7 @@ enum TradeMatch: Equatable, Hashable {
         case .auto(let a): return a.name
         }
     }
+
+    /// True when this is an Auto & moto service (vs a home trade).
+    var isAuto: Bool { if case .auto = self { return true }; return false }
 }

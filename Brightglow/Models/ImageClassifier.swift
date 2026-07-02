@@ -16,7 +16,11 @@ struct DetectedObject: Identifiable {
 /// on-device Apple **Vision** when the network/token fails, so it always works.
 enum ImageClassifier {
 
-    enum ClassifyError: Error { case noImage, noMatch }
+    enum ClassifyError: Error { case noImage, noMatch, unsure }
+
+    /// On-device confidence floor for auto-suggesting a tag. Below this we treat the
+    /// guess as unsure and don't preselect (tunable — raise if it over-preselects).
+    private static let onDeviceMinConfidence: Float = 0.25
 
     // MARK: - Config
 
@@ -39,7 +43,8 @@ enum ImageClassifier {
             + "ONE category:\n"
             + "- If it's a vehicle, choose from: \(auto).\n"
             + "- If it's a home/property, choose from: \(home).\n"
-            + "Reply with only the chosen category name, exactly as written."
+            + "Reply with only the chosen category name, exactly as written. "
+            + "If the photo doesn't clearly show a single repairable subject, reply only: unsure."
     }()
 
     // MARK: - Public API
@@ -54,6 +59,34 @@ enum ImageClassifier {
     static func classify(_ image: UIImage, regionInView rect: CGRect, viewSize: CGSize) async throws -> TradeMatch {
         let target = crop(image, viewRect: rect, viewSize: viewSize) ?? image
         return try await classify(target)
+    }
+
+    /// Whole-image classification for **auto-suggesting** a tag. Returns nil when
+    /// the model isn't confident, so we don't preselect a wrong guess (e.g. a whole
+    /// house read as "plumbing"). The cloud model may answer "unsure"; the on-device
+    /// fallback is gated by a confidence floor. (The drawing path still uses the
+    /// plain `classify`, which always returns a best guess — the user pointed at it.)
+    static func classifyConfident(_ image: UIImage) async -> TradeMatch? {
+        do { return try await classifyCloud(image) }
+        catch ClassifyError.unsure { return nil }                          // model reachable but not sure
+        catch { return try? classifyOnDevice(image, minConfidence: onDeviceMinConfidence) }
+    }
+
+    /// Best-effort car-vs-motorcycle guess (on-device), used to label the auto tags
+    /// "Car repair" / "Moto repair". nil = neither clearly present.
+    static func detectVehicleType(_ image: UIImage) -> VehicleFilter? {
+        guard let cg = image.cgImage else { return nil }
+        let req = VNClassifyImageRequest()
+        try? VNImageRequestHandler(cgImage: cg, orientation: cgOrientation(image.imageOrientation), options: [:]).perform([req])
+        guard let obs = req.results else { return nil }
+        var moto: Float = 0, car: Float = 0
+        for o in obs where o.confidence > 0.05 {
+            let l = o.identifier.lowercased()
+            if ["motorcycle", "moped", "scooter", "motor scooter", "dirt bike"].contains(where: { l.contains($0) }) { moto += o.confidence }
+            if ["car", "truck", "van", "automobile", "sedan", "suv", "pickup", "convertible", "sports car", "minivan"].contains(where: { l.contains($0) }) { car += o.confidence }
+        }
+        guard moto > 0 || car > 0 else { return nil }
+        return moto > car ? .moto : .auto
     }
 
     /// Detect up to `max` salient objects and classify each (used to offer
@@ -113,7 +146,10 @@ enum ImageClassifier {
               let content = message["content"] as? String
         else { throw ClassifyError.noMatch }
 
-        return try matchTrade(in: content)
+        // Model was reachable — trust its verdict, including an explicit "unsure".
+        if content.lowercased().contains("unsure") { throw ClassifyError.unsure }
+        do { return try matchTrade(in: content) }
+        catch { throw ClassifyError.unsure }   // reachable but unmappable → don't guess
     }
 
     /// Map a free-text classification reply to a home or auto category. Exact
@@ -131,7 +167,7 @@ enum ImageClassifier {
 
     // MARK: - On-device Vision fallback
 
-    private static func classifyOnDevice(_ image: UIImage) throws -> TradeMatch {
+    private static func classifyOnDevice(_ image: UIImage, minConfidence: Float = 0) throws -> TradeMatch {
         guard let cg = image.cgImage else { throw ClassifyError.noImage }
         let request = VNClassifyImageRequest()
         let handler = VNImageRequestHandler(cgImage: cg, orientation: cgOrientation(image.imageOrientation), options: [:])
@@ -152,6 +188,11 @@ enum ImageClassifier {
 
         let bestHome = homeScores.max(by: { $0.value < $1.value })
         let bestAuto = autoScores.max(by: { $0.value < $1.value })
+        // Too weak to be trustworthy → unsure (callers that want a best guess pass
+        // minConfidence: 0).
+        if max(bestHome?.value ?? 0, bestAuto?.value ?? 0) < minConfidence {
+            throw ClassifyError.unsure
+        }
         switch (bestHome, bestAuto) {
         case let (h?, a?):   // tie favours auto — its keywords are vehicle-specific
             return a.value >= h.value ? .auto(autoCategoryItems[a.key]) : .home(h.key)

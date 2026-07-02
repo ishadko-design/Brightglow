@@ -445,10 +445,8 @@ struct MainScreen: View {
                             }
                         }
                     },
-                    prefill: camera.detectedMatch?.label ?? "",
-                    categorySuggestions: autoSuggestionsActive
-                        ? autoCategoryItems.map(\.name)
-                        : Category.allCases.map(\.rawValue),
+                    prefill: capturedPrefill,
+                    categorySuggestions: capturedSuggestions,
                     objects: camera.detectedObjects,
                     paths: $drawnPaths
                 )
@@ -467,6 +465,44 @@ struct MainScreen: View {
     private var autoSuggestionsActive: Bool {
         if case .auto = camera.detectedMatch { return true }
         return false
+    }
+
+    /// Carousel suggestions for the capture flow, ordered by the photo's dominant
+    /// subject: the vertical occupying more of the image comes first, with any
+    /// specifically-detected categories leading. Both verticals are always
+    /// included so a wrong guess can be corrected by scrolling.
+    private var capturedSuggestions: [String] {
+        let objects = camera.detectedObjects
+        let area: (Bool) -> Double = { wantAuto in
+            objects.filter { $0.match.isAuto == wantAuto }
+                .reduce(0) { $0 + Double($1.rect.width * $1.rect.height) }
+        }
+        let autoArea = area(true), homeArea = area(false)
+        let autoDominant = autoArea != homeArea ? autoArea > homeArea : autoSuggestionsActive
+
+        // Detected categories (from the salient objects) lead within their vertical.
+        let detected = Set(objects.map(\.match.label))
+        func ordered(_ all: [String]) -> [String] {
+            all.filter { detected.contains($0) } + all.filter { !detected.contains($0) }
+        }
+        let auto = ordered(autoCategoryItems.map(\.name)).map(autoLabel)
+        let home = ordered(Category.allCases.map(\.rawValue))
+        return autoDominant ? auto + home : home + auto
+    }
+
+    /// Auto tags carry the detected vehicle type — "Car repair", "Moto tires", …
+    /// (defaults to "Car" when a vehicle wasn't specifically typed). The label
+    /// doubles as the search query, so it targets the right vehicle.
+    private func autoLabel(_ name: String) -> String {
+        let prefix = camera.detectedVehicle == .moto ? "Moto" : "Car"
+        return "\(prefix) \(name.lowercased())"
+    }
+
+    /// Prefill for the capture input — empty when the model wasn't confident (so
+    /// nothing is preselected); auto matches carry the vehicle prefix.
+    private var capturedPrefill: String {
+        guard let m = camera.detectedMatch else { return "" }
+        return m.isAuto ? autoLabel(m.label) : m.label
     }
 
     private var showLocationCTA: Bool {

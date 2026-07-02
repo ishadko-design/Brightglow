@@ -281,17 +281,15 @@ struct DrawModeView: View {
         onSubmit(parts.joined(separator: ", "))
     }
 
-    /// By default pre-select exactly ONE token: the highest-confidence object by
-    /// area when objects were detected, else the whole-image classification.
-    /// Other possibilities stay as selectable tags on the image, not in the input.
-    /// Stops once the user has made their own selection.
+    /// Pre-select a tag only when the classifier was confident about a single
+    /// clear subject (`prefill` is empty otherwise). If the photo's subjects span
+    /// both verticals (e.g. a car AND a house), it's ambiguous — preselect nothing
+    /// and let the user pick from the carousel, which is ordered so the dominant
+    /// subject's tags come first. Stops once the user has made their own choice.
     private func applyDefaultSelection() {
         guard !userTouched else { return }
-        if let best = objects.max(by: { $0.rect.width * $0.rect.height < $1.rect.width * $1.rect.height }) {
-            selectedTags = [best.match.label]
-        } else if !prefill.isEmpty {
-            selectedTags = [prefill]
-        }
+        if Set(objects.map(\.match.isAuto)).count > 1 { selectedTags = []; return }
+        selectedTags = prefill.isEmpty ? [] : [prefill]
     }
 
     /// Add a tag (deduped, order preserved). User-initiated.
