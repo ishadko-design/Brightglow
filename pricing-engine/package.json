@@ -1,0 +1,19 @@
+{
+  "name": "pricing-engine",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Local All-In Cost Range engine — SF DBI permit data + retail material pricing, replacing fake $100-250 estimates.",
+  "main": "dist/pricingEngine.js",
+  "types": "dist/pricingEngine.d.ts",
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "test": "jest"
+  },
+  "devDependencies": {
+    "@types/jest": "^29.5.12",
+    "@types/node": "^20.14.9",
+    "jest": "^29.7.0",
+    "ts-jest": "^29.1.5",
+    "typescript": "^5.5.3"
+  }
+}

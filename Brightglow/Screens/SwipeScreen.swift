@@ -56,12 +56,10 @@ struct SwipeScreen: View {
     }
 
     private func localEstimate(near coord: CLLocationCoordinate2D) async -> PriceTier? {
-        let q   = searchQuery.trimmingCharacters(in: .whitespacesAndNewlines)
-        let cat = !q.isEmpty
-            ? (Category.matching(query: q).first ?? .plumbing)
-            : (Category(rawValue: category) ?? .plumbing)
+        guard !isAutoService(category: category, searchQuery: searchQuery) else { return nil }
+        let q = searchQuery.trimmingCharacters(in: .whitespacesAndNewlines)
         let locality = await EstimateService.locality(for: coord)
-        return await EstimateService.estimate(category: cat, job: q, locality: locality)
+        return await EstimateService.estimate(job: q, locality: locality)
     }
 
     private func fetchLive(near coord: CLLocationCoordinate2D) async -> [Contractor] {
@@ -174,6 +172,7 @@ struct SwipeScreen: View {
                         ContractorCardView(
                             contractor: contractor,
                             estimate: estimate,
+                            comingSoonText: (estimate == nil) ? priceComingSoonText(businessCount: totalCount) : nil,
                             isTop: isTop,
                             onSkip: skipTop,
                             onQuote: quoteTop
@@ -223,6 +222,10 @@ struct SwipeScreen: View {
 struct ContractorCardView: View {
     let contractor: Contractor
     var estimate: PriceTier? = nil
+    /// Non-nil (and rendered instead of `estimate`) whenever there's no real
+    /// price data — auto/moto always, or a home job with neither a pricing-
+    /// engine nor review-derived range.
+    var comingSoonText: String? = nil
     let isTop: Bool
     let onSkip: () -> Void
     let onQuote: () -> Void
@@ -329,8 +332,13 @@ struct ContractorCardView: View {
                                     .font(.h3)
                                     .foregroundStyle(.white)
 
-                                if let tier = estimate ?? contractor.priceTiers.first {
-                                    Text("\(estimate == nil ? "Price range" : "Est.") $\(tier.min >= 1000 ? "\(tier.min/1000)k" : "\(tier.min)")–\(tier.max >= 1000 ? "\(tier.max/1000)k" : "\(tier.max)")")
+                                if let comingSoonText {
+                                    Text(comingSoonText)
+                                        .font(.bodyLight)
+                                        .foregroundStyle(.white.opacity(0.5))
+                                } else if let tier = estimate {
+                                    let range = "$\(tier.min >= 1000 ? "\(tier.min/1000)k" : "\(tier.min)")–\(tier.max >= 1000 ? "\(tier.max/1000)k" : "\(tier.max)")"
+                                    Text("\(tier.label): \(range)")
                                         .font(.bodyLight)
                                         .foregroundStyle(.white.opacity(0.5))
                                 }

@@ -26,3 +26,11 @@ Carthage/Build/
 
 # Claude Code local settings (may contain tokens)
 .claude/
+
+# Separate product, own git repo
+leadbridge/
+
+# Node / Deno tooling artifacts (pricing-engine/, supabase/functions type-checking)
+node_modules/
+deno.lock
+pricing-engine/dist/

@@ -68,12 +68,39 @@ let autoCategoryItems: [AutoCategory] = [
 /// uses this to KEEP vehicle photos (the actual work) instead of rejecting them
 /// the way it does for home trades.
 func isAutoService(category: String, searchQuery: String) -> Bool {
-    if autoCategoryItems.contains(where: { $0.name == category || $0.searchQuery == searchQuery }) {
-        return true
+    if autoCategoryItems.contains(where: { $0.name == category }) { return true }
+    return AutoCategory.matching(query: searchQuery) != nil
+}
+
+/// Shown in place of a price line whenever there's no real, verifiable
+/// number to show — auto/moto always (no comparable data source to the home
+/// pricing engine exists yet — a vehicle repair estimate needs a labor-time
+/// guide + parts pricing, not building permits, so it's a separate build),
+/// or a home job the pricing engine doesn't cover and that has no real
+/// review-derived range either. Shows a genuine count (businesses actually
+/// found nearby) instead of a synthesized guess — there is no LLM fallback
+/// left in this app; every price line is either real data or this.
+func priceComingSoonText(businessCount: Int, includeCount: Bool = true) -> String {
+    guard includeCount else { return "Price estimate coming soon" }
+    guard businessCount > 0 else { return "Price estimate: Coming soon" }
+    return "\(businessCount) business\(businessCount == 1 ? "" : "es") nearby — price estimate coming soon"
+}
+
+extension AutoCategory {
+    /// The auto service a free-form query is about, or nil when the query isn't
+    /// vehicle work. Prefers the most specific keyword hit ("car paint" beats
+    /// "car") so "car painting" resolves to Body & Paint, not general Repair.
+    static func matching(query: String) -> AutoCategory? {
+        let q = query.lowercased().trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !q.isEmpty else { return nil }
+        if let exact = autoCategoryItems.first(where: {
+            $0.searchQuery.lowercased() == q || $0.motoSearchQuery.lowercased() == q
+        }) { return exact }
+        let scored: [(AutoCategory, Int)] = autoCategoryItems.compactMap { item in
+            item.keywords.filter { q.contains($0) }.map(\.count).max().map { (item, $0) }
+        }
+        return scored.max(by: { $0.1 < $1.1 })?.0
     }
-    let q = searchQuery.lowercased()
-    guard !q.isEmpty else { return false }
-    return autoCategoryItems.contains { $0.keywords.contains { q.contains($0) } }
 }
 
 /// A photo classification result: a Home trade or an Auto & moto service. Keeps

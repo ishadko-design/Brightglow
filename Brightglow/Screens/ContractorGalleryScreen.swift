@@ -49,6 +49,9 @@ struct ContractorGalleryScreen: View {
     /// the spot the user navigated to (they may have skipped past the one they
     /// opened) when they go back.
     var lastViewedID: Binding<String?>? = nil
+    /// Photos the user attached before arriving here — carried to the
+    /// quote-request screen.
+    var attachedImages: [UIImage] = []
 
     @Environment(\.dismiss) var dismiss
     @Environment(\.openURL) private var openURL
@@ -166,7 +169,7 @@ struct ContractorGalleryScreen: View {
             if let id { lastViewedID?.wrappedValue = id }
         }
         .navigationDestination(isPresented: $showQuote) {
-            QuoteRequestScreen(contractor: selectedContractor, requestSummary: headerTitle)
+            QuoteRequestScreen(contractor: selectedContractor, requestSummary: headerTitle, initialImages: attachedImages)
         }
     }
 
@@ -264,10 +267,13 @@ struct ContractorGalleryScreen: View {
         }
     }
 
-    // Price line shown under the contractor name in the header.
+    // Price line shown under the contractor name in the header. Real data
+    // only — the pricing engine or a review-derived range — otherwise a
+    // "Coming soon" placeholder with the real business count, never a guess.
     private func priceText(for contractor: Contractor?) -> String? {
-        guard let contractor, let tier = estimate ?? contractor.priceTiers.first else { return nil }
-        return "Est prices: $\(money(tier.min))–\(money(tier.max))"
+        guard contractor != nil else { return nil }
+        guard let tier = estimate else { return priceComingSoonText(businessCount: totalCount) }
+        return "\(tier.label): $\(money(tier.min))–\(money(tier.max))"
     }
 
     private func money(_ v: Int) -> String { v >= 1000 ? "\(v / 1000)k" : "\(v)" }
@@ -534,11 +540,9 @@ struct ContractorGalleryScreen: View {
             nextPageToken = page.nextPageToken
             pagingCoord = coord
             if !live.isEmpty {
-                let hints = EstimateService.priceMentions(in: live.flatMap(\.reviews))
                 Task { @MainActor in
                     estimate = await ContractorLoader.estimate(
-                        category: category, searchQuery: searchQuery, near: coord,
-                        priceHints: hints)
+                        category: category, searchQuery: searchQuery, near: coord)
                 }
             }
             return

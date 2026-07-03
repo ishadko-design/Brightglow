@@ -32,7 +32,7 @@ const SEARCH_URL = "https://places.googleapis.com/v1/places:searchText";
 const FIELD_MASK = [
   "places.id", "places.displayName", "places.rating", "places.userRatingCount",
   "places.formattedAddress", "places.nationalPhoneNumber", "places.photos",
-  "places.businessStatus", "places.reviews", "places.location", "nextPageToken",
+  "places.businessStatus", "places.reviews", "places.location", "places.types", "nextPageToken",
 ].join(",");
 const RADIUS_M = 40000;
 const TTL_MS = 24 * 60 * 60 * 1000;   // reuse a cached search for a day

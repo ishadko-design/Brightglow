@@ -21,6 +21,9 @@ struct ContractorListScreen: View {
     var aiResult: AIResult? = nil
     /// When set (manual ZIP/city or an already-resolved fix), used instead of GPS.
     var presetCoordinate: CLLocationCoordinate2D? = nil
+    /// Photos the user attached before arriving here (camera capture + drawing,
+    /// or the search bar's own picker) — carried to the quote-request screen.
+    var attachedImages: [UIImage] = []
 
     @Environment(\.dismiss) var dismiss
     @Environment(\.openURL) private var openURL
@@ -109,7 +112,8 @@ struct ContractorListScreen: View {
                 startContractorID: startContractorID,
                 presetEstimate: estimate,
                 initialPageToken: nextPageToken,
-                lastViewedID: $lastViewedID
+                lastViewedID: $lastViewedID,
+                attachedImages: attachedImages
             )
         }
     }
@@ -128,7 +132,8 @@ struct ContractorListScreen: View {
                             // fetching a 20-business list only downloads photos for
                             // the ~4 businesses in view, then more as the user scrolls.
                             photos: revealedIDs.contains(contractor.id) ? screenedByID[contractor.id] : nil,
-                            priceTier: estimate ?? contractor.priceTiers.first,
+                            priceTier: estimate,
+                            comingSoonText: estimate == nil ? priceComingSoonText(businessCount: contractors.count, includeCount: false) : nil,
                             onOpen: { open(contractor) },
                             onReviews: { openReviews(for: contractor) },
                             onNearEnd: { Task { await screenMore(contractor) } }
@@ -348,11 +353,9 @@ struct ContractorListScreen: View {
                 (scannedCount[c.id] ?? 0) >= c.photos.count && (screenedByID[c.id]?.isEmpty ?? true)
             }
             if !contractors.isEmpty {
-                let hints = EstimateService.priceMentions(in: contractors.flatMap(\.reviews))
                 Task { @MainActor in
                     estimate = await ContractorLoader.estimate(
-                        category: category, searchQuery: query, near: coord,
-                        priceHints: hints)
+                        category: category, searchQuery: query, near: coord)
                 }
             }
         } else {
@@ -481,6 +484,7 @@ private struct ContractorListRow: View {
     /// then shows gray placeholders so the row's text isn't held back).
     let photos: [String]?
     let priceTier: PriceTier?
+    var comingSoonText: String? = nil
     let onOpen: () -> Void
     let onReviews: () -> Void
     /// Fired when the last loaded strip photo appears — cue to load the next batch.
@@ -508,8 +512,12 @@ private struct ContractorListRow: View {
                     .buttonStyle(.plain)
                 }
 
-                if let tier = priceTier {
-                    Text("Est prices: $\(money(tier.min))–\(money(tier.max))")
+                if let comingSoonText {
+                    Text(comingSoonText)
+                        .font(.bodySmall)                   // Poppins 300 / 14
+                        .foregroundStyle(.white)
+                } else if let tier = priceTier {
+                    Text("\(tier.label): $\(money(tier.min))–\(money(tier.max))")
                         .font(.bodySmall)                   // Poppins 300 / 14
                         .foregroundStyle(.white)
                 }

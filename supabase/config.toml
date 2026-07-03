@@ -7,3 +7,6 @@ verify_jwt = false
 
 [functions.verdicts]
 verify_jwt = false
+
+[functions.pricing]
+verify_jwt = false

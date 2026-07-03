@@ -59,7 +59,16 @@ enum PlacesService {
     static func fetchPage(searchText query: String, near coord: CLLocationCoordinate2D,
                           pageSize: Int = 20, pageToken: String? = nil) async -> Page {
         let category = Category.matching(query: query).first ?? .plumbing
-        return await search(textQuery: "\(query) contractor", category: category,
+        // "contractor" is a home-trade term to Google — "car painting contractor"
+        // returns house painters. Vehicle queries get a shop-style query instead
+        // (tuned auto queries already end in "shop" and pass through unchanged).
+        let textQuery: String
+        if AutoCategory.matching(query: query) != nil {
+            textQuery = query.lowercased().contains("shop") ? query : "\(query) shop"
+        } else {
+            textQuery = "\(query) contractor"
+        }
+        return await search(textQuery: textQuery, category: category,
                             near: coord, pageSize: pageSize, pageToken: pageToken)
     }
 
@@ -242,7 +251,7 @@ enum PlacesService {
         req.setValue(
             "places.id,places.displayName,places.rating,places.userRatingCount,"
             + "places.formattedAddress,places.nationalPhoneNumber,places.photos,"
-            + "places.businessStatus,places.reviews,places.location,nextPageToken",
+            + "places.businessStatus,places.reviews,places.location,places.types,nextPageToken",
             forHTTPHeaderField: "X-Goog-FieldMask")
         var body: [String: Any] = [
             "textQuery": textQuery,
@@ -261,8 +270,35 @@ enum PlacesService {
 
     // MARK: - Mapping
 
+    /// Google Places Text Search matches loosely on text, not strictly on
+    /// category — a vague or sparse-result query can surface completely
+    /// unrelated businesses (e.g. a dentist for a "repair" search). This is
+    /// a blanket exclude of clearly non-trade place types, independent of
+    /// which home/auto category was searched.
+    private static let nonTradeTypes: Set<String> = [
+        // Medical / health
+        "dentist", "doctor", "hospital", "pharmacy", "physiotherapist",
+        "veterinary_care", "medical_lab", "drugstore",
+        // Legal / finance
+        "lawyer", "accounting", "bank", "atm", "insurance_agency", "real_estate_agency",
+        // Food / entertainment
+        "restaurant", "cafe", "bar", "bakery", "night_club", "movie_theater", "casino",
+        // Beauty / fitness
+        "beauty_salon", "hair_care", "spa", "gym", "nail_salon",
+        // Education / government / religious
+        "school", "university", "primary_school", "secondary_school",
+        "local_government_office", "courthouse", "embassy",
+        "church", "mosque", "synagogue", "hindu_temple", "place_of_worship",
+        // Lodging / travel
+        "lodging", "hotel", "travel_agency", "airport",
+        // Unrelated retail
+        "clothing_store", "shoe_store", "jewelry_store", "supermarket",
+        "convenience_store", "liquor_store", "book_store", "pet_store", "florist",
+    ]
+
     private static func contractor(from place: Place, index: Int, category: Category) -> Contractor? {
         guard let name = place.displayName?.text else { return nil }
+        if let types = place.types, !nonTradeTypes.isDisjoint(with: types) { return nil }
 
         // Every card must have an image — skip placeless results.
         // Cheap pre-filter: drop low-resolution source photos (small originals
@@ -447,6 +483,7 @@ private struct Place: Decodable {
     let businessStatus: String?
     let reviews: [PlaceReview]?
     let location: LatLng?
+    let types: [String]?
 }
 
 private struct LatLng: Decodable {

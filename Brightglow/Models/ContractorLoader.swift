@@ -67,17 +67,17 @@ enum ContractorLoader {
     }
 
     /// Indicative local price tier for the request, used for the price line.
+    /// Real data only — the SF pricing engine — nil (no synthesized guess,
+    /// no noisy review-mention range) when it has nothing, including always
+    /// for auto/moto (no pricing data source exists for it yet).
     static func estimate(
         category: String,
         searchQuery: String,
-        near coord: CLLocationCoordinate2D,
-        priceHints: [Int] = []
+        near coord: CLLocationCoordinate2D
     ) async -> PriceTier? {
-        let q   = searchQuery.trimmingCharacters(in: .whitespacesAndNewlines)
-        let cat = !q.isEmpty
-            ? (Category.matching(query: q).first ?? .plumbing)
-            : (Category(rawValue: category) ?? .plumbing)
+        guard !isAutoService(category: category, searchQuery: searchQuery) else { return nil }
+        let q = searchQuery.trimmingCharacters(in: .whitespacesAndNewlines)
         let locality = await EstimateService.locality(for: coord)
-        return await EstimateService.estimate(category: cat, job: q, locality: locality, priceHints: priceHints)
+        return await EstimateService.estimate(job: q, locality: locality)
     }
 }
