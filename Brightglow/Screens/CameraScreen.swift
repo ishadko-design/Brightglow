@@ -38,7 +38,7 @@ struct CameraScreen: View {
                                 .foregroundStyle(AppColors.accentStart)
                         }
                     } else {
-                        Text("Take a picture and explain your\ntask for a smart estimate")
+                        Text("Add photos and describe the job —\nget an estimate and connect with businesses")
                             .font(.bodyLight)
                             .multilineTextAlignment(.center)
                             .foregroundStyle(.white)

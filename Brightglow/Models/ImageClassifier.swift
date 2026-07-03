@@ -29,7 +29,9 @@ enum ImageClassifier {
     private static let hfToken: String =
         (Bundle.main.object(forInfoDictionaryKey: "HF_TOKEN") as? String) ?? ""
 
-    private static let model = "Qwen/Qwen3-VL-8B-Instruct"
+    // 30B MoE (~3B active params): near-8B latency, much better scene reading —
+    // the 8B kept calling floor coverings "Carpentry".
+    private static let model = "Qwen/Qwen3-VL-30B-A3B-Instruct"
 
     /// Built from the live category lists so the options always match the app
     /// (no hand-maintained list to drift). The model first decides the vertical
@@ -43,7 +45,17 @@ enum ImageClassifier {
             + "ONE category:\n"
             + "- If it's a vehicle, choose from: \(auto).\n"
             + "- If it's a home/property, choose from: \(home).\n"
-            + "Reply with only the chosen category name, exactly as written. "
+            + "Note: floors and floor coverings (hardwood, laminate, tile, carpet, rugs) "
+            + "are Flooring — NOT Carpentry. Carpentry is furniture, cabinets, trim, "
+            + "framing, decks.\n"
+            + "Reply on one line as: CATEGORY | DETAILS\n"
+            + "CATEGORY is the chosen category name, exactly as written above. If you can "
+            + "pick a category but are not certain, append a question mark (e.g. Carpentry?).\n"
+            + "DETAILS is a short comma-separated list of attributes visible in the photo "
+            + "that are useful for a repair cost estimate — size, capacity (gallons, amps, "
+            + "BTU), material, or type (e.g. \"40 gallon, tankless, gas\" or \"30 inch, "
+            + "vinyl\"). Only include what's actually visible — do not guess a condition or "
+            + "problem you can't see. Write \"none\" if nothing relevant is visible.\n"
             + "If the photo doesn't clearly show a single repairable subject, reply only: unsure."
     }()
 
@@ -51,7 +63,7 @@ enum ImageClassifier {
 
     /// Best-guess trade (home or auto) — cloud first, on-device Vision fallback.
     static func classify(_ image: UIImage) async throws -> TradeMatch {
-        if let cloud = try? await classifyCloud(image) { return cloud }
+        if let cloud = try? await classifyCloud(image) { return cloud.match }
         return try classifyOnDevice(image)
     }
 
@@ -61,15 +73,42 @@ enum ImageClassifier {
         return try await classify(target)
     }
 
-    /// Whole-image classification for **auto-suggesting** a tag. Returns nil when
-    /// the model isn't confident, so we don't preselect a wrong guess (e.g. a whole
-    /// house read as "plumbing"). The cloud model may answer "unsure"; the on-device
-    /// fallback is gated by a confidence floor. (The drawing path still uses the
-    /// plain `classify`, which always returns a best guess — the user pointed at it.)
-    static func classifyConfident(_ image: UIImage) async -> TradeMatch? {
-        do { return try await classifyCloud(image) }
-        catch ClassifyError.unsure { return nil }                          // model reachable but not sure
-        catch { return try? classifyOnDevice(image, minConfidence: onDeviceMinConfidence) }
+    /// A single cloud verdict. `isConfident` is false when the model hedged
+    /// (appended "?" per the prompt protocol). `details` is a short, comma-
+    /// separated list of visible cost-relevant attributes (size, capacity,
+    /// material) — nil when nothing relevant was visible or the model wasn't
+    /// confident enough to trust its category call in the first place.
+    struct Suggestion { let match: TradeMatch; let isConfident: Bool; let details: String? }
+
+    /// Ordered guesses for the capture flow, best first: the cloud verdict (when
+    /// available) then the on-device Vision guess. `confident` is set only when
+    /// the cloud model answered without hedging — that one may be preselected;
+    /// everything else only leads the category carousel. `details` mirrors the
+    /// confident cloud verdict's extracted attributes, if any.
+    struct Suggestions { let matches: [TradeMatch]; let confident: TradeMatch?; let details: String? }
+
+    /// Whole-image classification for **auto-suggesting** tags. (The drawing path
+    /// still uses the plain `classify`, which always returns a single best guess —
+    /// the user pointed at it.)
+    static func suggestTrades(_ image: UIImage) async -> Suggestions {
+        var matches: [TradeMatch] = []
+        var confident: TradeMatch? = nil
+        var details: String? = nil
+        if let cloud = try? await classifyCloud(image) {
+            matches.append(cloud.match)
+            if cloud.isConfident {
+                confident = cloud.match
+                details = cloud.details
+            }
+        }
+        // The on-device guess always contributes a carousel suggestion (never a
+        // preselection) — it often catches what the cloud model mislabels, e.g.
+        // a rug reads as Flooring here while the model may say Carpentry.
+        if let device = try? classifyOnDevice(image, minConfidence: onDeviceMinConfidence),
+           !matches.contains(device) {
+            matches.append(device)
+        }
+        return Suggestions(matches: matches, confident: confident, details: details)
     }
 
     /// Best-effort car-vs-motorcycle guess (on-device), used to label the auto tags
@@ -118,7 +157,7 @@ enum ImageClassifier {
 
     // MARK: - Cloud (vision LLM)
 
-    private static func classifyCloud(_ image: UIImage) async throws -> TradeMatch {
+    private static func classifyCloud(_ image: UIImage) async throws -> Suggestion {
         guard !hfToken.isEmpty else { throw ClassifyError.noMatch }
         guard let jpeg = image.downscaled(maxDimension: 512).jpegData(compressionQuality: 0.7),
               let url = URL(string: "https://router.huggingface.co/v1/chat/completions")
@@ -126,7 +165,7 @@ enum ImageClassifier {
 
         let dataURI = "data:image/jpeg;base64,\(jpeg.base64EncodedString())"
         let payload: [String: Any] = [
-            "model": model, "max_tokens": 20,
+            "model": model, "max_tokens": 50,
             "messages": [["role": "user", "content": [
                 ["type": "text", "text": prompt],
                 ["type": "image_url", "image_url": ["url": dataURI]],
@@ -147,8 +186,19 @@ enum ImageClassifier {
         else { throw ClassifyError.noMatch }
 
         // Model was reachable — trust its verdict, including an explicit "unsure".
+        // A trailing "?" is the model hedging: keep the guess but mark it weak.
         if content.lowercased().contains("unsure") { throw ClassifyError.unsure }
-        do { return try matchTrade(in: content) }
+
+        // "CATEGORY | DETAILS" — split off the details before category matching
+        // so a stray "?"/word in DETAILS never affects category parsing.
+        let parts = content.split(separator: "|", maxSplits: 1).map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+        let categoryText = parts.first ?? content
+        let detailsText = parts.count > 1 ? parts[1] : ""
+        let details: String? = (detailsText.isEmpty || detailsText.lowercased() == "none") ? nil : detailsText
+
+        do { return Suggestion(match: try matchTrade(in: categoryText),
+                               isConfident: !categoryText.contains("?"),
+                               details: details) }
         catch { throw ClassifyError.unsure }   // reachable but unmappable → don't guess
     }
 
@@ -178,12 +228,22 @@ enum ImageClassifier {
         var autoScores: [Int: Float] = [:]   // index into autoCategoryItems
         for obs in observations where obs.confidence > 0.05 {
             let label = obs.identifier.lowercased().replacingOccurrences(of: "_", with: " ")
-            for cat in Category.allCases where cat.keywords.contains(where: { label.contains($0) }) || label.contains(cat.rawValue.lowercased()) {
-                homeScores[cat, default: 0] += obs.confidence
+            // Credit only the category with the most specific (longest) keyword hit
+            // per label, so "hardwood" counts for Flooring ("hardwood") and doesn't
+            // also feed Carpentry via the looser "wood".
+            var bestHome: (cat: Category, len: Int)? = nil
+            for cat in Category.allCases {
+                var len = cat.keywords.filter { label.contains($0) }.map(\.count).max() ?? 0
+                if label.contains(cat.rawValue.lowercased()) { len = max(len, cat.rawValue.count) }
+                if len > (bestHome?.len ?? 0) { bestHome = (cat, len) }
             }
-            for (i, a) in autoCategoryItems.enumerated() where a.keywords.contains(where: { label.contains($0) }) {
-                autoScores[i, default: 0] += obs.confidence
+            if let bestHome { homeScores[bestHome.cat, default: 0] += obs.confidence }
+            var bestAuto: (idx: Int, len: Int)? = nil
+            for (i, a) in autoCategoryItems.enumerated() {
+                if let len = a.keywords.filter({ label.contains($0) }).map(\.count).max(),
+                   len > (bestAuto?.len ?? 0) { bestAuto = (i, len) }
             }
+            if let bestAuto { autoScores[bestAuto.idx, default: 0] += obs.confidence }
         }
 
         let bestHome = homeScores.max(by: { $0.value < $1.value })
@@ -254,7 +314,7 @@ enum ImageClassifier {
     }
 }
 
-private extension UIImage {
+extension UIImage {
     func downscaled(maxDimension: CGFloat) -> UIImage {
         let longest = max(size.width, size.height)
         guard longest > maxDimension else { return self }

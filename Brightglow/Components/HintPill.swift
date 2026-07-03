@@ -11,6 +11,7 @@ struct HintPill: View {
             .multilineTextAlignment(.center)
             .padding(.horizontal, 16)
             .padding(.vertical, 8)
+            .frame(maxWidth: .infinity)
             .background {
                 ZStack {
                     Color.clear.background(.ultraThinMaterial)

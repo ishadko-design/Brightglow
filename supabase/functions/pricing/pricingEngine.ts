@@ -117,6 +117,12 @@ export const JOB_TYPE_KEYWORDS: Record<string, string[]> = {
 const BIG_SCOPE_SIGNALS = [
   "remodel", "renovation", "addition", "adu", "accessory dwelling",
   "new construction", "full gut", "rebuild", "reconstruct", "structural",
+  // Code-enforcement / legalization permits (retroactively permitting
+  // unpermitted work found via a Notice of Violation) also bundle a much
+  // wider inspection-driven scope than the single trade they mention —
+  // found 2026-07-03 in windows_doors.window real data ("legalize
+  // unwarranted structure @ 2/f, reconfigure rear staircase..." at $80,000).
+  "legaliz", "unwarranted", "notice of violation", "comply with nov", "structure",
 ];
 
 const NORMALIZE_RULES: Array<{ job_type: string; keywords: string[]; excludeIfContains?: string[] }> = [
@@ -354,10 +360,26 @@ function trimOutliers(sortedCosts: number[]): number[] {
   return sortedCosts.filter((c) => c >= lo && c <= hi);
 }
 
+// SF permit "revisions" (amendments to an already-filed permit — description
+// starts "revision to <permit#>" or "rev <permit#>") carry a placeholder
+// valuation, often exactly $1, since the real cost was already declared on
+// the original permit. Verified 2026-07-03 against live data: up to 12% of
+// matched permits for some job types (carpentry.deck) were these
+// placeholders, dragging the low end of the range toward $1.
+// Not anchored to the start — "unit a: revision to existing permit#..." is
+// a real example that an anchored pattern missed (found 2026-07-03).
+const REVISION_PATTERN = /(revision to|\brev\.?\s)/i;
+// A real construction job is never priced at $1-$99 — that range is always
+// a placeholder/artifact, not an actual cost. Belt-and-suspenders alongside
+// the revision-pattern exclude, since not every placeholder-cost permit
+// necessarily matches that description pattern.
+const MIN_PLAUSIBLE_COST = 100;
+
 export function calculatePermitRange(permits: Permit[], scope: JobScope): PermitRange | null {
   const normalized = normalizePermits(permits);
 
   const matched = normalized.filter((p) => {
+    if (REVISION_PATTERN.test(p.description)) return false;
     if (p.job_type !== scope.job_type) return false;
     if (p.size === null) return true;
     return Math.abs(p.size - scope.width_in) <= 6;
@@ -365,7 +387,20 @@ export function calculatePermitRange(permits: Permit[], scope: JobScope): Permit
 
   if (matched.length < 10) return null;
 
-  const rawCosts = matched.map((p) => p.estimated_cost).filter((c) => c > 0).sort((a, b) => a - b);
+  // Prefer a tighter match on scope.features (e.g. "40 gallon", "tankless" —
+  // typically extracted from a photo capture, see PricingService.swift's
+  // detectFeatureTokens) when there's still enough data to support it. Real
+  // permit-description substring matching, not a guess — just more specific
+  // to this request than job_type + size alone. Falls back to the broader
+  // `matched` set when tightening would leave too little to be valid.
+  const features = (scope.features ?? []).map((f) => f.toLowerCase()).filter((f) => f.length > 0);
+  let pool = matched;
+  if (features.length > 0) {
+    const tighter = matched.filter((p) => features.some((f) => p.description.toLowerCase().includes(f)));
+    if (tighter.length >= 10) pool = tighter;
+  }
+
+  const rawCosts = pool.map((p) => p.estimated_cost).filter((c) => c >= MIN_PLAUSIBLE_COST).sort((a, b) => a - b);
   if (rawCosts.length < 10) return null;
 
   const costs = trimOutliers(rawCosts);

@@ -70,14 +70,24 @@ enum ContractorLoader {
     /// Real data only — the SF pricing engine — nil (no synthesized guess,
     /// no noisy review-mention range) when it has nothing, including always
     /// for auto/moto (no pricing data source exists for it yet).
+    ///
+    /// `photoDetails` (size/capacity/material extracted from the captured
+    /// photo, e.g. "40 gallon, tankless") is appended to the job description
+    /// sent to the pricing engine only — it narrows which permits count as
+    /// comparable, it never changes what businesses get searched.
     static func estimate(
         category: String,
         searchQuery: String,
-        near coord: CLLocationCoordinate2D
+        near coord: CLLocationCoordinate2D,
+        photoDetails: String? = nil
     ) async -> PriceTier? {
         guard !isAutoService(category: category, searchQuery: searchQuery) else { return nil }
         let q = searchQuery.trimmingCharacters(in: .whitespacesAndNewlines)
+        let job = [q, photoDetails]
+            .compactMap { $0?.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
+            .joined(separator: ", ")
         let locality = await EstimateService.locality(for: coord)
-        return await EstimateService.estimate(job: q, locality: locality)
+        return await EstimateService.estimate(job: job, locality: locality)
     }
 }

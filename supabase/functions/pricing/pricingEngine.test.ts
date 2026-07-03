@@ -78,6 +78,43 @@ Deno.test("calculatePermitRange trims a bundled-scope outlier out of the percent
   assertEquals(result!.p75 < 5000, true); // range stays plausible for a vanity job
 });
 
+Deno.test("calculatePermitRange excludes permit revisions with placeholder valuations", () => {
+  const real = Array.from({ length: 10 }, (_, i) =>
+    makePermit({ description: "replace 36in vanity", estimated_cost: 2000 + i * 50 }));
+  const revisions = [
+    makePermit({ description: "revision to 202501158339: switch vanity to 36in", estimated_cost: 1 }),
+    makePermit({ description: "Rev 202512242539: modify 36in vanity plan", estimated_cost: 1 }),
+  ];
+  const result = calculatePermitRange([...real, ...revisions], scope);
+  assertExists(result);
+  assertEquals(result!.count, 10); // the two $1 revisions are excluded entirely
+  assertEquals(result!.p25 >= 2000, true); // not dragged toward $1
+});
+
+Deno.test("calculatePermitRange tightens to scope.features when there's still enough data", () => {
+  // 11 generic vanity permits (cheaper) + 12 permits that specifically
+  // mention "tankless" (pricier) — a request with features: ["tankless"]
+  // should compute its range from just the tankless-mentioning permits.
+  const generic = Array.from({ length: 11 }, (_, i) =>
+    makePermit({ description: "replace 36in vanity", estimated_cost: 1000 + i * 10 }));
+  const tankless = Array.from({ length: 12 }, (_, i) =>
+    makePermit({ description: "replace 36in vanity, tankless unit", estimated_cost: 5000 + i * 10 }));
+  const featuredScope: JobScope = { ...scope, features: ["tankless"] };
+  const result = calculatePermitRange([...generic, ...tankless], featuredScope);
+  assertExists(result);
+  assertEquals(result!.count, 12); // only the tankless-mentioning permits
+  assertEquals(result!.p25 >= 5000, true);
+});
+
+Deno.test("calculatePermitRange falls back to the broader match when features would leave too few permits", () => {
+  const generic = Array.from({ length: 15 }, (_, i) =>
+    makePermit({ description: "replace 36in vanity", estimated_cost: 1000 + i * 10 }));
+  const featuredScope: JobScope = { ...scope, features: ["tankless"] }; // no permit mentions it
+  const result = calculatePermitRange(generic, featuredScope);
+  assertExists(result);
+  assertEquals(result!.count, 15); // used the full unfiltered set instead
+});
+
 Deno.test("calculateMaterialFloor sums matched materials", () => {
   assertEquals(calculateMaterialFloor(materials, scope), 650 + 220 + 180 + 120);
 });

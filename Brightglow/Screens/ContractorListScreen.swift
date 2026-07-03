@@ -24,6 +24,10 @@ struct ContractorListScreen: View {
     /// Photos the user attached before arriving here (camera capture + drawing,
     /// or the search bar's own picker) — carried to the quote-request screen.
     var attachedImages: [UIImage] = []
+    /// Cost-relevant attributes extracted from the captured photo (size,
+    /// capacity, material — e.g. "40 gallon, tankless"), if any. Narrows the
+    /// price estimate only — never used for the business search.
+    var photoDetails: String? = nil
 
     @Environment(\.dismiss) var dismiss
     @Environment(\.openURL) private var openURL
@@ -355,7 +359,8 @@ struct ContractorListScreen: View {
             if !contractors.isEmpty {
                 Task { @MainActor in
                     estimate = await ContractorLoader.estimate(
-                        category: category, searchQuery: query, near: coord)
+                        category: category, searchQuery: query, near: coord,
+                        photoDetails: photoDetails)
                 }
             }
         } else {

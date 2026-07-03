@@ -22,6 +22,10 @@ struct MainScreen: View {
     /// Auto & moto category the user tapped; drives the contractor list.
     @State private var goAuto: AutoCategory? = nil
     @State private var submittedQuery = ""
+    /// Photo-derived cost-relevant attributes (size, capacity, material) from
+    /// the most recent capture, carried to the contractor list to narrow the
+    /// price estimate only — never used for the business search itself.
+    @State private var photoDetails: String? = nil
     @State private var searchText = ""
     @State private var locationQuery = ""
     /// True while the user is editing the location (typing a ZIP) — kept separate
@@ -31,6 +35,9 @@ struct MainScreen: View {
     /// a location resolves. Contractors are never shown without a location.
     @State private var pendingDestination: PendingDestination? = nil
     @State private var drawnPaths: [DrawnPath] = []
+    /// The captured photo (with any drawn strokes baked in) carried forward to
+    /// the quote-request screen once the user reaches a contractor.
+    @State private var attachedImages: [UIImage] = []
     @State private var showProfile = false
     /// Native photo-picker selection (raw items) and the decoded images shown
     /// as thumbnails above the input bar.
@@ -110,7 +117,7 @@ struct MainScreen: View {
                     if selectedVertical == nil && camera.isAuthorized {
                         VStack(spacing: 0) {
                             Spacer()
-                            HintPill(text: "Take a picture and explain your task for a smart estimate")
+                            HintPill(text: "Add photos and describe the job — get an estimate and connect with businesses")
                                 .padding(.horizontal, 16)
                                 .padding(.bottom, 16)
                             Button(action: { camera.capturePhoto() }) {
@@ -286,21 +293,19 @@ struct MainScreen: View {
                                 guard !q.isEmpty else { return }
                                 submittedQuery = q
                                 searchFocused = false
+                                attachedImages = []   // this path uses pickedImages, not the camera flow's photo
                                 goSearch = true
                             }
 
-                        // Trailing: mic when empty, send arrow once there's text.
-                        if searchText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                            Image(systemName: "mic")
-                                .font(.system(size: 22))
-                                .foregroundStyle(.white.opacity(0.5))
-                                .iconTapTarget()
-                        } else {
+                        // Trailing: send arrow once there's text. (Voice/mic is
+                        // hidden until the feature is enabled.)
+                        if !searchText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                             Button(action: {
                                 let q = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
                                 guard !q.isEmpty else { return }
                                 submittedQuery = q
                                 searchFocused = false
+                                attachedImages = []   // this path uses pickedImages, not the camera flow's photo
                                 goSearch = true
                             }) {
                                 ZStack {
@@ -373,11 +378,17 @@ struct MainScreen: View {
                     set: { if !$0 { goSwipe = nil } }
                 )) {
                     ContractorListScreen(category: goSwipe?.rawValue ?? "",
-                                         presetCoordinate: locationStore.coordinate)
+                                         presetCoordinate: locationStore.coordinate,
+                                         attachedImages: attachedImages,
+                                         photoDetails: photoDetails)
                 }
                 .navigationDestination(isPresented: $goSearch) {
+                    // goSearch is reached either from the camera flow (attachedImages
+                    // set) or the search bar's own + picker (pickedImages, up to 5).
                     ContractorListScreen(searchQuery: submittedQuery,
-                                         presetCoordinate: locationStore.coordinate)
+                                         presetCoordinate: locationStore.coordinate,
+                                         attachedImages: attachedImages.isEmpty ? pickedImages : attachedImages,
+                                         photoDetails: photoDetails)
                 }
                 .navigationDestination(isPresented: Binding(
                     get: { goAuto != nil },
@@ -385,7 +396,8 @@ struct MainScreen: View {
                 )) {
                     ContractorListScreen(category: goAuto?.name ?? "",
                                          searchQuery: goAuto?.searchQuery ?? "",
-                                         presetCoordinate: locationStore.coordinate)
+                                         presetCoordinate: locationStore.coordinate,
+                                         attachedImages: attachedImages)
                 }
                 // Once a location resolves (GPS fix or manual ZIP/city), continue
                 // to the destination the user tapped while it was still missing.
@@ -422,17 +434,21 @@ struct MainScreen: View {
                     onBack: {
                         camera.retake()
                         drawnPaths = []
+                        attachedImages = []
                     },
-                    onSubmit: { word in
+                    onSubmit: { word, resultImage in
                         // Dismiss the capture cover, then open the matching results:
                         // typed word wins (free-text search); else route by the
                         // photo's detected trade — auto → auto providers, home →
                         // the home category deck; else a mixed search.
                         let q = word.trimmingCharacters(in: .whitespacesAndNewlines)
                         let detected = camera.detectedMatch
+                        let details = camera.detectedDetails
+                        attachedImages = [resultImage]
                         camera.retake()
                         drawnPaths = []
                         DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
+                            photoDetails = details
                             if !q.isEmpty {
                                 submittedQuery = q
                                 goSearch = true
@@ -448,6 +464,7 @@ struct MainScreen: View {
                         }
                     },
                     prefill: capturedPrefill,
+                    initialDescription: searchText,
                     categorySuggestions: capturedSuggestions,
                     objects: camera.detectedObjects,
                     paths: $drawnPaths
@@ -465,16 +482,26 @@ struct MainScreen: View {
     /// True when the captured photo was recognised as an Auto & moto subject —
     /// drives the in-capture category carousel to suggest auto services.
     private var autoSuggestionsActive: Bool {
-        if case .auto = camera.detectedMatch { return true }
+        if case .auto = camera.suggestedMatches.first { return true }
         return false
     }
 
-    /// Carousel suggestions for the capture flow, ordered by the photo's dominant
-    /// subject: the vertical occupying more of the image comes first, with any
-    /// specifically-detected categories leading. Both verticals are always
-    /// included so a wrong guess can be corrected by scrolling.
+    /// Carousel suggestions for the capture flow. Only the vertical(s) actually
+    /// seen in the photo are offered — a house-only photo gets no auto tags and a
+    /// vehicle-only photo gets no home trades. When both are in frame, the vertical
+    /// occupying more of the image comes first, with any specifically-detected
+    /// categories leading within their vertical.
     private var capturedSuggestions: [String] {
         let objects = camera.detectedObjects
+        let guesses = camera.suggestedMatches
+        var autoPresent = objects.contains(where: \.match.isAuto) || camera.detectedVehicle != nil
+            || guesses.contains(where: \.isAuto)
+        var homePresent = objects.contains { !$0.match.isAuto }
+            || guesses.contains { !$0.isAuto }
+        // Nothing recognised (classifier unsure/still running) → home trades, the
+        // app's primary vertical, so the carousel is never empty.
+        if !autoPresent && !homePresent { homePresent = true }
+
         let area: (Bool) -> Double = { wantAuto in
             objects.filter { $0.match.isAuto == wantAuto }
                 .reduce(0) { $0 + Double($1.rect.width * $1.rect.height) }
@@ -482,13 +509,19 @@ struct MainScreen: View {
         let autoArea = area(true), homeArea = area(false)
         let autoDominant = autoArea != homeArea ? autoArea > homeArea : autoSuggestionsActive
 
-        // Detected categories (from the salient objects) lead within their vertical.
-        let detected = Set(objects.map(\.match.label))
+        // Whole-image guesses lead in their own priority order (cloud verdict,
+        // then the on-device read), then other salient-object categories, then
+        // the rest of the vertical — so every guess is up front without being
+        // preselected.
+        let lead = guesses.map(\.label)
+        let detected = Set(objects.map(\.match.label)).union(lead)
         func ordered(_ all: [String]) -> [String] {
-            all.filter { detected.contains($0) } + all.filter { !detected.contains($0) }
+            lead.filter { all.contains($0) }
+                + all.filter { detected.contains($0) && !lead.contains($0) }
+                + all.filter { !detected.contains($0) }
         }
-        let auto = ordered(autoCategoryItems.map(\.name)).map(autoLabel)
-        let home = ordered(Category.allCases.map(\.rawValue))
+        let auto = autoPresent ? ordered(autoCategoryItems.map(\.name)).map(autoLabel) : []
+        let home = homePresent ? ordered(Category.allCases.map(\.rawValue)) : []
         return autoDominant ? auto + home : home + auto
     }
 

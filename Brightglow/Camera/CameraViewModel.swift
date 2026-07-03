@@ -8,9 +8,19 @@ class CameraViewModel: NSObject, ObservableObject {
     @Published var capturedImage: UIImage? = nil
     @Published var showDrawingCanvas = false
     @Published var permissionDenied = false
-    /// Trade inferred from the captured photo — home or auto (nil until
-    /// classified, or when the model isn't confident enough to preselect).
+    /// Trade inferred from the captured photo — home or auto. Only set when the
+    /// classifier was CONFIDENT: this one preselects the input tag and routes an
+    /// empty submit. (nil until classified, or when the guess was weak.)
     @Published var detectedMatch: TradeMatch? = nil
+    /// Ordered guesses including weak ones (cloud verdict first, then the
+    /// on-device read) — they lead the category carousel so every guess is one
+    /// tap away, but are never preselected.
+    @Published var suggestedMatches: [TradeMatch] = []
+    /// Visible cost-relevant attributes from the photo (size, capacity,
+    /// material — e.g. "40 gallon, tankless"), extracted alongside
+    /// `detectedMatch`. Only set when the cloud classifier was confident.
+    /// Used to narrow the price estimate, never the business search.
+    @Published var detectedDetails: String? = nil
     /// Vehicle type inferred from the photo (car vs motorcycle) — labels the auto
     /// tags "Car repair" / "Moto repair". nil when no vehicle is recognised.
     @Published var detectedVehicle: VehicleFilter? = nil
@@ -105,6 +115,8 @@ class CameraViewModel: NSObject, ObservableObject {
     func retake() {
         capturedImage = nil
         detectedMatch = nil
+        suggestedMatches = []
+        detectedDetails = nil
         detectedVehicle = nil
         detectedObjects = []
         showDrawingCanvas = false
@@ -134,9 +146,14 @@ extension CameraViewModel: AVCapturePhotoCaptureDelegate {
         // Identify immediately: whole-image category for the prefill, plus any
         // multiple salient objects for disambiguation tags.
         Task {
-            // Confidence-gated: nil (no preselection) when the model isn't sure.
-            let detected = await ImageClassifier.classifyConfident(image)
-            await MainActor.run { self.detectedMatch = detected }
+            // Confidence-gated: weak guesses only lead the carousel; only a
+            // certain cloud verdict preselects the tag and routes the submit.
+            let suggestions = await ImageClassifier.suggestTrades(image)
+            await MainActor.run {
+                self.suggestedMatches = suggestions.matches
+                self.detectedMatch = suggestions.confident
+                self.detectedDetails = suggestions.details
+            }
         }
         Task {
             let vehicle = ImageClassifier.detectVehicleType(image)

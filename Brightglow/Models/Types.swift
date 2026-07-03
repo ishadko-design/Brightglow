@@ -22,7 +22,7 @@ enum Category: String, CaseIterable, Codable {
         case .carpentry:    return ["carpent", "wood", "cabinet", "shelf", "shelving", "framing", "trim", "handyman", "remodel", "deck",
                                     "chair", "armchair", "furniture", "table", "desk", "sofa", "couch", "stool", "bench", "drawer", "dresser", "seat"]
         case .roofing:      return ["roof", "roofing", "shingle", "gutter", "leak roof"]
-        case .flooring:     return ["floor", "flooring", "hardwood", "tile", "laminate", "carpet", "vinyl", "lvp", "epoxy"]
+        case .flooring:     return ["floor", "flooring", "hardwood", "tile", "laminate", "carpet", "rug", "vinyl", "lvp", "epoxy"]
         case .windowsDoors: return ["window", "door", "glass", "sash", "screen", "frame"]
         case .landscaping:  return ["landscap", "lawn", "garden", "yard", "grass", "mowing", "mow", "hedge", "tree", "shrub", "mulch", "sod", "irrigation", "sprinkler", "patio", "hardscape", "weed", "leaves"]
         case .pestControl:  return ["pest", "mold", "mildew", "termite", "rodent", "rat", "mice", "mouse", "roach", "cockroach", "ant", "bug", "insect", "exterminat", "fumigat", "spider", "wasp", "bee", "bed bug", "infestation", "moisture"]

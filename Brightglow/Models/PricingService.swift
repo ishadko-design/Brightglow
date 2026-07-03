@@ -8,11 +8,13 @@ import Foundation
 /// `EstimateService.estimate` tries this first; if it returns nil (job/
 /// locality not covered, or the call fails), callers show "Coming soon".
 ///
-/// Coverage is intentionally narrow: only jobs recognized as
-/// `bathroom.vanity` or `bathroom.full` (keyword match, mirrors
-/// `NORMALIZE_RULES` in the pricing engine), and only when the locality is
-/// San Francisco. The client sends only the job — material pricing is
-/// sourced server-side, so there's nothing else to wire up here.
+/// Coverage is intentionally narrow: only jobs recognized in
+/// `jobTypeKeywords` below (mirrors `NORMALIZE_RULES` in the pricing
+/// engine), and only when the locality is San Francisco. Material pricing
+/// is sourced server-side; the client sends the job text plus any
+/// distinctive terms extracted from it (`detectFeatureTokens`) — most
+/// usefully the size/capacity/material details a photo capture appends —
+/// so the backend can narrow which permits count as comparable.
 enum PricingService {
     private static let ref: String =
         (Bundle.main.object(forInfoDictionaryKey: "SUPABASE_REF") as? String) ?? ""
@@ -46,9 +48,10 @@ enum PricingService {
         else { return nil }
 
         let widthIn = detectWidthIn(in: job) ?? 36
+        let features = detectFeatureTokens(in: job)
         let body: [String: Any] = [
             "job_type": jobType,
-            "scope": ["job_type": jobType, "width_in": widthIn, "features": [String]()],
+            "scope": ["job_type": jobType, "width_in": widthIn, "features": features],
         ]
 
         var req = URLRequest(url: url, timeoutInterval: 10)
@@ -89,6 +92,28 @@ enum PricingService {
         let ns = job as NSString
         guard let m = rx.firstMatch(in: job, range: NSRange(location: 0, length: ns.length)) else { return nil }
         return Int(ns.substring(with: m.range(at: 1)))
+    }
+
+    /// Pulls out distinctive terms from the job description — most usefully
+    /// the comma-separated details a photo capture appends (e.g. "40 gallon,
+    /// tankless, gas") — sent as `scope.features` so the backend can match
+    /// against permits more specifically than job_type + size alone. Real
+    /// permit-description substring matching server-side, not a guess; see
+    /// `calculatePermitRange` in the pricing engine.
+    private static func detectFeatureTokens(in job: String) -> [String] {
+        let text = job.lowercased()
+        var tokens: Set<String> = []
+        for part in text.split(separator: ",") {
+            let t = part.trimmingCharacters(in: .whitespacesAndNewlines)
+            if t.count > 2 { tokens.insert(t) }
+        }
+        if let rx = try? NSRegularExpression(pattern: #"\d+\s*(?:gallon|gal|amp|amps|btu)\b"#) {
+            let ns = text as NSString
+            for m in rx.matches(in: text, range: NSRange(location: 0, length: ns.length)) {
+                tokens.insert(ns.substring(with: m.range).trimmingCharacters(in: .whitespaces))
+            }
+        }
+        return Array(tokens)
     }
 
     /// Only decodes the success shape; the {error, fallback} shape decodes
