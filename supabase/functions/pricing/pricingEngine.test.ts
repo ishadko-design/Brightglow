@@ -45,6 +45,14 @@ Deno.test("normalizeScope returns null for unrecognized text", () => {
   assertEquals(normalizeScope("install solar panels"), null);
 });
 
+Deno.test("normalizeScope excludes a narrow job_type bundled into bigger-scope work", () => {
+  assertEquals(
+    normalizeScope("kitchen remodel, water heater replacement, panel upgrade, adu addition"),
+    { job_type: "kitchen.remodel", size: null }, // falls through to the remodel job_type instead
+  );
+  assertEquals(normalizeScope("replace water heater"), { job_type: "plumbing.water_heater", size: null });
+});
+
 Deno.test("calculatePermitRange returns null under 10 permits", () => {
   const permits = [1000, 2000, 3000].map((estimated_cost) => makePermit({ estimated_cost }));
   assertEquals(calculatePermitRange(permits, scope), null);
@@ -56,6 +64,18 @@ Deno.test("calculatePermitRange computes percentiles over matching permits", () 
   const result = calculatePermitRange(permits, scope);
   assertExists(result);
   assertEquals(result!.count, costs.length);
+});
+
+Deno.test("calculatePermitRange trims a bundled-scope outlier out of the percentile calc", () => {
+  // A tight cluster of real vanity-job costs, plus one permit whose
+  // valuation clearly belongs to a much bigger bundled project.
+  const costs = [1000, 1500, 2000, 2200, 2500, 2800, 3000, 3200, 3500, 4000, 4500];
+  const permits = costs.map((estimated_cost) => makePermit({ estimated_cost }));
+  permits.push(makePermit({ estimated_cost: 95000 }));
+  const result = calculatePermitRange(permits, scope);
+  assertExists(result);
+  assertEquals(result!.count, costs.length); // the 95000 outlier is trimmed out
+  assertEquals(result!.p75 < 5000, true); // range stays plausible for a vanity job
 });
 
 Deno.test("calculateMaterialFloor sums matched materials", () => {

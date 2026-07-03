@@ -103,15 +103,31 @@ export const JOB_TYPE_KEYWORDS: Record<string, string[]> = {
 // for this formula to use at all and are intentionally NOT covered here —
 // and (b) has an enumerable materials list. See home-pricing-engine memory
 // for the full per-category reasoning.
-const NORMALIZE_RULES: Array<{ job_type: string; keywords: string[] }> = [
+//
+// SF permits are often filed for a whole bundle of work at once (e.g. "add
+// ADU, kitchen remodel, water heater replacement, panel upgrade, structural
+// work — $95,000"). A naive substring match on "water heater" pulls that
+// $95,000 permit into what should be a standalone-water-heater-job dataset
+// and blows the range out to something implausible. `excludeIfContains`
+// keeps a standalone-trade job_type from matching a permit that's actually
+// describing bundled bigger-scope work — verified 2026-07-03 against real
+// SF data, where this was producing ranges like $9,630-$96,000 for a water
+// heater before this fix. Not applied to the remodel job_types themselves
+// (bathroom.full, kitchen.remodel), since bundled scope IS what they mean.
+const BIG_SCOPE_SIGNALS = [
+  "remodel", "renovation", "addition", "adu", "accessory dwelling",
+  "new construction", "full gut", "rebuild", "reconstruct", "structural",
+];
+
+const NORMALIZE_RULES: Array<{ job_type: string; keywords: string[]; excludeIfContains?: string[] }> = [
   { job_type: "bathroom.vanity", keywords: ["vanity"] },
   { job_type: "bathroom.full", keywords: ["bathroom remodel", "bathroom renovation", "full bath"] },
   { job_type: "kitchen.remodel", keywords: ["kitchen remodel", "kitchen renovation"] },
-  { job_type: "plumbing.water_heater", keywords: ["water heater"] },
-  { job_type: "electrical.panel", keywords: ["panel upgrade", "electrical panel", "breaker panel"] },
-  { job_type: "hvac.furnace", keywords: ["furnace"] },
-  { job_type: "windows_doors.window", keywords: ["window replacement", "replace window", "new window"] },
-  { job_type: "carpentry.deck", keywords: ["deck"] },
+  { job_type: "plumbing.water_heater", keywords: ["water heater"], excludeIfContains: BIG_SCOPE_SIGNALS },
+  { job_type: "electrical.panel", keywords: ["panel upgrade", "electrical panel", "breaker panel"], excludeIfContains: BIG_SCOPE_SIGNALS },
+  { job_type: "hvac.furnace", keywords: ["furnace"], excludeIfContains: BIG_SCOPE_SIGNALS },
+  { job_type: "windows_doors.window", keywords: ["window replacement", "replace window", "new window"], excludeIfContains: BIG_SCOPE_SIGNALS },
+  { job_type: "carpentry.deck", keywords: ["deck"], excludeIfContains: BIG_SCOPE_SIGNALS },
 ];
 
 // Materials required to price a given job_type, matched against
@@ -288,9 +304,12 @@ export function normalizeScope(description: string): { job_type: string; size: n
   const size = sizeMatch ? Number(sizeMatch[1]) : null;
 
   for (const rule of NORMALIZE_RULES) {
-    if (rule.keywords.some((kw) => text.includes(kw))) {
-      return { job_type: rule.job_type, size };
-    }
+    if (!rule.keywords.some((kw) => text.includes(kw))) continue;
+    // Bundled into bigger-scope work — not a standalone match for this
+    // job_type. Keep checking other rules (it may still match a remodel
+    // job_type instead) rather than returning null outright.
+    if (rule.excludeIfContains?.some((kw) => text.includes(kw))) continue;
+    return { job_type: rule.job_type, size };
   }
 
   return null;
@@ -318,6 +337,23 @@ function percentile(sorted: number[], p: number): number {
   return sorted[lo] + (sorted[hi] - sorted[lo]) * frac;
 }
 
+// Statistical safety net on top of `excludeIfContains`: even a permit whose
+// description looks standalone can carry a wildly bundled/miskeyed
+// valuation. Standard 1.5×IQR outlier trim before computing percentiles —
+// no per-category hardcoded price assumptions, just removing points that
+// are statistical outliers relative to this specific matched set. Needs at
+// least 4 points to compute a meaningful IQR; smaller sets pass through
+// untrimmed (the >=10 minimum is enforced on the pre-trim matched count).
+function trimOutliers(sortedCosts: number[]): number[] {
+  if (sortedCosts.length < 4) return sortedCosts;
+  const q1 = percentile(sortedCosts, 25);
+  const q3 = percentile(sortedCosts, 75);
+  const iqr = q3 - q1;
+  const lo = q1 - 1.5 * iqr;
+  const hi = q3 + 1.5 * iqr;
+  return sortedCosts.filter((c) => c >= lo && c <= hi);
+}
+
 export function calculatePermitRange(permits: Permit[], scope: JobScope): PermitRange | null {
   const normalized = normalizePermits(permits);
 
@@ -329,8 +365,10 @@ export function calculatePermitRange(permits: Permit[], scope: JobScope): Permit
 
   if (matched.length < 10) return null;
 
-  const costs = matched.map((p) => p.estimated_cost).filter((c) => c > 0).sort((a, b) => a - b);
-  if (costs.length < 10) return null;
+  const rawCosts = matched.map((p) => p.estimated_cost).filter((c) => c > 0).sort((a, b) => a - b);
+  if (rawCosts.length < 10) return null;
+
+  const costs = trimOutliers(rawCosts);
 
   return {
     p25: percentile(costs, 25),
