@@ -701,16 +701,76 @@ export const LEGACY_PERMIT_JOB_TYPES = new Set([
   "carpentry.deck",
 ]);
 
+// Category-name stems for inferring the category from free text when the
+// client has none (typed search, no category chip — the client can't recover
+// a category from a multi-word phrase and sends it empty). Substring-matched
+// like taxonomy keywords ("floor" hits "flooring" and "floors"). HVAC
+// deliberately has no "heat"/"air" stem — "water heater" must not route to
+// HVAC; its job keywords ("furnace", "heat pump") carry that category.
+const CATEGORY_STEMS: Record<string, string[]> = {
+  "Plumbing": ["plumb"],
+  "Electrical": ["electric"],
+  "HVAC": ["hvac"],
+  "Painting": ["paint"],
+  "Carpentry": ["carpent"],
+  "Roofing": ["roof"],
+  "Flooring": ["floor"],
+  "Windows & Doors": ["window", "door"],
+  "Landscaping": ["landscap", "yard", "garden"],
+  "Mold & Pest Control": ["pest", "mold"],
+};
+
+// Keywords that disambiguate jobs only *within* a category ("repair" means
+// hvac.repair under HVAC and roofing.repair under Roofing) and so must not
+// classify on their own when no category is known — "replaced hardwood
+// floor" must not hit roofing.replacement via "replace". "light" is here
+// because "skylight" contains it.
+const WITHIN_CATEGORY_ONLY = new Set([
+  "repair", "replace", "replacement", "service", "tune-up", "tune up",
+  "patch", "leak", "fixture", "interior", "exterior", "room", "light",
+  "lighting", "sand", "cabinet",
+]);
+
 export function classifyJobType(
   category: string,
   description: string,
   photoAttributes: string[] = [],
 ): JobTypeEntry | null {
   const text = [description, ...photoAttributes].join(", ").toLowerCase();
-  const candidates = JOB_TYPE_TAXONOMY.filter((entry) => entry.category === category);
-  const specific = candidates.find((entry) => entry.keywords.some((kw) => text.includes(kw)));
-  if (specific) return specific;
-  return CATEGORY_GENERAL[category] ?? null;
+  if (category) {
+    const candidates = JOB_TYPE_TAXONOMY.filter((entry) => entry.category === category);
+    const specific = candidates.find((entry) => entry.keywords.some((kw) => text.includes(kw)));
+    if (specific) return specific;
+    return CATEGORY_GENERAL[category] ?? null;
+  }
+
+  // No category from the client — infer it from the description. A single
+  // category-stem hit routes through the normal per-category path above, so
+  // "fix my roof" still lands on a real number via the category-general
+  // entry even when no job keyword matches.
+  const stemmed = Object.keys(CATEGORY_STEMS)
+    .filter((cat) => CATEGORY_STEMS[cat].some((s) => text.includes(s)));
+  if (stemmed.length === 1) return classifyJobType(stemmed[0], description, photoAttributes);
+
+  // No stem (or several) — scan job keywords, longest match wins as the
+  // most specific ("water heater" beats "heater"-less generics). With no
+  // category signal at all, within-category-only keywords are skipped;
+  // when stems narrowed the pool they're safe to use again.
+  const pool = stemmed.length > 0
+    ? JOB_TYPE_TAXONOMY.filter((entry) => stemmed.includes(entry.category))
+    : JOB_TYPE_TAXONOMY;
+  let best: JobTypeEntry | null = null;
+  let bestLen = 0;
+  for (const entry of pool) {
+    for (const kw of entry.keywords) {
+      if (stemmed.length === 0 && WITHIN_CATEGORY_ONLY.has(kw)) continue;
+      if (kw.length > bestLen && text.includes(kw)) {
+        best = entry;
+        bestLen = kw.length;
+      }
+    }
+  }
+  return best;
 }
 
 // Explicit quantity beats the taxonomy default — the default is a real

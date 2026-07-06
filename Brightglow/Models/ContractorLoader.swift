@@ -95,11 +95,10 @@ enum ContractorLoader {
             .compactMap { $0?.trimmingCharacters(in: .whitespacesAndNewlines) }
             .filter { !$0.isEmpty }
             .joined(separator: ", ")
-        // Category browsing without a typed search (the common case) leaves
-        // `category` empty only when the caller passed a free-text query
-        // instead of picking a category chip — recover a category from that
-        // text when it unambiguously names one (reuses the same matcher the
-        // search suggestions use), rather than losing pricing coverage.
+        // A free-text query without a chip leaves `category` empty. Recover
+        // one when the text is exactly a category term (cheap, unambiguous);
+        // otherwise send it empty — the server classifies the job from the
+        // description, which the client can't do from a multi-word phrase.
         let resolvedCategory = category.isEmpty ? (Category.exactTerm(q)?.rawValue ?? "") : category
         let (_, zip) = await EstimateService.geocode(for: coord)
         return await EstimateService.estimate(category: resolvedCategory, description: description, zip: zip)

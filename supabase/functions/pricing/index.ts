@@ -165,8 +165,12 @@ Deno.serve(async (req) => {
   const description = typeof payload.description === "string" ? payload.description : "";
   const zip = typeof payload.zip === "string" ? payload.zip : undefined;
 
-  if (typeof category !== "string" || category.length === 0) {
-    return json({ error: "missing category" }, 400);
+  // Either is enough: a category chip alone prices via the category-general
+  // entry; a bare typed description (the common search path — the client
+  // can't recover a category from a phrase) classifies server-side from
+  // job keywords / category stems.
+  if (typeof category !== "string" || (category.length === 0 && description.length === 0)) {
+    return json({ error: "missing category and description" }, 400);
   }
 
   // The description already carries any photo-derived detail text (the
@@ -174,6 +178,9 @@ Deno.serve(async (req) => {
   // no separate photo_attributes field to classify against.
   const entry = classifyJobType(category, description);
   if (!entry) {
+    // The backlog for the mapping layer: every description that reached us
+    // and classified to nothing (visible in `supabase functions logs pricing`).
+    console.log("pricing: unclassified", JSON.stringify({ category, description }));
     const result: InsufficientDataResult = { error: "Insufficient data", fallback: "Get 3 bids" };
     return json({ range: result, display: `${result.error}. ${result.fallback}.` });
   }
@@ -190,8 +197,10 @@ Deno.serve(async (req) => {
 
   if (epciRange) {
     let confidence: "high" | "med" | "low" = isGeneral || isDefaulted ? "low" : "med";
+    // entry.category, not the request's category — the latter is empty when
+    // the job was classified from the description alone.
     let label = isGeneral
-      ? `Regional avg for ${category} (EstimationPro)`
+      ? `Regional avg for ${entry.category} (EstimationPro)`
       : "Regional avg (EstimationPro)";
     let dataPoints = 0;
 

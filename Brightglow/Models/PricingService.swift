@@ -27,8 +27,15 @@ enum PricingService {
     /// Best-effort local range for a job. Returns nil (never throws) if the
     /// category isn't covered or the call fails — callers fall back to the
     /// "coming soon" placeholder.
+    ///
+    /// Either field alone is enough: a category chip with no typed text
+    /// prices via the server's category-general entry, and a bare typed
+    /// description (the common search path — no chip, and no category is
+    /// recoverable from a multi-word phrase) is classified server-side from
+    /// job keywords. Requiring a category here silently unpriced every
+    /// typed search.
     static func estimate(category: String, description: String, zip: String?) async -> PriceTier? {
-        guard isConfigured, !category.isEmpty,
+        guard isConfigured, !category.isEmpty || !description.isEmpty,
               let url = URL(string: "https://\(ref).supabase.co/functions/v1/pricing")
         else { return nil }
 

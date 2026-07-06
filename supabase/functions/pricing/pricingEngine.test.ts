@@ -8,6 +8,7 @@ import {
   buildPermitOnlyRange,
   calculateMaterialFloor,
   calculatePermitRange,
+  classifyJobType,
   fetchMaterialFloorRaw,
   formatDisplayText,
   normalizeScope,
@@ -285,4 +286,42 @@ Deno.test("fetchMaterialFloorRaw sources tub/toilet/vanity/tile for bathroom.ful
   } finally {
     globalThis.fetch = originalFetch;
   }
+});
+
+// --- Description-only classification (no category from the client) ---
+// A typed search without a category chip reaches the server with an empty
+// category; classification must come from the description alone.
+
+Deno.test("classifyJobType with a category keeps the original behavior", () => {
+  assertEquals(classifyJobType("Flooring", "replaced hardwood floor 300 sq ft")?.job_type, "flooring.hardwood");
+  assertEquals(classifyJobType("Plumbing", "something odd")?.job_type, "plumbing.general");
+  assertEquals(classifyJobType("Mold & Pest Control", "ants everywhere"), null);
+});
+
+Deno.test("classifyJobType infers the category from a stem in the description", () => {
+  // "floor" stem -> Flooring, then "hardwood" -> the specific job
+  assertEquals(classifyJobType("", "replaced hardwood floor 300 sq ft")?.job_type, "flooring.hardwood");
+  // stem + no job keyword -> that category's general entry
+  assertEquals(classifyJobType("", "fix up my roof")?.job_type, "roofing.general");
+  // within-category-only keyword ("repair") is safe once the stem picked the category
+  assertEquals(classifyJobType("", "repair roof")?.job_type, "roofing.repair");
+});
+
+Deno.test("classifyJobType falls back to the most specific job keyword without a stem", () => {
+  assertEquals(classifyJobType("", "water heater replacement 40 gallon")?.job_type, "plumbing.water_heater");
+  assertEquals(classifyJobType("", "leaking toilet")?.job_type, "plumbing.fixture");
+  assertEquals(classifyJobType("", "install ev charger")?.job_type, "electrical.ev_charger");
+  assertEquals(classifyJobType("", "tree removal")?.job_type, "landscaping.tree");
+});
+
+Deno.test("classifyJobType does not classify from generic keywords alone", () => {
+  // "replace" must not hit roofing.replacement; "mailbox" matches nothing
+  assertEquals(classifyJobType("", "replace my mailbox"), null);
+  assertEquals(classifyJobType("", ""), null);
+});
+
+Deno.test("classifyJobType narrows to matched categories when several stems hit", () => {
+  // "floor" + "paint" stems both match; "tile" is only searched within
+  // those categories, so roofing's generic "replace" can't win
+  assertEquals(classifyJobType("", "replace floor tile and paint walls")?.job_type, "flooring.tile");
 });
