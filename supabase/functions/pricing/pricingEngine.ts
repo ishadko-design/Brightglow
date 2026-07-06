@@ -655,6 +655,11 @@ export const JOB_TYPE_TAXONOMY: JobTypeEntry[] = [
 
   // Windows & Doors
   { job_type: "windows_doors.window", category: "Windows & Doors", keywords: ["window replacement", "replace window", "new window", "window"], trade: "windows", itemId: "vinyl-window-replacement", unit: "each", defaultQuantity: 1 },
+  { job_type: "windows_doors.bay_window", category: "Windows & Doors", keywords: ["bay window", "bow window"], trade: "windows", itemId: "bay-bow-window-replacement", unit: "each", defaultQuantity: 1 },
+  { job_type: "windows_doors.casement_window", category: "Windows & Doors", keywords: ["casement"], trade: "windows", itemId: "casement-window-replacement", unit: "each", defaultQuantity: 1 },
+  { job_type: "windows_doors.egress_window", category: "Windows & Doors", keywords: ["egress"], trade: "windows", itemId: "egress-window-installation", unit: "each", defaultQuantity: 1 },
+  { job_type: "windows_doors.french_door", category: "Windows & Doors", keywords: ["french door"], trade: "doors", itemId: "french-door-installation", unit: "pair", defaultQuantity: 1 },
+  { job_type: "windows_doors.sliding_door", category: "Windows & Doors", keywords: ["sliding door", "patio door", "sliding glass"], trade: "doors", itemId: "sliding-patio-door", unit: "each", defaultQuantity: 1 },
   { job_type: "windows_doors.exterior_door", category: "Windows & Doors", keywords: ["exterior door", "entry door", "front door"], trade: "doors", itemId: "exterior-door-steel", unit: "each", defaultQuantity: 1 },
   { job_type: "windows_doors.interior_door", category: "Windows & Doors", keywords: ["interior door", "closet door", "bedroom door"], trade: "doors", itemId: "interior-door-hollow-core", unit: "each", defaultQuantity: 1 },
   { job_type: "windows_doors.garage_door", category: "Windows & Doors", keywords: ["garage door"], trade: "doors", itemId: "garage-door-single", unit: "each", defaultQuantity: 1 },
@@ -738,8 +743,11 @@ export function classifyJobType(
 ): JobTypeEntry | null {
   const text = [description, ...photoAttributes].join(", ").toLowerCase();
   if (category) {
+    // Longest keyword wins, not first-declared: "replace 2 french door
+    // windows" must land on french_door via "french door", not on the
+    // generic window entry via "window".
     const candidates = JOB_TYPE_TAXONOMY.filter((entry) => entry.category === category);
-    const specific = candidates.find((entry) => entry.keywords.some((kw) => text.includes(kw)));
+    const specific = longestKeywordMatch(candidates, text);
     if (specific) return specific;
     return CATEGORY_GENERAL[category] ?? null;
   }
@@ -759,11 +767,19 @@ export function classifyJobType(
   const pool = stemmed.length > 0
     ? JOB_TYPE_TAXONOMY.filter((entry) => stemmed.includes(entry.category))
     : JOB_TYPE_TAXONOMY;
+  return longestKeywordMatch(pool, text, stemmed.length === 0);
+}
+
+function longestKeywordMatch(
+  pool: JobTypeEntry[],
+  text: string,
+  excludeWithinCategoryOnly = false,
+): JobTypeEntry | null {
   let best: JobTypeEntry | null = null;
   let bestLen = 0;
   for (const entry of pool) {
     for (const kw of entry.keywords) {
-      if (stemmed.length === 0 && WITHIN_CATEGORY_ONLY.has(kw)) continue;
+      if (excludeWithinCategoryOnly && WITHIN_CATEGORY_ONLY.has(kw)) continue;
       if (kw.length > bestLen && text.includes(kw)) {
         best = entry;
         bestLen = kw.length;
@@ -780,6 +796,24 @@ export function resolveQuantity(
   entry: JobTypeEntry,
   description: string,
 ): { quantity: number; isDefaulted: boolean } {
+  if (entry.unit === "each" || entry.unit === "pair") {
+    // A small count within a few words of a countable noun: "2 french door
+    // windows", "install 4 outlets". The count must be its own word, so
+    // dimension strings ("72x88") never match.
+    const count = description.toLowerCase().match(
+      /(?:^|[\s,])(\d{1,2})\s+(?:[a-z/-]+\s+){0,3}?(?:window|door|outlet|socket|fan|fixture|light|toilet|faucet|sink|tree|zone|charger|thermostat)s?\b/,
+    );
+    if (count) {
+      let value = Number(count[1]);
+      if (value > 0) {
+        // Pair-priced items counted in single doors: "2 french doors" is
+        // one pair, not two.
+        if (entry.unit === "pair") value = Math.ceil(value / 2);
+        return { quantity: value, isDefaulted: false };
+      }
+    }
+    return { quantity: entry.defaultQuantity, isDefaulted: true };
+  }
   const explicit = description.match(
     /(\d+(?:\.\d+)?)\s*(?:sq\s*\.?\s*ft|square\s*feet|sf|linear\s*f(?:oo|ee)?t|lf|ft)\b/i,
   );

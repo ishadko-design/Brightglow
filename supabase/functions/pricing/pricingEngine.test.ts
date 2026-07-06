@@ -12,6 +12,7 @@ import {
   fetchMaterialFloorRaw,
   formatDisplayText,
   normalizeScope,
+  resolveQuantity,
   type JobScope,
   type Material,
   type Permit,
@@ -324,4 +325,26 @@ Deno.test("classifyJobType narrows to matched categories when several stems hit"
   // "floor" + "paint" stems both match; "tile" is only searched within
   // those categories, so roofing's generic "replace" can't win
   assertEquals(classifyJobType("", "replace floor tile and paint walls")?.job_type, "flooring.tile");
+});
+
+Deno.test("classifyJobType prefers the most specific keyword within a category", () => {
+  // "window" also matches, but "french door" is longer/more specific
+  assertEquals(classifyJobType("", "replace 2 french door windows 72x88")?.job_type, "windows_doors.french_door");
+  assertEquals(classifyJobType("Windows & Doors", "french door windows")?.job_type, "windows_doors.french_door");
+  assertEquals(classifyJobType("", "sliding glass door replacement")?.job_type, "windows_doors.sliding_door");
+  assertEquals(classifyJobType("", "replace a window")?.job_type, "windows_doors.window");
+});
+
+Deno.test("resolveQuantity counts each-unit items and halves pair-unit counts", () => {
+  const french = classifyJobType("", "replace 2 french door windows 72x88")!;
+  // 2 door panels = 1 pair; the count is explicit, so not defaulted
+  assertEquals(resolveQuantity(french, "replace 2 french door windows 72x88"), { quantity: 1, isDefaulted: false });
+  const outlet = classifyJobType("", "install 4 outlets")!;
+  assertEquals(outlet.job_type, "electrical.outlet");
+  assertEquals(resolveQuantity(outlet, "install 4 outlets"), { quantity: 4, isDefaulted: false });
+  // no count -> default, flagged as defaulted (drives low confidence)
+  const window = classifyJobType("", "replace a window")!;
+  assertEquals(resolveQuantity(window, "replace a window"), { quantity: 1, isDefaulted: true });
+  // dimension strings are not counts
+  assertEquals(resolveQuantity(window, "window 72x88"), { quantity: 1, isDefaulted: true });
 });
