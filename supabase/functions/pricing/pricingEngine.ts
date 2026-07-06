@@ -34,6 +34,10 @@ export interface JobScope {
   job_type: string;
   width_in: number;
   features: string[];
+  /** Postal code from the app's currently selected location, used to resolve
+   *  the nearest real Home Depot store for materials pricing (see
+   *  `nearestStoreId`). Optional — falls back to a default Bay Area store. */
+  zip?: string;
 }
 
 export interface Material {
@@ -169,7 +173,7 @@ const REQUIRED_MATERIAL_CATEGORIES: Record<string, string[]> = {
 // is a literal, meaningful dimension again, same as vanity.
 const MATERIAL_QUERIES: Record<string, (widthIn: number) => Record<string, string>> = {
   "bathroom.vanity": (widthIn) => ({
-    vanity: `${widthIn} inch bathroom vanity cabinet`,
+    vanity: `bathroom vanity cabinet ${widthIn} in`,
     top: `${widthIn} inch vanity top`,
     faucet: "bathroom sink faucet",
     mirror: `${widthIn} inch bathroom mirror`,
@@ -212,12 +216,53 @@ interface HomeDepotProduct {
   price?: number;
 }
 
-async function fetchHomeDepotPrice(query: string, apiKey: string): Promise<Material | null> {
+// SerpApi's Home Depot engine ignores `delivery_zip` for store selection —
+// verified live 2026-07-03, it only filters delivery-eligible items and
+// always falls back to store 2414 (Bangor, ME) if `store_id` isn't given
+// (see https://github.com/serpapi/public-roadmap/issues/268). There's no
+// zip-code param that resolves a nearest store server-side, so we resolve
+// it ourselves from SerpApi's published store list
+// (https://serpapi.com/home-depot-stores-us.json). Only Bay Area stores are
+// listed here since PricingService.swift currently gates on San Francisco
+// locality — extend this table if coverage expands beyond the Bay Area.
+const BAY_AREA_STORES: { storeId: string; zip: string }[] = [
+  { storeId: "639", zip: "94014" }, // Colma — closest to SF proper
+  { storeId: "6655", zip: "94014" }, // Colma (2nd location)
+  { storeId: "1092", zip: "94015" }, // Daly City
+  { storeId: "628", zip: "94070" }, // San Carlos
+  { storeId: "632", zip: "94404" }, // San Mateo
+  { storeId: "627", zip: "94608" }, // Emeryville
+  { storeId: "1007", zip: "94601" }, // Oakland
+  { storeId: "657", zip: "94901" }, // San Rafael
+];
+const DEFAULT_STORE_ID = "639"; // Colma — used when zip is missing/unrecognized
+
+/** Nearest Bay Area store by numeric zip distance — not geographically
+ *  precise, but zip codes cluster regionally so it's a reasonable proxy,
+ *  and far better than SerpApi's random-store default. */
+export function nearestStoreId(zip: string | undefined): string {
+  const target = Number(zip);
+  if (!zip || Number.isNaN(target)) return DEFAULT_STORE_ID;
+
+  let best = BAY_AREA_STORES[0];
+  let bestDist = Math.abs(Number(best.zip) - target);
+  for (const store of BAY_AREA_STORES.slice(1)) {
+    const dist = Math.abs(Number(store.zip) - target);
+    if (dist < bestDist) {
+      best = store;
+      bestDist = dist;
+    }
+  }
+  return best.storeId;
+}
+
+async function fetchHomeDepotPrice(query: string, storeId: string, apiKey: string): Promise<Material | null> {
   const url = `${SERPAPI_URL}?${new URLSearchParams({
     engine: "home_depot",
     q: query,
     country: "us",
     ps: "1",
+    store_id: storeId,
     api_key: apiKey,
   })}`;
 
@@ -244,9 +289,10 @@ export async function fetchMaterialFloorRaw(
   const buildQueries = MATERIAL_QUERIES[scope.job_type];
   if (!buildQueries || !apiKey) return null;
 
+  const storeId = nearestStoreId(scope.zip);
   const queries = buildQueries(scope.width_in);
   const materials = await Promise.all(
-    Object.values(queries).map((q) => fetchHomeDepotPrice(q, apiKey)),
+    Object.values(queries).map((q) => fetchHomeDepotPrice(q, storeId, apiKey)),
   );
 
   if (materials.some((m) => m === null)) return null;
@@ -514,4 +560,211 @@ export function formatDisplayText(
   }
 
   return lines.join("\n");
+}
+
+// --- Multi-category nationwide estimate (EstimationPro/EPCI) ---------------
+//
+// Adopted this session as the primary, nationwide data source across all 10
+// app categories — the permit engine above only ever covered 7 narrow
+// job_types in San Francisco, and was producing implausible ranges even for
+// those (e.g. $8,754-$48,197 for a water heater, verified live 2026-07-03).
+// EPCI = EstimationPro's free, self-serve construction cost API
+// (estimationpro.ai/api/v1), BLS wage- and PPI-backed, not a guess.
+//
+// NOTE: EstimationPro's own API responses carry
+// `"license":"Free for non-commercial use with attribution"` and no
+// commercial price is published yet — a licensing email is in flight.
+// Until that's resolved, index.ts gates real usage behind the
+// `EPCI_ENABLED` secret (default unset/false); everything below works
+// regardless, so it's ready the moment that flips.
+
+const EPCI_BASE_URL = "https://estimationpro.ai/api/v1";
+
+export interface EPCIItem {
+  id: string;
+  description: string;
+  unit: string;
+  low: number;
+  typical: number;
+  high: number;
+  regionallyAdjusted: boolean;
+}
+
+export interface JobTypeEntry {
+  job_type: string;
+  category: string;        // matches the app's Category.rawValue
+  keywords: string[];       // matched against description + photo attributes, lowercased; empty = category-general fallback entry
+  trade: string;            // EPCI `trade` query param
+  itemId: string;           // EPCI item id to price against
+  unit: string;             // expected unit of measure, informational
+  defaultQuantity: number;  // used when no explicit quantity is detected — lowers confidence
+}
+
+// One flagship job per category that EPCI prices well, plus a per-category
+// ".general" fallback (CATEGORY_GENERAL below) so every mapped category
+// always returns *something* even when the description is too generic to
+// pin down a specific job. Item ids, units, and price shape verified live
+// against estimationpro.ai/api/v1/costs this session — not guessed.
+export const JOB_TYPE_TAXONOMY: JobTypeEntry[] = [
+  // Plumbing
+  { job_type: "plumbing.water_heater", category: "Plumbing", keywords: ["water heater"], trade: "plumbing", itemId: "water-heater-install", unit: "project", defaultQuantity: 1 },
+  { job_type: "plumbing.tankless_water_heater", category: "Plumbing", keywords: ["tankless"], trade: "plumbing", itemId: "tankless-water-heater-install", unit: "project", defaultQuantity: 1 },
+  { job_type: "plumbing.fixture", category: "Plumbing", keywords: ["faucet", "toilet", "sink", "fixture"], trade: "plumbing", itemId: "fixture-install", unit: "each", defaultQuantity: 1 },
+  { job_type: "plumbing.pipe_repair", category: "Plumbing", keywords: ["leak", "clog", "drain"], trade: "plumbing", itemId: "pipe-repair", unit: "project", defaultQuantity: 1 },
+  { job_type: "plumbing.repipe", category: "Plumbing", keywords: ["repipe", "repiping"], trade: "plumbing", itemId: "whole-house-repipe-pex", unit: "sq ft", defaultQuantity: 1500 },
+  { job_type: "plumbing.sewer_line", category: "Plumbing", keywords: ["sewer"], trade: "plumbing", itemId: "sewer-line-replacement", unit: "linear foot", defaultQuantity: 50 },
+
+  // Electrical
+  { job_type: "electrical.panel", category: "Electrical", keywords: ["panel upgrade", "electrical panel", "breaker panel", "200 amp"], trade: "electrical", itemId: "panel-upgrade-200amp", unit: "project", defaultQuantity: 1 },
+  { job_type: "electrical.outlet", category: "Electrical", keywords: ["outlet", "socket"], trade: "electrical", itemId: "outlet-installation", unit: "each", defaultQuantity: 1 },
+  { job_type: "electrical.ceiling_fan", category: "Electrical", keywords: ["ceiling fan"], trade: "electrical", itemId: "ceiling-fan-install", unit: "each", defaultQuantity: 1 },
+  { job_type: "electrical.ev_charger", category: "Electrical", keywords: ["ev charger", "car charger"], trade: "electrical", itemId: "ev-charger-level2", unit: "each", defaultQuantity: 1 },
+  { job_type: "electrical.rewire", category: "Electrical", keywords: ["rewire", "rewiring"], trade: "electrical", itemId: "whole-house-rewire", unit: "sq ft", defaultQuantity: 1500 },
+  { job_type: "electrical.lighting", category: "Electrical", keywords: ["light", "lighting"], trade: "electrical", itemId: "light-fixture-install", unit: "each", defaultQuantity: 1 },
+
+  // HVAC
+  { job_type: "hvac.furnace", category: "HVAC", keywords: ["furnace"], trade: "hvac", itemId: "gas-furnace-installed", unit: "project", defaultQuantity: 1 },
+  { job_type: "hvac.ac", category: "HVAC", keywords: ["central air", "air condition", "a/c"], trade: "hvac", itemId: "central-ac-installed", unit: "project", defaultQuantity: 1 },
+  { job_type: "hvac.heat_pump", category: "HVAC", keywords: ["heat pump"], trade: "hvac", itemId: "heat-pump-installed", unit: "project", defaultQuantity: 1 },
+  { job_type: "hvac.mini_split", category: "HVAC", keywords: ["mini split", "ductless"], trade: "hvac", itemId: "mini-split-per-zone", unit: "each", defaultQuantity: 1 },
+  { job_type: "hvac.thermostat", category: "HVAC", keywords: ["thermostat"], trade: "hvac", itemId: "thermostat-installation-smart", unit: "each", defaultQuantity: 1 },
+  { job_type: "hvac.repair", category: "HVAC", keywords: ["repair", "tune-up", "tune up", "service"], trade: "hvac", itemId: "furnace-repair", unit: "project", defaultQuantity: 1 },
+
+  // Painting
+  { job_type: "painting.interior", category: "Painting", keywords: ["interior", "room", "wall color", "repaint"], trade: "paint", itemId: "paint-interior-labor", unit: "sq ft", defaultQuantity: 250 },
+  { job_type: "painting.exterior", category: "Painting", keywords: ["exterior"], trade: "paint", itemId: "paint-exterior-labor", unit: "sq ft", defaultQuantity: 1500 },
+  { job_type: "painting.cabinet", category: "Painting", keywords: ["cabinet"], trade: "paint", itemId: "cabinet-painting-spray", unit: "linear foot", defaultQuantity: 20 },
+
+  // Carpentry
+  { job_type: "carpentry.deck", category: "Carpentry", keywords: ["deck"], trade: "deck", itemId: "pressure-treated-installed", unit: "sq ft", defaultQuantity: 300 },
+  { job_type: "carpentry.cabinet", category: "Carpentry", keywords: ["cabinet", "cabinetry"], trade: "cabinetry", itemId: "stock-cabinets-installed", unit: "linear foot", defaultQuantity: 15 },
+  { job_type: "carpentry.framing", category: "Carpentry", keywords: ["framing", "beam", "header", "load bearing", "load-bearing"], trade: "framing", itemId: "wall-framing", unit: "linear foot", defaultQuantity: 20 },
+
+  // Roofing
+  { job_type: "roofing.replacement", category: "Roofing", keywords: ["replace", "replacement", "new roof", "reroof"], trade: "roofing", itemId: "roof-replacement-total", unit: "project", defaultQuantity: 1 },
+  { job_type: "roofing.repair", category: "Roofing", keywords: ["repair", "patch", "leak"], trade: "roofing", itemId: "roof-repair-patch", unit: "sq ft", defaultQuantity: 50 },
+  { job_type: "roofing.gutter", category: "Roofing", keywords: ["gutter"], trade: "roofing", itemId: "gutter-install-aluminum", unit: "linear foot", defaultQuantity: 150 },
+
+  // Flooring
+  { job_type: "flooring.hardwood", category: "Flooring", keywords: ["hardwood"], trade: "flooring", itemId: "hardwood-installed", unit: "sq ft", defaultQuantity: 200 },
+  { job_type: "flooring.laminate", category: "Flooring", keywords: ["laminate"], trade: "flooring", itemId: "laminate-installed", unit: "sq ft", defaultQuantity: 200 },
+  { job_type: "flooring.lvp", category: "Flooring", keywords: ["vinyl plank", "lvp"], trade: "flooring", itemId: "lvp-installed", unit: "sq ft", defaultQuantity: 200 },
+  { job_type: "flooring.carpet", category: "Flooring", keywords: ["carpet", "rug"], trade: "flooring", itemId: "carpet-installed", unit: "sq ft", defaultQuantity: 200 },
+  { job_type: "flooring.tile", category: "Flooring", keywords: ["tile"], trade: "flooring", itemId: "tile-installed", unit: "sq ft", defaultQuantity: 150 },
+  { job_type: "flooring.refinish", category: "Flooring", keywords: ["refinish", "refinishing", "sand"], trade: "flooring", itemId: "hardwood-refinishing", unit: "sq ft", defaultQuantity: 200 },
+
+  // Windows & Doors
+  { job_type: "windows_doors.window", category: "Windows & Doors", keywords: ["window replacement", "replace window", "new window", "window"], trade: "windows", itemId: "vinyl-window-replacement", unit: "each", defaultQuantity: 1 },
+  { job_type: "windows_doors.exterior_door", category: "Windows & Doors", keywords: ["exterior door", "entry door", "front door"], trade: "doors", itemId: "exterior-door-steel", unit: "each", defaultQuantity: 1 },
+  { job_type: "windows_doors.interior_door", category: "Windows & Doors", keywords: ["interior door", "closet door", "bedroom door"], trade: "doors", itemId: "interior-door-hollow-core", unit: "each", defaultQuantity: 1 },
+  { job_type: "windows_doors.garage_door", category: "Windows & Doors", keywords: ["garage door"], trade: "doors", itemId: "garage-door-single", unit: "each", defaultQuantity: 1 },
+
+  // Landscaping
+  { job_type: "landscaping.lawn", category: "Landscaping", keywords: ["lawn", "sod", "grass"], trade: "landscaping", itemId: "sod-installation", unit: "sq ft", defaultQuantity: 1000 },
+  { job_type: "landscaping.tree", category: "Landscaping", keywords: ["tree"], trade: "landscaping", itemId: "tree-removal", unit: "each", defaultQuantity: 1 },
+  { job_type: "landscaping.irrigation", category: "Landscaping", keywords: ["irrigation", "sprinkler"], trade: "landscaping", itemId: "irrigation-system-per-zone", unit: "each", defaultQuantity: 1 },
+  { job_type: "landscaping.patio", category: "Landscaping", keywords: ["patio", "hardscape", "paver"], trade: "landscaping", itemId: "paver-patio-installation", unit: "sq ft", defaultQuantity: 200 },
+  { job_type: "landscaping.mulch", category: "Landscaping", keywords: ["mulch"], trade: "landscaping", itemId: "mulch-installation", unit: "cubic yard", defaultQuantity: 5 },
+];
+
+// Per-category fallback used when nothing in JOB_TYPE_TAXONOMY matches the
+// description/photo attributes — keeps the promise that every *mapped*
+// category always returns a real number, not just the ones a user happens
+// to describe precisely. `null` = intentionally unmapped: Mold & Pest
+// Control has no EPCI trade at all (same gap SF permits had), so it stays
+// on the "coming soon" fallback by explicit decision this session.
+export const CATEGORY_GENERAL: Record<string, JobTypeEntry | null> = {
+  "Plumbing": { job_type: "plumbing.general", category: "Plumbing", keywords: [], trade: "plumbing", itemId: "plumber-hourly", unit: "hour", defaultQuantity: 2 },
+  "Electrical": { job_type: "electrical.general", category: "Electrical", keywords: [], trade: "electrical", itemId: "electrician-hourly", unit: "hour", defaultQuantity: 2 },
+  "HVAC": { job_type: "hvac.general", category: "HVAC", keywords: [], trade: "hvac", itemId: "hvac-labor-rate", unit: "hour", defaultQuantity: 2 },
+  "Painting": { job_type: "painting.general", category: "Painting", keywords: [], trade: "paint", itemId: "paint-interior-labor", unit: "sq ft", defaultQuantity: 250 },
+  "Carpentry": { job_type: "carpentry.general", category: "Carpentry", keywords: [], trade: "framing", itemId: "framing-labor-rate", unit: "sq ft", defaultQuantity: 200 },
+  "Roofing": { job_type: "roofing.general", category: "Roofing", keywords: [], trade: "roofing", itemId: "roof-repair-patch", unit: "sq ft", defaultQuantity: 50 },
+  "Flooring": { job_type: "flooring.general", category: "Flooring", keywords: [], trade: "flooring", itemId: "laminate-installed", unit: "sq ft", defaultQuantity: 200 },
+  "Windows & Doors": { job_type: "windows_doors.general", category: "Windows & Doors", keywords: [], trade: "windows", itemId: "vinyl-window-replacement", unit: "each", defaultQuantity: 1 },
+  "Landscaping": { job_type: "landscaping.general", category: "Landscaping", keywords: [], trade: "landscaping", itemId: "mulch-installation", unit: "cubic yard", defaultQuantity: 3 },
+  "Mold & Pest Control": null,
+};
+
+// The 5 job_types that overlap the original SF-permit engine's coverage
+// (see JOB_TYPE_KEYWORDS / NORMALIZE_RULES above) — permits are consulted as
+// a cross-check for these only, when the request resolves to an SF zip
+// (941xx), and only ever boost confidence — they never override the EPCI
+// number. Two of the original 7 permit job_types (bathroom.vanity,
+// bathroom.full) have no equivalent in the app's 10-category taxonomy —
+// "Bathroom" isn't an app Category — so they no longer get a cross-check.
+export const LEGACY_PERMIT_JOB_TYPES = new Set([
+  "plumbing.water_heater",
+  "electrical.panel",
+  "hvac.furnace",
+  "windows_doors.window",
+  "carpentry.deck",
+]);
+
+export function classifyJobType(
+  category: string,
+  description: string,
+  photoAttributes: string[] = [],
+): JobTypeEntry | null {
+  const text = [description, ...photoAttributes].join(", ").toLowerCase();
+  const candidates = JOB_TYPE_TAXONOMY.filter((entry) => entry.category === category);
+  const specific = candidates.find((entry) => entry.keywords.some((kw) => text.includes(kw)));
+  if (specific) return specific;
+  return CATEGORY_GENERAL[category] ?? null;
+}
+
+// Explicit quantity beats the taxonomy default — the default is a real
+// number too, just a rougher one, reflected in the caller's confidence level
+// (see index.ts).
+export function resolveQuantity(
+  entry: JobTypeEntry,
+  description: string,
+): { quantity: number; isDefaulted: boolean } {
+  const explicit = description.match(
+    /(\d+(?:\.\d+)?)\s*(?:sq\s*\.?\s*ft|square\s*feet|sf|linear\s*f(?:oo|ee)?t|lf|ft)\b/i,
+  );
+  if (explicit) {
+    const value = Number(explicit[1]);
+    if (value > 0) return { quantity: value, isDefaulted: false };
+  }
+  return { quantity: entry.defaultQuantity, isDefaulted: true };
+}
+
+interface EPCICostsResponse {
+  data: {
+    trade: string;
+    location: string;
+    multiplier: number;
+    items: EPCIItem[];
+  };
+}
+
+/** No caching here — the caller (index.ts) wraps this with a Postgres cache,
+ *  same pattern as fetchSFPermitsRaw / fetchMaterialFloorRaw. */
+export async function fetchEPCIRaw(trade: string, zip: string | undefined): Promise<EPCIItem[]> {
+  const params = new URLSearchParams({ trade });
+  if (zip) params.set("zip", zip);
+  const res = await fetch(`${EPCI_BASE_URL}/costs?${params}`);
+  if (!res.ok) throw new Error(`EstimationPro API returned ${res.status}`);
+  const body = (await res.json()) as EPCICostsResponse;
+  return body.data.items;
+}
+
+export interface EPCIComputedRange {
+  all_in_low: number;
+  all_in_high: number;
+}
+
+export function calculateEPCIRange(
+  items: EPCIItem[],
+  entry: JobTypeEntry,
+  quantity: number,
+): EPCIComputedRange | null {
+  const item = items.find((i) => i.id === entry.itemId);
+  if (!item) return null;
+  return { all_in_low: item.low * quantity, all_in_high: item.high * quantity };
+}
+
+export function rangesOverlap(aLow: number, aHigh: number, bLow: number, bHigh: number): boolean {
+  return aLow <= bHigh && bLow <= aHigh;
 }

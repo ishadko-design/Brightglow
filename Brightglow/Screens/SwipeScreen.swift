@@ -56,10 +56,7 @@ struct SwipeScreen: View {
     }
 
     private func localEstimate(near coord: CLLocationCoordinate2D) async -> PriceTier? {
-        guard !isAutoService(category: category, searchQuery: searchQuery) else { return nil }
-        let q = searchQuery.trimmingCharacters(in: .whitespacesAndNewlines)
-        let locality = await EstimateService.locality(for: coord)
-        return await EstimateService.estimate(job: q, locality: locality)
+        await ContractorLoader.estimate(category: category, searchQuery: searchQuery, near: coord)
     }
 
     private func fetchLive(near coord: CLLocationCoordinate2D) async -> [Contractor] {

@@ -257,7 +257,7 @@ struct DrawModeView: View {
                                 .tint(AppColors.accentStart)
                                 .focused($inputFocused)
                                 .lineLimit(1...5)
-                                .submitLabel(.send)
+                                .submitLabel(.go)
                                 .onSubmit { submit(viewSize: geo.size) }
                                 .frame(minHeight: 32, alignment: .leading)
                                 .frame(maxWidth: .infinity, alignment: .leading)

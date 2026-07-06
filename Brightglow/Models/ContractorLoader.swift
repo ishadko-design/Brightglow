@@ -67,14 +67,22 @@ enum ContractorLoader {
     }
 
     /// Indicative local price tier for the request, used for the price line.
-    /// Real data only — the SF pricing engine — nil (no synthesized guess,
-    /// no noisy review-mention range) when it has nothing, including always
-    /// for auto/moto (no pricing data source exists for it yet).
+    /// Real data only — nationwide regional cost data, cross-checked against
+    /// SF permits where covered — nil (no synthesized guess, no noisy
+    /// review-mention range) when it has nothing, including always for
+    /// auto/moto (no pricing data source exists for it yet) and Mold & Pest
+    /// Control (no cost data source covers it).
+    ///
+    /// `category` is always forwarded now — previously this only sent
+    /// `searchQuery`/`photoDetails`, so a plain category tap (the most common
+    /// path: no typed search, no photo) built an empty job description and
+    /// silently never priced anything, for any category. The server
+    /// classifies the specific job from `category` + this description.
     ///
     /// `photoDetails` (size/capacity/material extracted from the captured
-    /// photo, e.g. "40 gallon, tankless") is appended to the job description
-    /// sent to the pricing engine only — it narrows which permits count as
-    /// comparable, it never changes what businesses get searched.
+    /// photo, e.g. "40 gallon, tankless") is appended to the description
+    /// sent to the pricing engine only — it never changes what businesses
+    /// get searched.
     static func estimate(
         category: String,
         searchQuery: String,
@@ -83,11 +91,17 @@ enum ContractorLoader {
     ) async -> PriceTier? {
         guard !isAutoService(category: category, searchQuery: searchQuery) else { return nil }
         let q = searchQuery.trimmingCharacters(in: .whitespacesAndNewlines)
-        let job = [q, photoDetails]
+        let description = [q, photoDetails]
             .compactMap { $0?.trimmingCharacters(in: .whitespacesAndNewlines) }
             .filter { !$0.isEmpty }
             .joined(separator: ", ")
-        let locality = await EstimateService.locality(for: coord)
-        return await EstimateService.estimate(job: job, locality: locality)
+        // Category browsing without a typed search (the common case) leaves
+        // `category` empty only when the caller passed a free-text query
+        // instead of picking a category chip — recover a category from that
+        // text when it unambiguously names one (reuses the same matcher the
+        // search suggestions use), rather than losing pricing coverage.
+        let resolvedCategory = category.isEmpty ? (Category.exactTerm(q)?.rawValue ?? "") : category
+        let (_, zip) = await EstimateService.geocode(for: coord)
+        return await EstimateService.estimate(category: resolvedCategory, description: description, zip: zip)
     }
 }
