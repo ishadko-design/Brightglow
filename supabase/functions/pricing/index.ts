@@ -35,6 +35,7 @@ import {
   calculatePermitRange,
   CATEGORY_GENERAL,
   classifyJobType,
+  detectScopeAddOns,
   calculateEPCIRange,
   fetchEPCIRaw,
   fetchSFPermitsRaw,
@@ -275,7 +276,12 @@ Deno.serve(async (req) => {
   const { items, cache: epciCache } = EPCI_ENABLED
     ? await fetchEPCICached(entry.trade, zip)
     : { items: null, cache: "bypass" as const };
-  const epciRange = items ? calculateEPCIRange(items, entry, quantity) : null;
+  // Scope add-ons the description asserts (tear-out, subfloor…) — usually
+  // put there by the clarify chat's canonical details.
+  const addOns = detectScopeAddOns(entry, description);
+  const epciRange = items
+    ? calculateEPCIRange(items, entry, quantity, addOns.map((a) => a.itemId))
+    : null;
 
   if (epciRange) {
     let confidence: "high" | "med" | "low" = isGeneral || isDefaulted ? "low" : "med";
@@ -284,6 +290,9 @@ Deno.serve(async (req) => {
     let label = isGeneral
       ? `Regional avg for ${entry.category} (EstimationPro)`
       : "Regional avg (EstimationPro)";
+    if (addOns.length > 0) {
+      label += ` — incl. ${addOns.map((a) => a.label).join(", ")}`;
+    }
     let dataPoints = 0;
 
     if (eligibleForCrossCheck) {
@@ -304,6 +313,7 @@ Deno.serve(async (req) => {
       range: {
         all_in_low: epciRange.all_in_low,
         all_in_high: epciRange.all_in_high,
+        all_in_typical: epciRange.all_in_typical,
         confidence,
         label,
         data_points: dataPoints,

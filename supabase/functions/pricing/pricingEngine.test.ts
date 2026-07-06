@@ -6,9 +6,11 @@ import { assertEquals, assertExists } from "jsr:@std/assert@1";
 import {
   buildLocalRange,
   buildPermitOnlyRange,
+  calculateEPCIRange,
   calculateMaterialFloor,
   calculatePermitRange,
   classifyJobType,
+  detectScopeAddOns,
   fetchMaterialFloorRaw,
   formatDisplayText,
   normalizeScope,
@@ -365,4 +367,35 @@ Deno.test("resolveQuantity takes explicit pair counts without halving", () => {
   assertEquals(resolveQuantity(french, "1 pair of french doors, 72x88"), { quantity: 1, isDefaulted: false });
   // panel counts still halve
   assertEquals(resolveQuantity(french, "2 french doors"), { quantity: 1, isDefaulted: false });
+});
+
+// --- Typical anchor + scope add-ons ---
+
+const epciFlooring: import("./pricingEngine.ts").EPCIItem[] = [
+  { id: "hardwood-installed", description: "Hardwood flooring, installed", unit: "sq ft", low: 7, typical: 14, high: 29, regionallyAdjusted: true },
+  { id: "flooring-removal-only", description: "Flooring removal only", unit: "sq ft", low: 0.5, typical: 2, high: 4.5, regionallyAdjusted: true },
+  { id: "subfloor-repair", description: "Subfloor repair", unit: "sq ft", low: 2, typical: 5, high: 9, regionallyAdjusted: true },
+];
+
+Deno.test("calculateEPCIRange carries the typical anchor scaled by quantity", () => {
+  const entry = classifyJobType("", "replace hardwood floor 300 sq ft")!;
+  const range = calculateEPCIRange(epciFlooring, entry, 300)!;
+  assertEquals(range.all_in_low, 2100);
+  assertEquals(range.all_in_high, 8700);
+  assertEquals(range.all_in_typical, 4200);
+});
+
+Deno.test("calculateEPCIRange composes confirmed scope add-ons into the range", () => {
+  const entry = classifyJobType("", "replace hardwood floor 300 sq ft")!;
+  const addOns = detectScopeAddOns(entry, "replace hardwood floor 300 sq ft, remove old flooring");
+  assertEquals(addOns.map((a) => a.itemId), ["flooring-removal-only"]);
+  const range = calculateEPCIRange(epciFlooring, entry, 300, addOns.map((a) => a.itemId))!;
+  assertEquals(range.all_in_low, 2250);   // (7 + 0.5) * 300
+  assertEquals(range.all_in_high, 10050); // (29 + 4.5) * 300
+  assertEquals(range.all_in_typical, 4800);
+});
+
+Deno.test("detectScopeAddOns only fires for the entry's own category", () => {
+  const plumbing = classifyJobType("", "water heater replacement")!;
+  assertEquals(detectScopeAddOns(plumbing, "water heater replacement, remove old unit"), []);
 });

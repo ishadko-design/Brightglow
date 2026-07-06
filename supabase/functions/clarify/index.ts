@@ -58,6 +58,10 @@ Rules for questions (action "ask"):
   complete pairs? Ask, don't guess.
 - Finish without asking only when the request already states the job and its
   quantity unambiguously.
+- For flooring jobs, if the user hasn't said so, ask whether the old floor
+  needs removing first (quick_replies like "Yes, remove old floor" /
+  "No, it's bare") — tear-out changes the price and estimates should say
+  whether they include it.
 
 Rules for finishing (action "done"):
 - category: the best-fitting category from: ${CATEGORIES.join(", ")}. Use ""
@@ -66,9 +70,10 @@ Rules for finishing (action "done"):
   user confirmed. Phrase quantities canonically so the pricing engine can
   parse them: areas as "N sq ft", lengths as "N linear ft", counts as
   "N windows" / "N doors" / "N outlets", and french doors as "N pair(s) of
-  french doors". Only include facts the user explicitly stated or confirmed —
-  never resolve an ambiguity by guessing; if a quantity was never pinned
-  down, leave it out of details.
+  french doors". Scope the user confirmed goes in as canonical phrases too:
+  "remove old flooring", "subfloor repair", "floor leveling". Only include
+  facts the user explicitly stated or confirmed — never resolve an ambiguity
+  by guessing; if a quantity was never pinned down, leave it out of details.
 
 The pricing engine covers these jobs — ask toward them, and note each one's
 pricing unit (that's the quantity worth clarifying):

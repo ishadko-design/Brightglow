@@ -116,6 +116,10 @@ struct PriceTier: Codable, Identifiable {
     let label: String
     let min: Int
     let max: Int
+    /// The data source's central estimate ("typically ~$X") — anchors wide
+    /// min–max bands, which reflect real material-grade spread. Nil for
+    /// sources that don't publish one (mocks, permit-only fallback).
+    var typical: Int? = nil
 }
 
 /// A single Google review (testimonial) shown on the contractor card.

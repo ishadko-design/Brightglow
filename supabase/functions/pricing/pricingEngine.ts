@@ -861,16 +861,64 @@ export async function fetchEPCIRaw(trade: string, zip: string | undefined): Prom
 export interface EPCIComputedRange {
   all_in_low: number;
   all_in_high: number;
+  /** EPCI's central estimate × quantity — a real data point, displayed as
+   *  "typically ~$X" to anchor wide low–high bands (e.g. hardwood's 4×
+   *  spread, which is material-grade variance, not estimation noise). */
+  all_in_typical: number;
+}
+
+/** Scope add-ons: real catalog items composed on top of the base job when
+ *  the description says the work includes them — the clarify chat asks
+ *  ("does the old floor need to come out?") and writes these phrases into
+ *  its canonical details. Same-trade items only, so they price from the
+ *  same EPCI response as the base job. */
+export const SCOPE_ADD_ONS: Array<{
+  categories: string[];
+  keywords: string[];
+  itemId: string;
+  label: string;
+}> = [
+  { categories: ["Flooring"], keywords: ["remov", "tear out", "tear-out", "rip out", "demo"], itemId: "flooring-removal-only", label: "old floor removal" },
+  { categories: ["Flooring"], keywords: ["subfloor"], itemId: "subfloor-repair", label: "subfloor repair" },
+  { categories: ["Flooring"], keywords: ["leveling", "self-level", "level the"], itemId: "floor-leveling", label: "floor leveling" },
+];
+
+export function detectScopeAddOns(
+  entry: JobTypeEntry,
+  description: string,
+): Array<{ itemId: string; label: string }> {
+  const text = description.toLowerCase();
+  return SCOPE_ADD_ONS
+    .filter((a) => a.categories.includes(entry.category))
+    .filter((a) => a.keywords.some((k) => text.includes(k)))
+    .map((a) => ({ itemId: a.itemId, label: a.label }));
 }
 
 export function calculateEPCIRange(
   items: EPCIItem[],
   entry: JobTypeEntry,
   quantity: number,
+  addOnItemIds: string[] = [],
 ): EPCIComputedRange | null {
   const item = items.find((i) => i.id === entry.itemId);
   if (!item) return null;
-  return { all_in_low: item.low * quantity, all_in_high: item.high * quantity };
+  // Older cache rows may predate `typical` — fall back to the band midpoint.
+  const typicalOf = (i: EPCIItem) => i.typical ?? (i.low + i.high) / 2;
+  let low = item.low;
+  let high = item.high;
+  let typical = typicalOf(item);
+  for (const id of addOnItemIds) {
+    const addOn = items.find((i) => i.id === id);
+    if (!addOn) continue; // not in this trade's catalog — skip, never guess
+    low += addOn.low;
+    high += addOn.high;
+    typical += typicalOf(addOn);
+  }
+  return {
+    all_in_low: low * quantity,
+    all_in_high: high * quantity,
+    all_in_typical: typical * quantity,
+  };
 }
 
 export function rangesOverlap(aLow: number, aHigh: number, bLow: number, bHigh: number): boolean {

@@ -60,7 +60,10 @@ enum PricingService {
         // (plain regional average, vs. cross-checked against N SF permits,
         // vs. legacy permit-only) — the client just displays it rather than
         // reconstructing it from raw fields.
-        return PriceTier(label: range.label, min: Int(range.all_in_low.rounded()), max: Int(range.all_in_high.rounded()))
+        return PriceTier(label: range.label,
+                         min: Int(range.all_in_low.rounded()),
+                         max: Int(range.all_in_high.rounded()),
+                         typical: range.all_in_typical.map { Int($0.rounded()) })
     }
 
     /// Only decodes the success shape; the {error, fallback} shape decodes
@@ -71,6 +74,7 @@ enum PricingService {
         struct Range: Decodable {
             let all_in_low: Double
             let all_in_high: Double
+            let all_in_typical: Double?
             let confidence: String
             let label: String
         }
