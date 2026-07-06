@@ -20,17 +20,26 @@
 //           attribution"); defaults to false/unset so nothing ships against
 //           unclear terms. The API itself needs no key.
 //           supabase secrets set SF_OPEN_DATA_APP_TOKEN=<optional, raises rate limit>
-// Tables:   supabase/migrations/*_permit_cache.sql, *_epci_cache.sql
-//           (run via `supabase db push`)
+//           supabase secrets set ANTHROPIC_API_KEY=<optional — enables the LLM
+//           fallback classifier (llmClassifier.ts) for phrasings the keyword
+//           matcher misses; unset, keyword matching alone decides>
+// Tables:   supabase/migrations/*_permit_cache.sql, *_epci_cache.sql,
+//           *_classification_cache.sql (run via `supabase db push`)
 
 import { createClient } from "jsr:@supabase/supabase-js@2";
 import {
+  buildClassifierPool,
+  classifyWithLLM,
+} from "./llmClassifier.ts";
+import {
   calculatePermitRange,
+  CATEGORY_GENERAL,
   classifyJobType,
   calculateEPCIRange,
   fetchEPCIRaw,
   fetchSFPermitsRaw,
   JOB_TYPE_KEYWORDS,
+  JOB_TYPE_TAXONOMY,
   LEGACY_PERMIT_JOB_TYPES,
   rangesOverlap,
   resolveQuantity,
@@ -40,6 +49,7 @@ import {
 } from "./pricingEngine.ts";
 
 const SF_OPEN_DATA_APP_TOKEN = Deno.env.get("SF_OPEN_DATA_APP_TOKEN") ?? "";
+const ANTHROPIC_API_KEY = Deno.env.get("ANTHROPIC_API_KEY") ?? "";
 const APP_TOKEN = Deno.env.get("APP_TOKEN") ?? "";
 const SUPA_URL = Deno.env.get("SUPABASE_URL") ?? "";
 const SERVICE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
@@ -140,6 +150,54 @@ async function fetchEPCICached(
   return { items, cache: db ? "miss" : "bypass" };
 }
 
+function classificationCacheKey(category: string, description: string): string {
+  const norm = description.toLowerCase().replace(/\s+/g, " ").trim();
+  return `${category}:${norm}`.slice(0, 300);
+}
+
+/** LLM fallback classification with a 24h cache. Returns a taxonomy job_type
+ *  or null ("none"/failure — the keyword result stands). "none" outcomes are
+ *  cached like hits so unmatchable text costs one call, not one per retry. */
+async function classifyLLMCached(
+  category: string,
+  description: string,
+): Promise<string | null> {
+  const key = classificationCacheKey(category, description);
+
+  if (db) {
+    try {
+      const { data } = await db.from("classification_cache")
+        .select("job_type, created_at").eq("cache_key", key).maybeSingle();
+      if (data && Date.now() - new Date(data.created_at as string).getTime() < TTL_MS) {
+        return data.job_type as string | null;
+      }
+    } catch (_) { /* ignore, fall through to a live call */ }
+  }
+
+  const pool = buildClassifierPool(JOB_TYPE_TAXONOMY, CATEGORY_GENERAL, category);
+  let jobType: string | null;
+  try {
+    jobType = await classifyWithLLM(pool, description, ANTHROPIC_API_KEY);
+  } catch (err) {
+    // Not cached: a transient API failure shouldn't pin "no match" for 24h.
+    console.error("pricing: LLM classification failed", err);
+    return null;
+  }
+  console.log("pricing: llm-classified", JSON.stringify({ category, description, jobType }));
+
+  if (db) {
+    try {
+      await db.from("classification_cache").upsert({
+        cache_key: key,
+        job_type: jobType,
+        created_at: new Date().toISOString(),
+      });
+    } catch (_) { /* ignore, cache write is best-effort */ }
+  }
+
+  return jobType;
+}
+
 /** Reuses calculatePermitRange (permits above/pricingEngine.ts) with a fixed
  *  generic width — none of the 5 cross-checked job_types are actually sized
  *  by width, so this only exists to satisfy JobScope's shape (matches the
@@ -176,7 +234,24 @@ Deno.serve(async (req) => {
   // The description already carries any photo-derived detail text (the
   // client appends it before sending — see PricingService.swift), so there's
   // no separate photo_attributes field to classify against.
-  const entry = classifyJobType(category, description);
+  let entry = classifyJobType(category, description);
+
+  // LLM fallback for the long tail of phrasings keywords can't anticipate:
+  // runs only when keywords missed outright, or matched nothing more specific
+  // than the category-general entry despite a real description. The model is
+  // enum-constrained to the taxonomy (see llmClassifier.ts) — it picks a job
+  // type, never a price.
+  const trimmedDesc = description.trim();
+  if (ANTHROPIC_API_KEY && trimmedDesc.length >= 8 && (!entry || entry.keywords.length === 0)) {
+    const llmJobType = await classifyLLMCached(category, trimmedDesc);
+    if (llmJobType) {
+      const generalEntries = Object.values(CATEGORY_GENERAL)
+        .filter((e): e is NonNullable<typeof e> => e !== null);
+      entry = [...JOB_TYPE_TAXONOMY, ...generalEntries]
+        .find((e) => e.job_type === llmJobType) ?? entry;
+    }
+  }
+
   if (!entry) {
     // The backlog for the mapping layer: every description that reached us
     // and classified to nothing (visible in `supabase functions logs pricing`).
