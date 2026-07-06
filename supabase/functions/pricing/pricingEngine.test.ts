@@ -356,3 +356,13 @@ Deno.test("classifyJobType prices a vanity as a vanity, not a kitchen's worth of
   // plain cabinet work still maps to the kitchen-cabinet entry
   assertEquals(classifyJobType("Carpentry", "install kitchen cabinets")?.job_type, "carpentry.cabinet");
 });
+
+Deno.test("resolveQuantity takes explicit pair counts without halving", () => {
+  const french = classifyJobType("", "french doors")!;
+  assertEquals(french.job_type, "windows_doors.french_door");
+  // canonical clarify-chat phrasing: pairs are already units
+  assertEquals(resolveQuantity(french, "2 pairs of french doors"), { quantity: 2, isDefaulted: false });
+  assertEquals(resolveQuantity(french, "1 pair of french doors, 72x88"), { quantity: 1, isDefaulted: false });
+  // panel counts still halve
+  assertEquals(resolveQuantity(french, "2 french doors"), { quantity: 1, isDefaulted: false });
+});

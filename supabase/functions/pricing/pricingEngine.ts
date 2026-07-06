@@ -801,6 +801,16 @@ export function resolveQuantity(
   description: string,
 ): { quantity: number; isDefaulted: boolean } {
   if (entry.unit === "each" || entry.unit === "pair") {
+    // Explicit pair counts win outright for pair-priced items — "2 pairs of
+    // french doors" is 2 units, no halving. This is the canonical phrasing
+    // the clarify chat emits once the user resolves panels-vs-pairs.
+    if (entry.unit === "pair") {
+      const pairs = description.toLowerCase().match(/(?:^|[\s,])(\d{1,2})\s+pairs?\b/);
+      if (pairs) {
+        const value = Number(pairs[1]);
+        if (value > 0) return { quantity: value, isDefaulted: false };
+      }
+    }
     // A small count within a few words of a countable noun: "2 french door
     // windows", "install 4 outlets". The count must be its own word, so
     // dimension strings ("72x88") never match.
