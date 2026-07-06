@@ -348,3 +348,11 @@ Deno.test("resolveQuantity counts each-unit items and halves pair-unit counts", 
   // dimension strings are not counts
   assertEquals(resolveQuantity(window, "window 72x88"), { quantity: 1, isDefaulted: true });
 });
+
+Deno.test("classifyJobType prices a vanity as a vanity, not a kitchen's worth of cabinets", () => {
+  // "vanity cabinet" must outrank the generic "cabinet" keyword
+  assertEquals(classifyJobType("", "replace vanity cabinet")?.job_type, "carpentry.vanity");
+  assertEquals(classifyJobType("Carpentry", "new bathroom vanity")?.job_type, "carpentry.vanity");
+  // plain cabinet work still maps to the kitchen-cabinet entry
+  assertEquals(classifyJobType("Carpentry", "install kitchen cabinets")?.job_type, "carpentry.cabinet");
+});

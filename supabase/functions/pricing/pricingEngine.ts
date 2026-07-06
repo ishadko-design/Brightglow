@@ -637,6 +637,10 @@ export const JOB_TYPE_TAXONOMY: JobTypeEntry[] = [
 
   // Carpentry
   { job_type: "carpentry.deck", category: "Carpentry", keywords: ["deck"], trade: "deck", itemId: "pressure-treated-installed", unit: "sq ft", defaultQuantity: 300 },
+  // "vanity cabinet" (14 chars) outranks the generic "cabinet" (7) under
+  // longest-keyword matching, so a vanity swap doesn't price as 15 linear
+  // feet of kitchen cabinets.
+  { job_type: "carpentry.vanity", category: "Carpentry", keywords: ["vanity cabinet", "vanity"], trade: "cabinetry", itemId: "bathroom-vanity-installation", unit: "each", defaultQuantity: 1 },
   { job_type: "carpentry.cabinet", category: "Carpentry", keywords: ["cabinet", "cabinetry"], trade: "cabinetry", itemId: "stock-cabinets-installed", unit: "linear foot", defaultQuantity: 15 },
   { job_type: "carpentry.framing", category: "Carpentry", keywords: ["framing", "beam", "header", "load bearing", "load-bearing"], trade: "framing", itemId: "wall-framing", unit: "linear foot", defaultQuantity: 20 },
 
