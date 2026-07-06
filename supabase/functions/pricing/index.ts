@@ -236,13 +236,17 @@ Deno.serve(async (req) => {
   // no separate photo_attributes field to classify against.
   let entry = classifyJobType(category, description);
 
-  // LLM fallback for the long tail of phrasings keywords can't anticipate:
-  // runs only when keywords missed outright, or matched nothing more specific
-  // than the category-general entry despite a real description. The model is
-  // enum-constrained to the taxonomy (see llmClassifier.ts) — it picks a job
-  // type, never a price.
+  // LLM classification for every real typed description — primary, not just
+  // a fallback for keyword misses. Keywords alone are confidently wrong on
+  // typos ("frech door windows" matched "window" and priced 2 vinyl windows
+  // instead of a french door pair) and on incidental words ("backyard" →
+  // Landscaping), and a wrong specific match never looked like a miss. The
+  // model is enum-constrained to the taxonomy (see llmClassifier.ts) — it
+  // picks a job type, never a price — and "none"/failure means the keyword
+  // result stands. Unique phrasings are cached 24h, so the added call is
+  // one-time per phrasing, not per request.
   const trimmedDesc = description.trim();
-  if (ANTHROPIC_API_KEY && trimmedDesc.length >= 8 && (!entry || entry.keywords.length === 0)) {
+  if (ANTHROPIC_API_KEY && trimmedDesc.length >= 8) {
     const llmJobType = await classifyLLMCached(category, trimmedDesc);
     if (llmJobType) {
       const generalEntries = Object.values(CATEGORY_GENERAL)
@@ -250,6 +254,9 @@ Deno.serve(async (req) => {
       entry = [...JOB_TYPE_TAXONOMY, ...generalEntries]
         .find((e) => e.job_type === llmJobType) ?? entry;
     }
+  }
+  if (entry) {
+    console.log("pricing: classified", JSON.stringify({ category, description, job_type: entry.job_type }));
   }
 
   if (!entry) {
