@@ -19,6 +19,7 @@ enum LeadBridgeService {
     /// LeadBridge has no other source for a contractor's name.
     static func submitLead(
         userEmail: String,
+        userId: UUID? = nil,
         contractorEmail: String,
         businessName: String? = nil,
         description: String,
@@ -41,6 +42,7 @@ enum LeadBridgeService {
             body.append("\(value)\r\n".data(using: .utf8)!)
         }
         appendField("user_email", userEmail)
+        if let userId { appendField("user_id", userId.uuidString) }
         appendField("contractor_email", contractorEmail)
         if let businessName, !businessName.isEmpty { appendField("business_name", businessName) }
         appendField("description", description)
