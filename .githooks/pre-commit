@@ -1,0 +1,53 @@
+#!/usr/bin/env bash
+# Pre-commit secret guard for Brightglow.
+#
+# Two layers, both run against STAGED content only:
+#   1. gitleaks (if installed) — broad, maintained ruleset.
+#   2. A built-in fallback grep for the few secret shapes that would hurt most
+#      here, so the hook still blocks something useful before gitleaks is set up.
+#
+# Enable once per clone:   git config core.hooksPath .githooks
+# Bypass in a pinch:       git commit --no-verify   (use sparingly, and know why)
+
+set -euo pipefail
+
+red()  { printf '\033[31m%s\033[0m\n' "$1"; }
+grn()  { printf '\033[32m%s\033[0m\n' "$1"; }
+
+fail=0
+
+# ---- Layer 1: gitleaks on staged changes ------------------------------------
+if command -v gitleaks >/dev/null 2>&1; then
+  if ! gitleaks protect --staged --redact --no-banner; then
+    red "✖ gitleaks flagged a potential secret in staged changes."
+    fail=1
+  fi
+else
+  printf '  (gitleaks not installed — run: brew install gitleaks — using fallback only)\n'
+fi
+
+# ---- Layer 2: high-signal fallback patterns ---------------------------------
+# Only the shapes that are catastrophic for THIS project. Deliberately narrow to
+# avoid false positives; gitleaks is the broad net.
+staged="$(git diff --cached --name-only --diff-filter=ACM)"
+if [ -n "$staged" ]; then
+  # Precise key SHAPES only (not identifier words like the bare "service_role",
+  # which appears legitimately in SQL/docs and would false-positive constantly):
+  # Supabase secret keys, SendGrid keys, and PEM private-key headers. gitleaks
+  # above is the broad net; this is the catastrophic-here backstop.
+  pattern='(sb_secret_[A-Za-z0-9]{20,})|(SG\.[A-Za-z0-9_-]{16,}\.[A-Za-z0-9_-]{16,})|(-----BEGIN [A-Z ]*PRIVATE KEY-----)'
+  # shellcheck disable=SC2086
+  if git diff --cached -U0 -- $staged | grep -nE "^\+" | grep -Eq "$pattern"; then
+    red "✖ Fallback guard matched a service_role/SendGrid/private-key pattern in staged changes."
+    red "  If this is a false positive, review carefully, then: git commit --no-verify"
+    fail=1
+  fi
+fi
+
+if [ "$fail" -ne 0 ]; then
+  red "Commit blocked — a secret may be about to be committed. Nothing was committed."
+  exit 1
+fi
+
+grn "✓ secret guard passed"
+exit 0
