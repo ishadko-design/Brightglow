@@ -3,6 +3,7 @@ import Supabase
 
 struct ProfileScreen: View {
     @EnvironmentObject private var auth: AuthService
+    @State private var showDeleteConfirm = false
 
     var body: some View {
         ZStack {
@@ -55,8 +56,34 @@ struct ProfileScreen: View {
                 }
                 .buttonStyle(.frosted)
                 .padding(.horizontal, 16)
+                .padding(.bottom, 12)
+
+                // Delete account — App Store Guideline 5.1.1(v) requires an
+                // in-app way to delete the account. Confirmed before running,
+                // since it's irreversible.
+                Button(role: .destructive, action: { showDeleteConfirm = true }) {
+                    Text("Delete account")
+                        .font(.bodyLight)
+                        .foregroundStyle(Color.red.opacity(0.9))
+                        .frame(maxWidth: .infinity)
+                        .frame(height: 44)
+                }
+                .disabled(auth.isLoading)
+                .padding(.horizontal, 16)
                 .padding(.bottom, 24)
             }
+        }
+        .confirmationDialog(
+            "Delete your account?",
+            isPresented: $showDeleteConfirm,
+            titleVisibility: .visible
+        ) {
+            Button("Delete account", role: .destructive) {
+                Task { await auth.deleteAccount() }
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("This permanently deletes your account and all your requests, messages, and photos. This can't be undone.")
         }
         .preferredColorScheme(.dark)
         // Match the app's bottom-sheet affordance: grab handle, rounded surface.

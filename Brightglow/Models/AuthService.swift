@@ -185,4 +185,25 @@ final class AuthService: ObservableObject {
             user = nil
         }
     }
+
+    // MARK: - Delete account
+
+    /// Permanently deletes the signed-in user's account and all their data.
+    /// Calls the `delete-account` Edge Function, which purges their leads,
+    /// messages, and photos, then deletes the auth user. The SDK attaches the
+    /// current session's access token automatically (fetchWithAuth), which the
+    /// function requires. Required by App Store Guideline 5.1.1(v).
+    func deleteAccount() async {
+        isLoading = true
+        defer { isLoading = false }
+        do {
+            try await supabase.functions.invoke("delete-account")
+            // The server-side user is gone; clear the local session so the app
+            // returns to the signed-out state.
+            try? await supabase.auth.signOut()
+            user = nil
+        } catch {
+            message = "Couldn't delete your account. Please try again."
+        }
+    }
 }
