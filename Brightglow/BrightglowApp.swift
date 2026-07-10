@@ -5,6 +5,8 @@ import GoogleSignIn
 
 @main
 struct BrightglowApp: App {
+    @StateObject private var chatRouter = ChatRouter()
+
     init() {
         registerFonts()
     }
@@ -12,11 +14,20 @@ struct BrightglowApp: App {
     var body: some Scene {
         WindowGroup {
             RootNavigator()
+                .environmentObject(chatRouter)
                 .onOpenURL { url in
+                    // A chat deep link (brightglow://chat) opens the inbox; only
+                    // if it wasn't one do we treat the url as an auth callback.
+                    if chatRouter.handle(url) { return }
                     GIDSignIn.sharedInstance.handle(url)
                     Task {
                         try? await supabase.auth.session(from: url)
                     }
+                }
+                // Universal Links (https://brightglow.co/chat…) arrive as a web
+                // browsing activity rather than an openURL — route them to chat too.
+                .onContinueUserActivity(NSUserActivityTypeBrowsingWeb) { activity in
+                    if let url = activity.webpageURL { _ = chatRouter.handle(url) }
                 }
         }
     }
