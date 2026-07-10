@@ -29,7 +29,7 @@ language sql
 stable
 security definer
 set search_path = public
-as $$
+as $fn$
   select exists (
     select 1
     from public.leads l
@@ -39,7 +39,7 @@ as $$
         or lower(l.contractor_email) = lower(coalesce(auth.jwt() ->> 'email', ''))
       )
   );
-$$;
+$fn$;
 
 revoke all on function public.is_lead_participant(uuid) from public;
 grant execute on function public.is_lead_participant(uuid) to authenticated;
@@ -78,7 +78,7 @@ create policy "chat participant can select messages"
 -- ── attachments ──────────────────────────────────────────────────────────
 -- The file itself is streamed by the backend (participant-authed); clients
 -- only need the metadata to render/request it.
-grant select (id, lead_id, mime_type, created_at, expires_at)
+grant select (id, lead_id, mime_type, expires_at)
   on public.attachments to authenticated;
 
 drop policy if exists "chat participant can select attachments" on public.attachments;
@@ -92,7 +92,7 @@ create policy "chat participant can select attachments"
 -- Add messages to the Realtime publication so a live INSERT (a reply from the
 -- other party) pushes to any subscribed client. Realtime re-checks the SELECT
 -- policy above per subscriber, so a user only ever receives their own threads.
-do $$
+do $do$
 begin
   if not exists (
     select 1 from pg_publication_tables
@@ -102,4 +102,5 @@ begin
   ) then
     alter publication supabase_realtime add table public.messages;
   end if;
-end $$;
+end
+$do$;
