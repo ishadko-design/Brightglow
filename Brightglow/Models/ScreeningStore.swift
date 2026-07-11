@@ -12,7 +12,24 @@ import Foundation
 final class ScreeningStore: @unchecked Sendable {
     static let shared = ScreeningStore()
 
-    struct Entry: Codable { let kept: [ScreenedPhoto]; let scanned: Int; let at: Double }
+    struct Entry: Codable {
+        let kept: [ScreenedPhoto]; let scanned: Int; let at: Double
+        /// Whether `kept` carries rich `phototags` labels (vs generic on-device
+        /// ones). Decodes to false for entries written before this field existed,
+        /// so they get enriched once on next view.
+        let enriched: Bool
+
+        init(kept: [ScreenedPhoto], scanned: Int, at: Double, enriched: Bool) {
+            self.kept = kept; self.scanned = scanned; self.at = at; self.enriched = enriched
+        }
+        init(from decoder: Decoder) throws {
+            let c = try decoder.container(keyedBy: CodingKeys.self)
+            kept = try c.decode([ScreenedPhoto].self, forKey: .kept)
+            scanned = try c.decode(Int.self, forKey: .scanned)
+            at = try c.decode(Double.self, forKey: .at)
+            enriched = try c.decodeIfPresent(Bool.self, forKey: .enriched) ?? false
+        }
+    }
 
     private let ttl: TimeInterval = 30 * 24 * 3600
     private let lock = NSLock()
@@ -35,17 +52,17 @@ final class ScreeningStore: @unchecked Sendable {
     }
 
     /// A still-valid verdict for this place, or nil (never screened / expired).
-    func get(_ id: String, allowVehicles: Bool) -> (kept: [ScreenedPhoto], scanned: Int)? {
+    func get(_ id: String, allowVehicles: Bool) -> (kept: [ScreenedPhoto], scanned: Int, enriched: Bool)? {
         lock.lock(); defer { lock.unlock() }
         guard let e = map[key(id, allowVehicles: allowVehicles)],
               Date().timeIntervalSince1970 - e.at < ttl else { return nil }
-        return (e.kept, e.scanned)
+        return (e.kept, e.scanned, e.enriched)
     }
 
-    func save(_ id: String, allowVehicles: Bool, kept: [ScreenedPhoto], scanned: Int) {
+    func save(_ id: String, allowVehicles: Bool, kept: [ScreenedPhoto], scanned: Int, enriched: Bool = false) {
         lock.lock()
         map[key(id, allowVehicles: allowVehicles)] =
-            Entry(kept: kept, scanned: scanned, at: Date().timeIntervalSince1970)
+            Entry(kept: kept, scanned: scanned, at: Date().timeIntervalSince1970, enriched: enriched)
         lock.unlock()
         scheduleWrite()
     }

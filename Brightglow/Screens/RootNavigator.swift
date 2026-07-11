@@ -6,7 +6,7 @@ struct RootNavigator: View {
     var body: some View {
         Group {
             if auth.isRestoringSession {
-                AppColors.bg.ignoresSafeArea()
+                SplashView()
             } else if auth.isSignedIn {
                 MainScreen()
             } else {

@@ -58,18 +58,37 @@ enum PlacesService {
     /// A page of free-form results plus the next-page token.
     static func fetchPage(searchText query: String, near coord: CLLocationCoordinate2D,
                           pageSize: Int = 20, pageToken: String? = nil) async -> Page {
-        let category = Category.matching(query: query).first ?? .plumbing
+        let matchedCategory = Category.matching(query: query).first
+        let category = matchedCategory ?? .plumbing
         // "contractor" is a home-trade term to Google — "car painting contractor"
         // returns house painters. Vehicle queries get a shop-style query instead
         // (tuned auto queries already end in "shop" and pass through unchanged).
+        let isAuto = AutoCategory.matching(query: query) != nil
         let textQuery: String
-        if AutoCategory.matching(query: query) != nil {
+        if isAuto {
             textQuery = query.lowercased().contains("shop") ? query : "\(query) shop"
         } else {
             textQuery = "\(query) contractor"
         }
-        return await search(textQuery: textQuery, category: category,
-                            near: coord, pageSize: pageSize, pageToken: pageToken)
+        let page = await search(textQuery: textQuery, category: category,
+                                near: coord, pageSize: pageSize, pageToken: pageToken)
+
+        // Some literal job phrases are themselves Google place-types and hijack
+        // the text search: "ev charger" returns EV charging *stations* (all typed
+        // electric_vehicle_charging_station), every one of which the trade filter
+        // drops — so a real request ("install ev charger", plenty of electricians
+        // nearby) comes back empty. When a first page is empty but the query
+        // confidently maps to a home trade, retry once with that trade's own
+        // query ("electrician contractor") so the contractors surface. First
+        // pages only — a continuation token is one-shot and can't be re-searched.
+        if page.contractors.isEmpty, pageToken == nil, !isAuto, let cat = matchedCategory {
+            let tradeQuery = cat.searchQuery
+            if tradeQuery.caseInsensitiveCompare(textQuery) != .orderedSame {
+                return await search(textQuery: tradeQuery, category: cat,
+                                    near: coord, pageSize: pageSize, pageToken: pageToken)
+            }
+        }
+        return page
     }
 
     // MARK: - Core request
@@ -272,9 +291,38 @@ enum PlacesService {
 
     /// Google Places Text Search matches loosely on text, not strictly on
     /// category — a vague or sparse-result query can surface completely
-    /// unrelated businesses (e.g. a dentist for a "repair" search). This is
-    /// a blanket exclude of clearly non-trade place types, independent of
-    /// which home/auto category was searched.
+    /// unrelated businesses (e.g. a dentist for a "repair" search, Kaiser
+    /// Permanente for "family medicine"). Gating is positive, not a
+    /// blocklist: a result must carry a trade-relevant type, or nothing but
+    /// generic types (small contractors are often uncategorized). The
+    /// legacy blocklist below stays as a second net for types Google files
+    /// under generic-looking names.
+    ///
+    /// Types Google actually recognizes pass through unchanged; entries it
+    /// never emits are harmless. Extend `tradeTypes` if a legitimate trade
+    /// business class starts getting filtered.
+    private static let tradeTypes: Set<String> = [
+        // Home trades
+        "general_contractor", "electrician", "plumber", "roofing_contractor",
+        "painter", "carpenter", "handyman", "hvac_contractor",
+        "pest_control_service", "landscaping_service", "lawn_care_service",
+        "locksmith", "moving_company",
+        // Trade-adjacent retail (showrooms sell + install)
+        "hardware_store", "home_improvement_store", "home_goods_store",
+        "furniture_store", "appliance_store", "garden_center",
+        // Auto & moto
+        "car_repair", "car_wash", "car_detailing_service", "auto_parts_store",
+        "tire_shop", "motorcycle_repair", "motorcycle_dealer", "car_dealer",
+    ]
+
+    /// Types that say nothing about what the business does — allowed only
+    /// when a result carries NOTHING more specific. Deliberately excludes
+    /// Google's broad-but-meaningful buckets ("health", "finance", "food"):
+    /// those are specific enough to prove a business is not a contractor.
+    private static let genericTypes: Set<String> = [
+        "establishment", "point_of_interest", "store",
+    ]
+
     private static let nonTradeTypes: Set<String> = [
         // Medical / health
         "dentist", "doctor", "hospital", "pharmacy", "physiotherapist",
@@ -298,7 +346,12 @@ enum PlacesService {
 
     private static func contractor(from place: Place, index: Int, category: Category) -> Contractor? {
         guard let name = place.displayName?.text else { return nil }
-        if let types = place.types, !nonTradeTypes.isDisjoint(with: types) { return nil }
+        if let types = place.types, !types.isEmpty {
+            if !nonTradeTypes.isDisjoint(with: types) { return nil }
+            let hasTradeType = !tradeTypes.isDisjoint(with: types)
+            let onlyGenericTypes = Set(types).isSubset(of: genericTypes)
+            if !hasTradeType && !onlyGenericTypes { return nil }
+        }
 
         // Every card must have an image — skip placeless results.
         // Cheap pre-filter: drop low-resolution source photos (small originals

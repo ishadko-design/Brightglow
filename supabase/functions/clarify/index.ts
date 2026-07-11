@@ -1,24 +1,29 @@
 // Supabase Edge Function: `clarify`
 //
-// One turn of the clarifying chat that runs between the user's typed request
-// and the price estimate. Claude either asks the next question (max 3 per
-// session, one at a time, only about things that change the price — quantity,
-// size, item type, material) or finishes with a canonical `details` summary
-// phrased so the pricing engine's quantity parser can read it ("250 sq ft",
-// "2 windows", "2 pairs of french doors"), plus the best-fitting category.
+// The clarifying chat that runs between the user's typed/photographed request
+// and the results screen. Its PRIMARY job is to disambiguate toward the right
+// LOCAL BUSINESS — a home-trade contractor or an auto/moto shop — and to
+// describe what a matching work photo looks like so results can rank businesses
+// that have actually done a similar job. A price estimate is a SECONDARY bonus,
+// produced only for home trades the pricing engine covers.
 //
-// The chat never produces a price — the client feeds `details` into the
-// existing `pricing` function, so every displayed number still comes from
-// EstimationPro data. Any failure here is non-fatal: the client proceeds to
-// the estimate exactly as if the chat didn't exist.
+// The chat never produces a price itself — the client feeds `details` into the
+// `pricing` function. Any failure here is non-fatal: the client proceeds to the
+// results screen exactly as if the chat hadn't run.
+//
+// Scalable questioning: there is no fixed question count. The model asks only
+// questions whose answer changes the business match, the photo filter, or the
+// price, and stops the instant the match is confident — 1 question for a clear
+// job, up to HARD_CEILING for an ambiguous multi-service one.
 //
 // POST { messages: [{role: "user"|"assistant", content}], photo_details? }
-//   -> { action: "ask", question, quick_replies }
-//   -> { action: "done", category, details }
+//   -> { action: "ask",  question, quick_replies, vertical, category }
+//   -> { action: "done", vertical, category, search_terms, photo_terms,
+//                        details, priceable }
 //
 // Deploy:   supabase functions deploy clarify
 // Secrets:  ANTHROPIC_API_KEY (shared with `pricing`; unset -> 503, client
-//           skips the chat and estimates directly)
+//           skips the chat and goes straight to results)
 
 import Anthropic from "npm:@anthropic-ai/sdk";
 import { CATEGORY_GENERAL, JOB_TYPE_TAXONOMY } from "../pricing/pricingEngine.ts";
@@ -26,13 +31,22 @@ import { CATEGORY_GENERAL, JOB_TYPE_TAXONOMY } from "../pricing/pricingEngine.ts
 const APP_TOKEN = Deno.env.get("APP_TOKEN") ?? "";
 const ANTHROPIC_API_KEY = Deno.env.get("ANTHROPIC_API_KEY") ?? "";
 
-const MAX_QUESTIONS = 3;
+// Safety ceiling only — NOT a target. The model is told to stop as soon as the
+// match is confident; most requests finish in 1-3 questions.
+const HARD_CEILING = 7;
 
-const CATEGORIES = [...new Set(JOB_TYPE_TAXONOMY.map((e) => e.category))];
+// Home-trade categories the pricing engine knows (drives `priceable`).
+const HOME_CATEGORIES = [...new Set(JOB_TYPE_TAXONOMY.map((e) => e.category))];
 
-// What the pricing engine can actually use — shown to the model so its
-// questions target only price-relevant gaps, and its `details` land on
-// covered jobs in parseable units.
+// Auto & moto services — must mirror `autoCategoryItems` in Brightglow's
+// Vertical.swift. No pricing data source exists for vehicle work, so these are
+// never `priceable`; the chat's whole value here is match + photo terms.
+const AUTO_SERVICES = ["Repair", "Tires", "Cleaning & Detailing", "Body & Paint", "Glass"];
+
+const ALL_CATEGORIES = [...HOME_CATEGORIES, ...AUTO_SERVICES];
+
+// What the pricing engine can actually use — shown to the model so its home
+// questions target price-relevant gaps and its `details` land in parseable units.
 const TAXONOMY_LINES = [
   ...JOB_TYPE_TAXONOMY.map((e) => `- ${e.job_type} (${e.category}, per ${e.unit})`),
   ...Object.values(CATEGORY_GENERAL)
@@ -41,42 +55,82 @@ const TAXONOMY_LINES = [
 ].join("\n");
 
 function systemPrompt(remaining: number): string {
-  return `You help price a home repair or improvement job. Ask the fewest \
-clarifying questions needed to pin down what drives the price, then finish. \
+  const mustFinish = remaining === 0;
+  return `You help a user find a LOCAL BUSINESS that can fix their problem — \
+either a home-trade contractor or an auto/moto shop. Your job is to ask the \
+fewest questions needed to (1) identify the right kind of business and (2) \
+describe what a matching work photo looks like. A price is a bonus, never the goal.
+
 You may ask at most ${remaining} more question${remaining === 1 ? "" : "s"}\
-${remaining === 0 ? ' — you MUST finish now with action "done"' : ""}.
+${mustFinish ? ' — you MUST finish now with action "done"' : ""}.
 
-Rules for questions (action "ask"):
-- One question per turn, plain non-technical language, under 20 words.
-- Only ask what changes the estimate: quantity or size, the specific item or
-  job, material/type. Never ask for contact info, address, or timing.
-- Offer 2-4 short quick_replies when natural options exist ("1 pair" /
-  "2 pairs", "Vinyl" / "Wood").
-- Prefer one good question over finishing early: if the quantity, size, or
-  specific item is missing OR could be read more than one way, ask. Example:
-  "replace 2 french doors" is ambiguous — 2 door panels (one pair) or 2
-  complete pairs? Ask, don't guess.
-- Finish without asking only when the request already states the job and its
-  quantity unambiguously.
-- For flooring jobs, if the user hasn't said so, ask whether the old floor
-  needs removing first (quick_replies like "Yes, remove old floor" /
-  "No, it's bare") — tear-out changes the price and estimates should say
-  whether they include it.
+Ask a question (action "ask") ONLY if its answer changes one of:
+- which KIND of business matches (the biggest lever, ask this first),
+- which of a business's work photos count as "a similar job",
+- the price (home trades only).
+Stop the moment you can confidently name the business type and the matching
+photo — that may be after a single question. Keep asking (up to the limit) only
+while the request still straddles clearly different businesses or services.
+Never pad to the limit with low-value questions.
 
-Rules for finishing (action "done"):
-- category: the best-fitting category from: ${CATEGORIES.join(", ")}. Use ""
-  if none fits.
-- details: a short comma-separated summary of the cost-relevant facts the
-  user confirmed. Phrase quantities canonically so the pricing engine can
-  parse them: areas as "N sq ft", lengths as "N linear ft", counts as
-  "N windows" / "N doors" / "N outlets", and french doors as "N pair(s) of
-  french doors". Scope the user confirmed goes in as canonical phrases too:
-  "remove old flooring", "subfloor repair", "floor leveling". Only include
-  facts the user explicitly stated or confirmed — never resolve an ambiguity
-  by guessing; if a quantity was never pinned down, leave it out of details.
+Question style: one per turn, plain non-technical language, under 20 words,
+2-4 short quick_replies when natural options exist. Never ask for contact info,
+address, or timing.
 
-The pricing engine covers these jobs — ask toward them, and note each one's
-pricing unit (that's the quantity worth clarifying):
+TRUST THE PHOTO: when the request carries a "(Visible in the user's photo: …)"
+note, treat every attribute it states as ALREADY ESTABLISHED and never ask what
+it answers. If it names a car, truck, or motorcycle (or any make/model), the
+vehicle type is settled — do NOT ask car-vs-motorcycle. If it names the make,
+model, material, size, or capacity, do not re-ask those. Fold a known make/model
+into search_terms and photo_terms (e.g. "silver Honda Civic bumper").
+
+Decide the VERTICAL first:
+- "home" — repair/improvement to a house or yard: ${HOME_CATEGORIES.join(", ")}.
+- "auto_moto" — anything about a car, truck, or motorcycle. Services:
+  Repair (engine, brakes, transmission, oil, general maintenance), Tires,
+  Cleaning & Detailing, Body & Paint (dents, scratches, collision, respray),
+  Glass (windshield, auto glass). If it's a MOTORCYCLE, always establish that —
+  it routes to motorcycle shops, not car shops.
+
+Per-vertical priorities:
+- Auto/moto: ask car-vs-motorcycle ONLY when neither the request nor the photo
+  note reveals it — if the photo already names the vehicle, skip straight to
+  matching. If the problem straddles services (e.g. "fix my bumper" could be
+  Body & Paint or a dealer), ask which. No price is produced — do not ask
+  price-only questions. Once the service and vehicle are known, finish.
+- Home: after the business type is clear, ask the cost driver that also sharpens
+  the photo match — the item's material/type and (for per-area jobs) size.
+  Examples: furnace -> gas / heat pump / mini split; water heater -> tank /
+  tankless; window -> operation (sliding, casement, double-hung) AND frame
+  material (vinyl, wood, aluminum, fiberglass); flooring -> material + whether
+  the old floor is removed; roof -> material + approx area; vanity -> width +
+  whether faucet/top are replaced.
+
+Finishing (action "done") — fill EVERY field:
+- vertical: "home" | "auto_moto".
+- category: the best-fit business category. Home: one of ${HOME_CATEGORIES.join(", ")}. \
+Auto: one of ${AUTO_SERVICES.join(", ")}. Use "" only if nothing fits.
+- search_terms: a short Google-Maps-style phrase to FIND the business, e.g.
+  "tankless water heater installer", "motorcycle brake repair shop",
+  "auto body dent repair", "hardwood flooring contractor". Include the vehicle
+  type for auto. Keep it to the trade/service — no location, no brand.
+- photo_terms: 2-6 words describing what a matching WORK PHOTO shows, used to
+  rank each business's photos. E.g. "tankless water heater wall", "motorcycle
+  brake caliper disc", "dented car bumper", "hardwood floor living room".
+- details: HOME ONLY — a short comma-separated summary of the cost-relevant
+  facts the user confirmed, phrased canonically so the pricing engine can parse
+  them: areas as "N sq ft", lengths as "N linear ft", counts as "N windows" /
+  "N doors" / "N outlets", vanity widths as "N inch vanity", roof materials as
+  "asphalt shingle roof" / "metal roof", french doors as "N pair(s) of french
+  doors", scope as "remove old flooring" / "subfloor repair" / "keep existing
+  faucet". Only facts the user explicitly stated or confirmed — never guess.
+  Use "" for auto/moto, or if no cost fact was pinned down.
+
+When asking (action "ask"): also return your best-so-far vertical and category
+(use "" if not yet known); leave search_terms, photo_terms, details as "".
+
+The pricing engine covers these home jobs — for home requests, aim toward them
+and note each one's pricing unit (the quantity worth clarifying):
 ${TAXONOMY_LINES}`;
 }
 
@@ -86,10 +140,16 @@ const SCHEMA = {
     action: { type: "string", enum: ["ask", "done"] },
     question: { type: "string" },
     quick_replies: { type: "array", items: { type: "string" } },
-    category: { type: "string", enum: [...CATEGORIES, ""] },
+    vertical: { type: "string", enum: ["home", "auto_moto", ""] },
+    category: { type: "string", enum: [...ALL_CATEGORIES, ""] },
+    search_terms: { type: "string" },
+    photo_terms: { type: "string" },
     details: { type: "string" },
   },
-  required: ["action", "question", "quick_replies", "category", "details"],
+  required: [
+    "action", "question", "quick_replies",
+    "vertical", "category", "search_terms", "photo_terms", "details",
+  ],
   additionalProperties: false,
 } as const;
 
@@ -103,6 +163,12 @@ function json(payload: unknown, status = 200): Response {
     status,
     headers: { "Content-Type": "application/json" },
   });
+}
+
+/// A price is only ever expected for a covered home trade. Auto/moto and any
+/// category the pricing engine doesn't know are match-only.
+function isPriceable(vertical: string, category: string): boolean {
+  return vertical === "home" && HOME_CATEGORIES.includes(category);
 }
 
 Deno.serve(async (req) => {
@@ -120,7 +186,7 @@ Deno.serve(async (req) => {
   }
 
   const rawMessages = payload.messages;
-  if (!Array.isArray(rawMessages) || rawMessages.length === 0 || rawMessages.length > 20) {
+  if (!Array.isArray(rawMessages) || rawMessages.length === 0 || rawMessages.length > 40) {
     return json({ error: "missing messages" }, 400);
   }
   const messages: Turn[] = [];
@@ -142,20 +208,29 @@ Deno.serve(async (req) => {
   }
 
   const asked = messages.filter((m) => m.role === "assistant").length;
-  const remaining = Math.max(0, MAX_QUESTIONS - asked);
+  const remaining = Math.max(0, HARD_CEILING - asked);
 
   let parsed: {
     action?: string;
     question?: string;
     quick_replies?: string[];
+    vertical?: string;
     category?: string;
+    search_terms?: string;
+    photo_terms?: string;
     details?: string;
   };
   try {
     const client = new Anthropic({ apiKey: ANTHROPIC_API_KEY, timeout: 20_000, maxRetries: 1 });
     const response = await client.messages.create({
-      model: "claude-opus-4-8",
-      max_tokens: 500,
+      // Sonnet is markedly faster than Opus for this lightweight per-turn routing
+      // task and just as accurate against the fixed schema — the chat felt slow.
+      model: "claude-sonnet-5",
+      max_tokens: 600,
+      // Sonnet 5 runs adaptive thinking when `thinking` is omitted — we don't
+      // want it here: this is a quick schema-bound routing call, and thinking
+      // only adds latency and output-token cost. Keep it off for speed.
+      thinking: { type: "disabled" },
       system: systemPrompt(remaining),
       output_config: { format: { type: "json_schema", schema: SCHEMA } },
       messages,
@@ -167,9 +242,10 @@ Deno.serve(async (req) => {
     return json({ error: "clarify failed" }, 502);
   }
 
-  // Out of questions -> the model was told to finish; coerce if it didn't.
+  // Out of questions -> the model was told to finish; coerce if it didn't. We
+  // keep whatever match fields it produced so results still get search terms.
   if (parsed.action !== "done" && remaining === 0) {
-    parsed = { action: "done", category: "", details: "" };
+    parsed.action = "done";
   }
 
   if (parsed.action === "ask" && parsed.question) {
@@ -177,11 +253,20 @@ Deno.serve(async (req) => {
       action: "ask",
       question: parsed.question,
       quick_replies: (parsed.quick_replies ?? []).slice(0, 4),
+      vertical: parsed.vertical ?? "",
+      category: parsed.category ?? "",
     });
   }
+
+  const vertical = parsed.vertical === "auto_moto" ? "auto_moto" : "home";
+  const category = parsed.category ?? "";
   return json({
     action: "done",
-    category: parsed.category ?? "",
-    details: parsed.details ?? "",
+    vertical,
+    category,
+    search_terms: parsed.search_terms ?? "",
+    photo_terms: parsed.photo_terms ?? "",
+    details: vertical === "home" ? (parsed.details ?? "") : "",
+    priceable: isPriceable(vertical, category),
   });
 });

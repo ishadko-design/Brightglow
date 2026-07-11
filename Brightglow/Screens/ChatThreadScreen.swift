@@ -19,6 +19,24 @@ struct ChatThreadScreen: View {
 
     private var isCustomer: Bool { conversation.viewerIsCustomer }
 
+    // Bubble gradients — Figma node 783:2127, exact stops + handle directions.
+    /// Sent (mine): #0039F5 → #3959C5, top-right → bottom-left.
+    static let sentGradient = LinearGradient(
+        stops: [.init(color: Color(hex: "#0039F5"), location: 0),
+                .init(color: Color(hex: "#3959C5"), location: 1)],
+        startPoint: UnitPoint(x: 1.0, y: -0.05),
+        endPoint: UnitPoint(x: -0.02, y: 0.74)
+    )
+    /// Received (business message): #2D3047 → #3D2C00, bottom-right → top-left.
+    /// Shares the exact stops with the clarify chat's AI follow-up bubble
+    /// (MainScreen.chatBubble) so both non-user bubbles read as one system.
+    static let receivedGradient = LinearGradient(
+        stops: [.init(color: Color(hex: "#2D3047"), location: 0),
+                .init(color: Color(hex: "#3D2C00"), location: 1)],
+        startPoint: UnitPoint(x: 1.0, y: 0.86),
+        endPoint: UnitPoint(x: 0.03, y: 0.0)
+    )
+
     var body: some View {
         ZStack {
             AppColors.bg.ignoresSafeArea()
@@ -34,6 +52,9 @@ struct ChatThreadScreen: View {
         .preferredColorScheme(.dark)
         .task { await start() }
         .onDisappear {
+            // Mark read on the way out too, so replies that arrived while the
+            // thread was open are covered (start() only stamps the open time).
+            ChatService.markThreadRead(conversation.id)
             liveTask?.cancel()
             liveTask = nil
         }
@@ -50,13 +71,13 @@ struct ChatThreadScreen: View {
             }
             VStack(alignment: .leading, spacing: 1) {
                 Text(conversation.title)
-                    .font(.h3)
+                    .font(.h2)                       // Figma: Lato ExtraBold 800 / 24
                     .foregroundStyle(.white)
                     .lineLimit(1)
                 if let city = conversation.city, !city.isEmpty {
                     Text(city)
-                        .font(.bodySmall)
-                        .foregroundStyle(.white.opacity(0.5))
+                        .font(.bodySmall)            // Figma: Poppins Light 300 / 14
+                        .foregroundStyle(.white)
                 }
             }
             Spacer()
@@ -67,30 +88,38 @@ struct ChatThreadScreen: View {
         .padding(.bottom, 4)
     }
 
+    /// The photo belongs to the request, so it hangs off the customer's first
+    /// message (direction "outbound") — that's the message it was shared with.
+    private var photoAnchorId: UUID? {
+        messages.first(where: { $0.direction == "outbound" })?.id
+    }
+
     @ViewBuilder
     private var messageList: some View {
         ScrollViewReader { proxy in
             ScrollView {
-                LazyVStack(spacing: 10) {
-                    if let photo {
-                        Image(uiImage: photo)
-                            .resizable()
-                            .scaledToFill()
-                            .frame(maxWidth: 220, maxHeight: 260)
-                            .clipShape(RoundedRectangle(cornerRadius: 18))
-                            .frame(maxWidth: .infinity, alignment: isCustomer ? .trailing : .leading)
-                            .padding(.horizontal, 16)
-                            .padding(.top, 8)
-                    }
-
+                LazyVStack(spacing: 16) {            // Figma: 16 between message blocks
                     if loading {
                         ProgressView().tint(.white).padding(.top, 24)
                     }
 
+                    // Fallback: a photo with no message to anchor it to (rare)
+                    // still shows on the customer's side.
+                    if let photo, photoAnchorId == nil {
+                        photoAttachment(photo).padding(.horizontal, 16)
+                    }
+
                     ForEach(messages) { message in
-                        bubble(message)
-                            .id(message.id)
-                            .padding(.horizontal, 16)
+                        // Group the shared photo with the message it came in on,
+                        // so it reads as one thing the customer sent.
+                        VStack(spacing: 8) {
+                            bubble(message)
+                            if message.id == photoAnchorId, let photo {
+                                photoAttachment(photo)
+                            }
+                        }
+                        .id(message.id)
+                        .padding(.horizontal, 16)
                     }
                 }
                 .padding(.bottom, 12)
@@ -106,17 +135,31 @@ struct ChatThreadScreen: View {
         return HStack {
             if mine { Spacer(minLength: 48) }
             Text(message.body)
-                .font(.bodyLight)
+                .font(.bodyLight)                    // Figma: Poppins Light 300 / 17
                 .foregroundStyle(.white)
-                .padding(.horizontal, 14)
-                .padding(.vertical, 10)
+                .padding(16)                          // Figma: 16 on all sides
                 .background(
                     mine
-                        ? AnyShapeStyle(AppColors.accentGradient)
-                        : AnyShapeStyle(Color.white.opacity(0.12)),
-                    in: RoundedRectangle(cornerRadius: 18, style: .continuous)
+                        ? AnyShapeStyle(Self.sentGradient)
+                        : AnyShapeStyle(Self.receivedGradient),
+                    in: RoundedRectangle(cornerRadius: 24, style: .continuous)  // Figma: r=24
                 )
             if !mine { Spacer(minLength: 48) }
+        }
+    }
+
+    /// The shared request photo, aligned to the customer's side (right for the
+    /// customer, left for the business) and rounded to match the bubbles.
+    /// `scaledToFit` keeps the whole image — the drawn-on annotation matters.
+    private func photoAttachment(_ image: UIImage) -> some View {
+        HStack(spacing: 0) {
+            if isCustomer { Spacer(minLength: 48) }
+            Image(uiImage: image)
+                .resizable()
+                .scaledToFit()
+                .frame(maxWidth: 220, maxHeight: 280)
+                .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))  // Figma: r=16
+            if !isCustomer { Spacer(minLength: 48) }
         }
     }
 
@@ -174,6 +217,7 @@ struct ChatThreadScreen: View {
     // MARK: - Data
 
     private func start() async {
+        ChatService.markThreadRead(conversation.id)   // opening = reviewed
         await loadMessages()
         loading = false
         loadPhoto()

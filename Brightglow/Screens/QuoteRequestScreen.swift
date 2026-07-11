@@ -48,7 +48,14 @@ struct QuoteRequestScreen: View {
     /// email card in the normal case (Figma doesn't show one; it's collected
     /// at sign-in), so this only ever surfaces to unblock a broken send.
     private var emailNeedsAttention: Bool { !email.isEmpty && !emailValid }
-    private var canSend: Bool { emailValid && !images.isEmpty && contractor != nil && !sending }
+    /// Send needs the user's own words AND a photo — a request that's just a
+    /// category name (or nothing) tells the business nothing actionable.
+    private var hasDescription: Bool {
+        !editableRequest.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
+    private var canSend: Bool {
+        emailValid && hasDescription && !images.isEmpty && contractor != nil && !sending
+    }
 
     var body: some View {
         ZStack {
@@ -91,13 +98,12 @@ struct QuoteRequestScreen: View {
             ScrollView {
                 VStack(spacing: 24) {
 
-                    // Contractor avatar + reassurance line — centered.
-                    VStack(spacing: 24) {
-                        contractorAvatar
-                        reassuranceText
-                    }
-                    .frame(maxWidth: .infinity)
-                    .padding(.horizontal, 24)
+                    // Reassurance line — centered. (No avatar: Places doesn't
+                    // provide business logos, and an initials placeholder read
+                    // as a fake one.)
+                    reassuranceText
+                        .frame(maxWidth: .infinity)
+                        .padding(.horizontal, 24)
 
                     VStack(alignment: .leading, spacing: 24) {
                         // Photos — required by LeadBridge (photo + text, not text alone).
@@ -158,6 +164,10 @@ struct QuoteRequestScreen: View {
                 await MainActor.run {
                     images.append(contentsOf: added)
                     pickedItems = []
+                    // A single new photo goes straight to the full-screen drawing
+                    // tool so the user can circle the problem right away (same
+                    // as tapping its thumbnail); batch-adds skip it.
+                    if added.count == 1 { drawingIndex = images.count - 1 }
                 }
             }
         }
@@ -185,60 +195,33 @@ struct QuoteRequestScreen: View {
         }
     }
 
-    // MARK: - Contractor avatar
-
-    /// Same initials placeholder used in the contractor list (contractors carry
-    /// no logo asset), scaled up to this screen's 88×88 footprint.
-    private var contractorAvatar: some View {
-        ZStack {
-            RoundedRectangle(cornerRadius: 24, style: .continuous)
-                .fill(Color.white.opacity(0.12))
-            Text(String(contractor?.name.prefix(1) ?? "?"))
-                .font(.system(size: 36, weight: .bold))
-                .foregroundStyle(.white)
-        }
-        .frame(width: 88, height: 88)
-    }
-
     private var reassuranceText: some View {
         let name = contractor?.name ?? "this business"
         let tail = name.hasSuffix(".") ? " They'll reply to you directly." : ". They'll reply to you directly."
-        return (
-            Text("We'll email your request to ")
-                + Text(name).fontWeight(.bold)
-                + Text(tail)
-        )
-        .font(.bodyLight)
-        .foregroundStyle(.white)
-        .multilineTextAlignment(.center)
+        // Text interpolation, not `Text + Text` (deprecated in iOS 26).
+        return Text("We'll email your request to \(Text(name).fontWeight(.bold))\(tail)")
+            .font(.bodyLight)
+            .foregroundStyle(.white)
+            .multilineTextAlignment(.center)
     }
 
     // MARK: - Photos
 
     private var photosSection: some View {
-        // Figma tiles are 112×136 (portrait). A strip of `tileCount` tiles at
-        // that size, centered, if it fits; otherwise a scrolling strip.
-        let tileCount = images.count + 1
-        let tileWidth: CGFloat = 112
-        let tileHeight: CGFloat = 136
-        let available = UIScreen.main.bounds.width - 32
-        let needed = CGFloat(tileCount) * tileWidth + CGFloat(tileCount - 1) * 8
-
-        return Group {
-            if needed <= available {
+        // Figma tiles are 112×136 (portrait). A centered strip when every tile
+        // fits the available width; otherwise a scrolling strip. ViewThatFits
+        // measures for us — no UIScreen.main (deprecated in iOS 26).
+        ViewThatFits(in: .horizontal) {
+            HStack(spacing: 8) {
+                tiles(width: 112, height: 136)
+            }
+            ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 8) {
-                    Spacer(minLength: 0)
-                    tiles(width: tileWidth, height: tileHeight)
-                    Spacer(minLength: 0)
-                }
-            } else {
-                ScrollView(.horizontal, showsIndicators: false) {
-                    HStack(spacing: 8) {
-                        tiles(width: tileWidth, height: tileHeight)
-                    }
+                    tiles(width: 112, height: 136)
                 }
             }
         }
+        .frame(maxWidth: .infinity)
     }
 
     @ViewBuilder
@@ -258,15 +241,18 @@ struct QuoteRequestScreen: View {
                 .clipShape(RoundedRectangle(cornerRadius: 16))
                 .onTapGesture { drawingIndex = index }
 
+            // Edit (pencil) — bottom-leading, inset inside the tile. Frosted
+            // secondary-button background (Capsule on a square = circle).
             Image(systemName: "pencil")
-                .font(.system(size: 11, weight: .bold))
+                .font(.system(size: 12, weight: .bold))
                 .foregroundStyle(.white)
-                .frame(width: 24, height: 24)
-                .background(Circle().fill(.white.opacity(0.2)))
-                .padding(6)
+                .frame(width: 28, height: 28)
+                .secondaryButtonBackground()
+                .padding(8)
                 .frame(width: width, height: height, alignment: .bottomLeading)
                 .allowsHitTesting(false)
 
+            // Remove (✕) — top-trailing, inset inside the tile (not offset out).
             Button {
                 withAnimation(.easeInOut(duration: 0.15)) { _ = images.remove(at: index) }
             } label: {
@@ -274,9 +260,9 @@ struct QuoteRequestScreen: View {
                     .font(.system(size: 12, weight: .bold))
                     .foregroundStyle(.white)
                     .frame(width: 28, height: 28)
-                    .background(Circle().fill(.white.opacity(0.2)))
+                    .secondaryButtonBackground()
             }
-            .offset(x: 6, y: -6)
+            .padding(8)
         }
     }
 
@@ -425,11 +411,12 @@ struct QuoteRequestScreen: View {
         sendError = nil
         sending = true
 
-        let description = editableRequest.isEmpty ? requestSummary : editableRequest
+        let description = editableRequest
         Task {
             do {
                 _ = try await LeadBridgeService.submitLead(
                     userEmail: email,
+                    userId: auth.user?.id,
                     contractorEmail: "hello@brightglow.co",
                     businessName: contractor.name,
                     description: description,

@@ -33,6 +33,41 @@ enum ChatService {
         let id: UUID
     }
 
+    // MARK: - Unread / read tracking
+
+    /// Per-thread "last opened" timestamps, keyed by lead id. A conversation is
+    /// unread when its newest message is incoming and arrived after the viewer
+    /// last opened *that thread* — so reviewing one thread clears only its own
+    /// indicator, not the whole inbox. Read state is per-device (local only).
+    private static let threadReadKey = "chatThreadReadAt"
+
+    private static func threadReads() -> [String: Double] {
+        UserDefaults.standard.dictionary(forKey: threadReadKey) as? [String: Double] ?? [:]
+    }
+
+    /// Mark a thread read up to now — call when the user opens/leaves it.
+    static func markThreadRead(_ leadId: UUID) {
+        var map = threadReads()
+        map[leadId.uuidString] = Date().timeIntervalSince1970
+        UserDefaults.standard.set(map, forKey: threadReadKey)
+    }
+
+    private static func lastRead(_ leadId: UUID) -> Date {
+        Date(timeIntervalSince1970: threadReads()[leadId.uuidString] ?? 0)
+    }
+
+    /// True when a conversation has an incoming message newer than the last time
+    /// the viewer opened it — drives the row dot and the main-screen header dot.
+    static func isUnread(_ c: Conversation) -> Bool {
+        c.lastMessageIncoming && (c.lastMessageAt ?? .distantPast) > lastRead(c.id)
+    }
+
+    /// True when any conversation is unread. Best-effort: a failure reports none.
+    static func hasUnread() async -> Bool {
+        guard let convos = try? await conversations() else { return false }
+        return convos.contains(where: isUnread)
+    }
+
     // MARK: - Conversations list
 
     /// Every conversation the signed-in user is a party to, newest activity
@@ -50,6 +85,12 @@ enum ChatService {
         return rows.map { row in
             let sorted = row.messages.sorted { $0.created_at < $1.created_at }
             let last = sorted.last
+            let viewerIsCustomer = row.user_id != nil && row.user_id == myId
+            // Incoming = the last message came from the other party. Direction is
+            // stored relative to the customer (outbound = customer→business).
+            let incoming = last.map { msg in
+                viewerIsCustomer ? msg.direction == "inbound" : msg.direction == "outbound"
+            } ?? false
             return Conversation(
                 id: row.id,
                 publicId: row.public_id,
@@ -57,10 +98,11 @@ enum ChatService {
                 city: row.city,
                 status: row.status,
                 createdAt: row.created_at,
-                viewerIsCustomer: row.user_id != nil && row.user_id == myId,
+                viewerIsCustomer: viewerIsCustomer,
                 photoAttachmentId: row.attachments.first?.id,
                 lastMessage: last?.body_text,
-                lastMessageAt: last?.created_at
+                lastMessageAt: last?.created_at,
+                lastMessageIncoming: incoming
             )
         }
         // Order by most recent message, falling back to the lead's own time.

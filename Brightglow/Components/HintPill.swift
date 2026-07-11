@@ -19,5 +19,8 @@ struct HintPill: View {
                 }
             }
             .clipShape(RoundedRectangle(cornerRadius: 32, style: .continuous))
+            // Always keep the pill 16pt off the screen edges; the label wraps to
+            // a second line rather than running to the edge.
+            .padding(.horizontal, 16)
     }
 }

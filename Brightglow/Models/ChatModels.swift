@@ -19,6 +19,9 @@ struct Conversation: Identifiable, Equatable {
     let photoAttachmentId: UUID?
     let lastMessage: String?
     let lastMessageAt: Date?
+    /// True when the most recent message was authored by the counterparty (i.e.
+    /// something the viewer may not have read yet). Drives the header unread dot.
+    let lastMessageIncoming: Bool
 
     /// What to show as the conversation title. The customer sees the business;
     /// the business sees a generic customer label (their email is never exposed).

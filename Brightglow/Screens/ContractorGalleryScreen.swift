@@ -36,12 +36,12 @@ struct ContractorGalleryScreen: View {
     /// When the gallery is opened from the List view, the already-loaded
     /// contractors and their screened work photos are handed over so we don't
     /// re-fetch or re-screen. `startContractorID` is the contractor whose photo
-    /// was tapped — it's surfaced first. `presetEstimate` keeps the price line in
-    /// step with the list.
+    /// was tapped — it's surfaced first, opened on `startPhotoIndex` (the exact
+    /// photo tapped in the list strip).
     var preloadedContractors: [Contractor]? = nil
     var preScreened: [String: [String]] = [:]
     var startContractorID: String? = nil
-    var presetEstimate: PriceTier? = nil
+    var startPhotoIndex: Int = 0
     /// Next-page token from the List view's fetch, so the gallery can keep
     /// loading more contractors as the user swipes through the stack.
     var initialPageToken: String? = nil
@@ -60,7 +60,6 @@ struct ContractorGalleryScreen: View {
     @State private var isLoading   = false
     @State private var showQuote   = false
     @State private var selectedContractor: Contractor? = nil
-    @State private var estimate: PriceTier? = nil
     @State private var totalCount  = 0
 
     @State private var sheetDetent: SheetDetent = .collapsed
@@ -79,6 +78,25 @@ struct ContractorGalleryScreen: View {
     private var headerTitle: String {
         let q = searchQuery.trimmingCharacters(in: .whitespacesAndNewlines)
         return q.isEmpty ? category : q
+    }
+
+    /// What the user actually typed, if anything. Auto categories arrive with a
+    /// synthetic Places query ("auto repair and maintenance shop") in
+    /// `searchQuery` — that's routing input, not the user's words, so it never
+    /// pre-fills the quote-request text.
+    private var typedQuery: String {
+        let q = searchQuery.trimmingCharacters(in: .whitespacesAndNewlines)
+        if autoCategoryItems.contains(where: {
+            $0.searchQuery.caseInsensitiveCompare(q) == .orderedSame
+                || $0.motoSearchQuery.caseInsensitiveCompare(q) == .orderedSame
+        }) { return "" }
+        return q
+    }
+
+    /// Term source for photo ordering — the typed query, else the category, so a
+    /// plain category browse still leads with its best-matching photos.
+    private var orderQuery: String {
+        searchQuery.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? category : searchQuery
     }
 
     var body: some View {
@@ -113,7 +131,10 @@ struct ContractorGalleryScreen: View {
                         photos: screenedByID[contractor.id],
                         width: proxy.size.width,
                         imageHeight: imageHeight,
-                        stripBottomPadding: collapsedSheetH + 12
+                        stripBottomPadding: collapsedSheetH + 12,
+                        // The contractor opened from the list starts on the exact
+                        // photo that was tapped there; everyone else on the first.
+                        initialIndex: contractor.id == startContractorID ? startPhotoIndex : 0
                     )
                     .id(contractor.id)
                     .ignoresSafeArea()
@@ -144,7 +165,6 @@ struct ContractorGalleryScreen: View {
                 // ── Header — matches the main screen's top bar ────────────────
                 GalleryHeader(
                     title: topContractor?.name ?? headerTitle,
-                    subtitle: priceText(for: topContractor),
                     onBack: { dismiss() }
                 )
                 .frame(maxHeight: .infinity, alignment: .top)
@@ -169,7 +189,7 @@ struct ContractorGalleryScreen: View {
             if let id { lastViewedID?.wrappedValue = id }
         }
         .navigationDestination(isPresented: $showQuote) {
-            QuoteRequestScreen(contractor: selectedContractor, requestSummary: headerTitle, initialImages: attachedImages)
+            QuoteRequestScreen(contractor: selectedContractor, requestSummary: typedQuery, initialImages: attachedImages)
         }
     }
 
@@ -244,17 +264,18 @@ struct ContractorGalleryScreen: View {
                 .foregroundStyle(.white)
             Spacer(minLength: 0)
             if contractor.reviewCount > 0 {
-                // Stars + rating number are display-only; only "reviews" is the
-                // link (with a ≥44pt-tall tap box to avoid accidental taps).
+                // Stars + rating number are display-only; "31 reviews" (count +
+                // word, both underlined) is the link (with a ≥44pt-tall tap box
+                // to avoid accidental taps).
                 HStack(spacing: 8) {
                     StarRow(rating: contractor.rating)
-                    Text("\(contractor.rating, specifier: "%.1f") • \(contractor.reviewCount)")
+                    Text("\(contractor.rating, specifier: "%.1f") •")
                         .font(.bodySmall)
                         .foregroundStyle(.white.opacity(0.5))
                     Button {
                         if let url = googleReviewsURL(for: contractor) { openURL(url) }
                     } label: {
-                        Text("reviews")
+                        Text("\(contractor.reviewCount) reviews")
                             .font(.bodySmall)
                             .foregroundStyle(.white.opacity(0.5))
                             .underline()
@@ -266,17 +287,6 @@ struct ContractorGalleryScreen: View {
             }
         }
     }
-
-    // Price line shown under the contractor name in the header. Real data
-    // only — the pricing engine or a review-derived range — otherwise a
-    // "Coming soon" placeholder with the real business count, never a guess.
-    private func priceText(for contractor: Contractor?) -> String? {
-        guard contractor != nil else { return nil }
-        guard let tier = estimate else { return priceComingSoonText(businessCount: totalCount) }
-        return "\(tier.label): $\(money(tier.min))–\(money(tier.max))"
-    }
-
-    private func money(_ v: Int) -> String { v >= 1000 ? "\(v / 1000)k" : "\(v)" }
 
     /// Deep link to the contractor's Google reviews. `id` is the Google place id
     /// on the live path (mock contractors won't resolve, which is fine here).
@@ -452,27 +462,36 @@ struct ContractorGalleryScreen: View {
             }
             // Persisted verdict from a previous launch — reuse, no download.
             if let v = ScreeningStore.shared.get(contractor.id, allowVehicles: allowVehicles) {
-                let ordered = PhotoFilter.order(v.kept, query: searchQuery)
+                let ordered = PhotoFilter.order(v.kept, query: orderQuery)
                 screenedByID[contractor.id] = ordered
                 if ordered.isEmpty {
                     contractors.removeAll { $0.id == contractor.id }
                     if totalCount > 0 { totalCount -= 1 }
                 } else if let first = ordered.first, let u = URL(string: first) {
                     await ImageCache.shared.prefetch(u)
+                    // Verdict cached before rich tagging → sharpen its order now.
+                    if !v.enriched {
+                        enrichInBackground(contractor.id, kept: v.kept, scanned: v.scanned,
+                                           allowVehicles: allowVehicles)
+                    }
                 }
                 continue
             }
             // Shared verdict from another user — reuse, no download.
             if let v = await VerdictService.fetch(ids: [contractor.id], allowVehicles: allowVehicles)[contractor.id] {
                 ScreeningStore.shared.save(contractor.id, allowVehicles: allowVehicles,
-                                           kept: v.kept, scanned: v.scanned)
-                let ordered = PhotoFilter.order(v.kept, query: searchQuery)
+                                           kept: v.kept, scanned: v.scanned, enriched: v.enriched)
+                let ordered = PhotoFilter.order(v.kept, query: orderQuery)
                 screenedByID[contractor.id] = ordered
                 if ordered.isEmpty {
                     contractors.removeAll { $0.id == contractor.id }
                     if totalCount > 0 { totalCount -= 1 }
                 } else if let first = ordered.first, let u = URL(string: first) {
                     await ImageCache.shared.prefetch(u)
+                    if !v.enriched {
+                        enrichInBackground(contractor.id, kept: v.kept, scanned: v.scanned,
+                                           allowVehicles: allowVehicles)
+                    }
                 }
                 continue
             }
@@ -483,7 +502,7 @@ struct ContractorGalleryScreen: View {
             let scanned = min(galleryScanLimit, contractor.photos.count)
             ScreeningStore.shared.save(contractor.id, allowVehicles: allowVehicles, kept: kept, scanned: scanned)
             VerdictService.upload(id: contractor.id, allowVehicles: allowVehicles, kept: kept, scanned: scanned)
-            let ordered = PhotoFilter.order(kept, query: searchQuery)
+            let ordered = PhotoFilter.order(kept, query: orderQuery)
             guard !ordered.isEmpty else {
                 // No usable work photos → drop the business entirely rather than
                 // showing an empty placeholder. Keep totalCount in step so the
@@ -500,9 +519,36 @@ struct ContractorGalleryScreen: View {
             if let first = ordered.first, let u = URL(string: first) {
                 await ImageCache.shared.prefetch(u)
             }
+            // Sharpen the order with rich vision tags in the background (these
+            // paginated businesses were never in the list, so they're screened
+            // fresh here); the photo is already showing on the on-device ordering.
+            enrichInBackground(contractor.id, kept: kept, scanned: scanned, allowVehicles: allowVehicles)
         }
         // Dropping no-photo businesses can thin the stack — top up if we can.
         loadMoreIfNeeded()
+    }
+
+    /// Ask the vision model for rich, query-independent tags for a freshly-screened
+    /// business's photos, then re-order and re-share the enriched verdict. On-device
+    /// labels are only generic scene tokens (no "bumper", no car make), so query
+    /// ranking can't otherwise work for auto or specific home searches. Detached so
+    /// the photo shows immediately; this only refines the order a beat later.
+    private func enrichInBackground(_ id: String, kept: [ScreenedPhoto],
+                                    scanned: Int, allowVehicles: Bool) {
+        Task { @MainActor in
+            // nil = tagger didn't run → leave un-enriched so a later visit retries.
+            guard let enriched = await PhotoTagService.enrich(kept, allowVehicles: allowVehicles),
+                  contractors.contains(where: { $0.id == id }) else { return }
+            // Re-order only when the tags changed the labels; either way mark the
+            // verdict enriched so it isn't re-tagged on every visit.
+            if enriched != kept {
+                screenedByID[id] = PhotoFilter.order(enriched, query: orderQuery)
+            }
+            ScreeningStore.shared.save(id, allowVehicles: allowVehicles, kept: enriched,
+                                       scanned: scanned, enriched: true)
+            VerdictService.upload(id: id, allowVehicles: allowVehicles, kept: enriched,
+                                  scanned: scanned, enriched: true)
+        }
     }
 
     // ── Data loading (mirrors SwipeScreen) ────────────────────────────────────
@@ -514,7 +560,6 @@ struct ContractorGalleryScreen: View {
         // photos verbatim, surfacing the tapped contractor first.
         if let preloaded = preloadedContractors {
             screenedByID = preScreened
-            estimate = presetEstimate
             contractors = orderedForGallery(preloaded)
             // Continue the List view's search as the user swipes past its results.
             nextPageToken = initialPageToken
@@ -535,16 +580,9 @@ struct ContractorGalleryScreen: View {
             // e.g. to Kyiv, appear to do nothing).
             let page = await ContractorLoader.fetchLivePage(
                 category: category, searchQuery: searchQuery, near: coord)
-            let live = page.contractors
-            contractors = live
+            contractors = page.contractors
             nextPageToken = page.nextPageToken
             pagingCoord = coord
-            if !live.isEmpty {
-                Task { @MainActor in
-                    estimate = await ContractorLoader.estimate(
-                        category: category, searchQuery: searchQuery, near: coord)
-                }
-            }
             return
         }
         // Only with no resolvable location at all (denied / offline) do we show
@@ -580,9 +618,20 @@ private struct GalleryPhotoView: View {
     /// it just above the collapsed sheet.
     let stripBottomPadding: CGFloat
 
-    @State private var photoIndex = 0
+    @State private var photoIndex: Int
     /// The photo tapped for full-screen zoom (nil = viewer closed).
     @State private var zoomItem: ZoomItem? = nil
+
+    init(photos: [String]?, width: CGFloat, imageHeight: CGFloat,
+         stripBottomPadding: CGFloat, initialIndex: Int = 0) {
+        self.photos = photos
+        self.width = width
+        self.imageHeight = imageHeight
+        self.stripBottomPadding = stripBottomPadding
+        // Clamp so a stale index from the list can never point past the stack.
+        let count = photos?.count ?? 0
+        _photoIndex = State(initialValue: count > 0 ? min(max(initialIndex, 0), count - 1) : 0)
+    }
 
     private var shownPhotos: [String] { photos ?? [] }
 
@@ -611,7 +660,7 @@ private struct GalleryPhotoView: View {
                         .animation(.easeInOut(duration: 0.3), value: photoIndex)
                         // Tap opens the full-screen zoomable viewer; swipe pages.
                         .contentShape(Rectangle())
-                        .onTapGesture { if let photoURL { zoomItem = ZoomItem(url: photoURL) } }
+                        .onTapGesture { if photoURL != nil { zoomItem = ZoomItem(index: photoIndex) } }
                         .gesture(swipeGesture)
                 }
             }
@@ -626,7 +675,13 @@ private struct GalleryPhotoView: View {
             }
         }
         .fullScreenCover(item: $zoomItem) { item in
-            PhotoZoomViewer(url: item.url) { zoomItem = nil }
+            PhotoZoomViewer(
+                photos: shownPhotos,
+                initialIndex: item.index,
+                onClose: { zoomItem = nil },
+                // Keep the gallery photo + thumbnail strip in step with the
+                // viewer, so closing it lands on the photo the user paged to.
+                onIndexChange: { photoIndex = $0 })
         }
     }
 
@@ -711,25 +766,43 @@ private struct GalleryPhotoView: View {
 // MARK: - PhotoZoomViewer
 // Full-screen, pinch-to-zoom + pan photo viewer. The header is just a close (X)
 // button, per the design. Reuses the already-cached full-size photo so it opens
-// instantly. Double-tap toggles zoom.
+// instantly. Double-tap toggles zoom. When not zoomed in, a sideways swipe pages
+// through the same photo stack the gallery shows (wraps around, like the
+// gallery's own swipe); while zoomed in, the drag pans instead.
 // ─────────────────────────────────────────────────────────────────────────────
 
 /// Identifiable wrapper so the tapped photo drives a `fullScreenCover(item:)`.
 private struct ZoomItem: Identifiable {
     let id = UUID()
-    let url: URL
+    let index: Int
 }
 
 private struct PhotoZoomViewer: View {
-    let url: URL
+    let photos: [String]
     let onClose: () -> Void
+    /// Fired on every page so the gallery underneath stays on the same photo.
+    let onIndexChange: (Int) -> Void
 
+    @State private var index: Int
     @State private var scale: CGFloat = 1
     @GestureState private var pinch: CGFloat = 1
     @State private var offset: CGSize = .zero
     @State private var lastOffset: CGSize = .zero
 
     private let maxScale: CGFloat = 4
+
+    init(photos: [String], initialIndex: Int,
+         onClose: @escaping () -> Void,
+         onIndexChange: @escaping (Int) -> Void = { _ in }) {
+        self.photos = photos
+        self.onClose = onClose
+        self.onIndexChange = onIndexChange
+        _index = State(initialValue: initialIndex)
+    }
+
+    private var url: URL? {
+        photos.indices.contains(index) ? URL(string: photos[index]) : nil
+    }
 
     var body: some View {
         ZStack(alignment: .topLeading) {
@@ -741,6 +814,9 @@ private struct PhotoZoomViewer: View {
                 .offset(offset)
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .ignoresSafeArea()
+                .id(index)
+                .transition(.opacity)
+                .animation(.easeInOut(duration: 0.2), value: index)
                 .gesture(
                     MagnificationGesture()
                         .updating($pinch) { value, state, _ in state = value }
@@ -758,7 +834,14 @@ private struct PhotoZoomViewer: View {
                             offset = CGSize(width: lastOffset.width + v.translation.width,
                                             height: lastOffset.height + v.translation.height)
                         }
-                        .onEnded { _ in lastOffset = offset }
+                        .onEnded { v in
+                            if scale > 1 { lastOffset = offset; return }
+                            // Not zoomed → a horizontal-dominant swipe pages,
+                            // same thresholds as the gallery's swipe.
+                            guard abs(v.translation.width) > abs(v.translation.height),
+                                  abs(v.translation.width) > 40 else { return }
+                            page(v.translation.width < 0 ? 1 : -1)   // swipe left → next
+                        }
                 )
                 .onTapGesture(count: 2) {
                     withAnimation(.easeInOut(duration: 0.25)) {
@@ -781,6 +864,20 @@ private struct PhotoZoomViewer: View {
             .padding(.top, 8)
         }
     }
+
+    /// Step to the next/previous photo (wraps around) and reset any zoom/pan so
+    /// the new photo opens at its natural fit.
+    private func page(_ dir: Int) {
+        let count = photos.count
+        guard count > 1 else { return }
+        withAnimation(.easeInOut(duration: 0.2)) {
+            index = (index + dir + count) % count
+            scale = 1
+            offset = .zero
+            lastOffset = .zero
+        }
+        onIndexChange(index)
+    }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -791,7 +888,6 @@ private struct PhotoZoomViewer: View {
 
 private struct GalleryHeader: View {
     let title: String
-    let subtitle: String?
     let onBack: () -> Void
 
     var body: some View {
@@ -805,21 +901,13 @@ private struct GalleryHeader: View {
             }
             .buttonStyle(.plain)
 
-            VStack(alignment: .leading, spacing: 0) {
-                Text(title)
-                    .font(.h2)
-                    .foregroundStyle(.white)
-                    .lineLimit(1)
-                    .truncationMode(.tail)
-                if let subtitle {
-                    Text(subtitle)
-                        .font(.bodySmall)
-                        .foregroundStyle(.white)
-                        .lineLimit(1)
-                }
-            }
-            // Absorbs the slack and truncates so a long name never overflows.
-            .frame(maxWidth: .infinity, alignment: .leading)
+            Text(title)
+                .font(.h2)
+                .foregroundStyle(.white)
+                .lineLimit(1)
+                .truncationMode(.tail)
+                // Absorbs the slack and truncates so a long name never overflows.
+                .frame(maxWidth: .infinity, alignment: .leading)
         }
         // 4pt before the 44×44 back button; content keeps 16pt off the right edge.
         .padding(.leading, 4)

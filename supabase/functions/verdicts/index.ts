@@ -6,9 +6,13 @@
 // once across all users.
 //
 //   POST { op: "get", vertical, ids: [placeId, ...] }
-//        -> { verdicts: { placeId: { kept: [url], scanned: n } } }  (fresh only)
-//   POST { op: "put", vertical, id, kept: [url], scanned }
+//        -> { verdicts: { placeId: { kept: [url], scanned: n, enriched: bool } } }
+//   POST { op: "put", vertical, id, kept: [url], scanned, enriched? }
 //        -> { ok: true }
+//
+// `enriched` marks whether the kept photos carry rich vision tags (from the
+// `phototags` function) or only generic on-device labels — the client re-enriches
+// a verdict the first time it loads one that isn't enriched yet.
 //
 // Deploy:  supabase functions deploy verdicts
 // Table:   supabase/migrations/*_place_verdicts.sql
@@ -53,14 +57,16 @@ Deno.serve(async (req) => {
     const ids = Array.isArray(payload.ids) ? payload.ids.filter((x) => typeof x === "string") : [];
     if (ids.length === 0) return json({ verdicts: {} });
     const { data, error } = await db.from("place_verdicts")
-      .select("place_id, kept, scanned, screened_at")
+      .select("place_id, kept, scanned, enriched, screened_at")
       .eq("vertical", vertical)
       .in("place_id", ids as string[]);
     if (error) return json({ verdicts: {} });   // best-effort
     const out: Record<string, unknown> = {};
     for (const row of data ?? []) {
       if (Date.now() - new Date(row.screened_at as string).getTime() < FRESH_MS) {
-        out[row.place_id as string] = { kept: row.kept, scanned: row.scanned };
+        out[row.place_id as string] = {
+          kept: row.kept, scanned: row.scanned, enriched: row.enriched ?? false,
+        };
       }
     }
     return json({ verdicts: out });
@@ -70,6 +76,7 @@ Deno.serve(async (req) => {
     const id = payload.id;
     const kept = payload.kept;
     const scanned = payload.scanned;
+    const enriched = payload.enriched === true;
     if (typeof id !== "string" || !Array.isArray(kept) || typeof scanned !== "number") {
       return json({ error: "missing id / kept / scanned" }, 400);
     }
@@ -78,6 +85,7 @@ Deno.serve(async (req) => {
       vertical,
       kept,
       scanned,
+      enriched,
       screened_at: new Date().toISOString(),
     });
     if (error) return json({ error: "write failed" }, 500);

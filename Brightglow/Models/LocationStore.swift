@@ -19,7 +19,6 @@ final class LocationStore: NSObject, ObservableObject {
     @Published private(set) var isResolving = false
 
     private let manager = CLLocationManager()
-    private let geocoder = CLGeocoder()
     private var pendingFix: CheckedContinuation<CLLocationCoordinate2D?, Never>?
 
     var hasLocation: Bool { coordinate != nil }
@@ -47,9 +46,9 @@ final class LocationStore: NSObject, ObservableObject {
     /// Manual entry: turn a typed ZIP / city into a coordinate + tidy label.
     ///
     /// Uses `MKLocalSearch` first — it resolves bare place names ("Kyiv",
-    /// "Paris") worldwide far more reliably than `CLGeocoder.geocodeAddressString`,
-    /// which frequently returns nothing for a single-word city. Falls back to the
-    /// geocoder (good for raw ZIPs) if the search finds nothing.
+    /// "Paris") worldwide far more reliably than a plain geocoding request,
+    /// which frequently returns nothing for a single-word city. Falls back to
+    /// `MKGeocodingRequest` (good for raw ZIPs) if the search finds nothing.
     func setManualLocation(_ text: String) {
         let query = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !query.isEmpty else { return }
@@ -61,16 +60,16 @@ final class LocationStore: NSObject, ObservableObject {
             request.naturalLanguageQuery = query
             request.resultTypes = [.address, .pointOfInterest]
             if let item = try? await MKLocalSearch(request: request).start().mapItems.first {
-                coordinate = item.placemark.coordinate
-                label = item.placemark.locality ?? item.name ?? query
+                coordinate = item.location.coordinate
+                label = item.addressRepresentations?.cityName ?? item.name ?? query
                 return
             }
 
-            // Fallback: ZIP / address string via the geocoder.
-            if let place = try? await geocoder.geocodeAddressString(query).first,
-               let loc = place.location {
-                coordinate = loc.coordinate
-                label = place.locality ?? place.postalCode ?? query
+            // Fallback: ZIP / address string via a geocoding request.
+            if let geocode = MKGeocodingRequest(addressString: query),
+               let item = try? await geocode.mapItems.first {
+                coordinate = item.location.coordinate
+                label = item.addressRepresentations?.cityName ?? query
             }
         }
     }
@@ -100,8 +99,10 @@ final class LocationStore: NSObject, ObservableObject {
 
     private func reverseGeocode(_ coord: CLLocationCoordinate2D) async -> String? {
         let loc = CLLocation(latitude: coord.latitude, longitude: coord.longitude)
-        let mark = try? await geocoder.reverseGeocodeLocation(loc).first
-        return mark?.locality ?? mark?.administrativeArea
+        guard let request = MKReverseGeocodingRequest(location: loc),
+              let item = try? await request.mapItems.first else { return nil }
+        // City name, falling back to "City, ST" (mirrors locality → admin area).
+        return item.addressRepresentations?.cityName ?? item.addressRepresentations?.cityWithContext
     }
 
     private func resume(_ coord: CLLocationCoordinate2D?) {

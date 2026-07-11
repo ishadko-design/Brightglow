@@ -23,7 +23,9 @@ enum PhotoFilter {
     private static let minPixelDimension = 300
     /// Keep every work photo a business has so the user can page through them all.
     /// Bounded by the Google Places API, which returns at most 10 photos per place.
-    private static let maxKept = 10
+    /// `nonisolated`: it's a default argument, evaluated in the caller's context —
+    /// the project's MainActor default isolation flags that without this.
+    private nonisolated static let maxKept = 10
     /// Laplacian variance below this reads as out-of-focus / blurry. Sharp photos
     /// score in the hundreds–thousands; soft / blurry ones below ~100.
     private static let minSharpness: Double = 110
@@ -66,10 +68,23 @@ enum PhotoFilter {
 
     // MARK: - Per-image decision
 
-    /// Outcome of screening one photo: whether to keep it, and whether its subject
-    /// is a vehicle (used to rank vehicle/work shots first for auto & moto).
-    struct Decision { let keep: Bool; let isVehicle: Bool; let labels: [String] }
+    /// Outcome of screening one photo: whether to keep it, whether its subject
+    /// is a vehicle (used to rank vehicle/work shots first for auto & moto), and
+    /// its Vision feature print (a perceptual fingerprint used to drop
+    /// near-duplicate shots so the mosaic/strip show distinct photos).
+    struct Decision {
+        let keep: Bool
+        let isVehicle: Bool
+        let labels: [String]
+        var featurePrint: VNFeaturePrintObservation? = nil
+    }
     private static let reject = Decision(keep: false, isVehicle: false, labels: [])
+
+    /// Feature-print distance below which two photos read as the same shot. Google
+    /// Places pools routinely include near-identical images (same job, seconds
+    /// apart); smaller distance = more alike. Tuned to catch obvious dupes without
+    /// merging genuinely different angles of the same job.
+    private static let duplicateDistance: Float = 0.32
 
     /// True when the photo looks like a genuine, good-quality work example.
     /// `allowVehicles` keeps car/truck/motorcycle photos (auto & moto work).
@@ -156,7 +171,29 @@ enum PhotoFilter {
                 .filter { $0.confidence > 0.10 }
                 .flatMap { $0.identifier.lowercased().split(whereSeparator: { !$0.isLetter }).map(String.init) }))
         }
-        return Decision(keep: true, isVehicle: isVehicle, labels: labels)
+        return Decision(keep: true, isVehicle: isVehicle, labels: labels,
+                        featurePrint: featurePrint(cg))
+    }
+
+    /// Perceptual fingerprint of an image (nil if Vision can't produce one),
+    /// compared via `computeDistance` to spot near-duplicate photos.
+    private static func featurePrint(_ cg: CGImage) -> VNFeaturePrintObservation? {
+        let req = VNGenerateImageFeaturePrintRequest()
+        let handler = VNImageRequestHandler(cgImage: cg, options: [:])
+        try? handler.perform([req])
+        return req.results?.first as? VNFeaturePrintObservation
+    }
+
+    /// True when `fp` is within `duplicateDistance` of any already-kept print.
+    private static func isNearDuplicate(_ fp: VNFeaturePrintObservation,
+                                        of kept: [VNFeaturePrintObservation]) -> Bool {
+        for other in kept {
+            var distance = Float.greatestFiniteMagnitude
+            if (try? fp.computeDistance(&distance, to: other)) != nil, distance < duplicateDistance {
+                return true
+            }
+        }
+        return false
     }
 
     // MARK: - Sharpness (variance of the Laplacian)
@@ -220,6 +257,10 @@ enum PhotoFilter {
         // shots; non-vehicle keepers (and unjudged) follow in original order.
         var vehicle: [ScreenedPhoto] = []
         var other: [ScreenedPhoto] = []
+        // Feature prints of everything kept so far, so near-identical shots (same
+        // job, seconds apart — common in Places pools) are dropped and the
+        // mosaic/strip show distinct photos.
+        var keptPrints: [VNFeaturePrintObservation] = []
         var scanned = 0
         for displayURL in urls {
             if scanned >= scanLimit { break }
@@ -232,6 +273,10 @@ enum PhotoFilter {
             if let img = await ImageCache.download(url) {
                 let decision = await evaluateOffPool(img, allowVehicles: allowVehicles)
                 guard decision.keep else { continue }
+                if let fp = decision.featurePrint {
+                    if isNearDuplicate(fp, of: keptPrints) { continue }   // drop near-dupe
+                    keptPrints.append(fp)
+                }
                 let photo = ScreenedPhoto(url: displayURL, labels: decision.labels)
                 if allowVehicles && decision.isVehicle { vehicle.append(photo) }
                 else { other.append(photo) }
@@ -242,24 +287,48 @@ enum PhotoFilter {
         return Array((vehicle + other).prefix(limit))   // display full-size, work shots first
     }
 
-    /// Order kept photos so those whose scene labels match the query lead (stable
-    /// for ties); returns display URLs. No meaningful query terms → original order.
-    /// This is what surfaces the kitchen shot first for a "kitchen remodel" search,
-    /// working off stored labels so it needs no re-download or re-classification.
+    /// Scene labels marking a shot of the *premises* (a shop's exterior / signage)
+    /// rather than the actual work — from Apple Vision's generic scene tokens,
+    /// which every kept photo retains even after rich-tag enrichment. Used only to
+    /// break ties: a storefront never outranks a genuine work photo, but it still
+    /// ranks above nothing when a business has only exterior shots.
+    private static let premisesTokens: Set<String> = [
+        "building", "buildings", "house", "facade", "storefront", "warehouse",
+        "signboard", "billboard", "street", "sign", "signage",
+    ]
+
+    private static func isPremisesShot(_ labels: [String]) -> Bool {
+        labels.contains { premisesTokens.contains($0) }
+    }
+
+    /// Order kept photos so those whose labels match the query lead; among equally
+    /// relevant shots, genuine work photos rank above storefront/exterior ones, and
+    /// original order breaks any remaining tie. Returns display URLs, working off
+    /// stored labels so it needs no re-download or re-classification. This surfaces
+    /// the kitchen shot first for a "kitchen remodel" search — and, once photos are
+    /// rich-tagged, the dented-bumper shot first for an auto body request.
     static func order(_ photos: [ScreenedPhoto], query: String) -> [String] {
         let terms = query.lowercased()
             .split { !$0.isLetter }.map(String.init)
             .filter { $0.count > 3 }
-        guard !terms.isEmpty else { return photos.map(\.url) }
         return photos.enumerated()
             .sorted { a, b in
                 let sa = matchScore(a.element.labels, terms)
                 let sb = matchScore(b.element.labels, terms)
-                return sa != sb ? sa > sb : a.offset < b.offset
+                if sa != sb { return sa > sb }
+                // Equal query relevance (incl. no query at all) → push premises /
+                // exterior shots below real work photos.
+                let pa = isPremisesShot(a.element.labels)
+                let pb = isPremisesShot(b.element.labels)
+                if pa != pb { return !pa }
+                return a.offset < b.offset
             }
             .map { $0.element.url }
     }
 
+    /// Empty `terms` scores every photo 0, so ordering falls through to the
+    /// premises/original-order tiebreaks — a plain category browse still leads
+    /// with work shots over storefronts.
     private static func matchScore(_ labels: [String], _ terms: [String]) -> Int {
         terms.reduce(0) { acc, t in
             acc + (labels.contains { $0.contains(t) || t.contains($0) } ? 1 : 0)

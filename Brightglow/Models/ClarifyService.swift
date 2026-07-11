@@ -1,14 +1,15 @@
 import Foundation
 
-/// One turn of the clarifying chat via the Supabase `clarify` Edge Function —
-/// the AI asks up to 3 price-relevant questions (quantity, size, item type)
-/// about the user's typed request, then hands back a canonical details string
-/// plus category that the existing pricing flow consumes. The chat never
-/// produces a price; every displayed number still comes from the pricing
-/// engine's data.
+/// One turn of the clarifying chat via the Supabase `clarify` Edge Function.
+/// Its primary job is to disambiguate toward the right LOCAL BUSINESS: it asks
+/// a scalable number of questions (1 for a clear job, up to ~7 for an ambiguous
+/// one) and hands back a `ClarifyOutcome` — a business-search phrase and
+/// photo-match terms that drive the results ranking, plus (for covered home
+/// trades only) canonical pricing `details`. The chat never produces a price;
+/// every displayed number still comes from the pricing engine's data.
 ///
 /// Best-effort like PricingService: any failure returns nil and the caller
-/// proceeds to the estimate exactly as if the chat didn't exist.
+/// proceeds to results exactly as if the chat didn't exist.
 enum ClarifyService {
     private static let ref: String =
         (Bundle.main.object(forInfoDictionaryKey: "SUPABASE_REF") as? String) ?? ""
@@ -25,7 +26,20 @@ enum ClarifyService {
 
     enum Reply {
         case ask(question: String, quickReplies: [String])
-        case done(category: String, details: String)
+        case done(ClarifyOutcome)
+    }
+
+    /// The chat's final match result. `searchTerms` refines the business search
+    /// and `photoTerms` ranks each business's work photos ("did a similar job");
+    /// `details`/`priceable` are the secondary pricing layer — `priceable` is
+    /// false for auto/moto and any category the pricing engine doesn't cover.
+    struct ClarifyOutcome: Equatable {
+        let vertical: String        // "home" | "auto_moto"
+        let category: String
+        let searchTerms: String
+        let photoTerms: String
+        let details: String
+        let priceable: Bool
     }
 
     /// Next chat turn. `messages` is the full history (first entry = the
@@ -58,7 +72,15 @@ enum ClarifyService {
             return .ask(question: question, quickReplies: decoded.quick_replies ?? [])
         }
         if decoded.action == "done" {
-            return .done(category: decoded.category ?? "", details: decoded.details ?? "")
+            let vertical = decoded.vertical ?? "home"
+            return .done(ClarifyOutcome(
+                vertical: vertical,
+                category: decoded.category ?? "",
+                searchTerms: decoded.search_terms ?? "",
+                photoTerms: decoded.photo_terms ?? "",
+                details: decoded.details ?? "",
+                priceable: decoded.priceable ?? (vertical == "home")
+            ))
         }
         return nil
     }
@@ -67,7 +89,11 @@ enum ClarifyService {
         let action: String
         let question: String?
         let quick_replies: [String]?
+        let vertical: String?
         let category: String?
+        let search_terms: String?
+        let photo_terms: String?
         let details: String?
+        let priceable: Bool?
     }
 }

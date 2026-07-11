@@ -1,5 +1,6 @@
 import Foundation
 import CoreLocation
+import MapKit
 
 /// Local price estimates for a job — real data only, never a synthesized guess.
 ///
@@ -23,12 +24,19 @@ enum EstimateService {
     /// Reverse-geocode a coordinate to a "City, ST" locality string plus its
     /// postal code — the zip resolves EstimationPro's regional multiplier
     /// and gates the SF-permit cross-check server-side.
+    ///
+    /// Uses MapKit's `MKReverseGeocodingRequest` (`CLGeocoder` is deprecated in
+    /// iOS 26). `MKAddressRepresentations` has no structured postal-code field,
+    /// so the US ZIP is parsed from the full postal address — the LAST 5-digit
+    /// group, so a 5-digit street number can't shadow it. (Pricing data is
+    /// US-only, so the US ZIP shape is the only one that matters here.)
     static func geocode(for coord: CLLocationCoordinate2D) async -> (locality: String, zip: String?) {
         let loc = CLLocation(latitude: coord.latitude, longitude: coord.longitude)
-        guard let mark = try? await CLGeocoder().reverseGeocodeLocation(loc).first else { return ("", nil) }
-        let locality = [mark.locality, mark.administrativeArea]
-            .compactMap { $0 }
-            .joined(separator: ", ")
-        return (locality, mark.postalCode)
+        guard let request = MKReverseGeocodingRequest(location: loc),
+              let item = try? await request.mapItems.first else { return ("", nil) }
+        // "Cupertino, CA" — same shape the old locality + admin-area pair made.
+        let locality = item.addressRepresentations?.cityWithContext ?? ""
+        let zip = item.address?.fullAddress.matches(of: /\b\d{5}\b/).last.map { String($0.0) }
+        return (locality, zip)
     }
 }

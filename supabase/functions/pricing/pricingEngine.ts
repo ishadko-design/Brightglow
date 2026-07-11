@@ -645,6 +645,17 @@ export const JOB_TYPE_TAXONOMY: JobTypeEntry[] = [
   { job_type: "carpentry.framing", category: "Carpentry", keywords: ["framing", "beam", "header", "load bearing", "load-bearing"], trade: "framing", itemId: "wall-framing", unit: "linear foot", defaultQuantity: 20 },
 
   // Roofing
+  // Material-specific replacements come before the generic project entry:
+  // when the material is known and EPCI has a per-sq-ft installed price,
+  // area × rate is a far tighter estimate than the whole-project band
+  // ($5,900-$53,100 regardless of size). Declared first so a same-length
+  // keyword tie ("shingle" vs "replace", both 7) resolves to the specific
+  // entry. EPCI has no flat/membrane roofing item (verified 2026-07-06:
+  // no TPO/EPDM/torch-down in any trade), so flat roofs classify to the
+  // whole-project item — wide but real; revisit when a source covers it.
+  { job_type: "roofing.shingle", category: "Roofing", keywords: ["shingle", "asphalt", "architectural"], trade: "roofing", itemId: "architectural-installed", unit: "sq ft", defaultQuantity: 1700 },
+  { job_type: "roofing.metal", category: "Roofing", keywords: ["metal roof", "standing seam"], trade: "roofing", itemId: "metal-roofing-installed", unit: "sq ft", defaultQuantity: 1700 },
+  { job_type: "roofing.flat", category: "Roofing", keywords: ["flat roof", "tpo", "epdm", "torch down", "membrane", "rolled roofing"], trade: "roofing", itemId: "roof-replacement-total", unit: "project", defaultQuantity: 1 },
   { job_type: "roofing.replacement", category: "Roofing", keywords: ["replace", "replacement", "new roof", "reroof"], trade: "roofing", itemId: "roof-replacement-total", unit: "project", defaultQuantity: 1 },
   { job_type: "roofing.repair", category: "Roofing", keywords: ["repair", "patch", "leak"], trade: "roofing", itemId: "roof-repair-patch", unit: "sq ft", defaultQuantity: 50 },
   { job_type: "roofing.gutter", category: "Roofing", keywords: ["gutter"], trade: "roofing", itemId: "gutter-install-aluminum", unit: "linear foot", defaultQuantity: 150 },
@@ -800,6 +811,13 @@ export function resolveQuantity(
   entry: JobTypeEntry,
   description: string,
 ): { quantity: number; isDefaulted: boolean } {
+  // A project-priced item is the whole job — never scale it by a size the
+  // user mentioned. "replace flat roof 1070 sq ft" must not multiply the
+  // whole-project roof-replacement price by 1070 (produced a $6.3M-$56.8M
+  // "estimate", verified live 2026-07-06).
+  if (entry.unit === "project") {
+    return { quantity: 1, isDefaulted: false };
+  }
   if (entry.unit === "each" || entry.unit === "pair") {
     // Explicit pair counts win outright for pair-priced items — "2 pairs of
     // french doors" is 2 units, no halving. This is the canonical phrasing
@@ -812,10 +830,11 @@ export function resolveQuantity(
       }
     }
     // A small count within a few words of a countable noun: "2 french door
-    // windows", "install 4 outlets". The count must be its own word, so
-    // dimension strings ("72x88") never match.
+    // windows", "install 4 outlets", "2 vanities" (irregular plural, can't
+    // take the generic "s?" suffix like the rest). The count must be its own
+    // word, so dimension strings ("72x88") never match.
     const count = description.toLowerCase().match(
-      /(?:^|[\s,])(\d{1,2})\s+(?:[a-z/-]+\s+){0,3}?(?:window|door|outlet|socket|fan|fixture|light|toilet|faucet|sink|tree|zone|charger|thermostat)s?\b/,
+      /(?:^|[\s,])(\d{1,2})\s+(?:[a-z/-]+\s+){0,3}?(?:(?:window|door|outlet|socket|fan|fixture|light|toilet|faucet|sink|tree|zone|charger|thermostat)s?|vanit(?:y|ies))\b/,
     );
     if (count) {
       let value = Number(count[1]);
@@ -923,4 +942,93 @@ export function calculateEPCIRange(
 
 export function rangesOverlap(aLow: number, aHigh: number, bLow: number, bHigh: number): boolean {
   return aLow <= bHigh && bLow <= aHigh;
+}
+
+// --- Cross-trade job composition -------------------------------------------
+//
+// Some flagship EPCI items are deliberately scoped to one part of a job —
+// check each item's own `description` on estimationpro.ai/api/v1/costs.
+// `bathroom-vanity-installation` (cabinetry trade) is labor-only ("includes
+// setting vanity, attaching hardware; countertop and plumbing separate"),
+// verified live 2026-07-06: a lone vanity estimate showed $236-708 when a
+// real vanity swap (cabinet + top + faucet) runs closer to $2,000+. Unlike
+// SCOPE_ADD_ONS (same-trade, keyword-triggered extras), these are companion
+// items from OTHER trades that make the job complete — included by default,
+// removable only when the description says the customer is supplying or
+// keeping that part themselves.
+export interface JobComponent {
+  trade: string;
+  itemId: string;
+  label: string;
+  /** Multiplier for the base job's resolved quantity — e.g. 1 for "one
+   *  faucet per vanity", or a sq-ft conversion parsed from the description
+   *  for a countertop sized off vanity width. */
+  quantityOf: (baseQuantity: number, description: string) => number;
+  /** Phrases that suppress this normally-included component — e.g. "keep
+   *  existing faucet" drops the faucet line from a vanity swap. */
+  excludeKeywords: string[];
+}
+
+export const JOB_COMPONENTS: Record<string, JobComponent[]> = {
+  "carpentry.vanity": [
+    {
+      trade: "countertops",
+      itemId: "laminate-countertop-installed",
+      label: "vanity top",
+      // Standard 22in-deep vanity top; width parsed from the description
+      // (the clarify chat asks for it) when present, else the common 36in.
+      quantityOf: (qty, description) => {
+        const m = description.match(/(\d{2,3})\s*(?:in\b|inch|")/i);
+        const widthIn = m ? Number(m[1]) : 36;
+        return qty * (widthIn * 22) / 144;
+      },
+      excludeKeywords: ["no countertop", "no top", "cabinet only", "top separate", "existing top", "keep the top", "keep existing top"],
+    },
+    {
+      trade: "plumbing",
+      itemId: "faucet-install-plumbing",
+      label: "faucet install",
+      quantityOf: (qty) => qty,
+      excludeKeywords: ["keep existing faucet", "existing faucet", "no faucet", "faucet separate"],
+    },
+  ],
+};
+
+export function resolveJobComponents(jobType: string, description: string): JobComponent[] {
+  const components = JOB_COMPONENTS[jobType];
+  if (!components) return [];
+  const text = description.toLowerCase();
+  return components.filter((c) => !c.excludeKeywords.some((k) => text.includes(k)));
+}
+
+/** Sums the base item (plus any same-trade SCOPE_ADD_ONS) with cross-trade
+ *  JOB_COMPONENTS into one range. `itemsByTrade` must carry an entry for
+ *  every trade the base job and its components reference; a component whose
+ *  trade wasn't fetched or doesn't carry that item id is skipped — never
+ *  guessed, same policy as calculateEPCIRange's add-on lookup. */
+export function calculateComposedRange(
+  itemsByTrade: Record<string, EPCIItem[]>,
+  entry: JobTypeEntry,
+  quantity: number,
+  description: string,
+  addOnItemIds: string[] = [],
+): (EPCIComputedRange & { includedLabels: string[] }) | null {
+  const base = calculateEPCIRange(itemsByTrade[entry.trade] ?? [], entry, quantity, addOnItemIds);
+  if (!base) return null;
+
+  let { all_in_low, all_in_high, all_in_typical } = base;
+  const includedLabels: string[] = [];
+  const typicalOf = (i: EPCIItem) => i.typical ?? (i.low + i.high) / 2;
+
+  for (const component of resolveJobComponents(entry.job_type, description)) {
+    const item = itemsByTrade[component.trade]?.find((i) => i.id === component.itemId);
+    if (!item) continue;
+    const q = component.quantityOf(quantity, description);
+    all_in_low += item.low * q;
+    all_in_high += item.high * q;
+    all_in_typical += typicalOf(item) * q;
+    includedLabels.push(component.label);
+  }
+
+  return { all_in_low, all_in_high, all_in_typical, includedLabels };
 }

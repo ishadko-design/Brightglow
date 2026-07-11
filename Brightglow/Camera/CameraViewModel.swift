@@ -112,6 +112,49 @@ class CameraViewModel: NSObject, ObservableObject {
         output.capturePhoto(with: settings, delegate: self)
     }
 
+    /// Open a photo in the full-screen draw-over canvas and classify it — the
+    /// same flow a camera capture takes, reused by the search bar's + upload so
+    /// an uploaded picture behaves exactly like a shot one.
+    func present(_ image: UIImage) {
+        capturedImage = image
+        showDrawingCanvas = true
+        DispatchQueue.global(qos: .userInitiated).async { self.session.stopRunning() }
+        classify(image)
+    }
+
+    /// Identify immediately: whole-image category for the prefill, plus any
+    /// multiple salient objects for disambiguation tags.
+    private func classify(_ image: UIImage) {
+        Task {
+            // Confidence-gated: weak guesses only lead the carousel; a
+            // certain cloud verdict stays in the background — it routes the
+            // submit and stands in when the user provides no input, but is
+            // never pre-selected in the UI (tag choice belongs to the user).
+            let suggestions = await ImageClassifier.suggestTrades(image)
+            await MainActor.run {
+                self.suggestedMatches = suggestions.matches
+                self.detectedMatch = suggestions.confident
+                self.detectedDetails = suggestions.details
+                // Cloud read wins — it's far more reliable than on-device Vision
+                // at "this is a car / a motorcycle", which is what stops clarify
+                // from asking the obvious. Fallback below fills in only if nil.
+                if let vehicle = suggestions.vehicle { self.detectedVehicle = vehicle }
+            }
+        }
+        Task {
+            // Fast on-device first guess so the auto tags label car vs moto right
+            // away; never clobbers the cloud read once it lands.
+            let vehicle = ImageClassifier.detectVehicleType(image)
+            await MainActor.run {
+                if self.detectedVehicle == nil { self.detectedVehicle = vehicle }
+            }
+        }
+        Task {
+            let objects = await ImageClassifier.detectObjects(image)
+            await MainActor.run { self.detectedObjects = objects }
+        }
+    }
+
     func retake() {
         capturedImage = nil
         detectedMatch = nil
@@ -138,30 +181,6 @@ extension CameraViewModel: AVCapturePhotoCaptureDelegate {
         guard error == nil,
               let data = photo.fileDataRepresentation(),
               let image = UIImage(data: data) else { return }
-        Task { @MainActor in
-            self.capturedImage = image
-            self.showDrawingCanvas = true
-            self.session.stopRunning()
-        }
-        // Identify immediately: whole-image category for the prefill, plus any
-        // multiple salient objects for disambiguation tags.
-        Task {
-            // Confidence-gated: weak guesses only lead the carousel; only a
-            // certain cloud verdict preselects the tag and routes the submit.
-            let suggestions = await ImageClassifier.suggestTrades(image)
-            await MainActor.run {
-                self.suggestedMatches = suggestions.matches
-                self.detectedMatch = suggestions.confident
-                self.detectedDetails = suggestions.details
-            }
-        }
-        Task {
-            let vehicle = ImageClassifier.detectVehicleType(image)
-            await MainActor.run { self.detectedVehicle = vehicle }
-        }
-        Task {
-            let objects = await ImageClassifier.detectObjects(image)
-            await MainActor.run { self.detectedObjects = objects }
-        }
+        Task { @MainActor in self.present(image) }
     }
 }

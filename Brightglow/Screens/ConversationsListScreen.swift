@@ -7,6 +7,7 @@ struct ConversationsListScreen: View {
     @Environment(\.dismiss) private var dismiss
 
     @State private var conversations: [Conversation] = []
+    @State private var unreadIDs: Set<UUID> = []
     @State private var loading = true
     @State private var loadError = false
 
@@ -23,6 +24,9 @@ struct ConversationsListScreen: View {
         .enableSwipeBack()
         .preferredColorScheme(.dark)
         .task { await load() }
+        // Fires again when a thread is popped — a reviewed conversation is now
+        // read, so recompute which rows still show the unread dot.
+        .onAppear { refreshUnread() }
     }
 
     private var header: some View {
@@ -76,12 +80,13 @@ struct ConversationsListScreen: View {
             }
         } else {
             ScrollView {
-                LazyVStack(spacing: 0) {
+                LazyVStack(spacing: 4) {             // Figma node 783:2224: 4 between cells
                     ForEach(conversations) { convo in
                         NavigationLink {
                             ChatThreadScreen(conversation: convo)
                         } label: {
-                            ConversationRow(conversation: convo)
+                            ConversationRow(conversation: convo,
+                                            unread: unreadIDs.contains(convo.id))
                         }
                         .buttonStyle(.plain)
                     }
@@ -100,49 +105,67 @@ struct ConversationsListScreen: View {
         loadError = false
         do {
             conversations = try await ChatService.conversations()
+            refreshUnread()
             loading = false
         } catch {
             loading = false
             loadError = true
         }
     }
+
+    /// Recompute the unread set from the (local) per-thread read timestamps.
+    private func refreshUnread() {
+        unreadIDs = Set(conversations.filter(ChatService.isUnread).map(\.id))
+    }
 }
 
-/// One row in the inbox: title, last message preview, relative time.
+/// One row in the inbox — Figma node 783:2224 "List cell". Rounded 44pt avatar,
+/// title + last-message preview, and a gold unread dot. Unread rows get a faint
+/// white fill and a full-opacity preview; read rows are transparent + dimmed.
 private struct ConversationRow: View {
     let conversation: Conversation
+    /// Unread until the viewer opens the thread — resolved by the list from
+    /// per-thread read state so a reviewed conversation drops its indicator.
+    let unread: Bool
 
     var body: some View {
-        HStack(spacing: 12) {
-            ZStack {
-                Circle().fill(AppColors.searchBg)
-                Image(systemName: "hammer.fill")
-                    .font(.system(size: 18))
-                    .foregroundStyle(.white.opacity(0.7))
-            }
-            .frame(width: 48, height: 48)
+        HStack(spacing: 12) {                        // Figma: gap 12
+            RoundedRectangle(cornerRadius: 12, style: .continuous)  // Figma: 44×44, r=12
+                .fill(AppColors.searchBg)
+                .frame(width: 44, height: 44)
+                .overlay(
+                    Image(systemName: "hammer.fill")
+                        .font(.system(size: 18))
+                        .foregroundStyle(.white.opacity(0.7))
+                )
 
-            VStack(alignment: .leading, spacing: 3) {
-                HStack {
-                    Text(conversation.title)
-                        .font(.h4)
-                        .foregroundStyle(.white)
-                        .lineLimit(1)
-                    Spacer()
-                    if let at = conversation.lastMessageAt {
-                        Text(at, format: .relative(presentation: .named))
-                            .font(.bodySmall)
-                            .foregroundStyle(.white.opacity(0.4))
-                    }
-                }
+            VStack(alignment: .leading, spacing: 4) {   // Figma: gap 4
+                Text(conversation.title)
+                    .font(.custom("Lato-Bold", size: 17))   // Figma: Lato Bold 700 / 17
+                    .foregroundStyle(Color(hex: "#ECEBED"))
+                    .lineLimit(1)
                 Text(conversation.lastMessage ?? "No messages yet")
-                    .font(.bodySmall)
-                    .foregroundStyle(.white.opacity(0.6))
+                    .font(.bodySmall)                        // Figma: Poppins Light 300 / 14
+                    .foregroundStyle(.white.opacity(unread ? 1 : 0.5))
                     .lineLimit(1)
             }
+            .padding(.vertical, 8)                   // Figma: text column top/bottom 8
+
+            Spacer(minLength: 8)
+
+            if unread {
+                Circle()                             // Figma: 12×12 badge, #D4A600
+                    .fill(AppColors.starFilled)
+                    .frame(width: 12, height: 12)
+            }
         }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 12)
+        .padding(.horizontal, 12)                    // Figma: cell inner padding 12
+        .frame(minHeight: 72)                        // Figma: cell height 72
+        .background(
+            unread ? Color.white.opacity(0.05) : Color.clear,  // Figma: unread fill white@5%
+            in: RoundedRectangle(cornerRadius: 16, style: .continuous)   // Figma: r=16
+        )
+        .padding(.horizontal, 8)                     // Figma: cell outer inset 8
         .contentShape(Rectangle())
     }
 }

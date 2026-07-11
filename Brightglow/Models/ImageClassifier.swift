@@ -51,11 +51,16 @@ enum ImageClassifier {
             + "Reply on one line as: CATEGORY | DETAILS\n"
             + "CATEGORY is the chosen category name, exactly as written above. If you can "
             + "pick a category but are not certain, append a question mark (e.g. Carpentry?).\n"
-            + "DETAILS is a short comma-separated list of attributes visible in the photo "
-            + "that are useful for a repair cost estimate — size, capacity (gallons, amps, "
-            + "BTU), material, or type (e.g. \"40 gallon, tankless, gas\" or \"30 inch, "
-            + "vinyl\"). Only include what's actually visible — do not guess a condition or "
-            + "problem you can't see. Write \"none\" if nothing relevant is visible.\n"
+            + "DETAILS is a short comma-separated list of attributes visible in the photo. "
+            + "For a VEHICLE, DETAILS must START with the vehicle type (car, truck, or "
+            + "motorcycle) and — when a badge or the body shape makes it legible — the make, "
+            + "model, and colour, then the visible issue: e.g. \"car, Honda Civic sedan, "
+            + "silver, front bumper dent\" or \"motorcycle, Harley-Davidson cruiser, black\". "
+            + "For a HOME subject, list attributes useful for a repair cost estimate — size, "
+            + "capacity (gallons, amps, BTU), material, or type (e.g. \"40 gallon, tankless, "
+            + "gas\" or \"30 inch, vinyl\"). Only include what's actually visible — never guess "
+            + "a make, condition, or problem you can't see. Write \"none\" if nothing relevant "
+            + "is visible.\n"
             + "If the photo doesn't clearly show a single repairable subject, reply only: unsure."
     }()
 
@@ -84,8 +89,11 @@ enum ImageClassifier {
     /// available) then the on-device Vision guess. `confident` is set only when
     /// the cloud model answered without hedging — that one may be preselected;
     /// everything else only leads the category carousel. `details` mirrors the
-    /// confident cloud verdict's extracted attributes, if any.
-    struct Suggestions { let matches: [TradeMatch]; let confident: TradeMatch?; let details: String? }
+    /// confident cloud verdict's extracted attributes, if any. `vehicle` is the
+    /// cloud model's car-vs-motorcycle read (from the vehicle words it leads
+    /// DETAILS with) — nil when the subject isn't a vehicle or the model didn't
+    /// name the type; the caller falls back to the on-device `detectVehicleType`.
+    struct Suggestions { let matches: [TradeMatch]; let confident: TradeMatch?; let details: String?; let vehicle: VehicleFilter? }
 
     /// Whole-image classification for **auto-suggesting** tags. (The drawing path
     /// still uses the plain `classify`, which always returns a single best guess —
@@ -94,8 +102,13 @@ enum ImageClassifier {
         var matches: [TradeMatch] = []
         var confident: TradeMatch? = nil
         var details: String? = nil
+        var vehicle: VehicleFilter? = nil
         if let cloud = try? await classifyCloud(image) {
             matches.append(cloud.match)
+            // When the cloud model saw a vehicle it leads DETAILS with the type
+            // (car/truck/motorcycle) — read car-vs-moto from there even if the
+            // category itself was hedged, so clarify never re-asks it.
+            if case .auto = cloud.match { vehicle = vehicleFilter(from: cloud.details) }
             if cloud.isConfident {
                 confident = cloud.match
                 details = cloud.details
@@ -108,7 +121,18 @@ enum ImageClassifier {
            !matches.contains(device) {
             matches.append(device)
         }
-        return Suggestions(matches: matches, confident: confident, details: details)
+        return Suggestions(matches: matches, confident: confident, details: details, vehicle: vehicle)
+    }
+
+    /// Read car-vs-motorcycle from the cloud model's DETAILS string (it leads
+    /// with the vehicle type for vehicles). nil when no vehicle word is present.
+    private static func vehicleFilter(from details: String?) -> VehicleFilter? {
+        guard let l = details?.lowercased() else { return nil }
+        let moto = ["motorcycle", "motorbike", "moped", "scooter", "dirt bike", "cruiser", "sportbike"]
+        let car = ["car", "truck", "van", "sedan", "suv", "pickup", "coupe", "hatchback", "automobile", "vehicle"]
+        if moto.contains(where: l.contains) { return .moto }
+        if car.contains(where: l.contains) { return .auto }
+        return nil
     }
 
     /// Best-effort car-vs-motorcycle guess (on-device), used to label the auto tags

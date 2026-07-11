@@ -8,6 +8,11 @@ verify_jwt = false
 [functions.verdicts]
 verify_jwt = false
 
+# Vision photo-tagging: public like the rest of the photo pipeline (search /
+# verdicts), gated in-code by APP_TOKEN.
+[functions.phototags]
+verify_jwt = false
+
 [functions.pricing]
 verify_jwt = false
 

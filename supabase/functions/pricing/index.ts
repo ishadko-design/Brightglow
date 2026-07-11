@@ -2,16 +2,17 @@
 //
 // Nationwide, all-category "Local cost estimate" — EstimationPro's EPCI API
 // (estimationpro.ai/api/v1, BLS wage + PPI backed, free/self-serve) is the
-// primary data source across the app's 10 categories. SF DBI permit data
-// (data.sfgov.org) is kept only as a cross-check confidence-booster for the
-// 5 job_types it originally covered, never the headline number — permit
-// valuations are self-reported and were producing implausible ranges (e.g.
-// $8,754-$48,197 for a water heater, verified live 2026-07-03).
+// sole data source across the app's 10 categories. SF DBI permit data was
+// removed from the formula entirely 2026-07-06 (originally the primary
+// source, then demoted to a cross-check): permit valuations are
+// self-reported and unreliable — e.g. $8,754-$48,197 for a water heater,
+// verified live 2026-07-03. The permit-matching code stays in
+// pricingEngine.ts for reference/tests but nothing here calls it.
 //
 // The app POSTs { category, description, zip } and gets back
 // { range: {all_in_low, all_in_high, confidence, label, data_points} } or
-// { range: {error, fallback} } when neither source has data (always true for
-// Mold & Pest Control — EPCI has no pest-control trade, same gap permits had).
+// { range: {error, fallback} } when EPCI has no data (always true for
+// Mold & Pest Control — EPCI has no pest-control trade).
 //
 // Deploy:   supabase functions deploy pricing
 // Secrets:  supabase secrets set EPCI_ENABLED=true   <- flip only once
@@ -19,11 +20,10 @@
 //           responses currently say "Free for non-commercial use with
 //           attribution"); defaults to false/unset so nothing ships against
 //           unclear terms. The API itself needs no key.
-//           supabase secrets set SF_OPEN_DATA_APP_TOKEN=<optional, raises rate limit>
 //           supabase secrets set ANTHROPIC_API_KEY=<optional — enables the LLM
 //           fallback classifier (llmClassifier.ts) for phrasings the keyword
 //           matcher misses; unset, keyword matching alone decides>
-// Tables:   supabase/migrations/*_permit_cache.sql, *_epci_cache.sql,
+// Tables:   supabase/migrations/*_epci_cache.sql,
 //           *_classification_cache.sql (run via `supabase db push`)
 
 import { createClient } from "jsr:@supabase/supabase-js@2";
@@ -32,24 +32,18 @@ import {
   classifyWithLLM,
 } from "./llmClassifier.ts";
 import {
-  calculatePermitRange,
+  calculateComposedRange,
   CATEGORY_GENERAL,
   classifyJobType,
   detectScopeAddOns,
-  calculateEPCIRange,
   fetchEPCIRaw,
-  fetchSFPermitsRaw,
-  JOB_TYPE_KEYWORDS,
   JOB_TYPE_TAXONOMY,
-  LEGACY_PERMIT_JOB_TYPES,
-  rangesOverlap,
+  resolveJobComponents,
   resolveQuantity,
   type EPCIItem,
   type InsufficientDataResult,
-  type Permit,
 } from "./pricingEngine.ts";
 
-const SF_OPEN_DATA_APP_TOKEN = Deno.env.get("SF_OPEN_DATA_APP_TOKEN") ?? "";
 const ANTHROPIC_API_KEY = Deno.env.get("ANTHROPIC_API_KEY") ?? "";
 const APP_TOKEN = Deno.env.get("APP_TOKEN") ?? "";
 const SUPA_URL = Deno.env.get("SUPABASE_URL") ?? "";
@@ -59,55 +53,13 @@ const EPCI_ENABLED = (Deno.env.get("EPCI_ENABLED") ?? "").toLowerCase() === "tru
 // caching is then skipped and the function still queries live (best-effort).
 const db = SUPA_URL && SERVICE_KEY ? createClient(SUPA_URL, SERVICE_KEY) : null;
 
-const MONTHS = 6;
-const TTL_MS = 24 * 60 * 60 * 1000; // reuse a cached permit/EPCI pull for a day
+const TTL_MS = 24 * 60 * 60 * 1000; // reuse a cached EPCI pull for a day
 
 function json(payload: unknown, status = 200, cache = "bypass"): Response {
   return new Response(JSON.stringify(payload), {
     status,
     headers: { "Content-Type": "application/json", "x-cache": cache },
   });
-}
-
-function permitCacheKey(jobKeywords: string[], months: number): string {
-  return `${months}:${[...jobKeywords].sort().join("|").toLowerCase()}`;
-}
-
-async function fetchSFPermitsCached(
-  jobKeywords: string[],
-  months: number,
-): Promise<{ permits: Permit[]; cache: "hit" | "miss" | "bypass" }> {
-  const key = permitCacheKey(jobKeywords, months);
-
-  if (db) {
-    try {
-      const { data } = await db.from("permit_cache")
-        .select("permits, created_at").eq("cache_key", key).maybeSingle();
-      if (data && Date.now() - new Date(data.created_at as string).getTime() < TTL_MS) {
-        return { permits: data.permits as Permit[], cache: "hit" };
-      }
-    } catch (_) { /* ignore, fall through to a live fetch */ }
-  }
-
-  let permits: Permit[];
-  try {
-    permits = await fetchSFPermitsRaw(jobKeywords, months, SF_OPEN_DATA_APP_TOKEN || undefined);
-  } catch (err) {
-    console.error("pricing: failed to fetch SF permit data", err);
-    return { permits: [], cache: "bypass" };
-  }
-
-  if (db) {
-    try {
-      await db.from("permit_cache").upsert({
-        cache_key: key,
-        permits,
-        created_at: new Date().toISOString(),
-      });
-    } catch (_) { /* ignore, cache write is best-effort */ }
-  }
-
-  return { permits, cache: db ? "miss" : "bypass" };
 }
 
 function epciCacheKey(trade: string, zip: string | undefined): string {
@@ -199,14 +151,6 @@ async function classifyLLMCached(
   return jobType;
 }
 
-/** Reuses calculatePermitRange (permits above/pricingEngine.ts) with a fixed
- *  generic width — none of the 5 cross-checked job_types are actually sized
- *  by width, so this only exists to satisfy JobScope's shape (matches the
- *  36in default the client used everywhere before this session). */
-function permitRangeFor(jobType: string, permits: Permit[], photoAttributes: string[]) {
-  return calculatePermitRange(permits, { job_type: jobType, width_in: 36, features: photoAttributes });
-}
-
 Deno.serve(async (req) => {
   if (req.method !== "POST") return json({ error: "method not allowed" }, 405);
   if (APP_TOKEN && req.headers.get("x-app-token") !== APP_TOKEN) {
@@ -270,43 +214,35 @@ Deno.serve(async (req) => {
 
   const { quantity, isDefaulted } = resolveQuantity(entry, description);
   const isGeneral = entry.keywords.length === 0;
-  const isSF = !!zip && zip.startsWith("941");
-  const eligibleForCrossCheck = isSF && LEGACY_PERMIT_JOB_TYPES.has(entry.job_type);
 
-  const { items, cache: epciCache } = EPCI_ENABLED
-    ? await fetchEPCICached(entry.trade, zip)
-    : { items: null, cache: "bypass" as const };
+  // Cross-trade companion items (e.g. a vanity's countertop + faucet) need
+  // their own trades fetched alongside the job's own trade.
+  const componentTrades = [...new Set(resolveJobComponents(entry.job_type, description).map((c) => c.trade))];
+  const tradesToFetch = EPCI_ENABLED ? [entry.trade, ...componentTrades] : [];
+  const fetched = await Promise.all(tradesToFetch.map((trade) => fetchEPCICached(trade, zip)));
+  const itemsByTrade: Record<string, EPCIItem[]> = {};
+  tradesToFetch.forEach((trade, i) => {
+    if (fetched[i].items) itemsByTrade[trade] = fetched[i].items!;
+  });
+  const epciCache = tradesToFetch.length > 0 && fetched.every((f) => f.cache === "hit") ? "hit" : "miss";
+
   // Scope add-ons the description asserts (tear-out, subfloor…) — usually
   // put there by the clarify chat's canonical details.
   const addOns = detectScopeAddOns(entry, description);
-  const epciRange = items
-    ? calculateEPCIRange(items, entry, quantity, addOns.map((a) => a.itemId))
+  const epciRange = itemsByTrade[entry.trade]
+    ? calculateComposedRange(itemsByTrade, entry, quantity, description, addOns.map((a) => a.itemId))
     : null;
 
   if (epciRange) {
-    let confidence: "high" | "med" | "low" = isGeneral || isDefaulted ? "low" : "med";
+    const confidence: "high" | "med" | "low" = isGeneral || isDefaulted ? "low" : "med";
     // entry.category, not the request's category — the latter is empty when
     // the job was classified from the description alone.
     let label = isGeneral
       ? `Regional avg for ${entry.category} (EstimationPro)`
       : "Regional avg (EstimationPro)";
-    if (addOns.length > 0) {
-      label += ` — incl. ${addOns.map((a) => a.label).join(", ")}`;
-    }
-    let dataPoints = 0;
-
-    if (eligibleForCrossCheck) {
-      const { permits } = await fetchSFPermitsCached(JOB_TYPE_KEYWORDS[entry.job_type], MONTHS);
-      const permitRange = permitRangeFor(entry.job_type, permits, [description]);
-      if (permitRange) {
-        const lo = permitRange.p25 * 1.2;
-        const hi = permitRange.p75 * 1.2;
-        if (rangesOverlap(lo, hi, epciRange.all_in_low, epciRange.all_in_high)) {
-          confidence = "high";
-          dataPoints = permitRange.count;
-          label = `Regional avg — cross-checked against ${permitRange.count} SF permits`;
-        }
-      }
+    const includedLabels = [...addOns.map((a) => a.label), ...epciRange.includedLabels];
+    if (includedLabels.length > 0) {
+      label += ` — incl. ${includedLabels.join(", ")}`;
     }
 
     return json({
@@ -316,30 +252,15 @@ Deno.serve(async (req) => {
         all_in_typical: epciRange.all_in_typical,
         confidence,
         label,
-        data_points: dataPoints,
+        data_points: 0,
       },
     }, 200, epciCache);
   }
 
   // EPCI unavailable (disabled pending licensing, or a transient failure) —
-  // fall back to the legacy SF-permit-only path for the 5 job_types it
-  // covers, so those don't regress to nothing while EPCI is gated off.
-  if (eligibleForCrossCheck) {
-    const { permits, cache: permitCache } = await fetchSFPermitsCached(JOB_TYPE_KEYWORDS[entry.job_type], MONTHS);
-    const permitRange = permitRangeFor(entry.job_type, permits, [description]);
-    if (permitRange) {
-      return json({
-        range: {
-          all_in_low: permitRange.p25 * 1.2,
-          all_in_high: permitRange.p75 * 1.2,
-          confidence: permitRange.count > 30 ? "high" : permitRange.count > 10 ? "med" : "low",
-          label: `${permitRange.count} SF permits — permit data only`,
-          data_points: permitRange.count,
-        },
-      }, 200, permitCache);
-    }
-  }
-
+  // no fallback source: SF permit data was removed from the formula
+  // entirely (unreliable self-reported valuations), so the honest answer
+  // is no number at all.
   const result: InsufficientDataResult = { error: "Insufficient data", fallback: "Get 3 bids" };
   return json({ range: result, display: `${result.error}. ${result.fallback}.` });
 });
