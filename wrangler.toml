@@ -13,9 +13,14 @@ name = "brightglow"
 main = "worker.js"
 compatibility_date = "2026-07-16"
 
-# Static site. `not_found_handling` serves each directory's index.html, so
-# /business/ resolves to site/business/index.html.
+# Static site. Directory index.html (so /business/ works) is handled by the
+# default html_handling — no config needed.
+#
+# not_found_handling MUST stay "none": anything else makes the asset router
+# answer unmatched paths itself and short-circuit worker.js, which would kill
+# the /api/* and /chat proxy the portal depends on. "none" lets a non-asset
+# request fall through to the Worker.
 [assets]
 directory = "./site"
 binding = "ASSETS"
-not_found_handling = "404-page"
+not_found_handling = "none"
