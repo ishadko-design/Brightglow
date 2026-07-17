@@ -1,0 +1,215 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Brightglow for Business — manage your page</title>
+  <meta name="description" content="Claim and manage your Brightglow business page — your services and prices, photos of your work, and the job requests customers send you.">
+  <meta name="theme-color" content="#131315">
+  <meta name="robots" content="noindex">
+  <link rel="icon" type="image/png" href="../favicon.png">
+  <link rel="apple-touch-icon" href="../apple-touch-icon.png">
+  <link rel="stylesheet" href="portal.css">
+</head>
+<body class="portal">
+  <header class="topbar">
+    <a class="brand" href="../index.html">
+      <img class="appicon" src="../media/appicon.png" alt="">
+      <span>Brightglow <em>for Business</em></span>
+    </a>
+    <button id="signOutBtn" class="ghost-btn" hidden>Sign out</button>
+  </header>
+
+  <main class="wrap">
+    <!-- Boot / loading -->
+    <section id="bootView" class="card center">
+      <div class="spinner" aria-label="Loading"></div>
+    </section>
+
+    <!-- Signed-out: claim / sign in -->
+    <section id="authView" class="card auth" hidden>
+      <h1>Claim your business page</h1>
+      <p class="muted">
+        Enter the email where you received your Brightglow request. We'll send you
+        a secure sign-in link — no password. Only the inbox we matched can manage
+        the page, so your listing stays yours.
+      </p>
+      <form id="authForm" novalidate>
+        <label for="email">Business email</label>
+        <input id="email" name="email" type="email" autocomplete="email"
+               inputmode="email" placeholder="you@yourbusiness.com" required>
+        <button type="submit" class="primary-btn" id="sendLinkBtn">Send sign-in link</button>
+      </form>
+      <p id="authMsg" class="form-msg" role="status" aria-live="polite"></p>
+      <p class="fineprint">
+        By continuing you agree to our <a href="../terms.html">Terms of Service</a>.
+      </p>
+    </section>
+
+    <!-- Signed-in: dashboard -->
+    <section id="dashView" hidden>
+      <div class="dash-head">
+        <div>
+          <h1 id="bizName">Your business</h1>
+          <p class="muted" id="bizMeta"></p>
+        </div>
+        <div class="dash-head-actions">
+          <label class="switch">
+            <input type="checkbox" id="acceptingWork">
+            <span class="track"></span>
+            <span class="switch-label">Accepting new work</span>
+          </label>
+        </div>
+      </div>
+
+      <!-- business switcher (only shown when >1 claimed business) -->
+      <div id="bizSwitcher" class="biz-switcher" hidden></div>
+
+      <div class="completeness">
+        <div class="bar"><span id="completeFill"></span></div>
+        <span id="completeText" class="muted"></span>
+      </div>
+
+      <nav class="tabs">
+        <button class="tab is-active" data-tab="page">Your page</button>
+        <button class="tab" data-tab="leads">Requests</button>
+      </nav>
+
+      <!-- YOUR PAGE — profile, services and photos stacked into one scrolling
+           list. They were separate tabs, which made the later ones easy to miss. -->
+      <section class="tab-panel is-active" data-panel="page">
+        <h2 class="section-head">Profile</h2>
+        <div class="card">
+          <div class="logo-row">
+            <div class="logo-preview" id="logoPreview" aria-hidden="true"></div>
+            <div>
+              <label class="field-label">Logo</label>
+              <p class="muted small">Square works best. PNG or JPG.</p>
+              <label class="upload-btn">
+                Upload logo
+                <input id="logoInput" type="file" accept="image/png,image/jpeg,image/webp" hidden>
+              </label>
+            </div>
+          </div>
+
+          <label class="field-label" for="displayName">Business name</label>
+          <input id="displayName" type="text" maxlength="120" placeholder="e.g. Bay Area Plumbing Co.">
+
+          <label class="field-label" for="tagline">Tagline</label>
+          <input id="tagline" type="text" maxlength="140" placeholder="One line about what you do best">
+
+          <label class="field-label" for="about">About</label>
+          <textarea id="about" rows="4" maxlength="1200" placeholder="Tell customers who you are, your experience, and what sets your work apart."></textarea>
+
+          <div class="grid-2">
+            <div>
+              <label class="field-label" for="phone">Phone</label>
+              <input id="phone" type="tel" autocomplete="tel" placeholder="(555) 123-4567">
+            </div>
+            <div>
+              <label class="field-label" for="website">Website</label>
+              <input id="website" type="url" inputmode="url" placeholder="https://…">
+            </div>
+          </div>
+
+          <label class="field-label" for="serviceArea">Service area</label>
+          <input id="serviceArea" type="text" maxlength="200" placeholder="e.g. San Francisco + 25 mi, or 94103, 94110, 94112">
+
+          <div class="grid-3">
+            <div>
+              <label class="field-label" for="license">License #</label>
+              <input id="license" type="text" maxlength="60" placeholder="CSLB #">
+            </div>
+            <div>
+              <label class="field-label" for="years">Years in business</label>
+              <input id="years" type="number" min="0" max="200" placeholder="e.g. 12">
+            </div>
+            <div class="check-field">
+              <label class="checkbox">
+                <input type="checkbox" id="insured">
+                <span>Licensed &amp; insured</span>
+              </label>
+            </div>
+          </div>
+        </div>
+        <h2 class="section-head">Services &amp; prices</h2>
+        <div class="card">
+          <p class="muted">
+            List the jobs you take and a typical price range for each — customers
+            see these ranges next to your name. Leave a price blank for
+            "call for quote."
+          </p>
+          <div class="prefill">
+            <label class="field-label" for="tradePrefill">Start from a trade template</label>
+            <div class="prefill-row">
+              <select id="tradePrefill">
+                <option value="">Choose a trade…</option>
+              </select>
+              <button type="button" class="ghost-btn" id="prefillBtn">Add typical services</button>
+            </div>
+          </div>
+          <div id="serviceRows" class="service-rows"></div>
+          <button type="button" class="add-row-btn" id="addServiceBtn">+ Add a service</button>
+        </div>
+        <h2 class="section-head">Photos</h2>
+        <div class="card">
+          <p class="muted">
+            Show real photos of your work — this is what customers scroll first
+            when they pick who to trust. Drag to reorder; the first photo leads.
+          </p>
+          <div id="photoGrid" class="photo-grid"></div>
+          <label class="upload-btn wide">
+            Upload photos
+            <input id="photoInput" type="file" accept="image/png,image/jpeg,image/webp" multiple hidden>
+          </label>
+          <p id="photoMsg" class="form-msg" aria-live="polite"></p>
+        </div>
+      </section>
+
+      <!-- LEADS -->
+      <section class="tab-panel" data-panel="leads">
+        <div class="card" id="leadsCard">
+          <p class="muted">
+            Job requests customers sent you. Open one to read it and reply — the
+            customer gets notified by email either way.
+          </p>
+          <div id="leadsList" class="leads-list"></div>
+          <p id="leadsEmpty" class="muted center-text" hidden>No requests yet. They'll appear here as customers reach out.</p>
+        </div>
+
+        <!-- One conversation, opened from a request card. Reads come straight
+             from Supabase under RLS; the reply POSTs to LeadBridge (same-origin
+             via the /api proxy) which stores it and emails the customer. -->
+        <div class="card" id="threadCard" hidden>
+          <div class="thread-head">
+            <button type="button" class="ghost-btn" id="threadBack">← Requests</button>
+            <div class="thread-heading">
+              <div class="thread-title" id="threadTitle"></div>
+              <div class="muted small" id="threadSub"></div>
+            </div>
+          </div>
+          <div class="thread-msgs" id="threadMsgs"></div>
+          <form class="composer" id="composer">
+            <textarea id="composerInput" rows="2" placeholder="Write a reply…"></textarea>
+            <button type="submit" class="primary-btn" id="composerSend">Send</button>
+          </form>
+          <p class="form-msg" id="threadMsg" aria-live="polite"></p>
+        </div>
+      </section>
+
+      <div class="save-bar">
+        <span id="saveState" class="muted"></span>
+        <button id="saveBtn" class="primary-btn">Save changes</button>
+      </div>
+    </section>
+  </main>
+
+  <footer class="portal-footer">
+    <a href="../terms.html">Terms</a>
+    <a href="mailto:hello@brightglow.co">hello@brightglow.co</a>
+    <span>© 2026 Brightglow LLC</span>
+  </footer>
+
+  <script type="module" src="portal.js"></script>
+</body>
+</html>

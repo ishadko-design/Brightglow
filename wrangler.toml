@@ -1,0 +1,21 @@
+# Cloudflare Worker that serves brightglow.co.
+#
+# The site is static (site/), but it can't be a pure assets-only Worker: the
+# business portal needs /api/* and /chat to come from OUR origin rather than
+# LeadBridge's Railway URL. LeadBridge sends no CORS headers, so a cross-origin
+# POST from the portal is blocked by the browser; proxying through this Worker
+# makes those calls same-origin. See worker.js.
+#
+# Deploy:  npx wrangler deploy   (this is the Deploy command Cloudflare runs
+#                                 when the repo is connected)
+
+name = "brightglow"
+main = "worker.js"
+compatibility_date = "2026-07-16"
+
+# Static site. `not_found_handling` serves each directory's index.html, so
+# /business/ resolves to site/business/index.html.
+[assets]
+directory = "./site"
+binding = "ASSETS"
+not_found_handling = "404-page"

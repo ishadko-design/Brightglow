@@ -1,0 +1,386 @@
+/* Brightglow site — tokens mirrored from design/tokens.json,
+   landing layout from Figma node 923:2736 (402px mobile frame) */
+
+@font-face {
+  font-family: "Lato";
+  src: url("fonts/Lato-Heavy.ttf") format("truetype");
+  font-weight: 800;
+  font-display: swap;
+}
+@font-face {
+  font-family: "Lato";
+  src: url("fonts/Lato-Bold.ttf") format("truetype");
+  font-weight: 700;
+  font-display: swap;
+}
+@font-face {
+  font-family: "Lato";
+  src: url("fonts/Lato-Regular.ttf") format("truetype");
+  font-weight: 400;
+  font-display: swap;
+}
+@font-face {
+  font-family: "Poppins";
+  src: url("fonts/Poppins-Light.ttf") format("truetype");
+  font-weight: 300;
+  font-display: swap;
+}
+@font-face {
+  font-family: "Poppins";
+  src: url("fonts/Poppins-Regular.ttf") format("truetype");
+  font-weight: 400;
+  font-display: swap;
+}
+
+:root {
+  --white: #ffffff;
+  --gray50: rgba(255, 255, 255, 0.5);
+  --gray20: rgba(255, 255, 255, 0.2);
+  --gray10: rgba(255, 255, 255, 0.1);
+  --bg: #131315;
+  --accent: #0039f5;
+  --orange: #d4a600;
+  --radius: 32px;
+  /* landing scale unit: all Figma px multiply by this */
+  --s: 1px;
+}
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html {
+  color-scheme: dark;
+}
+
+body {
+  background: var(--bg);
+  color: var(--white);
+  font-family: "Poppins", system-ui, sans-serif;
+  font-weight: 300;
+  font-size: 17px;
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+}
+
+h1, h2, h3, h4 {
+  font-family: "Lato", system-ui, sans-serif;
+  line-height: 1.15;
+}
+
+a {
+  color: var(--white);
+}
+
+.wordmark {
+  font-family: "Lato", system-ui, sans-serif;
+  font-weight: 800;
+  font-size: 24px;
+  color: var(--white);
+  text-decoration: none;
+  letter-spacing: -0.01em;
+}
+
+/* ---------- landing ---------- */
+
+body.landing {
+  background: #000;
+  overflow-x: hidden;
+}
+
+/* warm ambient gradient — echoes the app launch/splash screen
+   (SplashDark.png): amber bloom upper-right, softer warmth lower-left,
+   over near-black. Fixed so it stays a calm backdrop while the page scrolls. */
+body.landing::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background:
+    radial-gradient(55% 45% at 90% 3%, rgba(132, 101, 54, 0.55), rgba(132, 101, 54, 0) 62%),
+    radial-gradient(60% 42% at 10% 32%, rgba(78, 64, 46, 0.34), transparent 60%),
+    radial-gradient(52% 32% at 86% 74%, rgba(96, 76, 46, 0.22), transparent 66%);
+}
+
+@media (min-width: 700px) {
+  body.landing {
+    --s: 1.25px;
+  }
+}
+
+.column {
+  width: calc(402 * var(--s));
+  max-width: 100%;
+  margin: 0 auto;
+  padding: 0 calc(32 * var(--s));
+}
+
+.brand {
+  padding-top: calc(59 * var(--s));
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: calc(24 * var(--s));
+}
+
+.brand .appicon {
+  width: calc(76 * var(--s));
+  height: calc(76 * var(--s));
+  border-radius: calc(17 * var(--s));
+}
+
+.brand .name {
+  font-family: "Lato", system-ui, sans-serif;
+  font-weight: 800;
+  font-size: calc(26 * var(--s));
+  line-height: 1;
+  letter-spacing: -0.01em;
+}
+
+.hero-copy {
+  padding-top: calc(64 * var(--s));
+}
+
+.hero-copy h1 {
+  font-weight: 800;
+  font-size: calc(44 * var(--s));
+  line-height: calc(53 * var(--s));
+  color: var(--white);
+}
+
+.hero-copy .sub {
+  margin-top: calc(24 * var(--s));
+  font-size: 17px;
+  line-height: 26px;
+  color: rgba(255, 255, 255, 0.62);
+}
+
+.appstore-btn {
+  margin-top: calc(24 * var(--s));
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  width: 100%;
+  height: calc(52 * var(--s));
+  border-radius: var(--radius);
+  background: var(--accent);
+  color: var(--white);
+  font-family: "Lato", system-ui, sans-serif;
+  font-weight: 700;
+  font-size: 18px;
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.appstore-btn svg {
+  flex: none;
+}
+
+/* ---------- phone stage with parallax cards ---------- */
+
+/* Everything is anchored to the phone's centre (50%) so the phone always sits
+   dead-centre in the viewport; each card is offset from that centre by its
+   Figma distance from the phone centre (design x 203 in the 402-unit grid). */
+.stage {
+  position: relative;
+  width: 100%;
+  height: calc(608 * var(--s));
+  margin: calc(64 * var(--s)) auto 0;
+  /* purely decorative — never intercept taps meant for links above/below it */
+  pointer-events: none;
+}
+
+.stage img {
+  position: absolute;
+  display: block;
+}
+
+.stage .phone {
+  left: 50%;
+  transform: translateX(-50%);
+  top: 0;
+  width: calc(260 * var(--s));
+  z-index: 2;
+}
+
+.stage .float {
+  will-change: transform;
+  /* drop-shadow follows the PNG alpha (rounded corners + baked-in fades),
+     unlike box-shadow which would draw a rectangle */
+  filter: drop-shadow(0 18px 36px rgba(0, 0, 0, 0.65))
+          drop-shadow(0 4px 10px rgba(0, 0, 0, 0.45));
+}
+
+/* behind the phone */
+.stage .card-3 {
+  left: calc(50% + 88 * var(--s));
+  top: calc(217 * var(--s));
+  width: calc(124 * var(--s));
+  z-index: 1;
+}
+
+/* fade the phone's lower content into the page background */
+.stage::after {
+  content: "";
+  position: absolute;
+  left: calc(-40 * var(--s));
+  right: calc(-40 * var(--s));
+  bottom: calc(-2 * var(--s));
+  height: calc(200 * var(--s));
+  background: linear-gradient(to bottom, rgba(0, 0, 0, 0), #000 78%);
+  z-index: 3;
+  pointer-events: none;
+}
+
+/* in front of the phone (these exports carry their own baked-in fades) */
+.stage .card-1 {
+  left: calc(50% - 216 * var(--s));
+  top: calc(76 * var(--s));
+  width: calc(113 * var(--s));
+  z-index: 4;
+}
+
+.stage .card-2 {
+  left: calc(50% - 209 * var(--s));
+  top: calc(451 * var(--s));
+  width: calc(117 * var(--s));
+  z-index: 4;
+}
+
+.stage .card-4 {
+  left: calc(50% + 90 * var(--s));
+  top: calc(505 * var(--s));
+  width: calc(77 * var(--s));
+  z-index: 4;
+}
+
+/* ---------- landing footer ---------- */
+
+.landing-footer {
+  position: relative;
+  z-index: 6;
+  padding: calc(64 * var(--s)) 0 calc(59 * var(--s));
+  text-align: center;
+  font-size: 17px;
+  line-height: 32px;
+}
+
+.landing-footer a {
+  display: inline-block;
+  color: var(--white);
+}
+
+.landing-footer .copyright {
+  color: var(--gray50);
+}
+
+/* "For businesses" entry point — a quiet top-right pill on the landing, out of
+   the centered .brand flow (fixed), plus a footer link (in .landing-footer a). */
+.biz-link {
+  position: fixed;
+  top: calc(24 * var(--s));
+  right: calc(24 * var(--s));
+  z-index: 10;
+  font-family: "Lato", system-ui, sans-serif;
+  font-weight: 700;
+  font-size: 14px;
+  color: var(--white);
+  text-decoration: none;
+  padding: 8px 16px;
+  border: 1px solid var(--gray20);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.03);
+  backdrop-filter: blur(8px);
+}
+.biz-link:hover {
+  border-color: var(--gray50);
+}
+
+/* ---------- terms ---------- */
+
+.doc {
+  max-width: 720px;
+  margin: 0 auto;
+  padding: 32px;
+}
+
+.doc-nav {
+  padding: 16px 0 48px;
+}
+
+.doc h1 {
+  font-weight: 800;
+  font-size: clamp(28px, 5vw, 40px);
+}
+
+.doc .updated {
+  margin-top: 8px;
+  color: var(--gray50);
+  font-size: 14px;
+}
+
+.doc .notice {
+  margin: 32px 0;
+  padding: 24px;
+  border: 1px solid var(--gray20);
+  border-radius: var(--radius);
+  font-size: 14px;
+  color: var(--gray50);
+}
+
+.doc h2 {
+  font-weight: 700;
+  font-size: 24px;
+  margin: 48px 0 16px;
+}
+
+.doc p, .doc li {
+  color: rgba(255, 255, 255, 0.75);
+}
+
+.doc p {
+  margin-bottom: 16px;
+}
+
+.doc ul, .doc ol {
+  margin: 0 0 16px 24px;
+}
+
+.doc li {
+  margin-bottom: 8px;
+}
+
+.doc strong {
+  color: var(--white);
+  font-weight: 400;
+  font-family: "Poppins", system-ui, sans-serif;
+}
+
+.doc hr {
+  border: 0;
+  border-top: 1px solid var(--gray10);
+  margin: 48px 0;
+}
+
+.footer {
+  padding: 24px 0;
+  border-top: 1px solid var(--gray10);
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px 24px;
+  align-items: center;
+  font-size: 14px;
+  color: var(--gray50);
+}
+
+.footer a {
+  color: var(--gray50);
+}
+
+.footer .copyright {
+  margin-left: auto;
+}

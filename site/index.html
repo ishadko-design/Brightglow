@@ -1,0 +1,87 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Brightglow — see their work, then pick who you trust</title>
+  <meta name="description" content="Brightglow finds and ranks local contractors and auto shops by the ones who've done a job like yours — real photos of their work, price estimates, and secure in-app messaging. You compare and choose.">
+  <meta name="theme-color" content="#000000">
+  <link rel="icon" type="image/png" href="favicon.png">
+  <link rel="apple-touch-icon" href="apple-touch-icon.png">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body class="landing">
+  <main class="column">
+    <header class="brand">
+      <img class="appicon" src="media/appicon.png" alt="">
+      <div class="name">Brightglow</div>
+      <a class="biz-link" href="business/">For businesses →</a>
+    </header>
+
+    <section class="hero-copy">
+      <h1>See the work and pick who you trust</h1>
+      <p class="sub">
+        Brightglow finds local contractors and auto shops and ranks the ones
+        who've done a job like yours — with real photos of their work, price
+        estimates, and secure in-app messaging. You compare, and you choose.
+      </p>
+
+      <!--
+        When the App Store listing is live, replace href="#" with the real URL,
+        e.g. https://apps.apple.com/app/id0000000000
+      -->
+      <a class="appstore-btn" href="#">
+        <svg width="20" height="24" viewBox="0 0 20 24" fill="currentColor" aria-hidden="true">
+          <path d="M16.36 12.77c-.03-2.9 2.37-4.29 2.48-4.36-1.35-1.97-3.45-2.24-4.2-2.27-1.79-.18-3.49 1.05-4.4 1.05-.9 0-2.3-1.02-3.79-1-1.95.03-3.74 1.13-4.74 2.87-2.02 3.5-.52 8.69 1.45 11.53.96 1.39 2.11 2.95 3.62 2.9 1.45-.06 2-.94 3.76-.94 1.75 0 2.25.94 3.79.91 1.57-.03 2.56-1.42 3.52-2.82 1.11-1.61 1.56-3.17 1.59-3.25-.04-.02-3.05-1.17-3.08-4.62zM13.46 4.25c.8-.97 1.34-2.32 1.19-3.66-1.15.05-2.55.77-3.38 1.74-.74.85-1.39 2.22-1.22 3.53 1.29.1 2.6-.65 3.41-1.61z"/>
+        </svg>
+        Download from the App Store
+      </a>
+    </section>
+  </main>
+
+  <section class="stage">
+    <img class="float card-3" data-depth="0.9" src="media/card-3.png" alt="">
+    <img class="phone" src="media/app-screen-home.png"
+         alt="Brightglow app — Home screen with service categories like Plumbing, Electrical, Painting, and HVAC">
+    <img class="float card-1" data-depth="0.5" src="media/card-1.png" alt="">
+    <img class="float card-2" data-depth="0.7" src="media/card-2.png" alt="">
+    <img class="float card-4" data-depth="1.2" src="media/card-4.png" alt="">
+  </section>
+
+  <footer class="landing-footer">
+    <a href="business/">For businesses</a>
+    <a href="terms.html">Terms of Service</a>
+    <a href="mailto:hello@brightglow.co">hello@brightglow.co</a>
+    <div class="copyright">© 2026 Brightglow LLC</div>
+  </footer>
+
+  <script>
+    (function () {
+      if (matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+      var stage = document.querySelector(".stage");
+      var floats = [].slice.call(document.querySelectorAll(".float"));
+      var lastP = null;
+      function update() {
+        var r = stage.getBoundingClientRect();
+        // -1 .. 1 as the stage travels through the viewport
+        var p = (r.top + r.height / 2 - innerHeight / 2) / innerHeight;
+        if (lastP === null || Math.abs(p - lastP) > 0.001) {
+          lastP = p;
+          floats.forEach(function (el) {
+            var d = parseFloat(el.dataset.depth) || 0;
+            el.style.transform = "translateY(" + (-p * d * 60).toFixed(1) + "px)";
+          });
+        }
+      }
+      function frame() {
+        update();
+        requestAnimationFrame(frame);
+      }
+      requestAnimationFrame(frame);
+      // fallback for environments where rAF is throttled
+      setInterval(update, 150);
+      update();
+    })();
+  </script>
+</body>
+</html>
