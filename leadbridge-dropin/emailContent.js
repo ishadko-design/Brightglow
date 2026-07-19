@@ -2,7 +2,8 @@
 //
 // The additions to the lead-notification email:
 //   1. A response-time ETA nudge (respond fast → win the job).
-//   2. A "Claim your page" CTA → the web CRM at brightglow.co/business.
+//   2. A "Claim your page" CTA → opens the app to THIS conversation (page setup
+//      is now an in-app nudge, not the web CRM).
 //   3. A "Reply in the app" button → deep-links straight to THIS conversation.
 //   4. A CAN-SPAM–compliant unsubscribe footer + the List-Unsubscribe headers.
 //
@@ -15,12 +16,22 @@ const SITE = process.env.PUBLIC_SITE_URL || "https://brightglow.co";
 // the LeadBridge public URL.
 const API = process.env.PUBLIC_API_URL || "https://leadbridge-production-4065.up.railway.app";
 const ACCENT = "#0039f5";
+// App Store listing for the "download the app" nudge. Still a placeholder id until
+// the app is published under the LLC dev account — set APP_STORE_URL in env then.
+const APP_STORE_URL = process.env.APP_STORE_URL || "https://apps.apple.com/app/brightglow/id0000000000";
 
 // The main content block to inject into the lead email body. `publicId` is the
 // lead's public_id (the same id the app's deep link uses).
 function leadEmailBlock({ publicId, city }) {
-  const claimUrl = `${SITE}/business/`;
-  const replyUrl = `${SITE}/chat/${encodeURIComponent(publicId)}`; // Universal Link → opens the app thread
+  // Web portal is the primary destination: a plain https link opens in EVERY email
+  // client (Gmail, Namecheap private webmail, Outlook…) and every browser, with no
+  // app install and no Associated Domains entitlement (unprovisioned on the personal
+  // team). ?lead=<public_id> lands the owner on THIS conversation, where they sign in
+  // with the 6-digit code and reply in the web composer. The custom scheme is kept
+  // only as a secondary "open in app" convenience — it silently no-ops in clients
+  // that strip it, which is why it can't be the primary CTA. Once Universal Links are
+  // live, this can become `${SITE}/chat/<id>` opening the app when installed.
+  const webUrl = `${SITE}/business/?lead=${encodeURIComponent(publicId)}`;
   return `
   <div style="margin:24px 0;padding:16px 18px;background:#f4f6ff;border-radius:12px;
               border:1px solid #dbe3ff;font-size:14px;color:#1a1a1a;">
@@ -28,19 +39,31 @@ function leadEmailBlock({ publicId, city }) {
     more likely to hire. ${city ? `This request is in <b>${escapeHtml(city)}</b>.` : ""}
   </div>
 
+  <!-- Two ways to respond. Option 1 (web) is the primary button: it works in every
+       inbox and browser with no install. Option 2 nudges a download for owners who'd
+       rather manage on their phone. -->
   <table role="presentation" cellpadding="0" cellspacing="0" style="margin:8px 0 4px">
     <tr><td style="border-radius:999px;background:${ACCENT}">
-      <a href="${replyUrl}" style="display:inline-block;padding:13px 26px;color:#fff;
+      <a href="${webUrl}" style="display:inline-block;padding:13px 26px;color:#fff;
          font-weight:700;text-decoration:none;font-family:Arial,sans-serif;border-radius:999px">
-        Reply in the Brightglow app →
+        Reply on the web →
       </a>
     </td></tr>
   </table>
+  <p style="font-size:13px;color:#666;line-height:1.5;margin:10px 0 0">
+    Sign in with the 6-digit code we email you — no password, no download needed.
+  </p>
+
+  <p style="font-size:14px;color:#444;line-height:1.5;margin:18px 0 0">
+    📱 <b>Prefer to reply from your phone?</b>
+    <a href="${APP_STORE_URL}" style="color:${ACCENT};font-weight:700">Download the Brightglow app →</a>
+    Manage requests, chat, and update your page on the go.
+  </p>
 
   <p style="font-size:14px;color:#444;line-height:1.5;margin:16px 0 0">
     <b>This is your business.</b> Claim your page to add your services, prices, and
     photos of your work — it's what customers scroll first when they choose who to
-    hire. <a href="${claimUrl}" style="color:${ACCENT};font-weight:700">Claim your page →</a>
+    hire. <a href="${webUrl}" style="color:${ACCENT};font-weight:700">Claim your page →</a>
   </p>`;
 }
 

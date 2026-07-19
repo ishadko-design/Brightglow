@@ -84,7 +84,34 @@ $("authForm").addEventListener("submit", async (e) => {
     msg.textContent = authErrorText(error);
   } else {
     msg.className = "form-msg ok";
-    msg.textContent = `Check ${email} for a secure sign-in link. It opens this page, signed in.`;
+    msg.textContent = `Check ${email} for a sign-in link, or enter the 6-digit code below.`;
+    show($("codeForm"), true);
+    $("code").focus();
+  }
+});
+
+// Code fallback: verify the 6-digit OTP the same email carries. Works when the
+// magic link won't (rewritten/pre-fetched by an email client, or the template
+// only sends a code). On success detectSessionInUrl is irrelevant — verifyOtp
+// establishes the session directly, so we can enter the dashboard.
+$("codeForm").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const email = $("email").value.trim().toLowerCase();
+  const token = $("code").value.trim();
+  const msg = $("authMsg");
+  if (!email || !token) return;
+  const btn = $("verifyCodeBtn");
+  btn.disabled = true; btn.textContent = "Verifying…";
+  const { error } = await sb.auth.verifyOtp({ email, token, type: "email" });
+  btn.disabled = false; btn.textContent = "Verify & sign in";
+  if (error) {
+    console.error("verifyOtp failed:", error);
+    msg.className = "form-msg err";
+    msg.textContent = /expired|invalid|token/i.test(error?.message || "")
+      ? "That code is wrong or expired. Request a new link and try again."
+      : authErrorText(error);
+  } else {
+    await enterDashboard();
   }
 });
 
@@ -170,6 +197,158 @@ async function enterDashboard() {
   show($("dashView"), true);
   show($("signOutBtn"), true);
   renderSwitcher();
+  loadBilling();   // not awaited: the dashboard is usable while this resolves
+}
+
+// ── billing ─────────────────────────────────────────────────
+// Subscription state is keyed on the signed-in EMAIL, not on a claimed page —
+// one row per business inbox — so this is rendered once, independent of the
+// business switcher.
+//
+// Unlike profile edits, none of this goes direct to Supabase: billing rows are
+// service-role-only (they hold the Stripe customer id and payment state), so
+// every call here goes through LeadBridge via the same-origin /api proxy.
+let billing = null;
+
+async function authedFetch(path, options = {}) {
+  const { data: { session } } = await sb.auth.getSession();
+  if (!session) throw new Error("Your session expired — reload and sign in again.");
+  return fetch(path, {
+    ...options,
+    headers: {
+      ...(options.headers || {}),
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${session.access_token}`,
+    },
+  });
+}
+
+async function loadBilling() {
+  try {
+    const resp = await authedFetch("/api/billing/status");
+    if (!resp.ok) throw new Error(`status ${resp.status}`);
+    billing = await resp.json();
+  } catch (err) {
+    console.error("billing status failed:", err);
+    billing = null;
+  }
+  // The tab stays hidden unless the server says billing is switched on, so a
+  // deploy without Stripe env vars simply has no billing UI rather than a
+  // broken one.
+  if (!billing || !billing.enabled) { show($("billingTab"), false); return; }
+  show($("billingTab"), true);
+  renderBilling();
+
+  // Coming back from Stripe (?billing=success|cancelled) — land on Billing so
+  // the outcome is the first thing seen, rather than the profile editor.
+  if (new URLSearchParams(location.search).get("billing")) openTab("billing");
+}
+
+function renderBilling() {
+  const el = $("billingState");
+  const flash = billingFlash();
+  el.innerHTML = flash + (billing.subscribed ? subscribedHTML() : unsubscribedHTML());
+  const sub = $("subscribeBtn");
+  if (sub) sub.addEventListener("click", startCheckout);
+  const manage = $("manageBtn");
+  if (manage) manage.addEventListener("click", openStripePortal);
+}
+
+// Stripe sends the browser back here after Checkout. Success is optimistic on
+// purpose: the subscription is recorded by the webhook, which may land a beat
+// after the redirect, so we say "activating" and re-poll rather than showing a
+// stale "not subscribed" next to a completed payment.
+function billingFlash() {
+  const state = new URLSearchParams(location.search).get("billing");
+  if (state === "success" && !billing.subscribed) {
+    setTimeout(loadBilling, 2000);
+    return `<p class="form-msg ok">Payment received — activating your subscription…</p>`;
+  }
+  if (state === "cancelled") {
+    return `<p class="form-msg">Checkout cancelled. You haven't been charged.</p>`;
+  }
+  return "";
+}
+
+function unsubscribedHTML() {
+  const { free_leads_used: used, free_lead_limit: limit, free_leads_remaining: left } = billing;
+  const pct = limit ? Math.min(100, Math.round((used / limit) * 100)) : 0;
+  const outOfLeads = left === 0;
+
+  return `
+    <h2 class="billing-head">${outOfLeads ? "You're out of free leads" : "Free leads"}</h2>
+    <div class="meter"><span style="width:${pct}%" class="${outOfLeads ? "is-full" : ""}"></span></div>
+    <p class="muted">${used} of ${limit} free leads used${left > 0 ? ` · ${left} left` : ""}</p>
+    <p class="billing-body">
+      ${outOfLeads
+        ? `New customer requests matched to your business are waiting, but we can't pass them
+           along until you subscribe.`
+        : `After your ${limit} free leads, a subscription keeps customer requests coming.`}
+    </p>
+    <div class="price-row"><span class="price">$25</span><span class="muted">/month · unlimited leads</span></div>
+    <button class="primary-btn wide" id="subscribeBtn">Subscribe</button>
+    <p class="fineprint">
+      $25 per month, charged to your card today and automatically on the same day each month
+      until you cancel. <strong>Cancel anytime in one click</strong> from this page — no phone
+      call, no email. See our <a href="../business-terms.html">Business Terms</a>.
+    </p>`;
+}
+
+function subscribedHTML() {
+  const renews = billing.current_period_end ? fmtDate(billing.current_period_end) : null;
+  const pastDue = billing.needs_payment_update;
+
+  return `
+    <h2 class="billing-head">
+      Subscription <span class="pill ${pastDue ? "warn" : "ok"}">${pastDue ? "Payment failed" : "Active"}</span>
+    </h2>
+    ${pastDue
+      ? `<p class="form-msg err">
+           We couldn't charge your card. You're still receiving leads for now — update your
+           card to avoid an interruption.
+         </p>`
+      : ""}
+    <p class="billing-body">
+      You're on the $25/month plan with unlimited leads.${renews ? ` Renews ${renews}.` : ""}
+    </p>
+    <button class="ghost-btn wide" id="manageBtn">
+      ${pastDue ? "Update card" : "Manage or cancel subscription"}
+    </button>
+    <p class="fineprint">
+      Opens your secure Stripe billing page, where you can update your card, download invoices,
+      or cancel — takes effect at the end of the period you've paid for.
+    </p>`;
+}
+
+async function startCheckout() {
+  const btn = $("subscribeBtn");
+  btn.disabled = true; btn.textContent = "Opening secure checkout…";
+  try {
+    const resp = await authedFetch("/api/billing/checkout", { method: "POST" });
+    if (!resp.ok) throw new Error(`Couldn't start checkout (${resp.status}).`);
+    const { url } = await resp.json();
+    location.href = url;      // Stripe-hosted — no card data touches this page
+  } catch (err) {
+    console.error("checkout failed:", err);
+    btn.disabled = false; btn.textContent = "Subscribe";
+    alert(err.message || "Couldn't open checkout. Try again, or email hello@brightglow.co.");
+  }
+}
+
+async function openStripePortal() {
+  const btn = $("manageBtn");
+  const label = btn.textContent;
+  btn.disabled = true; btn.textContent = "Opening…";
+  try {
+    const resp = await authedFetch("/api/billing/portal", { method: "POST" });
+    if (!resp.ok) throw new Error(`Couldn't open billing (${resp.status}).`);
+    const { url } = await resp.json();
+    location.href = url;
+  } catch (err) {
+    console.error("portal failed:", err);
+    btn.disabled = false; btn.textContent = label;
+    alert(err.message || "Couldn't open your billing page. Try again, or email hello@brightglow.co.");
+  }
 }
 
 function fail(text) {
@@ -200,7 +379,7 @@ async function selectBusiness(biz) {
   const { data } = await sb.from("business_profiles").select("*").eq("place_id", biz.place_id).maybeSingle();
   profile = data || {
     place_id: biz.place_id, display_name: biz.name, website: biz.website,
-    services: [], photos: [], insured: false, accepting_work: true,
+    services: [], photos: [], licensed: false, insured: false, accepting_work: true,
   };
   dirty = false;
   $("saveState").textContent = "";
@@ -227,6 +406,7 @@ function renderProfile() {
   $("serviceArea").value = profile.service_area || "";
   $("license").value = profile.license_number || "";
   $("years").value = profile.years_in_business ?? "";
+  $("licensed").checked = !!profile.licensed;
   $("insured").checked = !!profile.insured;
   $("acceptingWork").checked = profile.accepting_work !== false;
   renderLogo();
@@ -261,6 +441,7 @@ $("years").addEventListener("input", (e) => {
   profile.years_in_business = e.target.value === "" ? null : parseInt(e.target.value, 10);
   markDirty();
 });
+$("licensed").addEventListener("change", (e) => { profile.licensed = e.target.checked; markDirty(); });
 $("insured").addEventListener("change", (e) => { profile.insured = e.target.checked; markDirty(); updateCompleteness(); });
 $("acceptingWork").addEventListener("change", (e) => { profile.accepting_work = e.target.checked; markDirty(); });
 
@@ -549,6 +730,7 @@ $("saveBtn").addEventListener("click", async () => {
     services: profile.services || [],
     service_area: profile.service_area || null,
     license_number: profile.license_number || null,
+    licensed: !!profile.licensed,
     insured: !!profile.insured,
     years_in_business: profile.years_in_business ?? null,
     accepting_work: profile.accepting_work !== false,

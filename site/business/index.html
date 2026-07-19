@@ -41,8 +41,18 @@
         <button type="submit" class="primary-btn" id="sendLinkBtn">Send sign-in link</button>
       </form>
       <p id="authMsg" class="form-msg" role="status" aria-live="polite"></p>
+      <!-- Code fallback: the email includes a 6-digit code as well as a link.
+           Typing it here signs in even when the link won't open (email clients
+           that rewrite/pre-fetch links can consume the one-time token first). -->
+      <form id="codeForm" novalidate hidden>
+        <label for="code">Enter the 6-digit code from the email</label>
+        <input id="code" name="code" type="text" inputmode="numeric"
+               autocomplete="one-time-code" pattern="[0-9]*" maxlength="6"
+               placeholder="123456" required>
+        <button type="submit" class="primary-btn" id="verifyCodeBtn">Verify &amp; sign in</button>
+      </form>
       <p class="fineprint">
-        By continuing you agree to our <a href="../terms.html">Terms of Service</a>.
+        By continuing you agree to our <a href="../business-terms.html">Business Terms of Service</a>.
       </p>
     </section>
 
@@ -73,6 +83,7 @@
       <nav class="tabs">
         <button class="tab is-active" data-tab="page">Your page</button>
         <button class="tab" data-tab="leads">Requests</button>
+        <button class="tab" data-tab="billing" id="billingTab" hidden>Billing</button>
       </nav>
 
       <!-- YOUR PAGE — profile, services and photos stacked into one scrolling
@@ -126,8 +137,12 @@
             </div>
             <div class="check-field">
               <label class="checkbox">
+                <input type="checkbox" id="licensed">
+                <span>Licensed</span>
+              </label>
+              <label class="checkbox">
                 <input type="checkbox" id="insured">
-                <span>Licensed &amp; insured</span>
+                <span>Insured</span>
               </label>
             </div>
           </div>
@@ -197,6 +212,18 @@
         </div>
       </section>
 
+      <!-- BILLING — hidden entirely until the server reports billing is
+           configured (GET /api/billing/status → enabled). Subscription state is
+           per business EMAIL, not per claimed page, so this panel is the same
+           whichever business is selected in the switcher. -->
+      <section class="tab-panel" data-panel="billing">
+        <div class="card" id="billingCard">
+          <div class="billing-state" id="billingState">
+            <div class="spinner" aria-label="Loading"></div>
+          </div>
+        </div>
+      </section>
+
       <div class="save-bar">
         <span id="saveState" class="muted"></span>
         <button id="saveBtn" class="primary-btn">Save changes</button>
@@ -205,6 +232,7 @@
   </main>
 
   <footer class="portal-footer">
+    <a href="../business-terms.html">Business Terms</a>
     <a href="../terms.html">Terms</a>
     <a href="mailto:hello@brightglow.co">hello@brightglow.co</a>
     <span>© 2026 Brightglow LLC</span>
