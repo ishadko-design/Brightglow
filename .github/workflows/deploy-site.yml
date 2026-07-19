@@ -1,0 +1,33 @@
+name: Deploy site
+
+# Push to main → Cloudflare updates brightglow.co automatically.
+# Only runs when something the Worker actually serves changes, so app-only
+# commits don't trigger a needless redeploy.
+on:
+  push:
+    branches: [main]
+    paths:
+      - site/**
+      - worker.js
+      - wrangler.toml
+      - .github/workflows/deploy-site.yml
+
+# let a newer push cancel an in-flight deploy
+concurrency:
+  group: deploy-site
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - name: Deploy Worker + assets
+        run: npx wrangler@4 deploy
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          # only needed if the token can see more than one account:
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}

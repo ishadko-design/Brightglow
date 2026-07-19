@@ -53,6 +53,10 @@
 
 html {
   color-scheme: dark;
+  /* the landing's decorative float cards bleed past the viewport edges by
+     design; clip horizontal overflow at the root so the page can't scroll
+     sideways. body's overflow-x alone doesn't reach the viewport scroll. */
+  overflow-x: hidden;
 }
 
 body {
@@ -118,30 +122,41 @@ body.landing::before {
   padding: 0 calc(32 * var(--s));
 }
 
-.brand {
-  padding-top: calc(59 * var(--s));
+/* top navbar — full page width (not confined to the centred .column):
+   logo lockup pinned left, "For businesses" pill pinned right, 32px gutters. */
+.topbar {
+  padding: calc(24 * var(--s)) calc(32 * var(--s)) 0;
   display: flex;
-  flex-direction: column;
   align-items: center;
-  gap: calc(24 * var(--s));
+  justify-content: space-between;
+  gap: calc(16 * var(--s));
 }
 
-.brand .appicon {
-  width: calc(76 * var(--s));
-  height: calc(76 * var(--s));
-  border-radius: calc(17 * var(--s));
+.topbar .logo {
+  display: flex;
+  align-items: center;
+  gap: calc(12 * var(--s));
+  text-decoration: none;
 }
 
-.brand .name {
+.topbar .appicon {
+  width: calc(44 * var(--s));
+  height: calc(44 * var(--s));
+  border-radius: calc(11 * var(--s));
+}
+
+.topbar .wordmark {
   font-family: "Lato", system-ui, sans-serif;
   font-weight: 800;
-  font-size: calc(26 * var(--s));
+  font-size: calc(24 * var(--s));
   line-height: 1;
   letter-spacing: -0.01em;
+  color: var(--white);
 }
 
 .hero-copy {
-  padding-top: calc(64 * var(--s));
+  padding-top: calc(28 * var(--s));
+  text-align: center;
 }
 
 .hero-copy h1 {
@@ -155,7 +170,7 @@ body.landing::before {
   margin-top: calc(24 * var(--s));
   font-size: 17px;
   line-height: 26px;
-  color: rgba(255, 255, 255, 0.62);
+  color: var(--gray50);
 }
 
 .appstore-btn {
@@ -278,26 +293,22 @@ body.landing::before {
   color: var(--gray50);
 }
 
-/* "For businesses" entry point — a quiet top-right pill on the landing, out of
-   the centered .brand flow (fixed), plus a footer link (in .landing-footer a). */
+/* "For businesses" entry point — the navbar pill (right of the logo lockup),
+   plus a footer link (in .landing-footer a). */
 .biz-link {
-  position: fixed;
-  top: calc(24 * var(--s));
-  right: calc(24 * var(--s));
-  z-index: 10;
+  flex: none;
   font-family: "Lato", system-ui, sans-serif;
   font-weight: 700;
   font-size: 14px;
   color: var(--white);
   text-decoration: none;
-  padding: 8px 16px;
-  border: 1px solid var(--gray20);
+  padding: calc(8 * var(--s)) calc(16 * var(--s));
   border-radius: 999px;
-  background: rgba(255, 255, 255, 0.03);
-  backdrop-filter: blur(8px);
+  background: rgba(217, 217, 217, 0.2);
+  transition: background 0.15s ease;
 }
 .biz-link:hover {
-  border-color: var(--gray50);
+  background: rgba(217, 217, 217, 0.3);
 }
 
 /* ---------- terms ---------- */
