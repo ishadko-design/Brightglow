@@ -166,7 +166,8 @@ select { appearance: none; background-image: none; }
 /* ── dashboard head ──────────────────────────────────────── */
 .dash-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; margin-bottom: 18px; }
 .dash-head h1 { margin-bottom: 4px; }
-.dash-head-actions { flex-shrink: 0; }
+/* Flex + gap, or the toggle and the Settings button flow inline and collide. */
+.dash-head-actions { display: flex; align-items: center; gap: 16px; flex-shrink: 0; }
 
 .switch { display: inline-flex; align-items: center; gap: 10px; cursor: pointer; user-select: none; }
 .switch input { position: absolute; opacity: 0; width: 0; height: 0; }
@@ -208,13 +209,9 @@ select { appearance: none; background-image: none; }
    app pushes BusinessProfileScreen — so there's a back affordance, not a tab. */
 .editor-head { display: flex; align-items: center; gap: 14px; margin-bottom: 8px; }
 .editor-head h1 { font-size: 26px; }
-/* Gear on the dashboard header — the app's entry point to Settings. */
-.icon-btn {
-  background: none; border: 1px solid var(--gray20); border-radius: 999px;
-  color: var(--white); font-size: 16px; line-height: 1;
-  width: 38px; height: 38px; cursor: pointer; flex-shrink: 0;
-}
-.icon-btn:hover { background: var(--gray05); }
+/* Settings on the dashboard header — the app's gear entry point, labelled and
+   sized as a real target rather than a 38px icon puck. */
+.settings-btn { font-size: 14px; padding: 11px 20px; flex-shrink: 0; }
 /* Delete + sign-out sit together at the tail of the editor, as in the app. */
 .account-card { display: flex; flex-direction: column; align-items: flex-start; gap: 12px; }
 
