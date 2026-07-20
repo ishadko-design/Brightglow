@@ -700,20 +700,23 @@ function fmtDate(iso) {
 }
 
 // ── completeness meter ──────────────────────────────────────
+// Kept in lockstep with the app's BusinessService.completeness (Swift): the SAME
+// five checks, each worth 20%, so a business sees an identical readiness score on
+// web and mobile. The web-only fields (phone, website, service area, license,
+// tagline, years) deliberately don't count toward readiness — matching the native
+// editor, which doesn't expose them at all.
 function updateCompleteness() {
   const checks = [
     !!profile.display_name,
-    !!profile.tagline || !!profile.about,
-    !!profile.phone,
-    (profile.services || []).some((s) => s.name),
-    (profile.photos || []).length > 0,
+    !!profile.about,
     !!profile.logo_path,
-    !!profile.service_area,
+    (profile.photos || []).length > 0,
+    (profile.services || []).some((s) => s.name),
   ];
   const done = checks.filter(Boolean).length;
   const pct = Math.round((done / checks.length) * 100);
   $("completeFill").style.width = pct + "%";
-  $("completeText").textContent = pct === 100 ? "Page complete 🎉" : `${pct}% complete`;
+  $("completeText").textContent = pct === 100 ? "Page complete" : `${pct}% complete`;
 }
 
 // ── save ────────────────────────────────────────────────────
