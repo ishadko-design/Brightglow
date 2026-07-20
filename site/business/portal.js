@@ -59,8 +59,35 @@ function enterAuth() {
   show($("bootView"), false);
   show($("dashView"), false);
   show($("signOutBtn"), false);
+  showEmailStep();
   show($("authView"), true);
 }
+
+// The two sign-in steps swap in place — only ever one is on screen.
+function showEmailStep() {
+  show($("emailStep"), true);
+  show($("codeStep"), false);
+  $("authMsg").className = "form-msg";
+  $("authMsg").textContent = "";
+  $("code").value = "";
+}
+
+function showCodeStep(email) {
+  $("codeEmail").textContent = email;
+  show($("emailStep"), false);
+  show($("codeStep"), true);
+  $("authMsg").className = "form-msg";
+  $("authMsg").textContent = "";
+  $("code").value = "";
+  $("code").focus();
+}
+
+// Restart: back to the email field so a typo'd address can be corrected and a
+// fresh code requested. The previous code is abandoned (it simply expires).
+$("restartBtn").addEventListener("click", () => {
+  showEmailStep();
+  $("email").focus();
+});
 
 // ── auth: email one-time link ───────────────────────────────
 $("authForm").addEventListener("submit", async (e) => {
@@ -77,16 +104,13 @@ $("authForm").addEventListener("submit", async (e) => {
     // job email still lands on that job after authenticating.
     options: { emailRedirectTo: location.origin + location.pathname + location.search },
   });
-  btn.disabled = false; btn.textContent = "Send sign-in link";
+  btn.disabled = false; btn.textContent = "Send sign-in code";
   if (error) {
     console.error("signInWithOtp failed:", error);   // full object for diagnosis
     msg.className = "form-msg err";
     msg.textContent = authErrorText(error);
   } else {
-    msg.className = "form-msg ok";
-    msg.textContent = `Check ${email} for a sign-in link, or enter the 6-digit code below.`;
-    show($("codeForm"), true);
-    $("code").focus();
+    showCodeStep(email);   // step 2 replaces step 1; its copy names the address
   }
 });
 
@@ -108,7 +132,7 @@ $("codeForm").addEventListener("submit", async (e) => {
     console.error("verifyOtp failed:", error);
     msg.className = "form-msg err";
     msg.textContent = /expired|invalid|token/i.test(error?.message || "")
-      ? "That code is wrong or expired. Request a new link and try again."
+      ? "That code is wrong or expired. Request a new code and try again."
       : authErrorText(error);
   } else {
     await enterDashboard();

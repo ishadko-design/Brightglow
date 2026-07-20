@@ -26,31 +26,43 @@
       <div class="spinner" aria-label="Loading"></div>
     </section>
 
-    <!-- Signed-out: claim / sign in -->
+    <!-- Signed-out: claim / sign in. Two steps that swap in place — email first,
+         then the 6-digit code (which replaces the email step, not stacks under it). -->
     <section id="authView" class="card auth" hidden>
-      <h1>Claim your business page</h1>
-      <p class="muted">
-        Enter the email where you received your Brightglow request. We'll send you
-        a secure sign-in link — no password. Only the inbox we matched can manage
-        the page, so your listing stays yours.
-      </p>
-      <form id="authForm" novalidate>
-        <label for="email">Business email</label>
-        <input id="email" name="email" type="email" autocomplete="email"
-               inputmode="email" placeholder="you@yourbusiness.com" required>
-        <button type="submit" class="primary-btn" id="sendLinkBtn">Send sign-in link</button>
-      </form>
+      <!-- Step 1: request the code -->
+      <div id="emailStep">
+        <h1>Claim your business page</h1>
+        <p class="muted">
+          Enter the email where you received your Brightglow request. We'll email
+          you a 6-digit sign-in code — no password. Only the inbox we matched can
+          manage the page, so your listing stays yours.
+        </p>
+        <form id="authForm" novalidate>
+          <label for="email">Business email</label>
+          <input id="email" name="email" type="email" autocomplete="email"
+                 inputmode="email" placeholder="you@yourbusiness.com" required>
+          <button type="submit" class="primary-btn" id="sendLinkBtn">Send sign-in code</button>
+        </form>
+      </div>
+
+      <!-- Step 2: enter the code. Replaces step 1 once the email is sent. -->
+      <div id="codeStep" hidden>
+        <h1>Enter your code</h1>
+        <p class="muted">
+          We sent a 6-digit code to <strong id="codeEmail"></strong>. Enter it
+          below to sign in. It can take a minute to arrive.
+        </p>
+        <form id="codeForm" novalidate>
+          <label for="code">6-digit code</label>
+          <input id="code" name="code" type="text" inputmode="numeric"
+                 autocomplete="one-time-code" pattern="[0-9]*" maxlength="6"
+                 placeholder="123456" required>
+          <button type="submit" class="primary-btn" id="verifyCodeBtn">Verify &amp; sign in</button>
+        </form>
+        <button type="button" class="linklike" id="restartBtn">Use a different email</button>
+      </div>
+
       <p id="authMsg" class="form-msg" role="status" aria-live="polite"></p>
-      <!-- Code fallback: the email includes a 6-digit code as well as a link.
-           Typing it here signs in even when the link won't open (email clients
-           that rewrite/pre-fetch links can consume the one-time token first). -->
-      <form id="codeForm" novalidate hidden>
-        <label for="code">Enter the 6-digit code from the email</label>
-        <input id="code" name="code" type="text" inputmode="numeric"
-               autocomplete="one-time-code" pattern="[0-9]*" maxlength="6"
-               placeholder="123456" required>
-        <button type="submit" class="primary-btn" id="verifyCodeBtn">Verify &amp; sign in</button>
-      </form>
       <p class="fineprint">
         By continuing you agree to our <a href="../business-terms.html">Business Terms of Service</a>.
       </p>
