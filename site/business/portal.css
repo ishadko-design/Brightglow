@@ -90,8 +90,8 @@ a { color: inherit; }
   background: var(--surface);
   border: 1px solid var(--gray10);
   border-radius: var(--radius);
-  padding: 24px;
-  margin-bottom: 16px;
+  padding: 16px;
+  margin-bottom: 12px;
 }
 .card.center, .center { display: flex; align-items: center; justify-content: center; min-height: 40vh; }
 .muted { color: var(--gray50); font-size: 14px; line-height: 1.5; }
@@ -129,8 +129,9 @@ input[type=number], textarea, select {
   color: var(--white);
   font-family: inherit; font-size: 15px; font-weight: 300;
   /* Wider side padding than a square field needs — text would otherwise hug the
-     rounded corner at this radius. Mirrors the app's 20pt inset. */
-  padding: 12px 20px;
+     rounded corner at this radius. Vertical stays tight: the pill shape already
+     reads as generous, so tall fields just waste screen. */
+  padding: 10px 18px;
   transition: border-color .15s ease;
 }
 input:focus, textarea:focus, select:focus { outline: none; border-color: var(--accent); }
@@ -138,9 +139,9 @@ input::placeholder, textarea::placeholder { color: var(--gray50); }
 textarea { resize: vertical; }
 select { appearance: none; background-image: none; }
 
-.field-label { display: block; font-size: 13px; color: var(--gray70); margin: 18px 0 6px; }
+.field-label { display: block; font-size: 13px; color: var(--gray70); margin: 12px 0 4px; }
 .card > .field-label:first-child { margin-top: 0; }
-.check-field { display: flex; align-items: center; gap: 12px; margin-top: 18px; }
+.check-field { display: flex; align-items: center; gap: 12px; margin-top: 16px; }
 
 /* ── buttons ─────────────────────────────────────────────── */
 .primary-btn {
@@ -217,20 +218,20 @@ select { appearance: none; background-image: none; }
 
 /* Section heading — the spacing above is what separates Profile / Services /
    Pictures now that they share one scroll. */
-.section-head { margin: 32px 0 12px; }
+.section-head { margin: 24px 0 8px; }
 #editorView > .section-head:first-of-type { margin-top: 8px; }
 
 /* ── services editor ─────────────────────────────────────── */
-.prefill { margin-bottom: 18px; padding-bottom: 18px; border-bottom: 1px solid var(--gray10); }
+.prefill { margin-bottom: 16px; padding-bottom: 16px; border-bottom: 1px solid var(--gray10); }
 .prefill-row { display: flex; gap: 8px; }
 .prefill-row select { flex: 1; }
 /* One card per service — the app's ServiceRowEditor shape: name on its own row,
    min/max side by side, Delete beneath. Not a spreadsheet grid. */
-.service-rows { display: flex; flex-direction: column; gap: 16px; }
-.service-card { background: var(--gray05); border: 1px solid var(--gray10); border-radius: 20px; padding: 16px 16px 18px; }
+.service-rows { display: flex; flex-direction: column; gap: 12px; }
+.service-card { background: var(--gray05); border: 1px solid var(--gray10); border-radius: 20px; padding: 16px; }
 .service-card > .field-label:first-child { margin-top: 0; }
-.price-pair { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
-.service-card .rm { margin-top: 18px; }
+.price-pair { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.service-card .rm { margin-top: 12px; }
 .service-card .rm:hover { border-color: var(--danger); color: var(--danger); }
 /* Accent capsule, as in the app — not a dashed full-width placeholder. */
 .add-row-btn { margin-top: 16px; background: var(--accent); border: none; color: var(--white); border-radius: 999px; padding: 11px 22px; cursor: pointer; font-family: "Lato"; font-weight: 700; font-size: 14px; }
