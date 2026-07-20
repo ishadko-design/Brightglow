@@ -421,6 +421,7 @@ async function selectBusiness(biz) {
   renderServices();
   renderPhotos();
   renderLeads();
+  renderStats();
   renderSwitcher();
   updateCompleteness();
 }
@@ -428,7 +429,8 @@ async function selectBusiness(biz) {
 // ── profile fields ──────────────────────────────────────────
 function renderProfile() {
   $("bizName").textContent = profile.display_name || current.name;
-  $("bizMeta").textContent = [current.city, current.place_id ? "Claimed page" : ""].filter(Boolean).join(" · ");
+  // bizMeta (city · readiness) is owned by updateCompleteness, which runs after
+  // this and keeps the subtitle in sync as fields are filled in.
   $("displayName").value = profile.display_name || "";
   $("tagline").value = profile.tagline || "";
   $("about").value = profile.about || "";
@@ -611,15 +613,18 @@ function renderLeads() {
   list.innerHTML = leads.map((l, i) => {
     const msgs = sortMsgs(l.messages || []);
     const last = msgs[msgs.length - 1];
-    // "inbound" = business→customer, so its presence means we already replied.
-    const replied = msgs.some((m) => m.direction === "inbound");
-    const preview = last ? esc(last.body_text || "").slice(0, 80) : "New request — no messages yet";
-    return `<div class="lead-card" data-i="${i}">
+    const waiting = !!last && last.direction === "outbound";
+    // No manual truncation — .lead-preview ellipsises, and slicing escaped HTML
+    // could cut an entity in half.
+    const preview = last ? esc(last.body_text || "") : "New request — no messages yet";
+    return `<div class="lead-card ${waiting ? "needs-reply" : ""}" data-i="${i}">
       <div class="lead-main">
-        <div class="lead-title">${esc(l.business_name || current.name)}
-          <span class="lead-status ${replied ? "replied" : "new"}">${replied ? "Replied" : "New"}</span></div>
-        <div class="lead-preview">${preview}</div>
-        <div class="lead-meta">${esc(l.city || "")}${l.city ? " · " : ""}${fmtDate(l.created_at)}</div>
+        <div class="lead-title-row">
+          <span class="lead-title">${esc(l.city || "New request")}</span>
+          ${waiting ? `<span class="lead-pill">Reply needed</span>` : ""}
+          <span class="lead-time">${fmtRelative((last && last.created_at) || l.created_at)}</span>
+        </div>
+        <div class="lead-preview ${waiting ? "is-waiting" : ""}">${preview}</div>
       </div>
       <button type="button" class="ghost-btn reply-btn">Open</button>
     </div>`;
@@ -730,6 +735,23 @@ function fmtDate(iso) {
   catch { return ""; }
 }
 
+// Named relative time ("yesterday", "3 days ago") to match the app's request
+// rows, which use .relative(presentation: .named). Falls back to a short date
+// past a month, where "34 days ago" stops being useful.
+const RTF = new Intl.RelativeTimeFormat(undefined, { numeric: "auto" });
+function fmtRelative(iso) {
+  if (!iso) return "";
+  const t = new Date(iso).getTime();
+  if (Number.isNaN(t)) return "";
+  const secs = Math.round((t - Date.now()) / 1000);
+  const abs = Math.abs(secs);
+  if (abs < 60) return RTF.format(secs, "second");
+  if (abs < 3600) return RTF.format(Math.round(secs / 60), "minute");
+  if (abs < 86400) return RTF.format(Math.round(secs / 3600), "hour");
+  if (abs < 2592000) return RTF.format(Math.round(secs / 86400), "day");
+  return fmtDate(iso);
+}
+
 // ── completeness meter ──────────────────────────────────────
 // Kept in lockstep with the app's BusinessService.completeness (Swift): the SAME
 // five checks, each worth 20%, so a business sees an identical readiness score on
@@ -746,8 +768,30 @@ function updateCompleteness() {
   ];
   const done = checks.filter(Boolean).length;
   const pct = Math.round((done / checks.length) * 100);
-  $("completeFill").style.width = pct + "%";
-  $("completeText").textContent = pct === 100 ? "Page complete" : `${pct}% complete`;
+  const label = pct === 100 ? "Page complete" : `${pct}% complete`;
+  // Readiness rides in the header subtitle exactly as it does in the app, and
+  // the nudge card only appears while there's still something left to finish.
+  $("bizMeta").textContent = [current && current.city, label].filter(Boolean).join(" · ");
+  $("readinessPct").textContent = `${pct}%`;
+  show($("readinessCard"), pct < 100);
+}
+
+// The customer is waiting when the LAST message came from them. Direction is
+// stored relative to the customer, so "outbound" = customer→business.
+function needsReply(lead) {
+  const msgs = sortMsgs(lead.messages || []);
+  const last = msgs[msgs.length - 1];
+  return !!last && last.direction === "outbound";
+}
+
+// The two dashboard counts, mirroring the app's stat tiles.
+function renderStats() {
+  const leads = current.leads || [];
+  const waiting = leads.filter(needsReply).length;
+  $("statRequests").textContent = leads.length;
+  $("statRequestsUnit").textContent = leads.length === 1 ? "request" : "requests";
+  $("statReply").textContent = waiting;
+  $("statReply").classList.toggle("is-waiting", waiting > 0);
 }
 
 // ── save ────────────────────────────────────────────────────
@@ -794,6 +838,8 @@ function openTab(name) {
 function wireStaticHandlers() {
   document.querySelectorAll(".tab").forEach((t) =>
     t.addEventListener("click", () => openTab(t.dataset.tab)));
+  // "Set up" on the readiness card jumps to the editor, as it does in the app.
+  $("readinessCta").addEventListener("click", () => openTab("page"));
   window.addEventListener("beforeunload", (e) => {
     if (dirty) { e.preventDefault(); e.returnValue = ""; }
   });

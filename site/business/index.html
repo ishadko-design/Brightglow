@@ -87,9 +87,25 @@
       <!-- business switcher (only shown when >1 claimed business) -->
       <div id="bizSwitcher" class="biz-switcher" hidden></div>
 
-      <div class="completeness">
-        <div class="bar"><span id="completeFill"></span></div>
-        <span id="completeText" class="muted"></span>
+      <!-- Stat tiles + readiness card — mirrors the app's dashboard
+           (BusinessDashboardScreen): the counts first, then a "finish your page"
+           nudge that only shows while the page is incomplete. The readiness
+           percentage also rides in the header subtitle, as it does in the app. -->
+      <div class="stat-tiles">
+        <div class="stat-tile">
+          <span class="stat-value" id="statRequests">0</span>
+          <span class="stat-unit" id="statRequestsUnit">requests</span>
+        </div>
+        <div class="stat-tile">
+          <span class="stat-value" id="statReply">0</span>
+          <span class="stat-unit">to reply</span>
+        </div>
+      </div>
+
+      <div class="readiness" id="readinessCard" hidden>
+        <div class="readiness-pct" id="readinessPct">0%</div>
+        <div class="readiness-label">Profile readiness</div>
+        <button type="button" class="primary-btn readiness-cta" id="readinessCta">Set up</button>
       </div>
 
       <nav class="tabs">

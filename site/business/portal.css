@@ -182,10 +182,28 @@ select { appearance: none; background-image: none; }
 .biz-chip { background: var(--surface); border: 1px solid var(--gray20); border-radius: 999px; padding: 8px 16px; font-size: 13px; cursor: pointer; color: var(--gray70); }
 .biz-chip.is-active { background: var(--accent-soft); border-color: var(--accent); color: var(--white); }
 
-/* ── completeness ────────────────────────────────────────── */
-.completeness { display: flex; align-items: center; gap: 12px; margin-bottom: 20px; }
-.completeness .bar { flex: 1; height: 6px; background: var(--gray10); border-radius: 999px; overflow: hidden; }
-.completeness .bar span { display: block; height: 100%; width: 0; background: linear-gradient(90deg, var(--accent), #4d78ff); transition: width .4s ease; }
+/* ── stat tiles + readiness ───────────────────────────────
+   Mirrors the app dashboard (BusinessDashboardScreen): two counts, then a
+   readiness nudge that disappears once the page is complete. */
+.stat-tiles { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 16px; }
+.stat-tile {
+  background: var(--gray05); border: 1px solid var(--gray10);
+  border-radius: 28px; padding: 16px; min-height: 132px;
+  display: flex; flex-direction: column; gap: 2px;
+}
+.stat-value { font-family: "Lato"; font-weight: 800; font-size: 34px; line-height: 1.15; }
+/* Gold while someone is waiting on a reply — the app tints this count the same. */
+.stat-value.is-waiting { color: var(--gold); }
+.stat-unit { font-size: 15px; font-weight: 300; color: var(--gray70); }
+
+.readiness {
+  background: var(--gray05); border: 1px solid var(--gray10);
+  border-radius: 28px; padding: 28px 16px; margin-bottom: 20px;
+  display: flex; flex-direction: column; align-items: center; gap: 6px;
+}
+.readiness-pct { font-family: "Lato"; font-weight: 800; font-size: 24px; }
+.readiness-label { color: var(--gray70); font-size: 15px; }
+.readiness-cta { width: auto; padding: 9px 20px; margin-top: 6px; }
 
 /* ── tabs ────────────────────────────────────────────────── */
 .tabs { display: flex; gap: 4px; margin-bottom: 16px; border-bottom: 1px solid var(--gray10); overflow-x: auto; }
@@ -229,12 +247,20 @@ select { appearance: none; background-image: none; }
 .leads-list { display: flex; flex-direction: column; gap: 10px; }
 .lead-card { background: var(--bg); border: 1px solid var(--gray10); border-radius: var(--radius-sm); padding: 14px 16px; display: flex; justify-content: space-between; align-items: center; gap: 14px; }
 .lead-main { min-width: 0; }
-.lead-title { font-family: "Lato"; font-weight: 700; font-size: 15px; margin-bottom: 3px; }
+/* Request row, matching the app's BusinessRequestRow: title + "Reply needed"
+   pill + relative time on one line, preview beneath, and the whole row lifted
+   while the customer is waiting. */
+.lead-title-row { display: flex; align-items: center; gap: 8px; margin-bottom: 3px; }
+.lead-title { font-family: "Lato"; font-weight: 700; font-size: 15px; }
 .lead-preview { font-size: 13px; color: var(--gray50); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.lead-meta { font-size: 12px; color: var(--gray50); margin-top: 4px; }
-.lead-status { display: inline-block; font-size: 11px; font-weight: 700; padding: 2px 9px; border-radius: 999px; font-family: "Lato"; }
-.lead-status.new { background: var(--accent-soft); color: #8aa5ff; }
-.lead-status.replied { background: rgba(126,227,155,.14); color: #7ee39b; }
+.lead-preview.is-waiting { color: var(--white); }
+.lead-time { font-size: 12px; color: var(--gray50); margin-left: auto; white-space: nowrap; }
+.lead-card.needs-reply { background: var(--gray05); }
+.lead-pill {
+  display: inline-block; font-family: "Lato"; font-weight: 700; font-size: 11px;
+  padding: 2px 8px; border-radius: 999px;
+  background: var(--gold); color: var(--bg); white-space: nowrap;
+}
 .reply-btn { flex-shrink: 0; }
 
 /* ── thread (one conversation, inside Requests) ──────────── */
@@ -272,9 +298,9 @@ select { appearance: none; background-image: none; }
 .billing-head { margin: 0 0 14px; font-size: 20px; display: flex; align-items: center; gap: 10px; }
 .billing-body { color: var(--gray70); font-size: 15px; line-height: 1.55; margin: 14px 0 20px; }
 
-/* Free-lead meter. Same construction as .completeness .bar, but it turns gold
-   at the limit rather than reading as a completed task — running out of free
-   leads is a prompt, not an achievement. */
+/* Free-lead meter — the one progress bar left in the portal (readiness is now a
+   stat card, as in the app). Turns gold at the limit rather than reading as a
+   completed task: running out of free leads is a prompt, not an achievement. */
 .meter { height: 6px; background: var(--gray10); border-radius: 999px; overflow: hidden; margin-bottom: 10px; }
 .meter span { display: block; height: 100%; width: 0; background: linear-gradient(90deg, var(--accent), #4d78ff); transition: width .4s ease; }
 .meter span.is-full { background: var(--gold); }
