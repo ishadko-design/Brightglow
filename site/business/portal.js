@@ -518,8 +518,15 @@ $("addServiceBtn").addEventListener("click", () => {
 $("prefillBtn").addEventListener("click", () => {
   const trade = $("tradePrefill").value;
   if (!trade) return;
-  const tmpl = TRADE_TEMPLATES[trade].map(([name, mn, mx]) => ({ name, price_min: mn, price_max: mx, unit: "job" }));
-  profile.services = [...(profile.services || []), ...tmpl];
+  // Drop the blank starter row so the template doesn't land under an empty line,
+  // and skip names already present so a second click can't duplicate rows.
+  // Mirrors addTemplateServices() in BusinessProfileScreen.swift.
+  const kept = (profile.services || []).filter((s) => (s.name || "").trim());
+  const existing = new Set(kept.map((s) => s.name.trim().toLowerCase()));
+  const tmpl = TRADE_TEMPLATES[trade]
+    .filter(([name]) => !existing.has(name.toLowerCase()))
+    .map(([name, mn, mx]) => ({ name, price_min: mn, price_max: mx, unit: "job" }));
+  profile.services = [...kept, ...tmpl];
   renderServices(); markDirty(); updateCompleteness();
 });
 
