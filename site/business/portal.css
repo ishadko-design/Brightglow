@@ -43,6 +43,10 @@
   --danger: #ff5a5a;
   --radius: 20px;
   --radius-sm: 12px;
+  /* Text fields, matching the app's main search input (MainScreen) and the
+     native business editor: same 32 radius + 1.5 gray20 border everywhere. */
+  --radius-input: 32px;
+  --input-border: 1.5px solid var(--gray20);
 }
 
 * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -120,11 +124,13 @@ input[type=text], input[type=email], input[type=tel], input[type=url],
 input[type=number], textarea, select {
   width: 100%;
   background: var(--bg);
-  border: 1px solid var(--gray20);
-  border-radius: var(--radius-sm);
+  border: var(--input-border);
+  border-radius: var(--radius-input);
   color: var(--white);
   font-family: inherit; font-size: 15px; font-weight: 300;
-  padding: 12px 14px;
+  /* Wider side padding than a square field needs — text would otherwise hug the
+     rounded corner at this radius. Mirrors the app's 20pt inset. */
+  padding: 12px 20px;
   transition: border-color .15s ease;
 }
 input:focus, textarea:focus, select:focus { outline: none; border-color: var(--accent); }
