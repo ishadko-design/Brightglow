@@ -381,6 +381,13 @@ async function selectBusiness(biz) {
     place_id: biz.place_id, display_name: biz.name, website: biz.website,
     services: [], photos: [], licensed: false, insured: false, accepting_work: true,
   };
+  // Open one empty service block by default so the pricing section is
+  // discoverable rather than a bare "Add" button (mirrors the app). Unnamed rows
+  // don't count toward completeness and are dropped on save, so this never
+  // persists an empty service.
+  if (!profile.services || profile.services.length === 0) {
+    profile.services = [{ name: "", price_min: null, price_max: null, unit: "job" }];
+  }
   dirty = false;
   $("saveState").textContent = "";
   thread = null;                      // a thread from the previous business
@@ -730,7 +737,7 @@ $("saveBtn").addEventListener("click", async () => {
     about: profile.about || null,
     phone: profile.phone || null,
     website: profile.website || null,
-    services: profile.services || [],
+    services: (profile.services || []).filter((s) => (s.name || "").trim()),
     service_area: profile.service_area || null,
     license_number: profile.license_number || null,
     licensed: !!profile.licensed,
