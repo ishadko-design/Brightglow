@@ -149,15 +149,15 @@
       </div>
       <h2 class="section-head">Profile</h2>
         <div class="card">
+          <!-- Logo: 104px preview, then button above caption — the app's layout. -->
           <div class="logo-row">
             <div class="logo-preview" id="logoPreview" aria-hidden="true"></div>
-            <div>
-              <label class="field-label">Logo</label>
-              <p class="muted small">Square works best. PNG or JPG.</p>
+            <div class="logo-actions">
               <label class="upload-btn">
                 Upload logo
                 <input id="logoInput" type="file" accept="image/png,image/jpeg,image/webp" hidden>
               </label>
+              <p class="muted small">Square works best. PNG or JPG.</p>
             </div>
           </div>
 
@@ -192,16 +192,16 @@
             </div>
           </div>
           <div id="serviceRows" class="service-rows"></div>
-          <button type="button" class="add-row-btn" id="addServiceBtn">+ Add a service</button>
+          <button type="button" class="add-row-btn" id="addServiceBtn">Add service</button>
         </div>
       <h2 class="section-head">Pictures</h2>
       <div class="card">
         <p class="muted">Show your best relevant work. Drag to reorder; the first photo leads.</p>
-        <div id="photoGrid" class="photo-grid"></div>
-        <label class="upload-btn wide">
-          Upload photos
-          <input id="photoInput" type="file" accept="image/png,image/jpeg,image/webp" multiple hidden>
-        </label>
+        <!-- Horizontal strip of tiles ending in a "+" add tile, as in the app —
+             not a grid with a separate upload button. The add tile is a <label>
+             for the input, so it opens the picker without any JS. -->
+        <div id="photoStrip" class="photo-strip"></div>
+        <input id="photoInput" type="file" accept="image/png,image/jpeg,image/webp" multiple hidden>
         <p id="photoMsg" class="form-msg" aria-live="polite"></p>
       </div>
 

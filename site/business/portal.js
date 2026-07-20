@@ -478,26 +478,34 @@ function populateTradeSelect() {
 function renderServices() {
   const wrap = $("serviceRows");
   const rows = (profile.services || []);
-  wrap.innerHTML = `<div class="service-head">
-      <span>Service</span><span>Min $</span><span>Max $</span><span></span>
-    </div>` + rows.map((s, i) => serviceRowHTML(s, i)).join("");
-  wrap.querySelectorAll(".service-row").forEach((row) => {
-    const i = +row.dataset.i;
-    row.querySelector(".name-in").addEventListener("input", (e) => { setSvc(i, "name", e.target.value); });
-    row.querySelector(".min-in").addEventListener("input", (e) => { setSvc(i, "price_min", numOrNull(e.target.value)); });
-    row.querySelector(".max-in").addEventListener("input", (e) => { setSvc(i, "price_max", numOrNull(e.target.value)); });
-    row.querySelector(".rm").addEventListener("click", () => { profile.services.splice(i, 1); renderServices(); markDirty(); updateCompleteness(); });
+  wrap.innerHTML = rows.map((s, i) => serviceCardHTML(s, i)).join("");
+  wrap.querySelectorAll(".service-card").forEach((card) => {
+    const i = +card.dataset.i;
+    card.querySelector(".name-in").addEventListener("input", (e) => { setSvc(i, "name", e.target.value); });
+    card.querySelector(".min-in").addEventListener("input", (e) => { setSvc(i, "price_min", numOrNull(e.target.value)); });
+    card.querySelector(".max-in").addEventListener("input", (e) => { setSvc(i, "price_max", numOrNull(e.target.value)); });
+    card.querySelector(".rm").addEventListener("click", () => { profile.services.splice(i, 1); renderServices(); markDirty(); updateCompleteness(); });
   });
 }
 
-// No unit column — the app's ServiceRowEditor is name + min + max, and `unit`
-// stays at its "job" default in the model.
-function serviceRowHTML(s, i) {
-  return `<div class="service-row" data-i="${i}">
-    <input class="name-in" type="text" placeholder="e.g. Drain cleaning" value="${esc(s.name)}">
-    <input class="min-in" type="number" min="0" placeholder="—" value="${s.price_min ?? ""}">
-    <input class="max-in" type="number" min="0" placeholder="—" value="${s.price_max ?? ""}">
-    <button class="rm" title="Remove" aria-label="Remove">×</button>
+// One card per service, laid out like the app's ServiceRowEditor: the name on
+// its own row, min/max side by side beneath it, then Delete. Not a spreadsheet
+// row. `unit` isn't shown and stays at its "job" default in the model.
+function serviceCardHTML(s, i) {
+  return `<div class="service-card" data-i="${i}">
+    <label class="field-label">Service</label>
+    <input class="name-in" type="text" placeholder="Service name" value="${esc(s.name)}">
+    <div class="price-pair">
+      <div>
+        <label class="field-label">Price min $</label>
+        <input class="min-in" type="number" min="0" placeholder="$" value="${s.price_min ?? ""}">
+      </div>
+      <div>
+        <label class="field-label">Price max $</label>
+        <input class="max-in" type="number" min="0" placeholder="$" value="${s.price_max ?? ""}">
+      </div>
+    </div>
+    <button type="button" class="ghost-btn rm">Delete</button>
   </div>`;
 }
 const setSvc = (i, k, v) => { profile.services[i][k] = v; markDirty(); if (k === "name") updateCompleteness(); };
@@ -521,19 +529,21 @@ function publicUrl(path) {
 }
 
 function renderPhotos() {
-  const grid = $("photoGrid");
+  const strip = $("photoStrip");
   const photos = profile.photos || [];
-  grid.innerHTML = photos.map((p, i) => `
+  // Tiles then a trailing "+" add tile, mirroring the app's photo strip.
+  strip.innerHTML = photos.map((p, i) => `
     <div class="photo-cell" draggable="true" data-i="${i}">
       ${i === 0 ? '<span class="lead-badge">Leads</span>' : ""}
       <img src="${publicUrl(p)}" alt="">
       <button class="rm" data-i="${i}" title="Remove">×</button>
-    </div>`).join("");
-  grid.querySelectorAll(".rm").forEach((b) => b.addEventListener("click", (e) => {
+    </div>`).join("")
+    + `<label class="photo-add" for="photoInput" title="Add photos"><span>+</span></label>`;
+  strip.querySelectorAll(".rm").forEach((b) => b.addEventListener("click", (e) => {
     e.stopPropagation();
     profile.photos.splice(+b.dataset.i, 1); renderPhotos(); markDirty(); updateCompleteness();
   }));
-  wirePhotoDrag(grid);
+  wirePhotoDrag(strip);
 }
 
 function wirePhotoDrag(grid) {
