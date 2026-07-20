@@ -44,6 +44,7 @@ const esc = (s) => (s ?? "").replace(/[&<>"']/g, (c) => (
 let businesses = [];      // [{ place_id, name, city, leads: [...] }]
 let current = null;       // the selected business
 let profile = null;       // its business_profiles row (working copy)
+let signedInEmail = "";   // shown in the editor's account section
 let dirty = false;
 const markDirty = () => { dirty = true; $("saveState").textContent = "Unsaved changes"; };
 
@@ -160,15 +161,15 @@ function authErrorText(error) {
   return raw;
 }
 
-$("signOutBtn").addEventListener("click", async () => {
-  await sb.auth.signOut();
-  location.reload();
-});
+$("signOutBtn").addEventListener("click", signOut);
 
 // ── dashboard load ──────────────────────────────────────────
 async function enterDashboard() {
   show($("authView"), false);
   show($("bootView"), true);
+
+  const { data: { session } } = await sb.auth.getSession();
+  signedInEmail = (session && session.user && session.user.email) || "";
 
   // Leads addressed to this business (RLS returns only mine). place_id is the
   // claim/join key; business_name/city seed the default display. Old leads with
@@ -212,14 +213,13 @@ async function enterDashboard() {
     : null;
   await selectBusiness(target || businesses[0]);
   if (target) {
-    openTab("leads");
     const lead = target.leads.find((l) => l.public_id === wantLead);
     if (lead) await openThread(lead);   // straight into the conversation
   }
 
   show($("bootView"), false);
-  show($("dashView"), true);
   show($("signOutBtn"), true);
+  showView("dash");
   renderSwitcher();
   loadBilling();   // not awaited: the dashboard is usable while this resolves
 }
@@ -259,13 +259,13 @@ async function loadBilling() {
   // The tab stays hidden unless the server says billing is switched on, so a
   // deploy without Stripe env vars simply has no billing UI rather than a
   // broken one.
-  if (!billing || !billing.enabled) { show($("billingTab"), false); return; }
-  show($("billingTab"), true);
+  if (!billing || !billing.enabled) { show($("billingBtn"), false); return; }
+  show($("billingBtn"), true);
   renderBilling();
 
   // Coming back from Stripe (?billing=success|cancelled) — land on Billing so
   // the outcome is the first thing seen, rather than the profile editor.
-  if (new URLSearchParams(location.search).get("billing")) openTab("billing");
+  if (new URLSearchParams(location.search).get("billing")) showView("billing");
 }
 
 function renderBilling() {
@@ -432,13 +432,7 @@ function renderProfile() {
   // bizMeta (city · readiness) is owned by updateCompleteness, which runs after
   // this and keeps the subtitle in sync as fields are filled in.
   $("displayName").value = profile.display_name || "";
-  $("tagline").value = profile.tagline || "";
   $("about").value = profile.about || "";
-  $("phone").value = profile.phone || "";
-  $("website").value = profile.website || "";
-  $("serviceArea").value = profile.service_area || "";
-  $("license").value = profile.license_number || "";
-  $("years").value = profile.years_in_business ?? "";
   $("licensed").checked = !!profile.licensed;
   $("insured").checked = !!profile.insured;
   $("acceptingWork").checked = profile.accepting_work !== false;
@@ -456,12 +450,10 @@ function renderLogo() {
   el.style.fontSize = "28px";
 }
 
-// Bind simple text fields → profile on input.
-const FIELD_MAP = {
-  displayName: "display_name", tagline: "tagline", about: "about",
-  phone: "phone", website: "website", serviceArea: "service_area",
-  license: "license_number",
-};
+// Bind simple text fields → profile on input. Only the two the app's editor
+// exposes; tagline/phone/website/service_area/license_number/years_in_business
+// are no longer edited here, and their stored values ride through save untouched.
+const FIELD_MAP = { displayName: "display_name", about: "about" };
 for (const [id, key] of Object.entries(FIELD_MAP)) {
   document.addEventListener("input", (e) => {
     if (e.target.id !== id) return;
@@ -470,10 +462,6 @@ for (const [id, key] of Object.entries(FIELD_MAP)) {
     markDirty(); updateCompleteness();
   });
 }
-$("years").addEventListener("input", (e) => {
-  profile.years_in_business = e.target.value === "" ? null : parseInt(e.target.value, 10);
-  markDirty();
-});
 $("licensed").addEventListener("change", (e) => { profile.licensed = e.target.checked; markDirty(); });
 $("insured").addEventListener("change", (e) => { profile.insured = e.target.checked; markDirty(); updateCompleteness(); });
 $("acceptingWork").addEventListener("change", (e) => { profile.accepting_work = e.target.checked; markDirty(); });
@@ -491,24 +479,24 @@ function renderServices() {
   const wrap = $("serviceRows");
   const rows = (profile.services || []);
   wrap.innerHTML = `<div class="service-head">
-      <span>Service</span><span>Min $</span><span>Max $</span><span class="unit-col">Per</span><span></span>
+      <span>Service</span><span>Min $</span><span>Max $</span><span></span>
     </div>` + rows.map((s, i) => serviceRowHTML(s, i)).join("");
   wrap.querySelectorAll(".service-row").forEach((row) => {
     const i = +row.dataset.i;
     row.querySelector(".name-in").addEventListener("input", (e) => { setSvc(i, "name", e.target.value); });
     row.querySelector(".min-in").addEventListener("input", (e) => { setSvc(i, "price_min", numOrNull(e.target.value)); });
     row.querySelector(".max-in").addEventListener("input", (e) => { setSvc(i, "price_max", numOrNull(e.target.value)); });
-    row.querySelector(".unit-in").addEventListener("input", (e) => { setSvc(i, "unit", e.target.value); });
     row.querySelector(".rm").addEventListener("click", () => { profile.services.splice(i, 1); renderServices(); markDirty(); updateCompleteness(); });
   });
 }
 
+// No unit column — the app's ServiceRowEditor is name + min + max, and `unit`
+// stays at its "job" default in the model.
 function serviceRowHTML(s, i) {
   return `<div class="service-row" data-i="${i}">
     <input class="name-in" type="text" placeholder="e.g. Drain cleaning" value="${esc(s.name)}">
     <input class="min-in" type="number" min="0" placeholder="—" value="${s.price_min ?? ""}">
     <input class="max-in" type="number" min="0" placeholder="—" value="${s.price_max ?? ""}">
-    <input class="unit-in" type="text" placeholder="job" value="${esc(s.unit || "")}">
     <button class="rm" title="Remove" aria-label="Remove">×</button>
   </div>`;
 }
@@ -829,17 +817,55 @@ $("saveBtn").addEventListener("click", async () => {
   }
 });
 
-// ── tabs + guards ───────────────────────────────────────────
-function openTab(name) {
-  document.querySelectorAll(".tab").forEach((x) => x.classList.toggle("is-active", x.dataset.tab === name));
-  document.querySelectorAll(".tab-panel").forEach((p) => p.classList.toggle("is-active", p.dataset.panel === name));
+// ── views + guards ──────────────────────────────────────────
+// Three top-level views mirroring the app's navigation: the dashboard, the
+// Settings editor opened on top of it, and billing (web-only, no app analogue).
+// Deliberately not tabs — the app pushes a separate screen for the editor.
+function showView(name) {
+  show($("dashView"), name === "dash");
+  show($("editorView"), name === "editor");
+  show($("billingView"), name === "billing");
+  window.scrollTo(0, 0);
+}
+
+function openEditor() {
+  $("signedInAs").textContent = signedInEmail ? `Signed in as ${signedInEmail}` : "";
+  showView("editor");
+}
+
+async function signOut() {
+  await sb.auth.signOut();
+  location.reload();
+}
+
+// The app's "Delete page": drops only the owner-authored business_profiles row.
+// Requests are untouched and the listing reverts to its Google-derived info.
+// RLS gates this to the owner.
+async function deletePage() {
+  if (!confirm(
+    "Delete this page?\n\nYour photos, services and description are removed. " +
+    "Your requests stay, and your listing falls back to its public info. " +
+    "You can rebuild the page anytime."
+  )) return;
+  const btn = $("deletePageBtn");
+  btn.disabled = true; btn.textContent = "Deleting…";
+  const { error } = await sb.from("business_profiles").delete().eq("place_id", current.place_id);
+  btn.disabled = false; btn.textContent = "Delete page";
+  if (error) { alert("Delete failed: " + (error.message || "unknown error")); return; }
+  dirty = false;
+  await selectBusiness(current);   // re-seed from the lead, as the app does
+  showView("dash");
 }
 
 function wireStaticHandlers() {
-  document.querySelectorAll(".tab").forEach((t) =>
-    t.addEventListener("click", () => openTab(t.dataset.tab)));
-  // "Set up" on the readiness card jumps to the editor, as it does in the app.
-  $("readinessCta").addEventListener("click", () => openTab("page"));
+  // Gear and "Set up" both open Settings — the two entry points the app uses.
+  $("openEditorBtn").addEventListener("click", openEditor);
+  $("readinessCta").addEventListener("click", openEditor);
+  $("editorBack").addEventListener("click", () => showView("dash"));
+  $("billingBtn").addEventListener("click", () => showView("billing"));
+  $("billingBack").addEventListener("click", () => showView("dash"));
+  $("editorSignOut").addEventListener("click", signOut);
+  $("deletePageBtn").addEventListener("click", deletePage);
   window.addEventListener("beforeunload", (e) => {
     if (dirty) { e.preventDefault(); e.returnValue = ""; }
   });

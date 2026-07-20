@@ -17,6 +17,7 @@
       <img class="appicon" src="../media/appicon.png" alt="">
       <span>Brightglow <em>for Business</em></span>
     </a>
+    <button id="billingBtn" class="ghost-btn" hidden>Billing</button>
     <button id="signOutBtn" class="ghost-btn" hidden>Sign out</button>
   </header>
 
@@ -81,6 +82,8 @@
             <span class="track"></span>
             <span class="switch-label">Accepting new work</span>
           </label>
+          <!-- Gear → Settings, the same entry point the app's dashboard uses. -->
+          <button type="button" class="icon-btn" id="openEditorBtn" title="Settings" aria-label="Settings">⚙</button>
         </div>
       </div>
 
@@ -108,16 +111,42 @@
         <button type="button" class="primary-btn readiness-cta" id="readinessCta">Set up</button>
       </div>
 
-      <nav class="tabs">
-        <button class="tab is-active" data-tab="page">Your page</button>
-        <button class="tab" data-tab="leads">Requests</button>
-        <button class="tab" data-tab="billing" id="billingTab" hidden>Billing</button>
-      </nav>
+      <!-- Requests sit directly on the dashboard, as they do in the app — no
+           tabs. The editor is its own view, reached from the gear or "Set up". -->
+      <h2 class="section-head">Requests</h2>
+      <div class="card" id="leadsCard">
+        <div id="leadsList" class="leads-list"></div>
+        <p id="leadsEmpty" class="muted center-text" hidden>No requests yet. New customer requests matched to your business show up here.</p>
+      </div>
 
-      <!-- YOUR PAGE — profile, services and photos stacked into one scrolling
-           list. They were separate tabs, which made the later ones easy to miss. -->
-      <section class="tab-panel is-active" data-panel="page">
-        <h2 class="section-head">Profile</h2>
+      <!-- One conversation, opened from a request card. Reads come straight
+           from Supabase under RLS; the reply POSTs to LeadBridge (same-origin
+           via the /api proxy) which stores it and emails the customer. -->
+      <div class="card" id="threadCard" hidden>
+        <div class="thread-head">
+          <button type="button" class="ghost-btn" id="threadBack">← Requests</button>
+          <div class="thread-heading">
+            <div class="thread-title" id="threadTitle"></div>
+            <div class="muted small" id="threadSub"></div>
+          </div>
+        </div>
+        <div class="thread-msgs" id="threadMsgs"></div>
+        <form class="composer" id="composer">
+          <textarea id="composerInput" rows="2" placeholder="Write a reply…"></textarea>
+          <button type="submit" class="primary-btn" id="composerSend">Send</button>
+        </form>
+        <p class="form-msg" id="threadMsg" aria-live="polite"></p>
+      </div>
+    </section>
+
+    <!-- EDITOR — the app's Settings screen (BusinessProfileScreen) as its own
+         view, with the same field set and nothing beyond it. -->
+    <section id="editorView" hidden>
+      <div class="editor-head">
+        <button type="button" class="ghost-btn" id="editorBack">← Back</button>
+        <h1>Settings</h1>
+      </div>
+      <h2 class="section-head">Profile</h2>
         <div class="card">
           <div class="logo-row">
             <div class="logo-preview" id="logoPreview" aria-hidden="true"></div>
@@ -134,54 +163,24 @@
           <label class="field-label" for="displayName">Business name</label>
           <input id="displayName" type="text" maxlength="120" placeholder="e.g. Bay Area Plumbing Co.">
 
-          <label class="field-label" for="tagline">Tagline</label>
-          <input id="tagline" type="text" maxlength="140" placeholder="One line about what you do best">
+          <label class="field-label" for="about">Description</label>
+          <textarea id="about" rows="4" maxlength="1200" placeholder="Tell people what your business does"></textarea>
 
-          <label class="field-label" for="about">About</label>
-          <textarea id="about" rows="4" maxlength="1200" placeholder="Tell customers who you are, your experience, and what sets your work apart."></textarea>
-
-          <div class="grid-2">
-            <div>
-              <label class="field-label" for="phone">Phone</label>
-              <input id="phone" type="tel" autocomplete="tel" placeholder="(555) 123-4567">
-            </div>
-            <div>
-              <label class="field-label" for="website">Website</label>
-              <input id="website" type="url" inputmode="url" placeholder="https://…">
-            </div>
-          </div>
-
-          <label class="field-label" for="serviceArea">Service area</label>
-          <input id="serviceArea" type="text" maxlength="200" placeholder="e.g. San Francisco + 25 mi, or 94103, 94110, 94112">
-
-          <div class="grid-3">
-            <div>
-              <label class="field-label" for="license">License #</label>
-              <input id="license" type="text" maxlength="60" placeholder="CSLB #">
-            </div>
-            <div>
-              <label class="field-label" for="years">Years in business</label>
-              <input id="years" type="number" min="0" max="200" placeholder="e.g. 12">
-            </div>
-            <div class="check-field">
-              <label class="checkbox">
-                <input type="checkbox" id="licensed">
-                <span>Licensed</span>
-              </label>
-              <label class="checkbox">
-                <input type="checkbox" id="insured">
-                <span>Insured</span>
-              </label>
-            </div>
+          <!-- Self-declared trust signals, same pair the app shows. -->
+          <div class="check-field">
+            <label class="checkbox">
+              <input type="checkbox" id="licensed">
+              <span>Licensed</span>
+            </label>
+            <label class="checkbox">
+              <input type="checkbox" id="insured">
+              <span>Insured</span>
+            </label>
           </div>
         </div>
-        <h2 class="section-head">Services &amp; prices</h2>
+        <h2 class="section-head">Typical services</h2>
         <div class="card">
-          <p class="muted">
-            List the jobs you take and a typical price range for each — customers
-            see these ranges next to your name. Leave a price blank for
-            "call for quote."
-          </p>
+          <p class="muted">Get more leads with transparent price ranges.</p>
           <div class="prefill">
             <label class="field-label" for="tradePrefill">Start from a trade template</label>
             <div class="prefill-row">
@@ -194,67 +193,43 @@
           <div id="serviceRows" class="service-rows"></div>
           <button type="button" class="add-row-btn" id="addServiceBtn">+ Add a service</button>
         </div>
-        <h2 class="section-head">Photos</h2>
-        <div class="card">
-          <p class="muted">
-            Show real photos of your work — this is what customers scroll first
-            when they pick who to trust. Drag to reorder; the first photo leads.
-          </p>
-          <div id="photoGrid" class="photo-grid"></div>
-          <label class="upload-btn wide">
-            Upload photos
-            <input id="photoInput" type="file" accept="image/png,image/jpeg,image/webp" multiple hidden>
-          </label>
-          <p id="photoMsg" class="form-msg" aria-live="polite"></p>
-        </div>
-      </section>
+      <h2 class="section-head">Pictures</h2>
+      <div class="card">
+        <p class="muted">Show your best relevant work. Drag to reorder; the first photo leads.</p>
+        <div id="photoGrid" class="photo-grid"></div>
+        <label class="upload-btn wide">
+          Upload photos
+          <input id="photoInput" type="file" accept="image/png,image/jpeg,image/webp" multiple hidden>
+        </label>
+        <p id="photoMsg" class="form-msg" aria-live="polite"></p>
+      </div>
 
-      <!-- LEADS -->
-      <section class="tab-panel" data-panel="leads">
-        <div class="card" id="leadsCard">
-          <p class="muted">
-            Job requests customers sent you. Open one to read it and reply — the
-            customer gets notified by email either way.
-          </p>
-          <div id="leadsList" class="leads-list"></div>
-          <p id="leadsEmpty" class="muted center-text" hidden>No requests yet. They'll appear here as customers reach out.</p>
-        </div>
-
-        <!-- One conversation, opened from a request card. Reads come straight
-             from Supabase under RLS; the reply POSTs to LeadBridge (same-origin
-             via the /api proxy) which stores it and emails the customer. -->
-        <div class="card" id="threadCard" hidden>
-          <div class="thread-head">
-            <button type="button" class="ghost-btn" id="threadBack">← Requests</button>
-            <div class="thread-heading">
-              <div class="thread-title" id="threadTitle"></div>
-              <div class="muted small" id="threadSub"></div>
-            </div>
-          </div>
-          <div class="thread-msgs" id="threadMsgs"></div>
-          <form class="composer" id="composer">
-            <textarea id="composerInput" rows="2" placeholder="Write a reply…"></textarea>
-            <button type="submit" class="primary-btn" id="composerSend">Send</button>
-          </form>
-          <p class="form-msg" id="threadMsg" aria-live="polite"></p>
-        </div>
-      </section>
-
-      <!-- BILLING — hidden entirely until the server reports billing is
-           configured (GET /api/billing/status → enabled). Subscription state is
-           per business EMAIL, not per claimed page, so this panel is the same
-           whichever business is selected in the switcher. -->
-      <section class="tab-panel" data-panel="billing">
-        <div class="card" id="billingCard">
-          <div class="billing-state" id="billingState">
-            <div class="spinner" aria-label="Loading"></div>
-          </div>
-        </div>
-      </section>
+      <!-- Delete + account — the tail of the app's Settings screen. -->
+      <div class="card account-card">
+        <button type="button" class="ghost-btn" id="deletePageBtn">Delete page</button>
+        <p class="muted small" id="signedInAs"></p>
+        <button type="button" class="ghost-btn" id="editorSignOut">Sign out</button>
+      </div>
 
       <div class="save-bar">
         <span id="saveState" class="muted"></span>
         <button id="saveBtn" class="primary-btn">Save changes</button>
+      </div>
+    </section>
+
+    <!-- BILLING — its own view, reached from the header. Stays hidden until the
+         server reports billing is configured (GET /api/billing/status → enabled).
+         State is per business EMAIL, not per claimed page, so it's the same
+         whichever business is selected in the switcher. -->
+    <section id="billingView" hidden>
+      <div class="editor-head">
+        <button type="button" class="ghost-btn" id="billingBack">← Back</button>
+        <h1>Billing</h1>
+      </div>
+      <div class="card" id="billingCard">
+        <div class="billing-state" id="billingState">
+          <div class="spinner" aria-label="Loading"></div>
+        </div>
       </div>
     </section>
   </main>
