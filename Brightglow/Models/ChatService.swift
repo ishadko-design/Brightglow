@@ -9,7 +9,11 @@ enum ChatService {
 
     // MARK: - Decoding rows (PostgREST resource embedding)
 
-    private struct LeadRow: Decodable {
+    /// A `leads` row with its messages + attachments embedded. Shared with
+    /// `BusinessService` (which selects the same shape for the dashboard) so both
+    /// map a lead to a `Conversation` through `makeConversation`. `website` is only
+    /// selected by the business query; it decodes as nil elsewhere.
+    struct LeadRow: Decodable {
         let id: UUID
         let public_id: String
         let business_name: String?
@@ -17,11 +21,21 @@ enum ChatService {
         let status: String
         let created_at: Date
         let user_id: UUID?
+        let place_id: String?
+        let website: String?
+        /// Just the first letter of the customer's email (a generated column —
+        /// the full `user_email` is deliberately never granted to participants).
+        /// Used business-side for the initial-tile avatar. Optional so a query
+        /// that doesn't select it still decodes.
+        let user_email_initial: String?
+        /// The inbox the request was matched to — who owns it as a business. Only
+        /// the business query selects it; nil elsewhere.
+        let contractor_email: String?
         let messages: [MessageRow]
         let attachments: [AttachmentRow]
     }
 
-    private struct MessageRow: Decodable {
+    struct MessageRow: Decodable {
         let id: UUID
         let lead_id: UUID
         let direction: String
@@ -29,7 +43,7 @@ enum ChatService {
         let created_at: Date
     }
 
-    private struct AttachmentRow: Decodable {
+    struct AttachmentRow: Decodable {
         let id: UUID
     }
 
@@ -56,6 +70,24 @@ enum ChatService {
         Date(timeIntervalSince1970: threadReads()[leadId.uuidString] ?? 0)
     }
 
+    // MARK: - Hidden (locally deleted) conversations
+
+    /// Conversations the user swiped away from THEIR inbox. Local per-device,
+    /// like read state — the underlying lead is left intact (the business still
+    /// sees the thread), so this hides it here without destroying shared data.
+    private static let hiddenKey = "chatHiddenThreads"
+
+    static func hiddenConversationIDs() -> Set<String> {
+        Set(UserDefaults.standard.stringArray(forKey: hiddenKey) ?? [])
+    }
+
+    /// Hide a conversation from the inbox — persists across launches.
+    static func hideConversation(_ leadId: UUID) {
+        var ids = hiddenConversationIDs()
+        ids.insert(leadId.uuidString)
+        UserDefaults.standard.set(Array(ids), forKey: hiddenKey)
+    }
+
     /// True when a conversation has an incoming message newer than the last time
     /// the viewer opened it — drives the row dot and the main-screen header dot.
     static func isUnread(_ c: Conversation) -> Bool {
@@ -77,36 +109,96 @@ enum ChatService {
 
         let rows: [LeadRow] = try await supabase
             .from("leads")
-            .select("id, public_id, business_name, city, status, created_at, user_id, messages(id, lead_id, direction, body_text, created_at), attachments(id)")
+            .select("id, public_id, business_name, city, status, created_at, user_id, user_email_initial, place_id, messages(id, lead_id, direction, body_text, created_at), attachments(id)")
             .order("created_at", ascending: false)
             .execute()
             .value
 
-        return rows.map { row in
-            let sorted = row.messages.sorted { $0.created_at < $1.created_at }
-            let last = sorted.last
-            let viewerIsCustomer = row.user_id != nil && row.user_id == myId
-            // Incoming = the last message came from the other party. Direction is
-            // stored relative to the customer (outbound = customer→business).
-            let incoming = last.map { msg in
-                viewerIsCustomer ? msg.direction == "inbound" : msg.direction == "outbound"
-            } ?? false
-            return Conversation(
-                id: row.id,
-                publicId: row.public_id,
-                businessName: row.business_name,
-                city: row.city,
-                status: row.status,
-                createdAt: row.created_at,
-                viewerIsCustomer: viewerIsCustomer,
-                photoAttachmentId: row.attachments.first?.id,
-                lastMessage: last?.body_text,
-                lastMessageAt: last?.created_at,
-                lastMessageIncoming: incoming
-            )
-        }
+        let hidden = hiddenConversationIDs()
+        return rows.map { makeConversation(from: $0, myId: myId) }
+        // Drop conversations the user swiped away on this device.
+        .filter { !hidden.contains($0.id.uuidString) }
         // Order by most recent message, falling back to the lead's own time.
         .sorted { ($0.lastMessageAt ?? $0.createdAt) > ($1.lastMessageAt ?? $1.createdAt) }
+    }
+
+    /// Map an embedded `leads` row (+ its messages/attachments) to a `Conversation`,
+    /// deciding the viewer's side from the signed-in user id. Shared by the inbox
+    /// and the business dashboard so both read a lead the same way.
+    /// `viewerIsCustomerOverride` forces which side the viewer is on — the business
+    /// dashboard passes `false` so a request always renders as the business (even a
+    /// self-test lead where the same account is both customer and contractor, which
+    /// would otherwise resolve to the customer side).
+    static func makeConversation(from row: LeadRow, myId: UUID?,
+                                 viewerIsCustomerOverride: Bool? = nil) -> Conversation {
+        let sorted = row.messages.sorted { $0.created_at < $1.created_at }
+        let last = sorted.last
+        let viewerIsCustomer = viewerIsCustomerOverride ?? (row.user_id != nil && row.user_id == myId)
+        // Incoming = the last message came from the other party. Direction is
+        // stored relative to the customer (outbound = customer→business).
+        let incoming = last.map { msg in
+            viewerIsCustomer ? msg.direction == "inbound" : msg.direction == "outbound"
+        } ?? false
+        return Conversation(
+            id: row.id,
+            publicId: row.public_id,
+            businessName: row.business_name,
+            city: row.city,
+            status: row.status,
+            createdAt: row.created_at,
+            viewerIsCustomer: viewerIsCustomer,
+            photoAttachmentId: row.attachments.first?.id,
+            placeId: row.place_id,
+            lastMessage: last?.body_text,
+            lastMessageAt: last?.created_at,
+            lastMessageIncoming: incoming,
+            // Only carried business-side, where they seed the initial avatar; the
+            // customer sees the business logo, not a tile.
+            customerInitial: viewerIsCustomer ? nil : row.user_email_initial,
+            customerColorSeed: viewerIsCustomer ? nil : row.user_id?.uuidString
+        )
+    }
+
+    private struct LeadIdentityRow: Decodable {
+        let id: UUID
+        let place_id: String?
+        let website: String?
+    }
+
+    /// Resolve the business logo for each conversation, keyed by lead id, so the
+    /// inbox and thread can draw it as the avatar. Only the customer's side has a
+    /// business to show (the business sees a generic customer), so business-viewed
+    /// threads are skipped. Best-effort and cross-user cached (see `LogoService`);
+    /// a conversation with no resolvable logo simply isn't in the result.
+    ///
+    /// The business identity (`place_id`/`website`) is fetched in its OWN query,
+    /// deliberately kept out of the main `conversations()` select and wrapped so a
+    /// failure is swallowed — before the `20260712` migration adds those columns
+    /// they don't exist, and this must degrade to "no logo" rather than break the
+    /// inbox.
+    static func resolveLogos(_ conversations: [Conversation]) async -> [UUID: URL] {
+        let customerIDs = conversations.filter(\.viewerIsCustomer).map(\.id)
+        guard !customerIDs.isEmpty else { return [:] }
+
+        let rows: [LeadIdentityRow]? = try? await supabase
+            .from("leads")
+            .select("id, place_id, website")
+            .in("id", values: customerIDs.map(\.uuidString))
+            .execute()
+            .value
+        guard let rows, !rows.isEmpty else { return [:] }
+
+        let byPlace = await LogoService.fetch(items: rows.compactMap { r in
+            guard let pid = r.place_id, !pid.isEmpty else { return nil }
+            return (placeId: pid, website: r.website)
+        })
+        guard !byPlace.isEmpty else { return [:] }
+
+        var out: [UUID: URL] = [:]
+        for r in rows {
+            if let pid = r.place_id, let url = byPlace[pid] { out[r.id] = url }
+        }
+        return out
     }
 
     // MARK: - One thread

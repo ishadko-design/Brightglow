@@ -17,17 +17,36 @@ struct Conversation: Identifiable, Equatable {
     /// Attachment id of the first photo, if any — the request photo. The image
     /// itself is streamed on demand from the backend (participant-authed).
     let photoAttachmentId: UUID?
+    /// The lead's Google Places id — the join key to `business_profiles`. Present
+    /// on business-side threads so the dashboard can resolve and edit the page the
+    /// request is addressed to; may be nil on older leads.
+    let placeId: String?
     let lastMessage: String?
     let lastMessageAt: Date?
     /// True when the most recent message was authored by the counterparty (i.e.
     /// something the viewer may not have read yet). Drives the header unread dot.
     let lastMessageIncoming: Bool
+    /// First letter of the customer's email — set only on business-viewed threads,
+    /// where it's the letter on the initial-tile avatar. The full email is never
+    /// exposed to the business (see the leads column grant). nil customer-side.
+    let customerInitial: String?
+    /// Stable per-customer seed for the avatar tile color (the customer's user id,
+    /// already visible to the business). nil customer-side.
+    let customerColorSeed: String?
 
     /// What to show as the conversation title. The customer sees the business;
-    /// the business sees a generic customer label (their email is never exposed).
+    /// the business sees a generic customer label (their email is never exposed
+    /// in text — only a single-letter avatar tile distinguishes requests).
     var title: String {
         if viewerIsCustomer { return businessName ?? "Business" }
         return "New request"
+    }
+
+    /// The letter on the business-side avatar tile — the customer's email initial,
+    /// or "?" when unavailable (older lead with no generated initial).
+    var avatarInitial: String {
+        let i = customerInitial?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        return i.isEmpty ? "?" : String(i.prefix(1)).uppercased()
     }
 }
 

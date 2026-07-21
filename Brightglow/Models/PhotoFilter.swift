@@ -301,38 +301,204 @@ enum PhotoFilter {
         labels.contains { premisesTokens.contains($0) }
     }
 
+    /// Scene labels marking pure scenery / landmarks — a Golden Gate Bridge
+    /// sunset is never a work example for ANY trade, unlike premises shots
+    /// (which at least show the business). Deliberately narrow: no "sky",
+    /// "water", "tree", "garden" etc., which appear on genuine roofing /
+    /// plumbing / landscaping work photos alongside the work itself.
+    private static let sceneryTokens: Set<String> = [
+        "bridge", "skyline", "cityscape", "seascape", "sunset", "sunrise",
+        "beach", "ocean", "coast", "shoreline", "mountain", "canyon",
+        "monument", "landmark", "panorama", "horizon", "waterfall",
+    ]
+
+    private static func isSceneryShot(_ labels: [String]) -> Bool {
+        labels.contains { sceneryTokens.contains($0) }
+    }
+
+    /// Premises or scenery — anything whose subject isn't the work.
+    private static func isNonWorkShot(_ labels: [String]) -> Bool {
+        isPremisesShot(labels) || isSceneryShot(labels)
+    }
+
     /// Order kept photos so those whose labels match the query lead; among equally
     /// relevant shots, genuine work photos rank above storefront/exterior ones, and
     /// original order breaks any remaining tie. Returns display URLs, working off
     /// stored labels so it needs no re-download or re-classification. This surfaces
     /// the kitchen shot first for a "kitchen remodel" search — and, once photos are
     /// rich-tagged, the dented-bumper shot first for an auto body request.
-    static func order(_ photos: [ScreenedPhoto], query: String) -> [String] {
+    /// `capPremises` limits how many premises/storefront shots the result may
+    /// contain — but only when the business also has at least one real work photo,
+    /// so a premises-only business still shows its exterior rather than nothing.
+    /// The list strip passes 1 (a card led with the shopfront twice — one big
+    /// storefront tile plus a repeat — instead of the actual work); the gallery
+    /// leaves it nil to page through everything.
+    static func order(_ photos: [ScreenedPhoto], query: String,
+                      capPremises: Int? = nil) -> [String] {
         let terms = query.lowercased()
             .split { !$0.isLetter }.map(String.init)
             .filter { $0.count > 3 }
-        return photos.enumerated()
+        let sorted = photos.enumerated()
             .sorted { a, b in
                 let sa = matchScore(a.element.labels, terms)
                 let sb = matchScore(b.element.labels, terms)
                 if sa != sb { return sa > sb }
                 // Equal query relevance (incl. no query at all) → push premises /
-                // exterior shots below real work photos.
-                let pa = isPremisesShot(a.element.labels)
-                let pb = isPremisesShot(b.element.labels)
+                // scenery shots below real work photos.
+                let pa = isNonWorkShot(a.element.labels)
+                let pb = isNonWorkShot(b.element.labels)
                 if pa != pb { return !pa }
                 return a.offset < b.offset
             }
-            .map { $0.element.url }
+            .map(\.element)
+
+        // Scenery never earns a slot: drop it whenever the business has
+        // anything else to show (a scenery-only gallery keeps its photos —
+        // better a bridge than a blank card).
+        var candidates = sorted
+        if candidates.contains(where: { !isSceneryShot($0.labels) }) {
+            candidates.removeAll { isSceneryShot($0.labels) }
+        }
+
+        guard let cap = capPremises,
+              candidates.contains(where: { !isPremisesShot($0.labels) }) else {
+            return candidates.map(\.url)   // no cap, or nothing but premises → keep all
+        }
+        var premisesShown = 0
+        return candidates.compactMap { photo in
+            guard isPremisesShot(photo.labels) else { return photo.url }
+            premisesShown += 1
+            return premisesShown <= cap ? photo.url : nil
+        }
+    }
+
+    /// Action verbs and generic shape/container words that describe *what's being
+    /// done* or a *stock label shape*, never the specific fixture the user cares
+    /// about. The badge must not fire on these alone: "replace" matches every
+    /// `replacement` photo regardless of trade, and "bowl" matches Apple Vision's
+    /// generic "bowl" label on sinks, dishes, and any round object — so "replaced
+    /// toilet bowl" was badging (and promoting) businesses whose only hit was a
+    /// non-toilet "bowl" shot (2026-07-18). Length ≤3 words ("new", "fix", "job")
+    /// are already dropped by the >3 filter; this covers the ≥4-char ones.
+    private nonisolated static let nonSubjectTerms: Set<String> = [
+        "replace", "replaced", "replacing", "replacement",
+        "install", "installed", "installing", "installation",
+        "repair", "repaired", "repairing", "fixed", "fixing",
+        "remodel", "renovate", "renovation", "refinish", "refinished",
+        "upgrade", "service", "maintenance", "clean", "cleaning",
+        "broken", "damaged", "bowl", "unit", "area", "spot",
+        "piece", "item", "work", "project", "need", "want",
+    ]
+
+    /// The specific-subject terms of a query — its ≥4-char words minus the
+    /// action/generic vocabulary above. "replaced toilet bowl" → ["toilet"].
+    private nonisolated static func subjectTerms(_ query: String) -> [String] {
+        query.lowercased()
+            .split { !$0.isLetter }.map(String.init)
+            .filter { $0.count > 3 && !nonSubjectTerms.contains($0) }
+    }
+
+    /// True when at least one of these screened photos actually matches the
+    /// user's request — i.e. the business has a work photo of the kind of job
+    /// being searched for. Drives the "Did similar job" trust cue on result cards
+    /// (design brief §9). Unlike `order` (a soft ranking that may lean on any
+    /// term, incl. the work type), the badge is a hard trust claim, so it requires
+    /// a match on a *specific subject* term — not a generic shape or the action
+    /// word — via `subjectTerms`. A query with no such term (a bare/short category
+    /// browse, or a verb-only "renovation") can't establish similarity → false.
+    nonisolated static func matchesQuery(_ photos: [ScreenedPhoto], query: String) -> Bool {
+        let terms = subjectTerms(query)
+        guard !terms.isEmpty else { return false }
+        return photos.contains { matchScore($0.labels, terms) > 0 }
+    }
+
+    /// Word tokens of a free-text review, for the same subject-term matching the
+    /// photo labels use — so "…they replaced our **toilet**" matches a "toilet"
+    /// query on whole-word/prefix equality, not a bare substring.
+    private nonisolated static func reviewTokens(_ text: String) -> [String] {
+        text.lowercased().split { !$0.isLetter }.map(String.init)
+    }
+
+    /// True when a business's own review text names the searched job's subject —
+    /// a customer describing the same work. Weaker proof than a screened photo,
+    /// but it rides on review text we already fetch (no extra API cost) and lets
+    /// a specialist surface without paying to screen its photos. Same
+    /// `subjectTerms` basis as the photo badge, so both agree on what the job is
+    /// and a generic/action word ("replace", "bowl") can't trip it alone.
+    nonisolated static func reviewsMentionJob(_ reviews: [String], query: String) -> Bool {
+        let terms = subjectTerms(query)
+        guard !terms.isEmpty else { return false }
+        let tokens = reviews.flatMap(reviewTokens)
+        return matchScore(tokens, terms) > 0
+    }
+
+    /// Reviews reordered so the one that most specifically names the searched job
+    /// leads; non-matching reviews keep their original relative order behind the
+    /// matches. Generic over the review model via a `text` extractor. This is the
+    /// single ordering both surfaces use, so the list card's quoted review and the
+    /// gallery's first review are guaranteed to be the same one.
+    nonisolated static func orderReviewsByJob<R>(_ reviews: [R], query: String, text: (R) -> String) -> [R] {
+        let terms = subjectTerms(query)
+        guard !terms.isEmpty else { return reviews }
+        return reviews.enumerated()
+            .sorted { a, b in
+                let sa = matchScore(reviewTokens(text(a.element)), terms)
+                let sb = matchScore(reviewTokens(text(b.element)), terms)
+                return sa != sb ? sa > sb : a.offset < b.offset
+            }
+            .map(\.element)
+    }
+
+    /// The single review that most specifically describes the searched job,
+    /// trimmed to the sentence that actually names it — the customer's own words
+    /// shown as the "why" behind a match on the list card. Nil when none mention
+    /// it. Picks the same review `orderReviewsByJob` puts first, so the card quote
+    /// and the gallery's lead review always agree.
+    nonisolated static func mostRelevantReview(_ reviews: [String], query: String) -> String? {
+        let terms = subjectTerms(query)
+        guard !terms.isEmpty else { return nil }
+        guard let best = orderReviewsByJob(reviews, query: query, text: { $0 }).first,
+              matchScore(reviewTokens(best), terms) > 0
+        else { return nil }
+        return focusedSnippet(best, terms: terms)
+    }
+
+    /// The sentence within a review that names a subject term, so the quoted line
+    /// shows the relevant words rather than a truncated opener. Falls back to the
+    /// whole review if no single sentence isolates the match.
+    private nonisolated static func focusedSnippet(_ text: String, terms: [String]) -> String {
+        for sentence in text.split(whereSeparator: { ".!?\n".contains($0) }) {
+            if matchScore(reviewTokens(String(sentence)), terms) > 0 {
+                return String(sentence).trimmingCharacters(in: .whitespaces)
+            }
+        }
+        return text.trimmingCharacters(in: .whitespaces)
     }
 
     /// Empty `terms` scores every photo 0, so ordering falls through to the
     /// premises/original-order tiebreaks — a plain category browse still leads
     /// with work shots over storefronts.
-    private static func matchScore(_ labels: [String], _ terms: [String]) -> Int {
+    ///
+    /// A term matches a label on whole-word equality or a shared prefix — never a
+    /// bare substring. Substring matching let a query term match the *middle or
+    /// end* of an unrelated label: "door" matched "in**door**" / "out**door**"
+    /// (labels Apple Vision stamps on nearly every room / exterior shot), so a
+    /// window photo scored the same "door" point as a genuine door shot and the
+    /// door search led with windows. Prefix matching keeps plurals / derivations
+    /// ("window"→"windows", "door"→"doorway") while dropping the suffix collisions.
+    private nonisolated static func matchScore(_ labels: [String], _ terms: [String]) -> Int {
         terms.reduce(0) { acc, t in
-            acc + (labels.contains { $0.contains(t) || t.contains($0) } ? 1 : 0)
+            acc + (labels.contains { matches($0, t) } ? 1 : 0)
         }
+    }
+
+    /// One label token vs. one query term. Equal, or either is a prefix of the
+    /// other — but only when the shorter string is itself ≥4 chars, so a stray
+    /// short token can't prefix-match half the vocabulary.
+    private nonisolated static func matches(_ label: String, _ term: String) -> Bool {
+        if label == term { return true }
+        let (short, long) = label.count <= term.count ? (label, term) : (term, label)
+        return short.count >= 4 && long.hasPrefix(short)
     }
 
     /// Vision screening is heavy synchronous CPU work (four ML requests per photo).

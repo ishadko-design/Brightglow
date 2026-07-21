@@ -37,8 +37,9 @@ export function buildSystemPrompt(pool: JobTypeEntry[]): string {
     return `- ${e.job_type} (${e.category}; ${hint})`;
   });
   return [
-    "You classify a homeowner's free-text repair request into one job type",
-    "from a fixed taxonomy, for a local cost estimate.",
+    "You classify a free-text service request into one job type from a fixed",
+    "taxonomy, for a local cost estimate. Requests cover both home trades and",
+    "vehicle work (cars and motorcycles).",
     "",
     "Rules:",
     '- Pick the single job type that best matches the work described.',
@@ -51,6 +52,22 @@ export function buildSystemPrompt(pool: JobTypeEntry[]): string {
     "  is worse than showing no price.",
     '- Match on the work, not incidental words ("water pooling under the',
     '  dishwasher" is a plumbing leak, not an appliance job).',
+    "",
+    "Report the vertical: \"auto\" for anything about a car, truck or",
+    'motorcycle; "home" for property work; "none" if genuinely unclear. This',
+    "matters because the home taxonomy owns the generic words: a request to",
+    'replace a car\'s "rear quarter window" must not become a house window.',
+    "",
+    "Also report the vehicle, because it changes both the parts and the count:",
+    "a car tire set is 4, a motorcycle's is 2, and moto labor is priced",
+    "differently. Infer it from ANY signal in the text — the word motorcycle,",
+    'a marque or model ("Ducati", "Yamaha R6", "Harley", "Vespa"), or a',
+    'colloquialism ("my bike", "two-wheeler"). This is why it is your job and',
+    "not a word list: the space of ways people name a motorcycle is open-ended.",
+    '- "moto" for motorcycles, scooters, mopeds, dirt bikes, ATVs.',
+    '- "auto" for cars, trucks, vans, SUVs.',
+    '- "none" for home-trade requests, or vehicle work where the text gives no',
+    "  indication which — never guess between auto and moto on no evidence.",
     "",
     "Job types:",
     ...lines,
@@ -66,25 +83,51 @@ export function buildSchema(pool: JobTypeEntry[]): Record<string, unknown> {
         type: "string",
         enum: [...pool.map((e) => e.job_type), "none"],
       },
+      vehicle: {
+        type: "string",
+        enum: ["auto", "moto", "none"],
+      },
+      vertical: {
+        type: "string",
+        enum: ["home", "auto", "none"],
+      },
     },
-    required: ["job_type"],
+    required: ["job_type", "vehicle", "vertical"],
     additionalProperties: false,
   };
 }
 
-/** Parses the model's JSON reply to a pool job_type, or null for "none",
- *  unknown ids, or malformed output — all of which mean "keyword result
- *  stands". */
-export function parseJobType(
+export interface Classification {
+  /** Pool job_type, or null for "none"/unknown — keyword result stands. */
+  jobType: string | null;
+  /** Vehicle the text implies, or null when it says nothing. */
+  vehicle: "auto" | "moto" | null;
+  /** Which taxonomy the request belongs to, or null when unclear. Keeps a car
+   *  window out of the home window entry. */
+  vertical: "home" | "auto" | null;
+}
+
+/** Parses the model's JSON reply. Anything malformed degrades to nulls, which
+ *  mean "keyword result stands" — the classifier never hard-fails a request. */
+export function parseClassification(
   text: string | undefined,
   pool: JobTypeEntry[],
-): string | null {
-  if (!text) return null;
+): Classification {
+  const empty: Classification = { jobType: null, vehicle: null, vertical: null };
+  if (!text) return empty;
   try {
-    const value = (JSON.parse(text) as { job_type?: unknown }).job_type;
-    return pool.some((e) => e.job_type === value) ? value as string : null;
+    const o = JSON.parse(text) as {
+      job_type?: unknown;
+      vehicle?: unknown;
+      vertical?: unknown;
+    };
+    return {
+      jobType: pool.some((e) => e.job_type === o.job_type) ? o.job_type as string : null,
+      vehicle: o.vehicle === "auto" || o.vehicle === "moto" ? o.vehicle : null,
+      vertical: o.vertical === "home" || o.vertical === "auto" ? o.vertical : null,
+    };
   } catch {
-    return null;
+    return empty;
   }
 }
 
@@ -92,8 +135,8 @@ export async function classifyWithLLM(
   pool: JobTypeEntry[],
   description: string,
   apiKey: string,
-): Promise<string | null> {
-  if (pool.length === 0 || !apiKey) return null;
+): Promise<Classification> {
+  if (pool.length === 0 || !apiKey) return { jobType: null, vehicle: null, vertical: null };
   const client = new Anthropic({ apiKey, timeout: 15_000, maxRetries: 1 });
   const response = await client.messages.create({
     model: "claude-opus-4-8",
@@ -103,5 +146,5 @@ export async function classifyWithLLM(
     messages: [{ role: "user", content: `Request: ${description}` }],
   });
   const textBlock = response.content.find((b) => b.type === "text");
-  return parseJobType(textBlock?.text, pool);
+  return parseClassification(textBlock?.text, pool);
 }

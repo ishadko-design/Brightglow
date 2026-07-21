@@ -31,14 +31,22 @@ struct LoginView: View {
                 .ignoresSafeArea()
                 .allowsHitTesting(false)
 
-            // Layer 2: PNG splash overlay
-            Image("SplashOverlay")
+            // Layer 2: the designed protection layer over the video — the warm
+            // gradient scrim that keeps the wordmark and form legible.
+            //
+            // Composited at full strength: the asset carries its own alpha
+            // (transparent where the video should show through), so it must NOT
+            // be dimmed here. If the video ever disappears behind this layer,
+            // the overlay has been re-exported flattened — check that its PNG
+            // still has a real alpha channel rather than adding .opacity().
+            Image("VideoOverlay")
                 .resizable()
                 .scaledToFill()
                 .ignoresSafeArea()
                 .allowsHitTesting(false)
 
-            // Layer 3: title, true screen center
+            // Layer 3: wordmark, centered in the vertical middle (matches the
+            // splash and the email-sent screen — the logo is centered everywhere).
             Text("Brightglow")
                 .font(.h1)
                 .foregroundStyle(.white)
@@ -73,7 +81,6 @@ struct LoginView: View {
                         .padding(.vertical, 16)
                     } else {
                         emailField
-                        socialDivider
                         appleButton
                         googleButton
 
@@ -148,17 +155,6 @@ struct LoginView: View {
         .overlay(RoundedRectangle(cornerRadius: 32).stroke(Color.white.opacity(0.2), lineWidth: 3))
     }
 
-    // MARK: - Divider
-
-    private var socialDivider: some View {
-        HStack(spacing: 12) {
-            Rectangle().fill(.white.opacity(0.15)).frame(height: 1)
-            Text("or").font(.bodySmall).foregroundStyle(.white.opacity(0.4))
-            Rectangle().fill(.white.opacity(0.15)).frame(height: 1)
-        }
-        .padding(.vertical, 4)
-    }
-
     // MARK: - Social buttons
 
     private var appleButton: some View {
@@ -231,11 +227,12 @@ private struct LoopingVideoPlayer: UIViewRepresentable {
     let videoName: String
     let videoExtension: String
 
-    func makeUIView(context: Context) -> UIView {
-        let view = UIView(frame: .zero)
+    func makeUIView(context: Context) -> PlayerView {
+        let view = PlayerView()
         view.backgroundColor = .black
 
         guard let url = Bundle.main.url(forResource: videoName, withExtension: videoExtension) else {
+            assertionFailure("\(videoName).\(videoExtension) is missing from the bundle")
             return view
         }
 
@@ -252,26 +249,31 @@ private struct LoopingVideoPlayer: UIViewRepresentable {
             player.play()
         }
 
-        let layer = AVPlayerLayer(player: player)
-        layer.videoGravity = .resizeAspectFill
-        layer.frame = view.bounds
-        view.layer.addSublayer(layer)
+        view.playerLayer.player = player
+        view.playerLayer.videoGravity = .resizeAspectFill
 
         player.play()
         context.coordinator.player = player
-        context.coordinator.layer = layer
         return view
     }
 
-    func updateUIView(_ uiView: UIView, context: Context) {
-        context.coordinator.layer?.frame = uiView.bounds
+    func updateUIView(_ uiView: PlayerView, context: Context) {
+        // Nothing to size — the player layer IS the view's layer, so UIKit keeps
+        // it matched to the view's bounds automatically.
     }
 
     func makeCoordinator() -> Coordinator { Coordinator() }
 
+    /// The AVPlayerLayer is the view's own backing layer, so it always tracks the
+    /// view's bounds. (As a manually-framed sublayer it could stay zero-sized and
+    /// render black if the frame was set before layout.)
+    class PlayerView: UIView {
+        override class var layerClass: AnyClass { AVPlayerLayer.self }
+        var playerLayer: AVPlayerLayer { layer as! AVPlayerLayer }
+    }
+
     class Coordinator {
         var player: AVPlayer?
-        var layer: AVPlayerLayer?
         deinit { player?.pause() }
     }
 }

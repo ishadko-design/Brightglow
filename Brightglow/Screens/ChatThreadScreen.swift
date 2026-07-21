@@ -7,9 +7,12 @@ struct ChatThreadScreen: View {
     let conversation: Conversation
 
     @Environment(\.dismiss) private var dismiss
+    @EnvironmentObject private var businessStore: BusinessStore
 
     @State private var messages: [ConversationMessage] = []
     @State private var photo: UIImage? = nil
+    /// The business's hosted logo for the header avatar (customer side only).
+    @State private var logoURL: URL? = nil
     @State private var loading = true
     @State private var draft = ""
     @State private var sending = false
@@ -57,6 +60,11 @@ struct ChatThreadScreen: View {
             ChatService.markThreadRead(conversation.id)
             liveTask?.cancel()
             liveTask = nil
+            // A business closing one of its request threads gets invited to finish
+            // its page back on the dashboard (guarded to once/session + incomplete).
+            if !isCustomer {
+                businessStore.armPageNudge(placeId: conversation.placeId)
+            }
         }
     }
 
@@ -69,9 +77,14 @@ struct ChatThreadScreen: View {
                     .frame(width: 44, height: 44)
                     .contentShape(Rectangle())
             }
+            // The business's logo avatar — only the customer's side has a business
+            // to show (the business sees a generic customer, no avatar).
+            if isCustomer {
+                ChatBusinessAvatar(logoURL: logoURL, size: 40)
+            }
             VStack(alignment: .leading, spacing: 1) {
                 Text(conversation.title)
-                    .font(.h2)                       // Figma: Lato ExtraBold 800 / 24
+                    .font(.h2)                       // Lato ExtraBold 800 / 24
                     .foregroundStyle(.white)
                     .lineLimit(1)
                 if let city = conversation.city, !city.isEmpty {
@@ -150,14 +163,25 @@ struct ChatThreadScreen: View {
 
     /// The shared request photo, aligned to the customer's side (right for the
     /// customer, left for the business) and rounded to match the bubbles.
-    /// `scaledToFit` keeps the whole image — the drawn-on annotation matters.
+    /// The whole image must stay visible — the drawn-on annotation matters.
+    ///
+    /// Sized to an EXACT fitted frame computed from the image's own aspect
+    /// ratio, not `scaledToFit` + a max-frame: inside the vertical ScrollView
+    /// the height proposal is unbounded, so a `maxHeight` frame clamps the
+    /// clipped container while the fitted image lays out taller — the r=16
+    /// clip then rounds the container, and the photo overflows it (cropped,
+    /// with its own square corners showing).
     private func photoAttachment(_ image: UIImage) -> some View {
-        HStack(spacing: 0) {
+        let maxW: CGFloat = 220, maxH: CGFloat = 280
+        let scale = min(maxW / max(image.size.width, 1),
+                        maxH / max(image.size.height, 1), 1)
+        let fitted = CGSize(width: image.size.width * scale,
+                            height: image.size.height * scale)
+        return HStack(spacing: 0) {
             if isCustomer { Spacer(minLength: 48) }
             Image(uiImage: image)
                 .resizable()
-                .scaledToFit()
-                .frame(maxWidth: 220, maxHeight: 280)
+                .frame(width: fitted.width, height: fitted.height)
                 .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))  // Figma: r=16
             if !isCustomer { Spacer(minLength: 48) }
         }
@@ -221,7 +245,21 @@ struct ChatThreadScreen: View {
         await loadMessages()
         loading = false
         loadPhoto()
+        loadLogo()
         subscribe()
+    }
+
+    /// Resolve the business's logo for the header avatar — customer side only,
+    /// best-effort and cached (see `ChatService.resolveLogos`). A miss leaves the
+    /// generic business icon in place.
+    private func loadLogo() {
+        guard isCustomer else { return }
+        Task {
+            let logos = await ChatService.resolveLogos([conversation])
+            if let url = logos[conversation.id] {
+                await MainActor.run { logoURL = url }
+            }
+        }
     }
 
     private func loadMessages() async {
@@ -231,11 +269,30 @@ struct ChatThreadScreen: View {
     }
 
     private func loadPhoto() {
-        guard let attachmentId = conversation.photoAttachmentId else { return }
+        guard let attachmentId = conversation.photoAttachmentId else {
+            // No attachment id means the leads→attachments RLS embed in
+            // ChatService.conversations() returned nothing for this thread.
+            #if DEBUG
+            print("📎 chat photo: no attachment on conversation \(conversation.id)")
+            #endif
+            return
+        }
         Task {
-            if let data = try? await LeadBridgeService.fetchAttachment(id: attachmentId),
-               let image = UIImage(data: data) {
-                await MainActor.run { photo = image }
+            do {
+                let data = try await LeadBridgeService.fetchAttachment(id: attachmentId)
+                if let image = UIImage(data: data) {
+                    await MainActor.run { photo = image }
+                } else {
+                    #if DEBUG
+                    print("📎 chat photo: \(data.count) bytes, not decodable as an image")
+                    #endif
+                }
+            } catch {
+                // Surfaces the real cause (e.g. 403 not-a-participant, 410 expired/
+                // cleaned-up object, transport error) instead of a silent `try?`.
+                #if DEBUG
+                print("📎 chat photo: fetchAttachment(\(attachmentId)) failed — \(error)")
+                #endif
             }
         }
     }

@@ -11,8 +11,8 @@ import Supabase
 /// Sends via LeadBridge (leadbridge/ — separate relay service). contractorEmail
 /// is hardcoded to the Brightglow test inbox for now: real contractor-email
 /// sourcing (business_enrichment) isn't built yet, so this can't reach an
-/// actual business email. A photo is required — LeadBridge's design is
-/// photo + text, not text alone.
+/// actual business email. Photos are optional — a described request alone is
+/// enough to send.
 struct QuoteRequestScreen: View {
     var contractor: Contractor? = nil
     var requestSummary: String = ""
@@ -20,6 +20,10 @@ struct QuoteRequestScreen: View {
     /// search bar's own picker) — shown up front so the user reviews exactly
     /// what's about to be sent, rather than picking again from scratch.
     var initialImages: [UIImage] = []
+    /// The clarifying Q&A from the landing chat. Its details are woven into the
+    /// description sent to the business (an AI-augmented summary), and shown here
+    /// read-only so the user sees exactly what's added on top of their own words.
+    var clarifyTranscript: ClarifyTranscript = .empty
 
     @Environment(\.dismiss) private var dismiss
     @EnvironmentObject private var auth: AuthService
@@ -48,13 +52,14 @@ struct QuoteRequestScreen: View {
     /// email card in the normal case (Figma doesn't show one; it's collected
     /// at sign-in), so this only ever surfaces to unblock a broken send.
     private var emailNeedsAttention: Bool { !email.isEmpty && !emailValid }
-    /// Send needs the user's own words AND a photo — a request that's just a
-    /// category name (or nothing) tells the business nothing actionable.
+    /// Send needs the user's own words — a request that's just a category name
+    /// (or nothing) tells the business nothing actionable. A photo helps but
+    /// isn't required.
     private var hasDescription: Bool {
         !editableRequest.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     }
     private var canSend: Bool {
-        emailValid && hasDescription && !images.isEmpty && contractor != nil && !sending
+        emailValid && hasDescription && contractor != nil && !sending
     }
 
     var body: some View {
@@ -106,18 +111,23 @@ struct QuoteRequestScreen: View {
                         .padding(.horizontal, 24)
 
                     VStack(alignment: .leading, spacing: 24) {
-                        // Photos — required by LeadBridge (photo + text, not text alone).
-                        // A horizontally scrolling strip once there's more than fits;
-                        // centered when there's just a photo or two.
+                        // Photos — optional. A horizontally scrolling strip once
+                        // there's more than fits; centered when there's just a
+                        // photo or two (or only the add tile).
                         photosSection
 
                         // Request text — editable pill, matches the app's input-bar
                         // styling (leading icon, dark frosted background).
                         requestPill
 
-                        Text("By sending, you agree to share your request and photos with \(contractor?.name ?? "this business"), and to Brightglow's Terms of Service.")
-                            .font(.bodySmall)
-                            .foregroundStyle(.white.opacity(0.6))
+                        // AI-augmented details from the clarifying Q&A — sent along
+                        // with the request above, shown read-only so the user sees
+                        // what's added on their behalf.
+                        if !clarifyTranscript.isEmpty {
+                            aiSummaryCard
+                        }
+
+                        consentText
 
                         if emailNeedsAttention {
                             emailFixCard
@@ -195,11 +205,30 @@ struct QuoteRequestScreen: View {
         }
     }
 
+    // Consent line with a tappable "Terms of Service" link. SwiftUI renders the
+    // AttributedString link tappable and opens it via the default openURL —
+    // i.e. externally in Safari (the ToS lives at the public site, not in-app).
+    private var consentText: some View {
+        let name = contractor?.name ?? "this business"
+        // Only claim photos are shared when some are actually attached.
+        let shared = images.isEmpty ? "your request" : "your request and photos"
+        var text = AttributedString("By sending, you agree to share \(shared) with \(name), and to Brightglow's ")
+        var link = AttributedString("Terms of Service")
+        link.link = URL(string: "https://brightglow.co/terms")
+        link.underlineStyle = .single
+        text.append(link)
+        text.append(AttributedString("."))
+        return Text(text)
+            .font(.bodySmall)
+            .foregroundStyle(.white.opacity(0.6))
+            .tint(.white)
+    }
+
     private var reassuranceText: some View {
         let name = contractor?.name ?? "this business"
         let tail = name.hasSuffix(".") ? " They'll reply to you directly." : ". They'll reply to you directly."
         // Text interpolation, not `Text + Text` (deprecated in iOS 26).
-        return Text("We'll email your request to \(Text(name).fontWeight(.bold))\(tail)")
+        return Text("We'll send your request to \(Text(name).fontWeight(.bold))\(tail)")
             .font(.bodyLight)
             .foregroundStyle(.white)
             .multilineTextAlignment(.center)
@@ -305,10 +334,40 @@ struct QuoteRequestScreen: View {
             .overlay(RoundedRectangle(cornerRadius: 32).stroke(AppColors.searchBorder, lineWidth: 1.5))
     }
 
+    // Read-only recap of the clarifying Q&A, folded into the sent description.
+    private var aiSummaryCard: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(spacing: 6) {
+                Image(systemName: "sparkles")
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(AppColors.accentStart)
+                Text("Added from your answers")
+                    .font(.bodySmall)
+                    .foregroundStyle(.white.opacity(0.5))
+            }
+            ForEach(clarifyTranscript.pairs) { pair in
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(pair.question)
+                        .font(.bodySmall)
+                        .foregroundStyle(.white.opacity(0.5))
+                    Text(pair.answer)
+                        .font(.bodyLight)
+                        .foregroundStyle(.white)
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(16)
+        .background(AppColors.searchBg)
+        .clipShape(RoundedRectangle(cornerRadius: 20))
+        .overlay(RoundedRectangle(cornerRadius: 20).stroke(AppColors.border, lineWidth: 1))
+    }
+
     // MARK: - Email (only surfaced when it needs fixing)
 
     private var emailFixCard: some View {
-        labeledCard(title: "Contractors will reply to you at") {
+        labeledCard(title: "Where we can reach you") {
             if editingEmail {
                 TextField("you@email.com", text: $email)
                     .font(.bodyLight)
@@ -337,7 +396,7 @@ struct QuoteRequestScreen: View {
             }
 
             if isRelay {
-                warning("Apple's private relay address can't receive replies from contractors. Add a direct email.")
+                warning("Apple's private relay address can't receive replies. Add a direct email.")
             } else if !email.isEmpty && !emailValid {
                 warning("That doesn't look like a valid email.")
             }
@@ -355,7 +414,7 @@ struct QuoteRequestScreen: View {
             Text("Request sent")
                 .font(.h2)
                 .foregroundStyle(.white)
-            Text("\(contractor?.name ?? "The contractor") will reply to you at \(email).")
+            Text("\(contractor?.name ?? "The business") has your request. They'll reply to you directly.")
                 .font(.bodyLight)
                 .foregroundStyle(.white.opacity(0.6))
                 .multilineTextAlignment(.center)
@@ -403,15 +462,18 @@ struct QuoteRequestScreen: View {
     ///
     /// LeadBridge only accepts one photo per lead — when several are attached,
     /// the first (the drawn/annotated one, when there is one) is what's sent.
+    /// With none attached the lead goes as text only.
     private func sendRequest() {
-        guard canSend, let contractor, let photo = images.first else { return }
+        guard canSend, let contractor else { return }
+        let photo = images.first
         emailFocused = false
         requestFocused = false
         editingEmail = false
         sendError = nil
         sending = true
 
-        let description = editableRequest
+        // The user's own words plus the AI-clarified details from the Q&A.
+        let description = clarifyTranscript.augmentedDescription(base: editableRequest)
         Task {
             do {
                 _ = try await LeadBridgeService.submitLead(
@@ -419,6 +481,10 @@ struct QuoteRequestScreen: View {
                     userId: auth.user?.id,
                     contractorEmail: "hello@brightglow.co",
                     businessName: contractor.name,
+                    // Carried so the chat can show this business's logo as the
+                    // conversation avatar (id = Places place_id; website resolves it).
+                    placeId: contractor.id,
+                    website: contractor.website,
                     description: description,
                     city: contractor.city,
                     photo: photo

@@ -8,6 +8,8 @@ struct ConversationsListScreen: View {
     /// A chat deep link may ask us to jump straight into a thread (the last one,
     /// or a specific one by public_id). Consumed after the list loads.
     @EnvironmentObject private var chatRouter: ChatRouter
+    /// Drives the "finish your page" nudge for a business viewing its inbox.
+    @EnvironmentObject private var businessStore: BusinessStore
 
     @State private var conversations: [Conversation] = []
     @State private var unreadIDs: Set<UUID> = []
@@ -18,6 +20,11 @@ struct ConversationsListScreen: View {
     /// Thread to push. Held by id (not the value) so it stays `Hashable` for
     /// `navigationDestination(item:)` — same pattern as ContractorListScreen.
     @State private var openConvoID: UUID? = nil
+    /// Page-completion nudge shown when a business exits a request thread back to
+    /// this inbox with a still-incomplete page (once per session).
+    @State private var showNudge = false
+    /// Pushes the business page editor when they tap "Finish my page".
+    @State private var showEditor = false
 
     var body: some View {
         ZStack {
@@ -36,10 +43,24 @@ struct ConversationsListScreen: View {
                 ChatThreadScreen(conversation: convo)
             }
         }
+        .navigationDestination(isPresented: $showEditor) {
+            BusinessProfileScreen(placeId: businessStore.selectedPlaceId)
+        }
         .task { await load() }
         // Fires again when a thread is popped — a reviewed conversation is now
-        // read, so recompute which rows still show the unread dot.
-        .onAppear { refreshUnread() }
+        // read, so recompute which rows still show the unread dot. Same moment a
+        // business, having just exited a request thread, gets the one-per-session
+        // nudge to finish its page (guarded to incomplete pages in the store).
+        .onAppear {
+            refreshUnread()
+            if businessStore.consumeNudge(for: businessStore.selectedPlaceId) { showNudge = true }
+        }
+        .sheet(isPresented: $showNudge) {
+            nudgeSheet
+                .presentationDetents([.height(320)])
+                .presentationDragIndicator(.visible)
+                .presentationBackground(AppColors.bg)
+        }
         // A deep link that lands while the inbox is already up (targetPublicID /
         // openLatestRequested set after the initial load) still opens its thread.
         .onChange(of: chatRouter.targetPublicID) { _, _ in applyPendingDeepLink() }
@@ -139,6 +160,40 @@ struct ConversationsListScreen: View {
             .frame(maxWidth: .infinity)
     }
 
+    /// Bottom-sheet nudge a business sees on returning to its inbox after exiting
+    /// a request thread with an unfinished page — a prompt to complete it, since
+    /// a full page wins more of the requests it's shown.
+    private var nudgeSheet: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            Text("Get more leads")
+                .font(.h2).foregroundStyle(.white)
+            Text("Businesses with a complete page — photos, services and prices — win more of the requests they're shown. Yours is almost there.")
+                .font(.bodyLight).foregroundStyle(.white.opacity(0.7))
+                .fixedSize(horizontal: false, vertical: true)
+            Spacer(minLength: 0)
+            Button(action: {
+                showNudge = false
+                showEditor = true
+            }) {
+                Text("Finish my page")
+                    .font(.h4).foregroundStyle(.white)
+                    .frame(maxWidth: .infinity).frame(height: 52)
+                    .background(AppColors.ctaPrimary, in: Capsule())
+            }
+            .buttonStyle(.plain)
+            Button(action: { showNudge = false }) {
+                Text("Later")
+                    .font(.h4).foregroundStyle(.white.opacity(0.6))
+                    .frame(maxWidth: .infinity).frame(height: 44)
+            }
+            .buttonStyle(.plain)
+        }
+        .padding(.horizontal, 24)
+        .padding(.top, 28)
+        .padding(.bottom, 16)
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
     private func load() async {
         loadError = false
         do {
@@ -215,7 +270,10 @@ private struct ConversationRow: View {
 
     var body: some View {
         HStack(spacing: 12) {                        // Figma: gap 12
-            ChatBusinessAvatar(logoURL: logoURL, size: 44)   // Figma: 44×44, r=12
+            // The customer sees the business (logo); the business sees each
+            // customer as a distinct initial tile — a shared business logo would
+            // make every received request look identical.
+            avatar
                 // Figma moves the unread dot onto the avatar's bottom-right corner,
                 // sitting in a notch. The bg-colored ring reproduces the cutout so
                 // the gold dot reads as punched into the tile.
@@ -251,6 +309,52 @@ private struct ConversationRow: View {
         )
         .padding(.horizontal, 8)                     // Figma: cell outer inset 8
         .contentShape(Rectangle())
+    }
+
+    /// Customer-side rows show the business logo; business-side rows show a
+    /// colored initial tile keyed to the customer so each request is distinct.
+    @ViewBuilder
+    private var avatar: some View {
+        if conversation.viewerIsCustomer {
+            ChatBusinessAvatar(logoURL: logoURL, size: 44)   // Figma: 44×44, r=12
+        } else {
+            InitialAvatar(letter: conversation.avatarInitial,
+                          colorSeed: conversation.customerColorSeed ?? conversation.avatarInitial,
+                          size: 44)
+        }
+    }
+}
+
+/// A colored tile with the counterparty's initial. Used business-side in the
+/// inbox, where every request would otherwise share the same generic avatar.
+/// `letter` is the customer's email initial; `colorSeed` (their user id) picks a
+/// stable tile color so the same customer always gets the same tile.
+struct InitialAvatar: View {
+    let letter: String
+    let colorSeed: String
+    var size: CGFloat = 44
+
+    // Muted tiles that keep white text legible; picked by a stable hash of the seed.
+    private static let palette: [Color] = [
+        Color(hex: "#E8683C"), Color(hex: "#3C8CE8"), Color(hex: "#4CAF72"),
+        Color(hex: "#B65CD1"), Color(hex: "#E0A93C"), Color(hex: "#3CB7C4"),
+        Color(hex: "#D1525C"), Color(hex: "#6C74E0"),
+    ]
+
+    private var color: Color {
+        let sum = colorSeed.unicodeScalars.reduce(0) { $0 + Int($1.value) }
+        return Self.palette[sum % Self.palette.count]
+    }
+
+    var body: some View {
+        RoundedRectangle(cornerRadius: size * 0.27, style: .continuous)
+            .fill(color)
+            .frame(width: size, height: size)
+            .overlay(
+                Text(letter)
+                    .font(.custom("Lato-Bold", size: size * 0.42))
+                    .foregroundStyle(.white)
+            )
     }
 }
 

@@ -19,7 +19,7 @@
 // POST { messages: [{role: "user"|"assistant", content}], photo_details? }
 //   -> { action: "ask",  question, quick_replies, vertical, category }
 //   -> { action: "done", vertical, category, search_terms, photo_terms,
-//                        details, priceable }
+//                        details, summary, priceable }
 //
 // Deploy:   supabase functions deploy clarify
 // Secrets:  ANTHROPIC_API_KEY (shared with `pricing`; unset -> 503, client
@@ -100,10 +100,16 @@ Per-vertical priorities:
   price-only questions. Once the service and vehicle are known, finish.
 - Home: after the business type is clear, ask the cost driver that also sharpens
   the photo match — the item's material/type and (for per-area jobs) size.
+  For size-driven work (windows, flooring, painting, roofing) ALWAYS pin the
+  dimensions — they swing the price several-fold. Read what the photo already
+  shows (a wide slider vs. a small casement, one window vs. a wall of them) and
+  confirm the numbers with the user; ask, don't guess a measurement.
   Examples: furnace -> gas / heat pump / mini split; water heater -> tank /
-  tankless; window -> operation (sliding, casement, double-hung) AND frame
-  material (vinyl, wood, aluminum, fiberglass); flooring -> material + whether
-  the old floor is removed; roof -> material + approx area; vanity -> width +
+  tankless; window -> operation (sliding, casement, double-hung), frame material
+  (vinyl, wood, aluminum, fiberglass), SCOPE (just the glass/a foggy or broken
+  pane vs. the whole window incl. frame vs. a full-frame tear-out), and
+  approximate size (W×H) and how many; flooring -> material + area + whether the
+  old floor is removed; roof -> material + approx area; vanity -> width +
   whether faucet/top are replaced.
 
 Finishing (action "done") — fill EVERY field:
@@ -120,14 +126,26 @@ Auto: one of ${AUTO_SERVICES.join(", ")}. Use "" only if nothing fits.
 - details: HOME ONLY — a short comma-separated summary of the cost-relevant
   facts the user confirmed, phrased canonically so the pricing engine can parse
   them: areas as "N sq ft", lengths as "N linear ft", counts as "N windows" /
-  "N doors" / "N outlets", vanity widths as "N inch vanity", roof materials as
-  "asphalt shingle roof" / "metal roof", french doors as "N pair(s) of french
-  doors", scope as "remove old flooring" / "subfloor repair" / "keep existing
-  faucet". Only facts the user explicitly stated or confirmed — never guess.
+  "N doors" / "N outlets", vanity widths as "N inch vanity", window/door
+  dimensions as "WxH window" / "WxH door" in inches (e.g. "72x80 window"), roof
+  materials as "asphalt shingle roof" / "metal roof", french doors as
+  "N pair(s) of french doors", scope as "remove old flooring" / "subfloor repair"
+  / "keep existing faucet". For an opening, state the replacement scope in these
+  exact words so it prices right: "glass only" (just the pane/foggy seal),
+  "full frame replacement" (tear out to the rough opening), or nothing for a
+  standard insert. Only facts the user explicitly stated or confirmed — never guess.
   Use "" for auto/moto, or if no cost fact was pinned down.
+- summary: a plain-English overview of the job for the BUSINESS to read at a
+  glance — 1-2 short sentences that fold the user's request together with the
+  facts they confirmed in the chat, in natural prose. Write it as a human intake
+  note, not a transcript: no "Q:"/"A:", no bullets, no "the customer said". Fold
+  in only what was actually established (from the request, the photo note, or the
+  answers). Example: "Exterior repaint of a backyard fence, plus planting new
+  shrubs along the yard." Never invent scope, timing, or budget. Use "" if the
+  request was too vague to describe.
 
 When asking (action "ask"): also return your best-so-far vertical and category
-(use "" if not yet known); leave search_terms, photo_terms, details as "".
+(use "" if not yet known); leave search_terms, photo_terms, details, summary as "".
 
 The pricing engine covers these home jobs — for home requests, aim toward them
 and note each one's pricing unit (the quantity worth clarifying):
@@ -145,10 +163,11 @@ const SCHEMA = {
     search_terms: { type: "string" },
     photo_terms: { type: "string" },
     details: { type: "string" },
+    summary: { type: "string" },
   },
   required: [
     "action", "question", "quick_replies",
-    "vertical", "category", "search_terms", "photo_terms", "details",
+    "vertical", "category", "search_terms", "photo_terms", "details", "summary",
   ],
   additionalProperties: false,
 } as const;
@@ -219,6 +238,7 @@ Deno.serve(async (req) => {
     search_terms?: string;
     photo_terms?: string;
     details?: string;
+    summary?: string;
   };
   try {
     const client = new Anthropic({ apiKey: ANTHROPIC_API_KEY, timeout: 20_000, maxRetries: 1 });
@@ -267,6 +287,7 @@ Deno.serve(async (req) => {
     search_terms: parsed.search_terms ?? "",
     photo_terms: parsed.photo_terms ?? "",
     details: vertical === "home" ? (parsed.details ?? "") : "",
+    summary: parsed.summary ?? "",
     priceable: isPriceable(vertical, category),
   });
 });

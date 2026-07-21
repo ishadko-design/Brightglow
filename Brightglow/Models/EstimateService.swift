@@ -17,8 +17,10 @@ import MapKit
 enum EstimateService {
 
     /// A locally-aware price range for a job, or nil if no real data backs one.
-    static func estimate(category: String, description: String, zip: String?) async -> PriceTier? {
-        await PricingService.estimate(category: category, description: description, zip: zip)
+    static func estimate(category: String, description: String, zip: String?,
+                         vehicle: VehicleFilter? = nil) async -> PriceTier? {
+        await PricingService.estimate(category: category, description: description,
+                                      zip: zip, vehicle: vehicle)
     }
 
     /// Reverse-geocode a coordinate to a "City, ST" locality string plus its

@@ -218,7 +218,9 @@ async function enterDashboard() {
   }
 
   show($("bootView"), false);
-  showView("dash");
+  // Chats is the landing tab. A `?lead=` deep link has already opened the thread
+  // above, and the thread lives inside this view — so this lands on it either way.
+  showView("chats");
   renderSwitcher();
   loadBilling();   // not awaited: the dashboard is usable while this resolves
 }
@@ -379,7 +381,8 @@ async function openStripePortal() {
 function fail(text) {
   show($("bootView"), false);
   show($("dashView"), false);
-  show($("openEditorBtn"), false);
+  show($("chatsView"), false);
+  show($("tabs"), false);
   show($("signOutBtn"), true);
   const c = $("authView");
   c.hidden = false;
@@ -803,9 +806,24 @@ function renderStats() {
   const leads = current.leads || [];
   const waiting = leads.filter(needsReply).length;
   $("statRequests").textContent = leads.length;
-  $("statRequestsUnit").textContent = leads.length === 1 ? "request" : "requests";
   $("statReply").textContent = waiting;
   $("statReply").classList.toggle("is-waiting", waiting > 0);
+  loadViews();
+}
+
+// Trailing-30-day profile views (business_profile_views). Owner-only under RLS,
+// and purely decorative — a failure leaves the tile at 0 rather than surfacing.
+async function loadViews() {
+  const el = $("statViews");
+  if (!el || !current?.place_id) return;
+  const since = new Date(Date.now() - 30 * 864e5).toISOString().slice(0, 10);
+  const { data, error } = await sb
+    .from("business_profile_views")
+    .select("views")
+    .eq("place_id", current.place_id)
+    .gte("day", since);
+  if (error) return;
+  el.textContent = (data || []).reduce((n, r) => n + (r.views || 0), 0);
 }
 
 // ── save ────────────────────────────────────────────────────
@@ -851,13 +869,21 @@ $("saveBtn").addEventListener("click", async () => {
 // Three top-level views mirroring the app's navigation: the dashboard, the
 // Settings editor opened on top of it, and billing (web-only, no app analogue).
 // Deliberately not tabs — the app pushes a separate screen for the editor.
+// Chats / Dashboard / Settings are peer tabs; Billing is reached from Settings
+// and is not a tab of its own, so it leaves the tab strip showing Settings.
+const TAB_VIEWS = ["chats", "dash", "editor"];
+
 function showView(name) {
+  show($("chatsView"), name === "chats");
   show($("dashView"), name === "dash");
   show($("editorView"), name === "editor");
   show($("billingView"), name === "billing");
-  // Settings is only an entry point FROM the dashboard — the editor and billing
-  // each have their own Back.
-  show($("openEditorBtn"), name === "dash");
+
+  const active = name === "billing" ? "editor" : name;
+  document.querySelectorAll(".tab").forEach((t) => {
+    t.classList.toggle("is-active", t.dataset.view === active);
+  });
+  show($("tabs"), TAB_VIEWS.includes(name) || name === "billing");
   window.scrollTo(0, 0);
 }
 
@@ -891,8 +917,13 @@ async function deletePage() {
 }
 
 function wireStaticHandlers() {
-  // Gear and "Set up" both open Settings — the two entry points the app uses.
-  $("openEditorBtn").addEventListener("click", openEditor);
+  // Tabs, plus the tiles' "View" buttons which jump to the Chats tab.
+  document.querySelectorAll("[data-view]").forEach((el) => {
+    el.addEventListener("click", () => {
+      const target = el.dataset.view;
+      if (target === "editor") openEditor(); else showView(target);
+    });
+  });
   $("readinessCta").addEventListener("click", openEditor);
   $("editorBack").addEventListener("click", () => showView("dash"));
   $("billingBtn").addEventListener("click", () => showView("billing"));

@@ -269,7 +269,7 @@ enum PlacesService {
         // `nextPageToken` must be in the field mask for pagination to come back.
         req.setValue(
             "places.id,places.displayName,places.rating,places.userRatingCount,"
-            + "places.formattedAddress,places.nationalPhoneNumber,places.photos,"
+            + "places.formattedAddress,places.nationalPhoneNumber,places.websiteUri,places.photos,"
             + "places.businessStatus,places.reviews,places.location,places.types,nextPageToken",
             forHTTPHeaderField: "X-Goog-FieldMask")
         var body: [String: Any] = [
@@ -377,6 +377,7 @@ enum PlacesService {
             photos: photos,
             priceTiers: category.priceTiers,
             phone: place.nationalPhoneNumber,
+            website: place.websiteUri,
             licenseNumber: nil,
             isVerified: (place.businessStatus ?? "OPERATIONAL") == "OPERATIONAL",
             reviews: reviews(from: place.reviews)
@@ -532,6 +533,7 @@ private struct Place: Decodable {
     let userRatingCount: Int?
     let formattedAddress: String?
     let nationalPhoneNumber: String?
+    let websiteUri: String?
     let photos: [Photo]?
     let businessStatus: String?
     let reviews: [PlaceReview]?

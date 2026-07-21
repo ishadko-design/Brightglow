@@ -6,7 +6,7 @@ import SwiftUI
 // Values are generated from design/tokens.json (DesignTokens). Edit tokens +
 // run `npm run tokens`, don't hardcode sizes here.
 extension Font {
-    /// H1 — Lato ExtraBold 800, 44pt. Display / brand.
+    /// H1 — Lato Bold 700, 48pt. The "Brightglow" brand wordmark (splash + login).
     static let h1: Font = DesignTokens.typographyH1
     /// H2 — Lato ExtraBold 800, 24pt. Screen titles.
     static let h2: Font = DesignTokens.typographyH2

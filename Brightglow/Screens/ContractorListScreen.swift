@@ -40,9 +40,47 @@ struct ContractorListScreen: View {
     /// for auto/moto and uncovered categories → the price line shows the
     /// match-only "coming soon" state instead of attempting a number.
     var priceable: Bool = true
+    /// The landing clarifying Q&A, carried through to the quote-request screen so
+    /// the message a business receives includes the AI-clarified details.
+    var clarifyTranscript: ClarifyTranscript = .empty
+
+    init(category: String = "",
+         searchQuery: String = "",
+         aiResult: AIResult? = nil,
+         presetCoordinate: CLLocationCoordinate2D? = nil,
+         attachedImages: [UIImage] = [],
+         photoDetails: String? = nil,
+         businessSearchOverride: String = "",
+         photoMatchTerms: String = "",
+         priceable: Bool = true,
+         clarifyTranscript: ClarifyTranscript = .empty,
+         initialVehicle: VehicleFilter? = nil) {
+        self.category = category
+        self.searchQuery = searchQuery
+        self.aiResult = aiResult
+        self.presetCoordinate = presetCoordinate
+        self.attachedImages = attachedImages
+        self.photoDetails = photoDetails
+        self.businessSearchOverride = businessSearchOverride
+        self.photoMatchTerms = photoMatchTerms
+        self.priceable = priceable
+        self.clarifyTranscript = clarifyTranscript
+        // Moto vs car for the Auto & moto toggle: an explicit signal (a
+        // motorcycle detected in the captured photo) wins; otherwise sniff the
+        // query text so a moto-specific search ("motorcycle brakes") opens on
+        // the Moto side. Defaults to cars.
+        let resolved: VehicleFilter
+        if let initialVehicle {
+            resolved = initialVehicle
+        } else {
+            let hay = (searchQuery + " " + businessSearchOverride + " " + photoMatchTerms).lowercased()
+            let motoTerms = ["motorcycle", "motorbike", "moped", "scooter", "dirt bike", "sportbike"]
+            resolved = motoTerms.contains(where: hay.contains) ? .moto : .auto
+        }
+        _vehicle = State(initialValue: resolved)
+    }
 
     @Environment(\.dismiss) var dismiss
-    @Environment(\.openURL) private var openURL
     @StateObject private var location = LocationProvider()
 
     @State private var contractors: [Contractor] = []
@@ -70,6 +108,9 @@ struct ContractorListScreen: View {
     /// Explainer for the header's info icon next to the estimate.
     @State private var showEstimateInfo = false
     @State private var goGallery = false
+    /// Set when the gallery is opened from a row's "N reviews" link, so it lands
+    /// with the reviews sheet expanded rather than the default collapsed peek.
+    @State private var startReviewsExpanded = false
     @State private var startContractorID: String? = nil
     /// Which photo in the tapped contractor's strip was tapped — the gallery
     /// opens on that exact shot.
@@ -94,6 +135,10 @@ struct ContractorListScreen: View {
     /// "unknown" — CSLB is California-only — never "unlicensed", so a missing
     /// entry shows no badge rather than a negative one.
     @State private var licenseByID: [String: LicenseService.License] = [:]
+
+    /// Hosted logo URLs by contractor id, filled best-effort after load. A
+    /// business not present here draws a name monogram (see [[LogoService]]).
+    @State private var logoByID: [String: URL] = [:]
     /// How many of the (relevance-ranked) contractors are shown. Starts at the
     /// best-matching `initialVisibleCount`; "See more" reveals the rest.
     @State private var visibleLimit = initialVisibleCount
@@ -101,10 +146,12 @@ struct ContractorListScreen: View {
     @State private var isLoadingMore = false
 
     private var headerTitle: String {
-        // Auto & moto: a friendly vehicle-aware title ("Auto repair"), never the
-        // raw Places query ("auto repair and maintenance shop").
+        // Auto & moto: show the exact category name the user tapped ("Repair",
+        // "Body & Paint") so the header matches the grid card and stays stable
+        // when the Auto ⇄ Moto toggle is flipped. The toggle communicates the
+        // vehicle; never surface the raw Places query.
         if let auto = autoCategory {
-            return "\(vehicle.rawValue) \(auto.name.lowercased())"
+            return auto.name
         }
         let q = searchQuery.trimmingCharacters(in: .whitespacesAndNewlines)
         return q.isEmpty ? category : q
@@ -139,11 +186,61 @@ struct ContractorListScreen: View {
         return effectiveSearchQuery.isEmpty ? category : effectiveSearchQuery
     }
 
-    /// The rows actually rendered — the top `visibleLimit` of the ranked list.
-    /// (`contractors` is already sorted best-match-first by PlacesService's
-    /// relevance ranking, so a prefix IS the best-matching set.)
+    /// Query used solely to decide the "Did similar job" badge — real user intent
+    /// only: the chat's `photo_terms`, else a chat-refined search (home only, like
+    /// `effectiveSearchQuery`), else what the user actually typed. Deliberately
+    /// omits the bare-category / synthetic auto-category fallback that `orderQuery`
+    /// uses, so simply opening a category with no input shows no badge (empty →
+    /// `PhotoFilter.matchesQuery` returns false).
+    private var matchQuery: String {
+        let terms = photoMatchTerms.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !terms.isEmpty { return terms }
+        let override = businessSearchOverride.trimmingCharacters(in: .whitespacesAndNewlines)
+        if autoCategory == nil, !override.isEmpty { return override }
+        return typedQuery
+    }
+
+    /// The rows actually rendered — ranked by match STRENGTH, strongest first,
+    /// then the top of the upstream list. A similar-job match outranks every
+    /// free-signal heuristic in PlacesService's ordering (north star: similar-job
+    /// > proximity > rating), but not all matches are equal: a business that both
+    /// shows the work AND is praised for it should beat one whose only hit is a
+    /// review mention (its photos may not match the ask). So instead of one flat
+    /// "similar" group, businesses sort by `matchRank`, each tier keeping its
+    /// upstream order. Proof arrives progressively — cached/shared verdicts at
+    /// load, then per row as lazy screening completes — so the order refines over
+    /// time (a review-only match climbs to the top tier once its photo is screened
+    /// and confirmed).
     private var visibleContractors: [Contractor] {
-        Array(contractors.prefix(visibleLimit))
+        let ranked = contractors.enumerated()
+            .map { (offset: $0.offset, contractor: $0.element, rank: matchRank($0.element)) }
+            .sorted { $0.rank != $1.rank ? $0.rank > $1.rank : $0.offset < $1.offset }
+            .map(\.contractor)
+        return Array(ranked.prefix(visibleLimit))
+    }
+
+    /// Match strength driving promotion. Two independent proofs, weighted so the
+    /// *work being visible* outranks words about it: +2 for a screened work photo
+    /// of the job, +1 for a review naming it. Both → 3 (leads), photo-only → 2,
+    /// review-only → 1, neither → 0. The review path needs no photo screening, so
+    /// a matching specialist deep in the list still surfaces without our paying to
+    /// screen everything down to it — then rises to the top tier once its row is
+    /// revealed and the photo confirms.
+    private func matchRank(_ c: Contractor) -> Int {
+        let photo = PhotoFilter.matchesQuery(keptPhotos[c.id] ?? [], query: matchQuery) ? 2 : 0
+        let review = PhotoFilter.reviewsMentionJob(c.reviews.map(\.text), query: matchQuery) ? 1 : 0
+        return photo + review
+    }
+
+    /// Single source of truth for the similar-job signal — drives the row's
+    /// "Did similar job" badge. Any proof (photo or review) earns it.
+    private func didSimilarJob(_ c: Contractor) -> Bool { matchRank(c) > 0 }
+
+    /// The customer review that best describes the searched job, shown on the row
+    /// as the "why" behind a match. Nil when no review mentions it (or on a bare
+    /// category browse, where `matchQuery` has no subject term).
+    private func matchingReview(_ c: Contractor) -> String? {
+        PhotoFilter.mostRelevantReview(c.reviews.map(\.text), query: matchQuery)
     }
 
     /// More to show: either already-fetched businesses held back by the limit, or
@@ -191,7 +288,10 @@ struct ContractorListScreen: View {
                 startPhotoIndex: startPhotoIndex,
                 initialPageToken: nextPageToken,
                 lastViewedID: $lastViewedID,
-                attachedImages: attachedImages
+                attachedImages: attachedImages,
+                startReviewsExpanded: startReviewsExpanded,
+                photoMatchTerms: photoMatchTerms,
+                clarifyTranscript: clarifyTranscript
             )
         }
         .navigationDestination(item: $quoteContractorID) { id in
@@ -200,13 +300,14 @@ struct ContractorListScreen: View {
             QuoteRequestScreen(
                 contractor: contractors.first { $0.id == id },
                 requestSummary: typedQuery,
-                initialImages: attachedImages
+                initialImages: attachedImages,
+                clarifyTranscript: clarifyTranscript
             )
         }
         .alert("How we estimate", isPresented: $showEstimateInfo) {
             Button("OK", role: .cancel) {}
         } message: {
-            Text("A typical price range for this job in your area. The business gives you the final quote.")
+            Text(estimateInfoText)
         }
     }
 
@@ -224,7 +325,16 @@ struct ContractorListScreen: View {
                             // fetching a 20-business list only downloads photos for
                             // the ~4 businesses in view, then more as the user scrolls.
                             photos: revealedIDs.contains(contractor.id) ? screenedByID[contractor.id] : nil,
-                            isLicensed: licenseByID[contractor.id] != nil,
+                            licenseNo: licenseByID[contractor.id]?.licenseNo,
+                            // "Did similar job": the business has a screened work
+                            // photo matching this request (design brief §9). Uses
+                            // `matchQuery` (real user intent only), so a bare category
+                            // browse with no input never shows the badge.
+                            didSimilarJob: didSimilarJob(contractor),
+                            // The customer's own words about this job — shown as
+                            // the "why" when a review names the searched work.
+                            matchingReview: matchingReview(contractor),
+                            logoURL: logoByID[contractor.id],
                             onOpen: { photoIndex in open(contractor, photoIndex: photoIndex) },
                             onReviews: { openReviews(for: contractor) },
                             onQuote: { quoteContractorID = contractor.id }
@@ -240,7 +350,7 @@ struct ContractorListScreen: View {
                         }
                     }
 
-                    if hasMore { seeMoreButton }
+                    if hasMore { loadMoreTrigger }
                 }
                 // Clears the header bar (~64pt) + a 12pt gap. The ScrollView
                 // already starts below the safe area, so topInset is NOT added
@@ -261,25 +371,23 @@ struct ContractorListScreen: View {
         }
     }
 
-    // ── "See more" — reveals the businesses held back below the top matches ───
-    private var seeMoreButton: some View {
-        Button(action: { Task { await showMore() } }) {
-            Group {
-                if isLoadingMore {
-                    ProgressView().tint(.white)
-                } else {
-                    Text("See more")
-                        .font(.h4)
-                        .foregroundStyle(.white)
-                }
-            }
-            .padding(.horizontal, 20)
-            .frame(height: 44)
-            .secondaryButtonBackground()
+    // ── Infinite scroll — reveals held-back matches, then pages, on approach ───
+    // Replaces the old "See more" button: this sentinel sits at the tail of the
+    // list and, when it scrolls into view, pulls the next batch. Cost is
+    // unchanged — photos still screen lazily per row (see `screenIfNeeded`), so
+    // revealing/paging only downloads photos for rows the user actually reaches;
+    // the sentinel only removes the extra tap, it doesn't screen ahead.
+    private var loadMoreTrigger: some View {
+        HStack {
+            if isLoadingMore { ProgressView().tint(.white) }
         }
-        .buttonStyle(.plain)
-        .disabled(isLoadingMore)
+        .frame(maxWidth: .infinity)
+        .frame(height: 44)
         .padding(.top, 8)
+        // Fires as the tail is approached. showMore() self-guards against
+        // re-entrancy and no-ops once there's nothing left, so repeated
+        // appearances are safe.
+        .onAppear { Task { await showMore() } }
     }
 
     // ── Auto/Moto segmented filter (pill) ─────────────────────────────────────
@@ -302,6 +410,45 @@ struct ContractorListScreen: View {
         .padding(2)
         .background(Capsule().fill(.white.opacity(0.12)))
         .fixedSize()
+    }
+
+    /// Header price line — one calm, rounded number: "Typically around $1.5k".
+    /// Falls back to the plain range only for sources with no central estimate
+    /// (mocks / permit-only), which have no typical to lead with.
+    private func headerEstimateText(_ tier: PriceTier) -> String {
+        if let typical = tier.typical {
+            let amount = "~$\(money(roundSig2(typical)))"
+            // Labor-only figures MUST carry the qualifier — the same number
+            // unlabelled would read as the whole job (pilot, 2026-07-16).
+            return tier.laborOnly ? "Typically \(amount) labor only" : "Typically \(amount)"
+        }
+        return "Est prices: $\(money(tier.min))–\(money(tier.max))"
+    }
+
+    /// The info-icon explainer — where the full range lives now that the header
+    /// shows a single number. Kept plain-spoken; the spread is framed as "what
+    /// most jobs cost", with the drivers named so a number outside it doesn't
+    /// read as us being wrong.
+    private var estimateInfoText: String {
+        guard let tier = estimate else {
+            return "A typical price range for this job in your area. The business gives you the final quote."
+        }
+        let range = "$\(money(roundSig2(tier.min)))–$\(money(roundSig2(tier.max)))"
+        // Labor-only: we don't model this job's parts, so the modal states the
+        // basis (hours x local rate, carried in the server's label) and is
+        // explicit that parts are excluded — never implies an all-in price.
+        if tier.laborOnly {
+            return "We don't have parts pricing for this job yet, so this covers labor only — "
+                + "most visits land between \(range). \(tier.label) "
+                + "The business gives you the final quote."
+        }
+        if let typical = tier.typical {
+            return "Typically ~$\(money(roundSig2(typical))) for this job in your area. "
+                + "Most jobs land between \(range), depending on size and materials. "
+                + "The business gives you the final quote."
+        }
+        return "Most jobs land between \(range), depending on size and materials. "
+            + "The business gives you the final quote."
     }
 
     // ── Header — matches the gallery / main screen top bar ────────────────────
@@ -336,7 +483,7 @@ struct ContractorListScreen: View {
                         .padding(.leading, 16)
                 } else if let tier = estimate {
                     HStack(alignment: .center, spacing: 4) {
-                        Text("Est prices: $\(money(tier.min))–\(money(tier.max))")
+                        Text(headerEstimateText(tier))
                             .font(.bodySmall)
                             .foregroundStyle(.white)
                             .lineLimit(1)
@@ -403,13 +550,18 @@ struct ContractorListScreen: View {
     private func open(_ contractor: Contractor, photoIndex: Int = 0) {
         startContractorID = contractor.id
         startPhotoIndex = photoIndex
+        startReviewsExpanded = false
         goGallery = true
     }
 
+    /// The "N reviews" link opens the gallery for this contractor with its bottom
+    /// sheet expanded to the reviews (in-app), rather than jumping straight out to
+    /// Google — the Google link now lives at the end of that sheet.
     private func openReviews(for contractor: Contractor) {
-        if let url = URL(string: "https://search.google.com/local/reviews?placeid=\(contractor.id)") {
-            openURL(url)
-        }
+        startContractorID = contractor.id
+        startPhotoIndex = 0
+        startReviewsExpanded = true
+        goGallery = true
     }
 
     /// Reveal everything already fetched; if the limit has caught up with the
@@ -474,7 +626,8 @@ struct ContractorListScreen: View {
                 if !v.kept.isEmpty {
                     // Cached work photos → show them, ordered by the current query.
                     keptPhotos[c.id] = v.kept
-                    screenedByID[c.id] = PhotoFilter.order(v.kept, query: orderQuery)
+                    screenedByID[c.id] = PhotoFilter.order(v.kept, query: orderQuery,
+                                                           capPremises: stripMaxPremises)
                     scannedCount[c.id] = v.scanned
                     // A verdict cached before rich tagging (or by an older build)
                     // orders only on generic labels — enrich it when its row shows.
@@ -494,7 +647,8 @@ struct ContractorListScreen: View {
                 scannedCount[id] = v.scanned
                 if !v.kept.isEmpty {
                     keptPhotos[id] = v.kept
-                    screenedByID[id] = PhotoFilter.order(v.kept, query: orderQuery)
+                    screenedByID[id] = PhotoFilter.order(v.kept, query: orderQuery,
+                                                         capPremises: stripMaxPremises)
                     if !v.enriched { needsEnrich.insert(id) }
                 }
                 ScreeningStore.shared.save(id, allowVehicles: allowVehicles,
@@ -506,14 +660,16 @@ struct ContractorListScreen: View {
             contractors.removeAll { c in
                 (scannedCount[c.id] ?? 0) >= c.photos.count && (screenedByID[c.id]?.isEmpty ?? true)
             }
-            // Only chase a price for a covered home trade. Auto/moto and
-            // uncovered categories are match-only — the price line shows the
-            // "coming soon" state (with a real business count) instead.
+            // Uncovered categories stay match-only — the price line shows the
+            // "coming soon" state (with a real business count) instead. Auto &
+            // moto is no longer among them; it passes its vehicle filter so a
+            // bike isn't priced as a car.
             if !contractors.isEmpty && priceable {
                 Task { @MainActor in
                     estimate = await ContractorLoader.estimate(
                         category: category, searchQuery: query, near: coord,
-                        photoDetails: photoDetails)
+                        photoDetails: photoDetails,
+                        vehicle: allowVehicles ? vehicle : nil)
                 }
             }
         } else {
@@ -522,8 +678,40 @@ struct ContractorListScreen: View {
         }
         isLoading = false
         // Photos are screened lazily per row (see `screenIfNeeded`) so we only pay
-        // for the businesses the user actually scrolls to.
+        // for the businesses the user actually scrolls to. Exception: eagerly
+        // screen the top slice now so "did a similar job" is known for the
+        // visible window and those businesses lead from the first render, not
+        // only once their row happens to scroll into view.
+        eagerlyScreenTopMatches()
         await loadLicenses(for: contractors)
+        await loadLogos(for: contractors)
+    }
+
+    /// Kick off the cheap list-pass screening for the top `eagerScreenDepth`
+    /// businesses (those not already primed from a cached/shared verdict), so
+    /// the similar-job signal that drives promotion is resolved for the
+    /// visible window without waiting on scroll. Reuses `screenIfNeeded`, so
+    /// it shares the same dedupe, cost budget, and verdict caching/sharing as
+    /// lazy screening — no extra Places Photo requests beyond what scrolling
+    /// the first page would have cost anyway, just front-loaded. Non-blocking:
+    /// each promotion lands as its screening completes.
+    @MainActor
+    private func eagerlyScreenTopMatches() {
+        for c in contractors.prefix(eagerScreenDepth) where scannedCount[c.id] == nil {
+            Task { await screenIfNeeded(c) }
+        }
+    }
+
+    /// Resolve hosted logos for businesses we haven't looked up yet. One batched,
+    /// best-effort call; a failure simply leaves those businesses on the monogram
+    /// fallback. Only contractors with a website are sent (the rest can't resolve).
+    @MainActor
+    private func loadLogos(for batch: [Contractor]) async {
+        let unknown = batch.filter { logoByID[$0.id] == nil && $0.website != nil }
+        guard !unknown.isEmpty else { return }
+        let found = await LogoService.fetch(for: unknown)
+        guard !found.isEmpty else { return }
+        logoByID.merge(found) { _, new in new }
     }
 
     /// Look up active contractor licences for businesses we haven't checked yet.
@@ -548,6 +736,7 @@ struct ContractorListScreen: View {
         nextPageToken = nil
         estimate = nil
         licenseByID = [:]
+        logoByID = [:]
         visibleLimit = initialVisibleCount
         await load()
     }
@@ -598,7 +787,8 @@ struct ContractorListScreen: View {
         } else {
             keptPhotos[c.id] = kept
             // Reveal once, ordered so query-matching photos (e.g. the kitchen) lead.
-            screenedByID[c.id] = PhotoFilter.order(kept, query: orderQuery)
+            screenedByID[c.id] = PhotoFilter.order(kept, query: orderQuery,
+                                                   capPremises: stripMaxPremises)
             // Then sharpen the order with rich vision tags in the background.
             enrichInBackground(c.id, kept: kept, scanned: scanned, allowVehicles: allowVehicles)
         }
@@ -636,7 +826,8 @@ struct ContractorListScreen: View {
             // either way mark the verdict enriched so we don't re-tag every visit.
             if enriched != kept {
                 keptPhotos[id] = enriched
-                screenedByID[id] = PhotoFilter.order(enriched, query: orderQuery)
+                screenedByID[id] = PhotoFilter.order(enriched, query: orderQuery,
+                                                     capPremises: stripMaxPremises)
             }
             ScreeningStore.shared.save(id, allowVehicles: allowVehicles, kept: enriched,
                                        scanned: scanned, enriched: true)
@@ -649,6 +840,12 @@ struct ContractorListScreen: View {
 /// How many of the best-matching businesses the list shows before "See more".
 private let initialVisibleCount = 5
 
+/// How far down the ranked list to eagerly screen at load so the similar-job
+/// promotion is settled for the visible window before the user scrolls. A few
+/// beyond `initialVisibleCount` so a match just below the fold can still be
+/// pulled up. Screening below this stays lazy (per-row on reveal).
+private let eagerScreenDepth = 8
+
 /// Screening budget per row: scan `stripBatchScan` source photos at a time,
 /// deeper into the pool only if early shots are rejected, keeping up to
 /// `stripMaxKept` (a few spares beyond the three the mosaic shows, so the
@@ -656,18 +853,24 @@ private let initialVisibleCount = 5
 /// inherits them pre-screened).
 private let stripBatchScan = 4
 private let stripMaxKept = 10
+/// At most one premises/storefront shot in a card's mosaic when the business also
+/// has real work photos — otherwise a shop with few work shots fills the card with
+/// repeated shopfront/signage tiles instead of the actual jobs.
+private let stripMaxPremises = 1
 /// Target number of work photos for the initial fill — a little over the three
 /// the mosaic displays, so a rejected early shot doesn't leave a gap.
 private let stripInitialFill = 4
 
 // ─────────────────────────────────────────────────────────────────────────────
 // MARK: - ContractorListRow
-// One contractor (Figma 793:1779): a name + "Get quote" header row, a rating
-// row, then a fixed 234pt photo mosaic — one large left tile and two stacked
-// right tiles — showing up to 3 of the business's work photos, ordered so the
-// ones most related to the user's request lead. The price estimate lives in the
-// screen header (one per job), not per business. Tapping a photo (or the name)
-// opens the gallery for this contractor.
+// One contractor (Figma 908:2558): a name + "Get quote" header row; then (12pt
+// below) a left-aligned metadata line — a quiet single-star rating, review link,
+// and the "Licensed" / "Did similar job" cues as one inline dot-separated text
+// run (no pills); then a fixed 234pt photo mosaic —
+// one large left tile and two stacked right tiles — showing up to 3 of the
+// business's work photos, ordered so the ones most related to the user's request
+// lead. The price estimate lives in the screen header (one per job), not per
+// business. Tapping a photo (or the name) opens the gallery for this contractor.
 // ─────────────────────────────────────────────────────────────────────────────
 
 private struct ContractorListRow: View {
@@ -675,10 +878,22 @@ private struct ContractorListRow: View {
     /// Screened work photos, or nil while screening is still in flight (the mosaic
     /// then shows gray placeholders so the row's text isn't held back).
     let photos: [String]?
-    /// True only when an ACTIVE contractor licence was found for this business.
-    /// False means "no licence on file" — which includes every business outside
-    /// California — so it must never be rendered as "Unlicensed".
-    let isLicensed: Bool
+    /// The active CSLB licence number, or nil when none is on file — which
+    /// includes every business outside California, so its absence says nothing
+    /// and must never render as "Unlicensed". Non-nil ⇒ show the "Licensed
+    /// #<no>" cue; the number is public record (verifiable on CSLB) and the
+    /// concrete trust signal, versus a bare "Licensed" word.
+    let licenseNo: String?
+    private var isLicensed: Bool { licenseNo != nil }
+    /// True when this business has a screened work photo matching the request —
+    /// draws the "Did similar job" proof-of-work tag. Absence draws no tag (the
+    /// signal is one-directional, like the licence badge).
+    let didSimilarJob: Bool
+    /// A customer review naming the searched job, or nil — shown as a quoted
+    /// one-liner under the metadata so a match reads in the customer's own words.
+    let matchingReview: String?
+    /// Hosted logo URL, or nil to draw a name monogram (see `ContractorLogoView`).
+    let logoURL: URL?
     /// Opens the gallery on this contractor at the given photo index (0 for the
     /// name tap; the mosaic passes the exact tile tapped).
     let onOpen: (Int) -> Void
@@ -699,15 +914,19 @@ private struct ContractorListRow: View {
         // Header block (8pt above the photo mosaic).
         VStack(alignment: .leading, spacing: 8) {
             // ── Name + quote CTA / rating ─────────────────────────────────────
-            VStack(alignment: .leading, spacing: 4) {
+            // Figma 793:1779: 12pt between the name/CTA row and the metadata row.
+            VStack(alignment: .leading, spacing: 12) {
                 HStack(spacing: 12) {
                     Button(action: { onOpen(0) }) {
-                        Text(contractor.name)
-                            .font(.h3)                      // Lato 700 / 18
-                            .foregroundStyle(.white)
-                            .lineLimit(1)
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                            .contentShape(Rectangle())
+                        HStack(spacing: 8) {
+                            ContractorLogoView(name: contractor.name, url: logoURL)
+                            Text(contractor.name)
+                                .font(.h3)                  // Lato 700 / 18
+                                .foregroundStyle(.white)
+                                .lineLimit(1)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                        }
+                        .contentShape(Rectangle())
                     }
                     .buttonStyle(.plain)
 
@@ -718,16 +937,25 @@ private struct ContractorListRow: View {
                             .foregroundStyle(.white)
                             .padding(.horizontal, 16)
                             .frame(height: 32)
-                            .secondaryButtonBackground()
+                            .background(AppColors.btnPrimary, in: Capsule())
                     }
                     .buttonStyle(.plain)
                 }
                 .frame(height: 32)
 
-                HStack(spacing: 8) {
-                    // Stars + rating number are display-only; only "31 reviews"
-                    // is the tappable link to the Google reviews.
-                    ListStarRow(rating: contractor.rating)
+                // Figma 908:2558: metadata is ONE quiet inline line — a small gold
+                // star, then "4.7 • 31 reviews • Licensed • Did similar job", all
+                // bodySmall at 50% white. No pills. Only "31 reviews" is underlined
+                // (the tappable link to the Google reviews). "Licensed" appears only
+                // against a verified ACTIVE state licence (its absence says nothing);
+                // "Did similar job" only when a screened work photo matches the request.
+                HStack(alignment: .center, spacing: 8) {
+                    if contractor.reviewCount > 0 {
+                        Image(systemName: "star.fill")
+                            .resizable()
+                            .frame(width: 12, height: 12)
+                            .foregroundStyle(AppColors.starFilled)
+                    }
                     HStack(spacing: 0) {
                         if contractor.reviewCount > 0 {
                             Text("\(contractor.rating, specifier: "%.1f") • ")
@@ -738,14 +966,36 @@ private struct ContractorListRow: View {
                             }
                             .buttonStyle(.plain)
                         }
-                        // Only ever shown against a verified ACTIVE state licence;
-                        // its absence says nothing, so nothing is drawn.
                         if isLicensed {
                             Text(contractor.reviewCount > 0 ? " • Licensed" : "Licensed")
+                        }
+                        if didSimilarJob {
+                            Text(contractor.reviewCount > 0 || isLicensed
+                                 ? " • Did similar job" : "Did similar job")
                         }
                     }
                     .font(.bodySmall)
                     .foregroundStyle(.white.opacity(0.5))
+                    .lineLimit(1)
+
+                    Spacer(minLength: 0)
+                }
+
+                // The customer's own words about this job — the "why" behind a
+                // review-driven match. One quiet quoted line; tapping opens the
+                // full reviews, same as the "N reviews" link.
+                if let review = matchingReview {
+                    Button(action: onReviews) {
+                        Text("“\(review)”")
+                            .font(.bodySmall)
+                            .italic()
+                            .foregroundStyle(.white.opacity(0.6))
+                            .lineLimit(2)
+                            .multilineTextAlignment(.leading)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
                 }
             }
             .padding(.horizontal, sideInset)
@@ -851,20 +1101,73 @@ private func money(_ v: Int) -> String {
     return hundreds == 0 ? "\(v / 1000)k" : "\(v / 1000).\(hundreds)k"
 }
 
-private struct ListStarRow: View {
-    let rating: Double
-    /// Whole stars only, floored — Figma 765:13844 draws 4 filled for a 4.7, so a
-    /// partial star never rounds up to a full one.
-    private var filled: Int { min(max(Int(rating), 0), 5) }
+/// Rounds to two significant figures so the displayed price reads as an
+/// estimate, not a false-precision quote: 1,512 → 1,500, 873 → 870, 433 → 430.
+/// The engine's cents are for math; the header should never imply that much
+/// certainty.
+private func roundSig2(_ v: Int) -> Int {
+    guard v >= 100 else { return v }
+    let magnitude = Int(pow(10.0, floor(log10(Double(v))) - 1))
+    return Int((Double(v) / Double(magnitude)).rounded()) * magnitude
+}
+
+/// A business's logo when one was resolved (LogoService), otherwise a colored
+/// name monogram — so every row has a stable, recognizable mark and there's
+/// never a blank slot. Hosted logos render on a white chip so dark/transparent
+/// marks stay visible against the app's dark background.
+private struct ContractorLogoView: View {
+    let name: String
+    let url: URL?
+    var size: CGFloat = 32
 
     var body: some View {
-        HStack(spacing: 4) {
-            ForEach(0..<5) { i in
-                Image(systemName: i < filled ? "star.fill" : "star")
-                    .resizable()
-                    .frame(width: 12, height: 12)
-                    .foregroundStyle(i < filled ? AppColors.starFilled : AppColors.starEmpty)
+        Group {
+            if let url {
+                AsyncImage(url: url) { phase in
+                    if case .success(let image) = phase {
+                        // Fill the whole tile edge-to-edge (no inset chip) so the
+                        // mark reads as a solid thumbnail. On a white backing so
+                        // dark/transparent logos still show against the dark UI.
+                        image.resizable().scaledToFill()
+                            .frame(width: size, height: size)
+                            .background(Color.white)
+                            .clipped()
+                    } else {
+                        // Loading or failed → monogram (no spinner flash).
+                        monogram
+                    }
+                }
+            } else {
+                monogram
             }
         }
+        .frame(width: size, height: size)
+        .clipShape(RoundedRectangle(cornerRadius: size * 0.28, style: .continuous))
+    }
+
+    private var monogram: some View {
+        RoundedRectangle(cornerRadius: size * 0.28, style: .continuous)
+            .fill(bgColor)
+            .overlay(
+                Text(initials)
+                    .font(.system(size: size * 0.42, weight: .bold))
+                    .foregroundStyle(.white)
+            )
+    }
+
+    /// First letters of the first two words, e.g. "Bay Area Plumbing" → "BA".
+    private var initials: String {
+        let letters = name.split(separator: " ").prefix(2).compactMap(\.first).map(String.init)
+        let joined = letters.joined().uppercased()
+        return joined.isEmpty ? String(name.prefix(1)).uppercased() : joined
+    }
+
+    /// Deterministic hue from the name so a business keeps the same color across
+    /// launches (djb2 hash → hue).
+    private var bgColor: Color {
+        var hash = 5381
+        for scalar in name.unicodeScalars { hash = (hash &* 33) &+ Int(scalar.value) }
+        let hue = Double(abs(hash) % 360) / 360.0
+        return Color(hue: hue, saturation: 0.5, brightness: 0.65)
     }
 }

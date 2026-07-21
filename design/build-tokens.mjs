@@ -14,7 +14,9 @@ const upper = (s) => s.charAt(0).toUpperCase() + s.slice(1);
 
 // Map a token font family + weight to its iOS PostScript font name.
 const fontFace = (family, weight) => {
-  const w = { "800": "ExtraBold", "700": "Bold", "600": "SemiBold",
+  // Lato's ExtraBold (800) file is named "Heavy" (its PostScript name is
+  // Lato-Heavy), so 800 maps to "Heavy" rather than "ExtraBold".
+  const w = { "800": "Heavy", "700": "Bold", "600": "SemiBold",
               "500": "Medium", "400": "Regular", "300": "Light" }[String(weight)] || "Regular";
   return `${family}-${w}`;
 };

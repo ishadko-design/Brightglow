@@ -35,11 +35,14 @@
   --gray10: rgba(255, 255, 255, 0.1);
   --gray05: rgba(255, 255, 255, 0.05);
   --bg: #131315;
+  /* tokens.json `bgSecondary` — the fill Figma gives stat tiles and inputs. */
+  --bg-secondary: rgba(19, 19, 21, 0.9);
   --surface: #1c1c1f;
   --surface2: #232327;
   --accent: #0039f5;
   --accent-soft: rgba(0, 57, 245, 0.16);
   --gold: #d4a600;
+  --green: #27c840;
   --danger: #ff5a5a;
   --radius: 20px;
   --radius-sm: 12px;
@@ -185,28 +188,47 @@ select { appearance: none; background-image: none; }
 .biz-chip { background: var(--surface); border: 1px solid var(--gray20); border-radius: 999px; padding: 8px 16px; font-size: 13px; cursor: pointer; color: var(--gray70); flex-shrink: 0; white-space: nowrap; }
 .biz-chip.is-active { background: var(--accent-soft); border-color: var(--accent); color: var(--white); }
 
-/* ── stat tiles + readiness ───────────────────────────────
-   Mirrors the app dashboard (BusinessDashboardScreen): two counts, then a
-   readiness nudge that disappears once the page is complete. */
-.stat-tiles { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 16px; }
-.stat-tile {
-  background: var(--gray05); border: 1px solid var(--gray10);
-  border-radius: 28px; padding: 16px; min-height: 132px;
-  display: flex; flex-direction: column; gap: 2px;
+/* ── tabs ─────────────────────────────────────────────────
+   The three peer tabs (Figma 1140:2933). Same construction as the app's
+   SegmentedTabs: a gray05 capsule track, the active segment a gray20 capsule. */
+.tabs {
+  display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px;
+  background: var(--gray05); border-radius: 100px;
+  margin: 0 auto 24px; max-width: 370px;
 }
-.stat-value { font-family: "Lato"; font-weight: 800; font-size: 34px; line-height: 1.15; }
+.tab {
+  font-family: "Lato"; font-weight: 700; font-size: 18px;
+  color: var(--gray50); background: none; border: 0; cursor: pointer;
+  height: 40px; border-radius: 100px; transition: background .18s, color .18s;
+}
+.tab:hover { color: var(--white); }
+.tab.is-active { background: var(--gray20); color: var(--white); }
+
+/* ── stat tiles + readiness ───────────────────────────────
+   Mirrors the app dashboard (BusinessDashboardScreen): Views / Leads /
+   Requests, then a readiness nudge that disappears once the page is complete. */
+.stat-tiles { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin-bottom: 16px; }
+.stat-tile, .readiness {
+  background: var(--bg-secondary); border: 1.5px solid var(--gray20);
+  border-radius: 32px; padding: 16px; min-height: 125px;
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px;
+}
+.stat-label { font-family: "Lato"; font-weight: 700; font-size: 14px; color: var(--gray50); }
+.stat-value { font-family: "Lato"; font-weight: 800; font-size: 24px; line-height: 1.15; }
 /* Gold while someone is waiting on a reply — the app tints this count the same. */
 .stat-value.is-waiting { color: var(--gold); }
-.stat-unit { font-size: 15px; font-weight: 300; color: var(--gray70); }
 
-.readiness {
-  background: var(--gray05); border: 1px solid var(--gray10);
-  border-radius: 28px; padding: 28px 16px; margin-bottom: 20px;
-  display: flex; flex-direction: column; align-items: center; gap: 6px;
+/* The tiles' capsule action. Gray by default, accent for the Requests tile. */
+.tile-btn {
+  font-family: "Lato"; font-weight: 700; font-size: 14px; color: var(--white);
+  background: var(--gray20); border: 0; border-radius: 100px; cursor: pointer;
+  height: 32px; padding: 0 16px; margin-top: 6px;
 }
+.tile-btn.is-primary { background: var(--accent); }
+.tile-btn:hover { filter: brightness(1.15); }
+
+.readiness { margin-bottom: 20px; }
 .readiness-pct { font-family: "Lato"; font-weight: 800; font-size: 24px; }
-.readiness-label { color: var(--gray70); font-size: 15px; }
-.readiness-cta { width: auto; padding: 9px 20px; margin-top: 6px; }
 
 /* ── editor / billing views ──────────────────────────────── */
 /* Settings and Billing are separate views pushed over the dashboard, the way the
@@ -215,7 +237,6 @@ select { appearance: none; background-image: none; }
 .editor-head h1 { font-size: 26px; }
 /* Settings on the dashboard header — the app's gear entry point, labelled and
    sized as a real target rather than a 38px icon puck. */
-.settings-btn { font-size: 14px; padding: 11px 20px; flex-shrink: 0; }
 /* Delete + sign-out sit together at the tail of the editor, as in the app. */
 .account-card { display: flex; flex-direction: column; align-items: flex-start; gap: 12px; }
 

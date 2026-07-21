@@ -120,6 +120,10 @@ struct PriceTier: Codable, Identifiable {
     /// min–max bands, which reflect real material-grade spread. Nil for
     /// sources that don't publish one (mocks, permit-only fallback).
     var typical: Int? = nil
+    /// True when this covers LABOR ONLY — a job outside the pricing catalog,
+    /// where parts/materials are deliberately excluded rather than guessed.
+    /// The UI must label it; an unlabelled labor figure reads as all-in.
+    var laborOnly: Bool = false
 }
 
 /// A single Google review (testimonial) shown on the contractor card.
@@ -152,6 +156,9 @@ struct Contractor: Codable, Identifiable {
     let photos: [String]
     let priceTiers: [PriceTier]
     let phone: String?
+    /// Business website from Google Places (`websiteUri`), used only to resolve a
+    /// hosted logo (see [[LogoService]]); nil when Places has no site on file.
+    var website: String? = nil
     let licenseNumber: String?
     let isVerified: Bool
     /// Real Google reviews (populated on the live path; empty for the snapshot).

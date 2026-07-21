@@ -14,8 +14,8 @@ enum LeadBridgeService {
         case transport(Error)
     }
 
-    /// POSTs a lead (photo + description) to LeadBridge. Returns the
-    /// lead's public_id on success. businessName personalizes the email
+    /// POSTs a lead (description, optionally a photo) to LeadBridge. Returns
+    /// the lead's public_id on success. businessName personalizes the email
     /// greeting when known (e.g. from Places via the browsed Contractor) —
     /// LeadBridge has no other source for a contractor's name.
     static func submitLead(
@@ -23,12 +23,20 @@ enum LeadBridgeService {
         userId: UUID? = nil,
         contractorEmail: String,
         businessName: String? = nil,
+        placeId: String? = nil,
+        website: String? = nil,
         description: String,
         city: String,
-        photo: UIImage
+        photo: UIImage? = nil
     ) async throws -> String {
-        guard let jpegData = photo.jpegData(compressionQuality: 0.85) else {
-            throw SubmitError.encodingFailed
+        // Photo is optional; when there is one, failing to encode it is still
+        // an error rather than a silent text-only send.
+        var jpegData: Data? = nil
+        if let photo {
+            guard let encoded = photo.jpegData(compressionQuality: 0.85) else {
+                throw SubmitError.encodingFailed
+            }
+            jpegData = encoded
         }
 
         let boundary = "Boundary-\(UUID().uuidString)"
@@ -46,14 +54,19 @@ enum LeadBridgeService {
         if let userId { appendField("user_id", userId.uuidString) }
         appendField("contractor_email", contractorEmail)
         if let businessName, !businessName.isEmpty { appendField("business_name", businessName) }
+        // Business identity for the chat logo avatar — best-effort, safe to omit.
+        if let placeId, !placeId.isEmpty { appendField("place_id", placeId) }
+        if let website, !website.isEmpty { appendField("website", website) }
         appendField("description", description)
         appendField("city", city)
 
-        body.append("--\(boundary)\r\n".data(using: .utf8)!)
-        body.append("Content-Disposition: form-data; name=\"photo\"; filename=\"photo.jpg\"\r\n".data(using: .utf8)!)
-        body.append("Content-Type: image/jpeg\r\n\r\n".data(using: .utf8)!)
-        body.append(jpegData)
-        body.append("\r\n".data(using: .utf8)!)
+        if let jpegData {
+            body.append("--\(boundary)\r\n".data(using: .utf8)!)
+            body.append("Content-Disposition: form-data; name=\"photo\"; filename=\"photo.jpg\"\r\n".data(using: .utf8)!)
+            body.append("Content-Type: image/jpeg\r\n\r\n".data(using: .utf8)!)
+            body.append(jpegData)
+            body.append("\r\n".data(using: .utf8)!)
+        }
         body.append("--\(boundary)--\r\n".data(using: .utf8)!)
 
         req.httpBody = body
@@ -126,6 +139,11 @@ enum LeadBridgeService {
         let token = try await supabase.auth.session.accessToken
         var req = URLRequest(url: URL(string: "\(baseURL)/api/attachments/\(id.uuidString)")!)
         req.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        // Always hit the server — never read a cached response. iOS caches a
+        // `410 Gone` (a heuristically-cacheable status) on disk, so a transient
+        // server-side failure would otherwise stick permanently, returning the
+        // stale 410 forever without ever re-contacting the (now-healthy) backend.
+        req.cachePolicy = .reloadIgnoringLocalCacheData
         let (data, response) = try await URLSession.shared.data(for: req)
         guard let http = response as? HTTPURLResponse, (200...299).contains(http.statusCode) else {
             let status = (response as? HTTPURLResponse)?.statusCode ?? -1

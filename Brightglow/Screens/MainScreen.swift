@@ -19,6 +19,7 @@ struct MainScreen: View {
     @StateObject private var camera = CameraViewModel()
     @StateObject private var locationStore = LocationStore()
     @EnvironmentObject private var chatRouter: ChatRouter
+    @EnvironmentObject private var businessStore: BusinessStore
     /// Landing opens compact (just the two vertical tiles); expands to .full when
     /// a vertical is opened so its category grid can scroll.
     @State private var sheetDetent: SheetDetent = .mid
@@ -29,6 +30,10 @@ struct MainScreen: View {
     @State private var selectedVertical: Vertical? = nil
     /// Auto & moto category the user tapped; drives the contractor list.
     @State private var goAuto: AutoCategory? = nil
+    /// Which vehicle side the Auto & moto list should open on — set to `.moto`
+    /// only when the captured photo shows a motorcycle, so results flip to the
+    /// Moto toggle. Nil (grid taps) lets the list default to cars.
+    @State private var autoInitialVehicle: VehicleFilter? = nil
     @State private var submittedQuery = ""
     /// Photo-derived cost-relevant attributes (size, capacity, material) from
     /// the most recent capture, carried to the contractor list to narrow the
@@ -49,6 +54,11 @@ struct MainScreen: View {
     @State private var chatQuickReplies: [String] = []
     @State private var chatActive = false
     @State private var chatLoading = false
+    /// True once the chat has resolved (or was skipped) and results were shown —
+    /// i.e. the conversation on screen is one restored on the way back from the
+    /// list, not a live one. Drives the header's escape hatch: a live chat can be
+    /// skipped to results, a finished one is dismissed to start a fresh search.
+    @State private var chatCompleted = false
     /// Chat outcome. `chatSearchTerms` refines the business search and
     /// `chatPhotoTerms` ranks each business's photos ("did a similar job");
     /// `chatDetails`/`chatPriceable` are the secondary pricing layer.
@@ -64,6 +74,28 @@ struct MainScreen: View {
     /// photographed while answering. Nil for a plain typed search (live camera
     /// stays as the backdrop).
     @State private var clarifyBackdrop: UIImage? = nil
+    /// Whether the clarifying chat has something to show behind it. The backdrop is
+    /// the ONLY thing that ever renders there, so this deliberately ignores
+    /// `attachedImages`/`pickedImages` — a photo picked from the library mid-chat
+    /// becomes a thumbnail above the input bar, not a backdrop, and must not bring
+    /// the live viewfinder back.
+    private var chatHasPhoto: Bool { clarifyBackdrop != nil }
+    /// The camera only earns its power while it's something the user can actually
+    /// see and use. During a picture-less chat it's covered, so shut it down.
+    private var cameraShouldRun: Bool { !(chatActive && !chatHasPhoto) }
+
+    /// Whether a category tap has enough to justify a price. A bare tap tells us
+    /// nothing about the job — "Plumbing" alone spans a $90 unclog and a $6k
+    /// repipe — so any "typical" figure would be invented rather than estimated.
+    /// A photo (and the details read off it) is a real signal; nothing isn't.
+    /// The clarify path doesn't use this: it has `chatPriceable` from the chat.
+    private var categoryPriceable: Bool {
+        photoDetails?.isEmpty == false || !attachedImages.isEmpty
+    }
+    /// The clarifying Q&A of the current search, carried to results and on to the
+    /// quote-request screen so the message a business receives includes the
+    /// AI-clarified details.
+    @State private var clarifyTranscript: ClarifyTranscript = .empty
     @State private var locationQuery = ""
     /// True while the user is editing the location (typing a ZIP) — kept separate
     /// from @FocusState so the "Current location" CTA shows reliably on tap.
@@ -78,6 +110,9 @@ struct MainScreen: View {
     @State private var showProfile = false
     /// Pushes the conversations inbox from the header chat icon.
     @State private var showChat = false
+    /// Pushes the business dashboard — from a lead-email deep link (for an owner)
+    /// or the "For business" row in Profile.
+    @State private var showBusiness = false
     /// Lights the orange dot on the chat icon when a counterparty has sent a
     /// message since the inbox was last opened.
     @State private var hasUnreadChat = false
@@ -106,25 +141,64 @@ struct MainScreen: View {
                 //   midHeight = 126 (tile-bottom inset) + 242 (tile height)
                 //             + 12 (title→grid spacing) + 29 (h2 title line)
                 //             + 4 (grid top pad) + 25 (grab handle) = 438
+                //           + 8 (see below) = 446
+                // The +8 buys clearance at the TOP edge: with the keyboard up the
+                // sheet stays pinned to the screen bottom while the input bar docks
+                // above the keyboard, which left the grab handle sitting flush on the
+                // input pill. A taller sheet lifts the handle clear of it (and, since
+                // the shutter tracks this height, the shutter with it).
                 // Not retractable (only two categories) — this is its only height.
-                let midHeight: CGFloat = 438
+                let midHeight: CGFloat = 446
                 let collapsedHeight: CGFloat = 180
                 let headerInset: CGFloat = 76   // 60pt header (44 + 8/8 padding) + 16pt gap to the sheet
                 // True whenever a text field (search OR the location/ZIP field) has
                 // raised the keyboard — both should dock the input bar to it.
                 let keyboardActive = searchFocused || locationFocused
                 // The landing sheet rests at midHeight but can be dragged down to
-                // collapsed (full camera). The shutter tracks it: 16pt above the
-                // sheet's current resting height — or, when the keyboard is up, above
-                // the input bar (which sits 16pt above the keyboard) with a 24pt gap.
+                // collapsed (full camera).
                 let restingSheetHeight = sheetDetent == .collapsed ? collapsedHeight : midHeight
-                let shutterPad: CGFloat = keyboardActive ? (inputBarHeight + 16 + 24) : (restingSheetHeight + 16)
+                // The shutter's ring is drawn scaled 1.18× outside its 72pt layout
+                // frame, so its visible edge sits ~7pt below the frame the padding
+                // measures. Counted in, or every gap below reads 7pt tighter than
+                // its number — which is why a nominal 24pt gap looked like contact.
+                let shutterRingOverhang: CGFloat = 7
+                // Both the shutter and the input bar ride up with the keyboard, but
+                // the sheet does not — it ignores the keyboard and stays pinned to
+                // the screen bottom, so its top edge drops to (sheetHeight −
+                // keyboardHeight) above the keyboard and collides with the shutter
+                // there. Clear whichever is higher: the input bar (docked 16pt above
+                // the keyboard) or the sheet's own top edge.
+                let sheetTopAboveKeyboard = restingSheetHeight - keyboardHeight
+                let shutterPad: CGFloat = keyboardActive
+                    ? max(inputBarHeight + 16, sheetTopAboveKeyboard) + 24 + shutterRingOverhang
+                    : restingSheetHeight + 16 + shutterRingOverhang
+
+                // Clarifying chat card: compact for a single opening question, but
+                // grows to fill the screen once there's a back-and-forth (a question
+                // has been answered), per the redesign. `chatMessages` is [request,
+                // question, answer, …], so ≥3 means at least one Q&A exchange.
+                let chatExpanded = chatMessages.count >= 3
+                let chatScrollMax: CGFloat = chatExpanded
+                    ? max(240, geo.size.height - geo.safeAreaInsets.top - headerInset - keyboardHeight - 220)
+                    : 240
 
                 ZStack(alignment: .bottom) {
 
                     // ── Full-screen camera (live)
                     CameraScreen(camera: camera)
                         .ignoresSafeArea()
+
+                    // ── Solid backdrop for a picture-less clarifying chat ────────
+                    // A typed request with no photo has nothing to show behind the
+                    // chat, so the live viewfinder is pure noise — it competes with
+                    // the text and keeps the camera (and its in-use dot) powered for
+                    // no reason. Cover it; `cameraShouldRun` also stops the session.
+                    if chatActive && !chatHasPhoto {
+                        AppColors.bg
+                            .ignoresSafeArea()
+                            .transition(.opacity)
+                            .allowsHitTesting(false)
+                    }
 
                     // ── Captured photo, held behind the clarifying chat ──────────
                     // The chat is about THIS photo, so it stays on screen (over the
@@ -185,7 +259,12 @@ struct MainScreen: View {
                                         }
                                         .iconTapTarget()
                                 }
-                                Button(action: { showProfile = true }) {
+                                // Owners land straight in their business dashboard;
+                                // everyone else gets the consumer profile sheet.
+                                Button(action: {
+                                    if businessStore.isOwner { showBusiness = true }
+                                    else { showProfile = true }
+                                }) {
                                     Image(systemName: "person.crop.circle")
                                         .font(.system(size: 24, weight: .regular))
                                         .foregroundStyle(.white)
@@ -202,7 +281,8 @@ struct MainScreen: View {
                     .allowsHitTesting(!searchFocused && !chatActive)
 
                     // ── Shutter button — always shown on the landing chooser (it sits
-                    // 16pt above the fixed categories sheet). When the camera is
+                    // 16pt of clear space above the fixed categories sheet, and above
+                    // both the sheet and the input bar with the keyboard up). When the camera is
                     // authorized it's the capture button; before access is granted it
                     // becomes the dark camera-icon disc that requests permission
                     // (Figma: Main – Before permissions).
@@ -263,6 +343,9 @@ struct MainScreen: View {
                         .animation(.interpolatingSpring(stiffness: 320, damping: 32), value: selectedVertical)
                         .animation(.interpolatingSpring(stiffness: 320, damping: 32), value: sheetDetent)
                         .animation(.easeOut(duration: 0.25), value: searchFocused)
+                        // The keyboard's height now feeds the shutter's clearance, so
+                        // it slides with the keyboard instead of jumping on show/hide.
+                        .animation(.easeOut(duration: 0.25), value: keyboardHeight)
                         .animation(.easeInOut(duration: 0.25), value: camera.isAuthorized)
                         .allowsHitTesting(!searchFocused && !chatActive)
                     }
@@ -371,7 +454,7 @@ struct MainScreen: View {
                     // ── Search / input bar (grows into the clarifying chat card)
                     VStack(spacing: 10) {
                       if chatActive {
-                          chatPanel
+                          chatPanel(scrollMax: chatScrollMax, expanded: chatExpanded)
                               .transition(.move(edge: .bottom).combined(with: .opacity))
                       }
                       // Attached-photo thumbnails — horizontal strip above the field.
@@ -403,7 +486,7 @@ struct MainScreen: View {
                         ) {
                             Image(systemName: "plus.circle")
                                 .font(.system(size: 22))
-                                .foregroundStyle(.white.opacity(0.5))
+                                .foregroundStyle(.white)
                                 .iconTapTarget()
                         }
 
@@ -413,17 +496,30 @@ struct MainScreen: View {
                             .foregroundStyle(.white)
                             .tint(AppColors.accentStart)
                             .focused($searchFocused)
-                            .lineLimit(1...5)
+                            // Grow with the text — a long request can fill most of
+                            // the screen above the keyboard before it starts to
+                            // scroll internally, instead of capping at a few lines.
+                            .lineLimit(1...12)
                             .submitLabel(.search)
                             .onSubmit {
                                 if chatActive { sendChatReply(searchText) } else { startClarify() }
                             }
 
-                        // Trailing: send arrow once there's text. (Voice/mic is
+                        // Trailing send/skip arrow. During the clarifying chat it's
+                        // ALWAYS present so the user can leave for results at any
+                        // point: with an answer typed it sends; empty, it skips
+                        // ahead with what we already know. Outside the chat it
+                        // appears only once there's text to search. (Voice/mic is
                         // hidden until the feature is enabled.)
-                        if !searchText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                        let hasText = !searchText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                        if chatActive || hasText {
                             Button(action: {
-                                if chatActive { sendChatReply(searchText) } else { startClarify() }
+                                if chatActive {
+                                    if hasText { sendChatReply(searchText) }
+                                    else { finishChat(nil) }   // skip → results
+                                } else {
+                                    startClarify()
+                                }
                             }) {
                                 ZStack {
                                     Circle().fill(AppColors.accentGradient)
@@ -434,6 +530,9 @@ struct MainScreen: View {
                                 .frame(width: 36, height: 36)
                             }
                             .frame(width: 44, height: 44)
+                            // Block a double-send while a reply is in flight; skipping
+                            // (empty field) stays available as an escape hatch.
+                            .disabled(chatLoading && hasText)
                         }
                       }
                       .animation(.easeInOut(duration: 0.15), value: searchText.isEmpty)
@@ -441,7 +540,7 @@ struct MainScreen: View {
                     .onChange(of: pickedItems) { _, items in
                         loadPickedImages(items)
                     }
-                    .padding(.horizontal, 16)
+                    .padding(.horizontal, 12)
                     .padding(.vertical, 8)
                     .frame(minHeight: 60)
                     .background {
@@ -460,17 +559,19 @@ struct MainScreen: View {
                     .animation(.easeInOut(duration: 0.25), value: chatActive)
                 }
                 .ignoresSafeArea(.container, edges: .bottom)
-                // Swipe down ANYWHERE on screen dismisses the keyboard —
+                // Swipe DOWN anywhere on screen dismisses the keyboard —
                 // simultaneous, not .gesture, so child recognizers (camera
                 // preview, sheet, chat) can't swallow the drag; the mask
-                // keeps it inert while no keyboard is up.
+                // keeps it inert while no keyboard is up. Only a clearly
+                // vertical-dominant drag counts, so sideways / diagonal swipes
+                // stay free for selecting text inside the input to delete it.
                 .simultaneousGesture(
                     DragGesture(minimumDistance: 20)
                         .onChanged { value in
-                            if value.translation.height > 20 {
-                                searchFocused = false
-                                locationFocused = false
-                            }
+                            let dy = value.translation.height
+                            guard dy > 24, dy > abs(value.translation.width) else { return }
+                            searchFocused = false
+                            locationFocused = false
                         },
                     including: (searchFocused || locationFocused) ? .all : .none
                 )
@@ -489,11 +590,22 @@ struct MainScreen: View {
                 .onChange(of: chatRouter.openInboxRequested) { _, _ in
                     consumePendingChatDeepLink()
                 }
+                // Ownership resolves asynchronously after sign-in; a link that
+                // arrived first is routed once we know which inbox it belongs to.
+                .onChange(of: businessStore.didLoad) { _, _ in
+                    consumePendingChatDeepLink()
+                }
                 // Power the camera down when leaving the landing (drilling into a
                 // category/gallery) so the green in-use dot disappears; onAppear
                 // resumes it on return.
                 .onDisappear {
                     camera.deactivate()
+                }
+                // Power the camera down for a picture-less clarifying chat, and
+                // bring it back the moment it's visible again — the chat ending, or
+                // the user attaching a photo mid-conversation.
+                .onChange(of: cameraShouldRun) { _, run in
+                    if run { camera.activateIfNeeded() } else { camera.deactivate() }
                 }
                 .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillShowNotification)) { notif in
                     if let frame = notif.userInfo?[UIResponder.keyboardFrameEndUserInfoKey] as? CGRect {
@@ -510,10 +622,14 @@ struct MainScreen: View {
                     ContractorListScreen(category: goSwipe?.rawValue ?? "",
                                          presetCoordinate: locationStore.coordinate,
                                          attachedImages: attachedImages,
-                                         photoDetails: photoDetails)
+                                         photoDetails: photoDetails,
+                                         priceable: categoryPriceable)
                 }
                 .navigationDestination(isPresented: $showChat) {
                     ConversationsListScreen()
+                }
+                .navigationDestination(isPresented: $showBusiness) {
+                    BusinessDashboardScreen()
                 }
                 .navigationDestination(isPresented: $goSearch) {
                     // goSearch is reached either from the camera flow (attachedImages
@@ -528,7 +644,8 @@ struct MainScreen: View {
                                          photoDetails: mergedDetails,
                                          businessSearchOverride: chatSearchTerms,
                                          photoMatchTerms: chatPhotoTerms,
-                                         priceable: chatPriceable)
+                                         priceable: chatPriceable,
+                                         clarifyTranscript: clarifyTranscript)
                 }
                 .navigationDestination(isPresented: Binding(
                     get: { goAuto != nil },
@@ -537,19 +654,25 @@ struct MainScreen: View {
                     ContractorListScreen(category: goAuto?.name ?? "",
                                          searchQuery: goAuto?.searchQuery ?? "",
                                          presetCoordinate: locationStore.coordinate,
-                                         attachedImages: attachedImages)
+                                         attachedImages: attachedImages,
+                                         priceable: categoryPriceable,
+                                         initialVehicle: autoInitialVehicle)
                 }
-                // Returning from results: put the submitted query back in the
-                // field so the user's typed input survives the round trip.
+                // Returning from results: restore what the user came in with, so
+                // the round trip costs them nothing. When a clarifying chat ran,
+                // the whole conversation comes back (with its photo backdrop) and
+                // can be continued — answering more re-runs the match. Otherwise
+                // the submitted query goes back in the field.
                 // (Images are never cleared on submit — see startClarify —
                 // so photos and picked thumbnails survive on their own.)
                 .onChange(of: goSearch) { _, active in
-                    if !active && !submittedQuery.isEmpty {
-                        searchText = submittedQuery
+                    guard !active else { return }
+                    if !chatMessages.isEmpty {
+                        withAnimation(.easeInOut(duration: 0.25)) { chatActive = true }
+                    } else {
+                        if !submittedQuery.isEmpty { searchText = submittedQuery }
+                        clarifyBackdrop = nil
                     }
-                    // Release the chat backdrop on the way back — held through the
-                    // push so the chat's fade-out has something to fade.
-                    if !active { clarifyBackdrop = nil }
                 }
                 // Once a location resolves (GPS fix or manual ZIP/city), continue
                 // to the destination the user tapped while it was still missing.
@@ -588,7 +711,20 @@ struct MainScreen: View {
         }
         .preferredColorScheme(.dark)
         .sheet(isPresented: $showProfile) {
-            ProfileScreen()
+            ProfileScreen(onSelectSearch: { query in
+                showProfile = false
+                // Let the sheet dismiss before the clarifying chat opens over the
+                // landing, so the transition doesn't fight the sheet animation.
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
+                    startClarify(query: query)
+                }
+            }, onOpenBusiness: {
+                showProfile = false
+                // Same beat as above: dismiss the sheet, then push the dashboard.
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
+                    showBusiness = true
+                }
+            })
         }
         // ── Draw mode — proper full-screen cover with its own layout + keyboard handling
         .fullScreenCover(isPresented: $camera.showDrawingCanvas) {
@@ -609,10 +745,13 @@ struct MainScreen: View {
                         let detected = camera.detectedMatch
                         let details = camera.detectedDetails
                         // Capture the vehicle guess before `retake()` clears it, so
-                        // the clarify chat knows this is a car/moto and won't ask.
+                        // the clarify chat knows this is a car/moto and won't ask —
+                        // and so the auto list can open on the Moto toggle when the
+                        // photo shows a motorcycle.
+                        let detectedVehicle = camera.detectedVehicle
                         let context = Self.clarifyPhotoContext(
                             match: detected ?? camera.suggestedMatches.first,
-                            vehicle: camera.detectedVehicle, details: details)
+                            vehicle: detectedVehicle, details: details)
                         attachedImages = [resultImage]
                         camera.retake()
                         drawnPaths = []
@@ -628,7 +767,10 @@ struct MainScreen: View {
                             } else {
                                 switch detected {
                                 case .home(let cat): goSwipe = cat
-                                case .auto(let auto): goAuto = auto
+                                case .auto(let auto):
+                                    // Flip the list to Moto when the photo shows one.
+                                    autoInitialVehicle = detectedVehicle
+                                    goAuto = auto
                                 case nil:
                                     submittedQuery = ""
                                     goSearch = true
@@ -740,6 +882,8 @@ struct MainScreen: View {
         let q = (query ?? searchText).trimmingCharacters(in: .whitespacesAndNewlines)
         guard !q.isEmpty else { return }
         submittedQuery = q
+        SearchHistoryStore.record(q)   // profile's search history
+        clarifyTranscript = .empty
         chatDetails = nil
         chatCategory = ""
         chatSearchTerms = ""
@@ -753,9 +897,21 @@ struct MainScreen: View {
         }
         chatMessages = [ChatMessage(role: "user", content: q)]
         chatQuickReplies = []
+        chatCompleted = false
         searchText = ""
         withAnimation(.easeInOut(duration: 0.25)) { chatActive = true }
         advanceChat()
+    }
+
+    /// Scroll the clarify chat to its bottom sentinel so the newest turn stays
+    /// visible while older ones scroll up. Deferred one runloop so a just-appended
+    /// bubble (or the loading indicator) is laid out before we scroll.
+    private func scrollToBottom(_ proxy: ScrollViewProxy) {
+        DispatchQueue.main.async {
+            withAnimation(.easeOut(duration: 0.2)) {
+                proxy.scrollTo("chat-bottom", anchor: .bottom)
+            }
+        }
     }
 
     /// One round trip: send the history, then either show the next question
@@ -790,7 +946,29 @@ struct MainScreen: View {
         guard !reply.isEmpty, !chatLoading else { return }
         chatMessages.append(ChatMessage(role: "user", content: reply))
         searchText = ""
+        // Answering a restored conversation makes it live again — the new answer
+        // re-runs the match rather than reopening the old results.
+        chatCompleted = false
         advanceChat()
+    }
+
+    /// Drop a finished conversation and go back to the plain input pill, so the
+    /// user can start an unrelated search. The only way out of a restored chat
+    /// that isn't "answer more" or "reopen results".
+    private func dismissChat() {
+        chatMessages = []
+        chatQuickReplies = []
+        chatCompleted = false
+        withAnimation(.easeInOut(duration: 0.25)) { chatActive = false }
+        clarifyBackdrop = nil
+        clarifyTranscript = .empty
+        searchText = ""
+        submittedQuery = ""
+        // Closing the clarify chat abandons the request, so the photo(s) that
+        // seeded it shouldn't linger in the input bar — clear both the camera
+        // capture and library picks.
+        attachedImages = []
+        pickedImages = []
     }
 
     /// Finish the chat and open results with whatever the match resolved to. A
@@ -802,7 +980,13 @@ struct MainScreen: View {
         chatSearchTerms = outcome?.searchTerms ?? ""
         chatPhotoTerms = outcome?.photoTerms ?? ""
         chatPriceable = outcome?.priceable ?? true
+        // Snapshot the conversation so the request sent to a business carries the
+        // AI overview, not just the one-line query.
+        clarifyTranscript = ClarifyTranscript(
+            turns: chatMessages.map { ClarifyService.Turn(role: $0.role, content: $0.content) },
+            summary: outcome?.summary ?? "")
         chatQuickReplies = []
+        chatCompleted = true
         withAnimation(.easeInOut(duration: 0.25)) { chatActive = false }
         searchFocused = false
         goSearch = true
@@ -810,17 +994,28 @@ struct MainScreen: View {
 
     /// The chat card the input pill grows into: bubbles, quick-reply chips,
     /// and a Skip escape hatch that proceeds with what we already know.
-    private var chatPanel: some View {
+    private func chatPanel(scrollMax: CGFloat, expanded: Bool) -> some View {
         VStack(alignment: .leading, spacing: 12) {
-            HStack(alignment: .firstTextBaseline) {
-                Text("Quick questions for better estimate")
+            HStack(alignment: .center) {
+                // Deliberately says nothing about the estimate: `priceable` is
+                // only known once the chat ENDS, and it's false for auto/moto and
+                // every uncovered category — where the list shows no price at all.
+                Text("Add details")
                     .font(.h3)
                     .foregroundStyle(.white)
                 Spacer(minLength: 12)
-                Button("Skip") { finishChat(nil) }
-                    .font(.h4)
-                    .foregroundStyle(AppColors.accentStart)
-                    .buttonStyle(.plain)
+                // Close (✕) — ends the search and drops the conversation back to
+                // the plain input pill (Figma node 781:3216 header). Works the same
+                // whether the chat is live or restored from a round trip.
+                Button(action: { dismissChat() }) {
+                    Image(systemName: "xmark")
+                        .font(.system(size: 16, weight: .semibold))
+                        .foregroundStyle(.white)
+                        .frame(width: 44, height: 44)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Close")
             }
             ScrollViewReader { proxy in
                 ScrollView {
@@ -833,19 +1028,30 @@ struct MainScreen: View {
                                 ProgressView().tint(.white).controlSize(.small)
                                 Spacer()
                             }
-                            .id("chat-loading")
                         }
+                        // Stable bottom anchor: always the last element, so scrolling
+                        // to it reliably reveals the newest message even before the
+                        // just-appended bubble has registered its own geometry.
+                        Color.clear.frame(height: 1).id("chat-bottom")
                     }
                 }
-                .frame(maxHeight: 240)
-                .onChange(of: chatMessages) { _, _ in
-                    withAnimation { proxy.scrollTo(chatMessages.last?.id, anchor: .bottom) }
-                }
-                .onChange(of: chatLoading) { _, loading in
-                    if loading { withAnimation { proxy.scrollTo("chat-loading", anchor: .bottom) } }
-                }
+                // Once the conversation is going, the message area fills the whole
+                // available height (top→bottom) instead of hugging its content, so
+                // it's a stable tall region and a new question is never clipped —
+                // it just appends at the bottom (auto-scrolled into view) while
+                // earlier turns scroll up. A single opening question still shows a
+                // compact card (maxHeight only).
+                .frame(minHeight: expanded ? scrollMax : 0, maxHeight: scrollMax)
+                // Keep the newest turn pinned to the bottom as the thread grows.
+                .defaultScrollAnchor(.bottom)
+                .onChange(of: chatMessages) { _, _ in scrollToBottom(proxy) }
+                .onChange(of: chatLoading) { _, _ in scrollToBottom(proxy) }
             }
-            if !chatQuickReplies.isEmpty {
+            // Quick replies. Shown while the chat is live and waiting on an answer
+            // (not loading, not a restored/finished conversation). Skipping ahead
+            // is still available from the input bar's arrow with an empty field —
+            // it proceeds to results with what we already know.
+            if !chatCompleted && !chatLoading {
                 ScrollView(.horizontal, showsIndicators: false) {
                     HStack(spacing: 8) {
                         ForEach(chatQuickReplies, id: \.self) { option in
@@ -946,16 +1152,35 @@ struct MainScreen: View {
     private func navigate(to destination: PendingDestination) {
         switch destination {
         case .home(let category): goSwipe = category
-        case .auto(let auto):     goAuto = auto
+        case .auto(let auto):
+            // A grid-card tap carries no photo, so let the list default to cars.
+            autoInitialVehicle = nil
+            goAuto = auto
         }
     }
 
     /// Open the conversations inbox when a `brightglow://chat` deep link is
     /// pending (set by ChatRouter). Consumes the flag so it fires once.
     private func consumePendingChatDeepLink() {
+        #if DEBUG
+        print("🔗 consumeDeepLink: openInbox=\(chatRouter.openInboxRequested) target=\(chatRouter.targetPublicID ?? "nil") latest=\(chatRouter.openLatestRequested) didLoad=\(businessStore.didLoad) isOwner=\(businessStore.isOwner)")
+        #endif
         guard chatRouter.openInboxRequested else { return }
+        // Wait until ownership is resolved so the link routes correctly on a cold
+        // start (the load is async); `onChange(of: didLoad)` retries once it lands.
+        guard businessStore.didLoad else { return }
         chatRouter.openInboxRequested = false
-        showChat = true
+        #if DEBUG
+        print("🔗 consumeDeepLink → \(businessStore.isOwner ? "business dashboard" : "customer inbox")")
+        #endif
+        // An owner tapping a lead email's "reply in the app" link belongs in their
+        // business dashboard (which opens the targeted request and, on the way
+        // back, nudges them to finish their page). Everyone else → customer inbox.
+        if businessStore.isOwner {
+            showBusiness = true
+        } else {
+            showChat = true
+        }
     }
 
     /// Opens the inbox from the header icon. The dot isn't cleared here — it
@@ -1006,7 +1231,7 @@ struct MainScreen: View {
                 .resizable()
                 .scaledToFill()
                 .frame(width: 56, height: 56)
-                .clipShape(RoundedRectangle(cornerRadius: 12))
+                .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
             Button(action: onRemove) {
                 Image(systemName: "xmark.circle.fill")
                     .font(.system(size: 18))

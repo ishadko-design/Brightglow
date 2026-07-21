@@ -20,8 +20,16 @@ import SwiftUI
 extension View {
     /// For navigation-pushed screens that hide the nav bar. Re-enables the
     /// system left-edge interactive pop gesture.
-    func enableSwipeBack() -> some View {
-        background(SwipeBackInstaller().frame(width: 0, height: 0))
+    ///
+    /// Pass `false` when the same view is also rendered inline (e.g. as a tab),
+    /// where there is nothing to pop and the installer would fight the parent.
+    @ViewBuilder
+    func enableSwipeBack(_ enabled: Bool = true) -> some View {
+        if enabled {
+            background(SwipeBackInstaller().frame(width: 0, height: 0))
+        } else {
+            self
+        }
     }
 
     /// For screens that aren't navigation pushes (modals / full-screen covers /

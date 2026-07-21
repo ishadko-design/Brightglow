@@ -9,7 +9,7 @@ import {
   buildClassifierPool,
   buildSchema,
   buildSystemPrompt,
-  parseJobType,
+  parseClassification,
 } from "./llmClassifier.ts";
 
 Deno.test("buildClassifierPool scopes to the category and includes its general entry", () => {
@@ -46,11 +46,37 @@ Deno.test("buildSchema enum is the pool plus none", () => {
   assert(schema.properties.job_type.enum.includes("none"));
 });
 
-Deno.test("parseJobType accepts pool ids and rejects everything else", () => {
+Deno.test("parseClassification accepts pool ids and rejects everything else", () => {
   const pool = buildClassifierPool(JOB_TYPE_TAXONOMY, CATEGORY_GENERAL, "");
-  assertEquals(parseJobType('{"job_type": "windows_doors.sliding_door"}', pool), "windows_doors.sliding_door");
-  assertEquals(parseJobType('{"job_type": "none"}', pool), null);
-  assertEquals(parseJobType('{"job_type": "made.up"}', pool), null);
-  assertEquals(parseJobType("not json", pool), null);
-  assertEquals(parseJobType(undefined, pool), null);
+  const jt = (t: string | undefined) => parseClassification(t, pool).jobType;
+  assertEquals(jt('{"job_type": "windows_doors.sliding_door", "vehicle": "none"}'), "windows_doors.sliding_door");
+  assertEquals(jt('{"job_type": "none", "vehicle": "none"}'), null);
+  assertEquals(jt('{"job_type": "made.up", "vehicle": "none"}'), null);
+  assertEquals(jt("not json"), null);
+  assertEquals(jt(undefined), null);
+});
+
+Deno.test("parseClassification reads the vehicle, defaulting to null", () => {
+  const pool = buildClassifierPool(JOB_TYPE_TAXONOMY, CATEGORY_GENERAL, "");
+  const v = (t: string) => parseClassification(t, pool).vehicle;
+  assertEquals(v('{"job_type": "auto.tire_replacement", "vehicle": "moto"}'), "moto");
+  assertEquals(v('{"job_type": "auto.tire_replacement", "vehicle": "auto"}'), "auto");
+  // "none" and anything unexpected both mean "the text said nothing".
+  assertEquals(v('{"job_type": "auto.tire_replacement", "vehicle": "none"}'), null);
+  assertEquals(v('{"job_type": "auto.tire_replacement", "vehicle": "truck"}'), null);
+  assertEquals(v('{"job_type": "auto.tire_replacement"}'), null);
+});
+
+Deno.test("buildSchema constrains vehicle to auto/moto/none", () => {
+  const pool = buildClassifierPool(JOB_TYPE_TAXONOMY, CATEGORY_GENERAL, "Tires");
+  const schema = buildSchema(pool) as { properties: { vehicle: { enum: string[] } } };
+  assertEquals(schema.properties.vehicle.enum, ["auto", "moto", "none"]);
+});
+
+Deno.test("buildSystemPrompt tells the model to infer the vehicle from any signal", () => {
+  const prompt = buildSystemPrompt(buildClassifierPool(JOB_TYPE_TAXONOMY, CATEGORY_GENERAL, "Tires"));
+  // The whole point of moving this off a word list: marques and colloquialisms.
+  assert(prompt.includes("Ducati"));
+  assert(prompt.includes("two-wheeler"));
+  assert(prompt.includes("moto"));
 });

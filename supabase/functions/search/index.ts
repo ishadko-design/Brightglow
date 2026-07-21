@@ -31,7 +31,7 @@ const db = SUPA_URL && SERVICE_KEY ? createClient(SUPA_URL, SERVICE_KEY) : null;
 const SEARCH_URL = "https://places.googleapis.com/v1/places:searchText";
 const FIELD_MASK = [
   "places.id", "places.displayName", "places.rating", "places.userRatingCount",
-  "places.formattedAddress", "places.nationalPhoneNumber", "places.photos",
+  "places.formattedAddress", "places.nationalPhoneNumber", "places.websiteUri", "places.photos",
   "places.businessStatus", "places.reviews", "places.location", "places.types", "nextPageToken",
 ].join(",");
 const RADIUS_M = 40000;

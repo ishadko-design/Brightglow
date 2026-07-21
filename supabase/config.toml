@@ -16,6 +16,18 @@ verify_jwt = false
 [functions.pricing]
 verify_jwt = false
 
+# Free website-photo enrichment: reads a business's own site for work photos,
+# public like the rest of the pipeline, gated in-code by APP_TOKEN. Caches per
+# place_id so the external fetch runs once per business, not per gallery-open.
+[functions.business-photos]
+verify_jwt = false
+
+# Contractor logo resolver: public like the rest of the enrichment pipeline,
+# gated in-code by APP_TOKEN. Resolves once per business, hosts in the public
+# `business-logos` bucket.
+[functions.logos]
+verify_jwt = false
+
 # Account deletion must be authenticated: verify_jwt rejects unauthenticated
 # calls, and the function additionally requires a real user (not the anon key).
 [functions.delete-account]

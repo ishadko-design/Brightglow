@@ -39,6 +39,10 @@ enum ClarifyService {
         let searchTerms: String
         let photoTerms: String
         let details: String
+        /// Plain-English overview of the job for the business to read — the AI's
+        /// prose combination of the request and the confirmed answers. Empty when
+        /// the chat couldn't describe the request (or an older payload lacks it).
+        let summary: String
         let priceable: Bool
     }
 
@@ -79,7 +83,12 @@ enum ClarifyService {
                 searchTerms: decoded.search_terms ?? "",
                 photoTerms: decoded.photo_terms ?? "",
                 details: decoded.details ?? "",
-                priceable: decoded.priceable ?? (vertical == "home")
+                summary: decoded.summary ?? "",
+                // Both verticals are priced now: the cost catalog gained the
+                // five Auto & moto categories 2026-07-20. This used to default
+                // auto to false, which was the second of two gates keeping
+                // "coming soon" on every auto result.
+                priceable: decoded.priceable ?? true
             ))
         }
         return nil
@@ -94,6 +103,7 @@ enum ClarifyService {
         let search_terms: String?
         let photo_terms: String?
         let details: String?
+        let summary: String?
         let priceable: Bool?
     }
 }

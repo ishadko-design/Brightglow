@@ -12,9 +12,9 @@ private struct SheetScrollKey: PreferenceKey {
 // MARK: - ContractorGalleryScreen
 //
 // New layout (Figma node 364-800 "Open category - contractor"):
-//   • One contractor at a time — no card stack, no swipe. Navigation between
-//     contractors is via the pinned Skip / Request quote buttons only, which are
-//     the same size.
+//   • One contractor at a time — no card stack, no swipe. The pinned footer is
+//     Call / Request quote (equal sizes); browsing between businesses happens
+//     back in the list view.
 //   • A full-width photo that is NOT full-screen: it ends ~40pt behind the bottom
 //     sheet's lowest (collapsed) position so it never peeks past the rounded
 //     corners.
@@ -52,6 +52,16 @@ struct ContractorGalleryScreen: View {
     /// Photos the user attached before arriving here — carried to the
     /// quote-request screen.
     var attachedImages: [UIImage] = []
+    /// When opened from the list's "N reviews" link, the sheet starts expanded so
+    /// the reviews are visible immediately (instead of the default collapsed peek).
+    var startReviewsExpanded: Bool = false
+    /// The chat's `photo_terms` (a matching work-photo descriptor), carried from
+    /// the list so review ordering here matches the list's — the review quoted on
+    /// the list card must lead the reviews sheet, not a different one.
+    var photoMatchTerms: String = ""
+    /// The landing clarifying Q&A, carried through to the quote-request screen so
+    /// the message a business receives includes the AI-clarified details.
+    var clarifyTranscript: ClarifyTranscript = .empty
 
     @Environment(\.dismiss) var dismiss
     @Environment(\.openURL) private var openURL
@@ -64,6 +74,8 @@ struct ContractorGalleryScreen: View {
 
     @State private var sheetDetent: SheetDetent = .collapsed
     @State private var sheetScrolledToTop = true
+    /// The "mention Brightglow" reminder shown before dialing the business.
+    @State private var showCallReminder = false
     /// Screened work-photo URLs per contractor id. nil = not yet screened
     /// (show loading); [] = no work photos (show placeholder). Populated ahead of
     /// time so a newly-surfaced contractor doesn't stall on the screen.
@@ -72,8 +84,23 @@ struct ContractorGalleryScreen: View {
     @State private var nextPageToken: String? = nil
     @State private var pagingCoord: CLLocationCoordinate2D? = nil
     @State private var isLoadingMore = false
+    /// Businesses whose own-website photos have already been fetched this session,
+    /// so a re-surface doesn't call the enrichment function again.
+    @State private var websiteFetched: Set<String> = []
 
     private var topContractor: Contractor? { contractors.last }
+
+    /// place_ids already counted this session. Swiping back and forth through the
+    /// stack shouldn't inflate a business's view count — one look is one view.
+    @State private var recordedViews: Set<String> = []
+
+    /// Fire-and-forget so the swipe never waits on the network. `contractor.id` is
+    /// the Places place_id (same key the lead carries — see QuoteRequestScreen).
+    private func recordView(placeId: String) {
+        guard !recordedViews.contains(placeId) else { return }
+        recordedViews.insert(placeId)
+        Task { await BusinessService.recordView(placeId: placeId) }
+    }
 
     private var headerTitle: String {
         let q = searchQuery.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -150,7 +177,7 @@ struct ContractorGalleryScreen: View {
                         sheetBody(for: contractor, bottomInset: bottomInset)
                     }
 
-                    // ── Pinned Skip / Request quote — equal sizes ─────────────
+                    // ── Pinned Call / Request quote — equal sizes ─────────────
                     VStack(spacing: 0) {
                         Spacer(minLength: 0)
                         ctaFooter(width: proxy.size.width, bottomInset: bottomInset)
@@ -178,6 +205,8 @@ struct ContractorGalleryScreen: View {
         .toolbar(.hidden, for: .navigationBar)
         .enableSwipeBack()
         .task {
+            // Opened via a reviews link → surface the reviews sheet expanded.
+            if startReviewsExpanded { sheetDetent = .full }
             await loadContractors()
             totalCount = contractors.count
         }
@@ -186,10 +215,21 @@ struct ContractorGalleryScreen: View {
         .task(id: topContractor?.id) { await prefetchUpcoming() }
         // Keep the List view's restore target in step with the contractor on top.
         .onChange(of: topContractor?.id, initial: true) { _, id in
-            if let id { lastViewedID?.wrappedValue = id }
+            if let id {
+                lastViewedID?.wrappedValue = id
+                recordView(placeId: id)
+            }
         }
         .navigationDestination(isPresented: $showQuote) {
-            QuoteRequestScreen(contractor: selectedContractor, requestSummary: typedQuery, initialImages: attachedImages)
+            QuoteRequestScreen(contractor: selectedContractor, requestSummary: typedQuery, initialImages: attachedImages, clarifyTranscript: clarifyTranscript)
+        }
+        .sheet(isPresented: $showCallReminder) {
+            if let contractor = topContractor {
+                CallReminderSheet(contractor: contractor) {
+                    showCallReminder = false
+                    call(contractor)
+                }
+            }
         }
     }
 
@@ -205,9 +245,14 @@ struct ContractorGalleryScreen: View {
                         .padding(.top, 4)
                 } else {
                     ForEach(Array(orderedReviews(for: contractor).prefix(5))) { ReviewRowGallery(review: $0) }
+                    // End of the in-app reviews → link out to the full set on Google.
+                    if contractor.reviewCount > 0 {
+                        allReviewsLink(for: contractor)
+                    }
                 }
-                // Clear the pinned CTAs at the bottom.
-                Color.clear.frame(height: 48 + 32 + bottomInset)
+                // Clear the pinned CTAs at the bottom — at least 160pt so the last
+                // row (e.g. the "All reviews" link) is never hidden behind them.
+                Color.clear.frame(height: 160 + bottomInset)
             }
             .padding(.horizontal, 24)
             .padding(.top, 8)
@@ -224,35 +269,24 @@ struct ContractorGalleryScreen: View {
         }
     }
 
-    /// Reviews ordered so those mentioning the user's query lead — e.g. searching
-    /// "vanity cabinet" surfaces reviews about that first, "bmw engine" surfaces
-    /// engine ones. Stable for ties; falls back to original order when the query
-    /// has no meaningful terms (e.g. a plain category browse).
+    /// Reviews ordered so the one describing the searched job leads — e.g.
+    /// searching "vanity cabinet" surfaces reviews about that first. Uses the
+    /// exact same `PhotoFilter` subject-term ordering the list card uses, so the
+    /// review quoted on the card is the one pinned to the top here. Falls back to
+    /// original order when the query has no subject term (a plain category browse).
     private func orderedReviews(for contractor: Contractor) -> [Review] {
-        let terms = reviewQueryTerms
-        guard !terms.isEmpty else { return contractor.reviews }
-        return contractor.reviews.enumerated()
-            .sorted { a, b in
-                let sa = reviewMatchScore(a.element, terms)
-                let sb = reviewMatchScore(b.element, terms)
-                return sa != sb ? sa > sb : a.offset < b.offset
-            }
-            .map(\.element)
+        PhotoFilter.orderReviewsByJob(contractor.reviews, query: reviewMatchQuery,
+                                      text: { $0.text })
     }
 
-    private var reviewQueryTerms: [String] {
-        let stop: Set<String> = ["the", "and", "for", "near", "with", "contractor",
-                                 "contractors", "shop", "service", "services"]
+    /// The query that decides review relevance — the chat's `photo_terms` when
+    /// present (mirrors the list's `matchQuery`), else the search query, else the
+    /// category. Keeps the sheet's lead review aligned with the list card's quote.
+    private var reviewMatchQuery: String {
+        let terms = photoMatchTerms.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !terms.isEmpty { return terms }
         let q = searchQuery.trimmingCharacters(in: .whitespacesAndNewlines)
-        let source = q.isEmpty ? category : q
-        return source.lowercased()
-            .split { !$0.isLetter }.map(String.init)
-            .filter { $0.count >= 3 && !stop.contains($0) }
-    }
-
-    private func reviewMatchScore(_ r: Review, _ terms: [String]) -> Int {
-        let text = (r.text + " " + (r.originalText ?? "")).lowercased()
-        return terms.reduce(0) { $0 + (text.contains($1) ? 1 : 0) }
+        return q.isEmpty ? category : q
     }
 
     // "Reviews" section title (enlarged) with the rating summary on the right —
@@ -264,28 +298,42 @@ struct ContractorGalleryScreen: View {
                 .foregroundStyle(.white)
             Spacer(minLength: 0)
             if contractor.reviewCount > 0 {
-                // Stars + rating number are display-only; "31 reviews" (count +
-                // word, both underlined) is the link (with a ≥44pt-tall tap box
-                // to avoid accidental taps).
-                HStack(spacing: 8) {
-                    StarRow(rating: contractor.rating)
-                    Text("\(contractor.rating, specifier: "%.1f") •")
+                // A single star icon + the aggregate rating and count — the full
+                // five-star row was redundant here; the link out to Google's full
+                // review set lives at the END of the sheet (see `allReviewsLink`).
+                HStack(spacing: 6) {
+                    Image(systemName: "star.fill")
+                        .resizable()
+                        .frame(width: 14, height: 14)
+                        .foregroundStyle(AppColors.starFilled)
+                    Text("\(contractor.rating, specifier: "%.1f") • \(contractor.reviewCount) reviews")
                         .font(.bodySmall)
                         .foregroundStyle(.white.opacity(0.5))
-                    Button {
-                        if let url = googleReviewsURL(for: contractor) { openURL(url) }
-                    } label: {
-                        Text("\(contractor.reviewCount) reviews")
-                            .font(.bodySmall)
-                            .foregroundStyle(.white.opacity(0.5))
-                            .underline()
-                            .frame(minHeight: 44)
-                            .contentShape(Rectangle())
-                    }
-                    .buttonStyle(.plain)
                 }
             }
         }
+    }
+
+    // "All reviews" — the link to the contractor's full Google review set, shown
+    // once the user has scrolled past the in-app reviews at the bottom of the sheet.
+    private func allReviewsLink(for contractor: Contractor) -> some View {
+        Button {
+            if let url = googleReviewsURL(for: contractor) { openURL(url) }
+        } label: {
+            HStack(spacing: 6) {
+                Text("All reviews")
+                    .font(.h4)
+                    .foregroundStyle(.white)
+                Image(systemName: "arrow.up.right")
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(.white)
+            }
+            .frame(maxWidth: .infinity)
+            .frame(height: 48)
+            .secondaryButtonBackground()
+        }
+        .buttonStyle(.plain)
+        .padding(.top, 4)
     }
 
     /// Deep link to the contractor's Google reviews. `id` is the Google place id
@@ -294,15 +342,19 @@ struct ContractorGalleryScreen: View {
         URL(string: "https://search.google.com/local/reviews?placeid=\(contractor.id)")
     }
 
-    // Pinned Skip / Request quote — equal-width buttons on a fading floor
+    // Pinned Call / Request quote — equal-width buttons on a fading floor
     // (Figma "CTAs": two 48pt-tall buttons, radius 32, 8pt gap).
     private func ctaFooter(width: CGFloat, bottomInset: CGFloat) -> some View {
         // Exact equal widths from the known screen width — no reliance on the
         // parent's width proposal (which has overflowed past the screen edges).
         let buttonWidth = max(0, (width - 32 - 8) / 2)
+        let hasPhone = topContractor?.phone != nil
         return HStack(spacing: 8) {
-            Button(action: skipTop) {
-                Text("Next")
+            // Call replaces the old "Next": tapping shows a reminder to mention
+            // the app, then hands off to the dialer. Dimmed when Places returned
+            // no phone number for this business.
+            Button(action: { showCallReminder = true }) {
+                Text("Call")
                     .font(.h3)
                     .foregroundStyle(.white)
                     .frame(width: buttonWidth, height: 48)
@@ -313,8 +365,10 @@ struct ContractorGalleryScreen: View {
                         }
                     }
                     .clipShape(RoundedRectangle(cornerRadius: 32, style: .continuous))
+                    .opacity(hasPhone ? 1 : 0.4)
             }
             .buttonStyle(.plain)
+            .disabled(!hasPhone)
 
             Button(action: quoteTop) {
                 Text("Request quote")
@@ -395,10 +449,16 @@ struct ContractorGalleryScreen: View {
     // animated the *entire* view tree (header, sheet, footer) on every change,
     // which is what made everything jump. The sheet collapse animates on its own
     // (BottomSheet animates its detent internally); the photo swap is instant.
-    private func skipTop() {
-        sheetDetent = .collapsed
-        if !contractors.isEmpty { contractors.removeLast() }
-        loadMoreIfNeeded()
+
+    /// Hands off to the system dialer with the business's number pre-filled (the
+    /// OS shows its own call confirmation — we never place the call ourselves).
+    private func call(_ contractor: Contractor) {
+        guard let phone = contractor.phone else { return }
+        // Places returns a display-formatted number ("(415) 555-0132"); tel: URLs
+        // only accept digits and a leading +.
+        let dialable = phone.filter { $0.isNumber || $0 == "+" }
+        guard !dialable.isEmpty, let url = URL(string: "tel:\(dialable)") else { return }
+        openURL(url)
     }
 
     private func quoteTop() {
@@ -462,7 +522,7 @@ struct ContractorGalleryScreen: View {
             }
             // Persisted verdict from a previous launch — reuse, no download.
             if let v = ScreeningStore.shared.get(contractor.id, allowVehicles: allowVehicles) {
-                let ordered = PhotoFilter.order(v.kept, query: orderQuery)
+                let ordered = PhotoFilter.order(v.kept, query: orderQuery, capPremises: galleryPremisesCap)
                 screenedByID[contractor.id] = ordered
                 if ordered.isEmpty {
                     contractors.removeAll { $0.id == contractor.id }
@@ -481,7 +541,7 @@ struct ContractorGalleryScreen: View {
             if let v = await VerdictService.fetch(ids: [contractor.id], allowVehicles: allowVehicles)[contractor.id] {
                 ScreeningStore.shared.save(contractor.id, allowVehicles: allowVehicles,
                                            kept: v.kept, scanned: v.scanned, enriched: v.enriched)
-                let ordered = PhotoFilter.order(v.kept, query: orderQuery)
+                let ordered = PhotoFilter.order(v.kept, query: orderQuery, capPremises: galleryPremisesCap)
                 screenedByID[contractor.id] = ordered
                 if ordered.isEmpty {
                     contractors.removeAll { $0.id == contractor.id }
@@ -502,7 +562,7 @@ struct ContractorGalleryScreen: View {
             let scanned = min(galleryScanLimit, contractor.photos.count)
             ScreeningStore.shared.save(contractor.id, allowVehicles: allowVehicles, kept: kept, scanned: scanned)
             VerdictService.upload(id: contractor.id, allowVehicles: allowVehicles, kept: kept, scanned: scanned)
-            let ordered = PhotoFilter.order(kept, query: orderQuery)
+            let ordered = PhotoFilter.order(kept, query: orderQuery, capPremises: galleryPremisesCap)
             guard !ordered.isEmpty else {
                 // No usable work photos → drop the business entirely rather than
                 // showing an empty placeholder. Keep totalCount in step so the
@@ -524,8 +584,93 @@ struct ContractorGalleryScreen: View {
             // fresh here); the photo is already showing on the on-device ordering.
             enrichInBackground(contractor.id, kept: kept, scanned: scanned, allowVehicles: allowVehicles)
         }
+        // Surface a fuller set of work photos for the business now on top:
+        // deepen the Places pool, then lead with the business's own website photos.
+        if let top = topContractor {
+            await deepenPhotos(for: top)
+            await mergeWebsitePhotos(for: top)
+        }
         // Dropping no-photo businesses can thin the stack — top up if we can.
         loadMoreIfNeeded()
+    }
+
+    /// Merge the business's OWN website photos (free, zero-consent enrichment via
+    /// the `business-photos` function) ahead of the Places pool. These are NOT
+    /// trusted blindly — a site's hero image is very often a logo, a cartoon van
+    /// wrap, or the storefront — so they run through the SAME on-device work-photo
+    /// screening as Places (which rejects logos/signage/vehicles/people/text-heavy
+    /// shots) and the same premises cap. Only genuine work photos survive to lead
+    /// the gallery. One call per business per session (the function caches across
+    /// users, so the external website fetch happens once per business overall).
+    @MainActor
+    private func mergeWebsitePhotos(for contractor: Contractor) async {
+        guard !websiteFetched.contains(contractor.id) else { return }
+        websiteFetched.insert(contractor.id)
+        let urls = await BusinessPhotoService.fetch(placeId: contractor.id, website: contractor.website)
+        guard !urls.isEmpty, contractors.contains(where: { $0.id == contractor.id }) else { return }
+        // Screen them the same way as Places photos, so clipart/logos/storefronts
+        // from the site get rejected instead of leading the gallery.
+        let allowVehicles = isAutoService(category: category, searchQuery: searchQuery)
+        let screened = await PhotoFilter.screen(urls, allowVehicles: allowVehicles,
+                                                limit: urls.count, scanLimit: urls.count)
+        let website = PhotoFilter.order(screened, query: orderQuery, capPremises: galleryPremisesCap)
+        guard !website.isEmpty, contractors.contains(where: { $0.id == contractor.id }) else { return }
+        let existing = screenedByID[contractor.id] ?? []
+        let have = Set(existing)
+        let fresh = website.filter { !have.contains($0) }
+        guard !fresh.isEmpty else { return }
+        // Business's own (screened) work photos first, then the Places work photos.
+        screenedByID[contractor.id] = fresh + existing
+        // Warm the first one so the swap to a website work photo is instant.
+        if let first = fresh.first, let u = URL(string: first) {
+            await ImageCache.shared.prefetch(u)
+        }
+    }
+
+    /// Surface a fuller set of work photos for the business on top. The list only
+    /// screens a few per business (its mosaic needs three), so a hand-off arrives
+    /// thin. Here — where the user actually browses — we screen the REST of this
+    /// business's own pool (only the one being viewed, so photo downloads stay
+    /// bounded) so every genuine work photo the filter accepts surfaces, up to
+    /// `galleryMaxKept`. We deliberately do NOT pad to a count with unscreened
+    /// photos: a business with only 4 real work shots shows 4, never 4 + a run of
+    /// storefronts/logos/office exteriors. Premises shots are additionally capped
+    /// in the ordering so a legit exterior appears at most once.
+    @MainActor
+    private func deepenPhotos(for contractor: Contractor) async {
+        let current = screenedByID[contractor.id] ?? []
+        guard current.count < galleryMinPhotos,
+              current.count < contractor.photos.count else { return }
+        let allowVehicles = isAutoService(category: category, searchQuery: searchQuery)
+        // How far the pool has already been scanned (persisted by the list
+        // hand-off or an earlier gallery pass).
+        let verdict = ScreeningStore.shared.get(contractor.id, allowVehicles: allowVehicles)
+        var kept = verdict?.kept ?? []
+        let scanned = verdict?.scanned ?? kept.count
+
+        // 1. Screen whatever's left of the pool, so ranking sees every work photo.
+        if scanned < contractor.photos.count {
+            let remaining = Array(contractor.photos.dropFirst(scanned))
+            let more = await PhotoFilter.screen(remaining, allowVehicles: allowVehicles,
+                                                limit: galleryMaxKept, scanLimit: remaining.count)
+            // The stack may have changed (paged past, Auto⇄Moto) while scanning.
+            guard contractors.contains(where: { $0.id == contractor.id }) else { return }
+            kept = Array((kept + more).prefix(galleryMaxKept))
+            let newScanned = contractor.photos.count
+            ScreeningStore.shared.save(contractor.id, allowVehicles: allowVehicles,
+                                       kept: kept, scanned: newScanned,
+                                       enriched: verdict?.enriched ?? false)
+            VerdictService.upload(id: contractor.id, allowVehicles: allowVehicles,
+                                  kept: kept, scanned: newScanned, enriched: verdict?.enriched ?? false)
+        }
+
+        // 2. Show only screened work photos, query-ranked, with premises
+        // (storefront/office/house-exterior) shots capped so they can't fill the
+        // strip. No padding with unscreened photos — quality over hitting a count,
+        // so a business with only 4 real work photos shows 4, not 4 + 6 storefronts.
+        let ordered = PhotoFilter.order(kept, query: orderQuery, capPremises: galleryPremisesCap)
+        guard contractors.contains(where: { $0.id == contractor.id }) else { return }
+        if !ordered.isEmpty { screenedByID[contractor.id] = ordered }
     }
 
     /// Ask the vision model for rich, query-independent tags for a freshly-screened
@@ -542,7 +687,7 @@ struct ContractorGalleryScreen: View {
             // Re-order only when the tags changed the labels; either way mark the
             // verdict enriched so it isn't re-tagged on every visit.
             if enriched != kept {
-                screenedByID[id] = PhotoFilter.order(enriched, query: orderQuery)
+                screenedByID[id] = PhotoFilter.order(enriched, query: orderQuery, capPremises: galleryPremisesCap)
             }
             ScreeningStore.shared.save(id, allowVehicles: allowVehicles, kept: enriched,
                                        scanned: scanned, enriched: true)
@@ -592,10 +737,19 @@ struct ContractorGalleryScreen: View {
 }
 
 /// Screening budget for contractors that reach the gallery via pagination (the
-/// rest reuse the list's screening). Scan a capped slice of the pool and keep a
-/// few work photos, instead of downloading all ~10 to classify.
-private let galleryMaxKept = 6
-private let galleryScanLimit = 8
+/// rest reuse the list's screening). The gallery is where the user browses work,
+/// so it keeps a fuller set than the list mosaic does.
+private let galleryMaxKept = 12
+private let galleryScanLimit = 10
+/// Target number of work photos to surface for the business being viewed. The
+/// list only screens a few per business; `deepenPhotos` tops the viewed one up
+/// to this by screening the rest of its own pool.
+private let galleryMinPhotos = 10
+/// Max premises shots (storefront / office / house exterior) the gallery keeps
+/// once a business also has real work photos — so a business's building/signage
+/// can appear at most this many times instead of filling the strip. Slightly
+/// looser than the list's cap of 1, since browsing the gallery has more room.
+private let galleryPremisesCap = 2
 
 // ─────────────────────────────────────────────────────────────────────────────
 // MARK: - GalleryPhotoView
@@ -788,8 +942,13 @@ private struct PhotoZoomViewer: View {
     @GestureState private var pinch: CGFloat = 1
     @State private var offset: CGSize = .zero
     @State private var lastOffset: CGSize = .zero
+    /// Live downward drag for pull-to-dismiss (only when not zoomed in).
+    @State private var dismissOffset: CGFloat = 0
 
     private let maxScale: CGFloat = 4
+    /// How far into the dismiss pull we are, 0…1 — fades the backdrop and shrinks
+    /// the photo so the gesture reads as "letting go closes it".
+    private var dismissProgress: CGFloat { min(max(dismissOffset, 0) / 240, 1) }
 
     init(photos: [String], initialIndex: Int,
          onClose: @escaping () -> Void,
@@ -806,12 +965,15 @@ private struct PhotoZoomViewer: View {
 
     var body: some View {
         ZStack(alignment: .topLeading) {
-            Color.black.ignoresSafeArea()
+            // Backdrop fades as the photo is pulled down, revealing the gallery
+            // beneath and signalling the pending dismiss.
+            Color.black.opacity(1 - dismissProgress * 0.6).ignoresSafeArea()
 
-            PlacesImage(url: url) { Color.black }
+            PlacesImage(url: url) { Color.clear }
                 .scaledToFit()
-                .scaleEffect(scale * pinch)
-                .offset(offset)
+                // The dismiss pull shrinks the photo slightly (only when not zoomed).
+                .scaleEffect(scale * pinch * (scale <= 1 ? 1 - dismissProgress * 0.15 : 1))
+                .offset(x: offset.width, y: offset.height + dismissOffset)
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .ignoresSafeArea()
                 .id(index)
@@ -830,16 +992,31 @@ private struct PhotoZoomViewer: View {
                 .simultaneousGesture(
                     DragGesture()
                         .onChanged { v in
-                            guard scale > 1 else { return }   // pan only when zoomed in
-                            offset = CGSize(width: lastOffset.width + v.translation.width,
-                                            height: lastOffset.height + v.translation.height)
+                            if scale > 1 {
+                                offset = CGSize(width: lastOffset.width + v.translation.width,
+                                                height: lastOffset.height + v.translation.height)
+                            } else if v.translation.height > 0,
+                                      abs(v.translation.height) > abs(v.translation.width) {
+                                // Not zoomed + downward-dominant → live pull-to-dismiss.
+                                dismissOffset = v.translation.height
+                            }
                         }
                         .onEnded { v in
                             if scale > 1 { lastOffset = offset; return }
-                            // Not zoomed → a horizontal-dominant swipe pages,
-                            // same thresholds as the gallery's swipe.
-                            guard abs(v.translation.width) > abs(v.translation.height),
-                                  abs(v.translation.width) > 40 else { return }
+                            let horizontal = abs(v.translation.width) > abs(v.translation.height)
+                            if !horizontal {
+                                // Vertical drag: a far-enough pull or a downward flick
+                                // dismisses; otherwise the photo springs back.
+                                if v.translation.height > 120 || v.predictedEndTranslation.height > 320 {
+                                    onClose()
+                                } else {
+                                    withAnimation(.easeOut(duration: 0.2)) { dismissOffset = 0 }
+                                }
+                                return
+                            }
+                            // Horizontal-dominant swipe pages, same threshold as the gallery.
+                            withAnimation(.easeOut(duration: 0.2)) { dismissOffset = 0 }
+                            guard abs(v.translation.width) > 40 else { return }
                             page(v.translation.width < 0 ? 1 : -1)   // swipe left → next
                         }
                 )
@@ -875,6 +1052,7 @@ private struct PhotoZoomViewer: View {
             scale = 1
             offset = .zero
             lastOffset = .zero
+            dismissOffset = 0
         }
         onIndexChange(index)
     }
@@ -916,6 +1094,55 @@ private struct GalleryHeader: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .contentShape(Rectangle())
         .background(alignment: .top) { BlurredHeaderBackground() }
+    }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// MARK: - CallReminderSheet
+// Bottom sheet shown before dialing: a nudge to say the request came from
+// Brightglow, with a single primary Call action. The actual call is never placed
+// here — Call hands off to the system dialer, which shows its own confirmation
+// with the number pre-filled.
+// ─────────────────────────────────────────────────────────────────────────────
+
+private struct CallReminderSheet: View {
+    let contractor: Contractor
+    /// Fired by the Call button — the screen dismisses this sheet and dials.
+    let onCall: () -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            Text("Before you call")
+                .font(.h2)
+                .foregroundStyle(.white)
+
+            Text("When they pick up, mention you found them on Brightglow — so \(contractor.name) knows your request came from the app.")
+                .font(.bodySmall)
+                .foregroundStyle(.white.opacity(0.5))
+                .lineSpacing(4)
+                .fixedSize(horizontal: false, vertical: true)
+                .padding(.top, 12)
+
+            Button(action: onCall) {
+                Text("Call")
+                    .font(.h3)
+                    .foregroundStyle(.white)
+                    .frame(maxWidth: .infinity)
+                    .frame(height: 48)
+                    .background(AppColors.btnPrimary,
+                                in: RoundedRectangle(cornerRadius: 32, style: .continuous))
+            }
+            .buttonStyle(.plain)
+            .padding(.top, 24)
+
+            Spacer(minLength: 0)
+        }
+        .padding(.horizontal, 24)
+        .padding(.top, 24)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .presentationDetents([.height(236)])
+        .presentationDragIndicator(.visible)
+        .presentationBackground(AppColors.bg)
     }
 }
 

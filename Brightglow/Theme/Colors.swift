@@ -1,9 +1,9 @@
 import SwiftUI
 
-// Semantic layer over the 8-color palette in design/tokens.json (Figma source of
-// truth): white, gray50, gray20, bg, bgSecondary, accent, orange, magenta.
-// Every value below resolves to one of those eight tokens. Run `npm run tokens`
-// to refresh DesignTokens from the source.
+// Semantic layer over the 11-color palette in design/tokens.json (Figma source
+// of truth): white, gray50, gray20, gray10, gray05, bg, bgSecondary, accent,
+// orange, green, magenta. Every value below resolves to one of those eleven
+// tokens. Run `npm run tokens` to refresh DesignTokens from the source.
 struct AppColors {
     // ── Backgrounds ──────────────────────────────────────────────────────────
     static let bg              = DesignTokens.colorBg
@@ -12,6 +12,10 @@ struct AppColors {
     static let bgOverlay       = DesignTokens.colorBgSecondary
     static let surface         = DesignTokens.colorBg
     static let cardFallback    = DesignTokens.colorGray20
+
+    /// Card surface and the segmented-tab track (Figma `gray05`). The business
+    /// dashboard/settings cards and the Dashboard|Settings pill sit on this.
+    static let cardSurface     = DesignTokens.colorGray05
 
     // ── Text ─────────────────────────────────────────────────────────────────
     static let textPrimary     = DesignTokens.colorWhite
@@ -35,8 +39,15 @@ struct AppColors {
     static let starFilled      = DesignTokens.colorOrange
     static let starEmpty       = DesignTokens.colorGray20
 
+    // ── Toggle ────────────────────────────────────────────────────────────────
+    /// "Accepting new work" in the business dashboard, on state (Figma `green`).
+    static let toggleOn        = DesignTokens.colorGreen
+
     // ── Border ───────────────────────────────────────────────────────────────
     static let border          = DesignTokens.colorGray20
+
+    // ── Subtle fill (tinted surface behind icons/tiles) ───────────────────────
+    static let fillSubtle      = DesignTokens.colorGray10
 
     // ── Search bar ───────────────────────────────────────────────────────────
     static let searchBg        = DesignTokens.colorBgSecondary

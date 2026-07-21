@@ -8,10 +8,13 @@ enum DesignTokens {
     static let colorWhite = Color(hex: "#FFFFFF")
     static let colorGray50 = Color(.sRGB, red: 1.0000, green: 1.0000, blue: 1.0000, opacity: 0.5)
     static let colorGray20 = Color(.sRGB, red: 1.0000, green: 1.0000, blue: 1.0000, opacity: 0.2)
+    static let colorGray10 = Color(.sRGB, red: 1.0000, green: 1.0000, blue: 1.0000, opacity: 0.1)
+    static let colorGray05 = Color(.sRGB, red: 1.0000, green: 1.0000, blue: 1.0000, opacity: 0.05)
     static let colorBg = Color(hex: "#131315")
     static let colorBgSecondary = Color(.sRGB, red: 0.0745, green: 0.0745, blue: 0.0824, opacity: 0.9)
     static let colorAccent = Color(hex: "#0039F5")
     static let colorOrange = Color(hex: "#D4A600")
+    static let colorGreen = Color(hex: "#27C840")
     static let colorMagenta = Color(hex: "#FF00BB")
 
     // MARK: - Spacing
@@ -33,8 +36,8 @@ enum DesignTokens {
     static let sizeDot: CGFloat = 8
 
     // MARK: - Typography
-    static let typographyH1 = Font.custom("Lato-ExtraBold", size: 44)
-    static let typographyH2 = Font.custom("Lato-ExtraBold", size: 24)
+    static let typographyH1 = Font.custom("Lato-Bold", size: 48)
+    static let typographyH2 = Font.custom("Lato-Heavy", size: 24)
     static let typographyH3 = Font.custom("Lato-Bold", size: 18)
     static let typographyH4 = Font.custom("Lato-Bold", size: 14)
     static let typographyBodyLight = Font.custom("Poppins-Light", size: 17)

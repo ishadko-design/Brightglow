@@ -598,6 +598,14 @@ export interface JobTypeEntry {
   itemId: string;           // EPCI item id to price against
   unit: string;             // expected unit of measure, informational
   defaultQuantity: number;  // used when no explicit quantity is detected — lowers confidence
+  /** Tiebreak ABOVE keyword length (default 0). Longest-match alone picks the
+   *  generic entry whenever the specific job's distinguishing word is shorter
+   *  than a generic keyword that also matches — "install a tankless water
+   *  heater" matched "water heater" (12) over "tankless" (8) and priced a tank
+   *  unit, 55% under the real job. Same failure hit "ductless mini split air
+   *  conditioner" (→ central AC) and "metal roof replacement" (→ generic
+   *  reroof). Set to 1 on the entry that must win when both match. */
+  priority?: number;
 }
 
 // One flagship job per category that EPCI prices well, plus a per-category
@@ -608,7 +616,7 @@ export interface JobTypeEntry {
 export const JOB_TYPE_TAXONOMY: JobTypeEntry[] = [
   // Plumbing
   { job_type: "plumbing.water_heater", category: "Plumbing", keywords: ["water heater"], trade: "plumbing", itemId: "water-heater-install", unit: "project", defaultQuantity: 1 },
-  { job_type: "plumbing.tankless_water_heater", category: "Plumbing", keywords: ["tankless"], trade: "plumbing", itemId: "tankless-water-heater-install", unit: "project", defaultQuantity: 1 },
+  { job_type: "plumbing.tankless_water_heater", category: "Plumbing", keywords: ["tankless", "on-demand water heater"], trade: "plumbing", itemId: "tankless-water-heater-install", unit: "project", defaultQuantity: 1, priority: 1 },
   { job_type: "plumbing.fixture", category: "Plumbing", keywords: ["faucet", "toilet", "sink", "fixture"], trade: "plumbing", itemId: "fixture-install", unit: "each", defaultQuantity: 1 },
   { job_type: "plumbing.pipe_repair", category: "Plumbing", keywords: ["leak", "clog", "drain"], trade: "plumbing", itemId: "pipe-repair", unit: "project", defaultQuantity: 1 },
   { job_type: "plumbing.repipe", category: "Plumbing", keywords: ["repipe", "repiping"], trade: "plumbing", itemId: "whole-house-repipe-pex", unit: "sq ft", defaultQuantity: 1500 },
@@ -621,12 +629,14 @@ export const JOB_TYPE_TAXONOMY: JobTypeEntry[] = [
   { job_type: "electrical.ev_charger", category: "Electrical", keywords: ["ev charger", "car charger"], trade: "electrical", itemId: "ev-charger-level2", unit: "each", defaultQuantity: 1 },
   { job_type: "electrical.rewire", category: "Electrical", keywords: ["rewire", "rewiring"], trade: "electrical", itemId: "whole-house-rewire", unit: "sq ft", defaultQuantity: 1500 },
   { job_type: "electrical.lighting", category: "Electrical", keywords: ["light", "lighting"], trade: "electrical", itemId: "light-fixture-install", unit: "each", defaultQuantity: 1 },
+  // Multi-word keywords only — a bare "tv" would substring-match unrelated text.
+  { job_type: "electrical.tv_mount", category: "Electrical", keywords: ["tv mount", "mount tv", "mount a tv", "mount the tv", "mounting tv", "mounting a tv", "install tv", "install a tv", "install the tv", "tv install", "tv wall", "tv on wall", "tv on the wall", "wall mount tv", "hang tv", "hang a tv", "hang the tv", "tv bracket", "television", "flat screen", "flatscreen"], trade: "electrical", itemId: "tv-mount-install", unit: "each", defaultQuantity: 1 },
 
   // HVAC
   { job_type: "hvac.furnace", category: "HVAC", keywords: ["furnace"], trade: "hvac", itemId: "gas-furnace-installed", unit: "project", defaultQuantity: 1 },
   { job_type: "hvac.ac", category: "HVAC", keywords: ["central air", "air condition", "a/c"], trade: "hvac", itemId: "central-ac-installed", unit: "project", defaultQuantity: 1 },
   { job_type: "hvac.heat_pump", category: "HVAC", keywords: ["heat pump"], trade: "hvac", itemId: "heat-pump-installed", unit: "project", defaultQuantity: 1 },
-  { job_type: "hvac.mini_split", category: "HVAC", keywords: ["mini split", "ductless"], trade: "hvac", itemId: "mini-split-per-zone", unit: "each", defaultQuantity: 1 },
+  { job_type: "hvac.mini_split", category: "HVAC", keywords: ["mini split", "mini-split", "ductless"], trade: "hvac", itemId: "mini-split-per-zone", unit: "each", defaultQuantity: 1, priority: 1 },
   { job_type: "hvac.thermostat", category: "HVAC", keywords: ["thermostat"], trade: "hvac", itemId: "thermostat-installation-smart", unit: "each", defaultQuantity: 1 },
   { job_type: "hvac.repair", category: "HVAC", keywords: ["repair", "tune-up", "tune up", "service"], trade: "hvac", itemId: "furnace-repair", unit: "project", defaultQuantity: 1 },
 
@@ -654,7 +664,7 @@ export const JOB_TYPE_TAXONOMY: JobTypeEntry[] = [
   // no TPO/EPDM/torch-down in any trade), so flat roofs classify to the
   // whole-project item — wide but real; revisit when a source covers it.
   { job_type: "roofing.shingle", category: "Roofing", keywords: ["shingle", "asphalt", "architectural"], trade: "roofing", itemId: "architectural-installed", unit: "sq ft", defaultQuantity: 1700 },
-  { job_type: "roofing.metal", category: "Roofing", keywords: ["metal roof", "standing seam"], trade: "roofing", itemId: "metal-roofing-installed", unit: "sq ft", defaultQuantity: 1700 },
+  { job_type: "roofing.metal", category: "Roofing", keywords: ["metal roof", "standing seam"], trade: "roofing", itemId: "metal-roofing-installed", unit: "sq ft", defaultQuantity: 1700, priority: 1 },
   { job_type: "roofing.flat", category: "Roofing", keywords: ["flat roof", "tpo", "epdm", "torch down", "membrane", "rolled roofing"], trade: "roofing", itemId: "roof-replacement-total", unit: "project", defaultQuantity: 1 },
   { job_type: "roofing.replacement", category: "Roofing", keywords: ["replace", "replacement", "new roof", "reroof"], trade: "roofing", itemId: "roof-replacement-total", unit: "project", defaultQuantity: 1 },
   { job_type: "roofing.repair", category: "Roofing", keywords: ["repair", "patch", "leak"], trade: "roofing", itemId: "roof-repair-patch", unit: "sq ft", defaultQuantity: 50 },
@@ -685,6 +695,81 @@ export const JOB_TYPE_TAXONOMY: JobTypeEntry[] = [
   { job_type: "landscaping.irrigation", category: "Landscaping", keywords: ["irrigation", "sprinkler"], trade: "landscaping", itemId: "irrigation-system-per-zone", unit: "each", defaultQuantity: 1 },
   { job_type: "landscaping.patio", category: "Landscaping", keywords: ["patio", "hardscape", "paver"], trade: "landscaping", itemId: "paver-patio-installation", unit: "sq ft", defaultQuantity: 200 },
   { job_type: "landscaping.mulch", category: "Landscaping", keywords: ["mulch"], trade: "landscaping", itemId: "mulch-installation", unit: "cubic yard", defaultQuantity: 5 },
+
+  // === Auto & moto ======================================================
+  // Categories match autoCategoryItems in Brightglow/Models/Vertical.swift.
+  // Keywords are deliberately vehicle-specific: several home categories own
+  // the generic word ("repair", "paint", "glass", "window"), so an auto entry
+  // has to carry the longer, unambiguous phrase to win longest-match. Where
+  // both verticals could plausibly claim a word, the auto keyword includes the
+  // vehicle noun ("car ac", "car window") so the home entry keeps the bare one.
+
+  // Repair (mechanical + maintenance)
+  { job_type: "auto.oil_change", category: "Repair", keywords: ["oil change", "oil and filter", "change the oil", "lube oil"], trade: "auto-repair", itemId: "oil-change-synthetic", unit: "each", defaultQuantity: 1 },
+  // Rotors declared with the longer keywords so "pads and rotors" outranks the
+  // pads-only entry; a bare "brake job" lands on pads.
+  { job_type: "auto.brakes_pads_rotors", category: "Repair", keywords: ["pads and rotors", "brake pads and rotors", "rotors", "rotor replacement", "brake rotors"], trade: "auto-repair", itemId: "brake-pads-rotors-per-axle", unit: "axle", defaultQuantity: 1, priority: 1 },
+  { job_type: "auto.brakes", category: "Repair", keywords: ["brake", "brakes", "brake pad", "brake job", "brake replacement"], trade: "auto-repair", itemId: "brake-pads-per-axle", unit: "axle", defaultQuantity: 1 },
+  { job_type: "auto.battery", category: "Repair", keywords: ["battery", "car battery", "dead battery", "won't start battery"], trade: "auto-repair", itemId: "battery-replacement", unit: "each", defaultQuantity: 1 },
+  { job_type: "auto.alternator", category: "Repair", keywords: ["alternator"], trade: "auto-repair", itemId: "alternator-replacement", unit: "each", defaultQuantity: 1 },
+  { job_type: "auto.starter", category: "Repair", keywords: ["starter", "starter motor"], trade: "auto-repair", itemId: "starter-replacement", unit: "each", defaultQuantity: 1 },
+  { job_type: "auto.water_pump", category: "Repair", keywords: ["water pump"], trade: "auto-repair", itemId: "water-pump-replacement", unit: "each", defaultQuantity: 1 },
+  { job_type: "auto.radiator", category: "Repair", keywords: ["radiator", "overheating", "coolant leak"], trade: "auto-repair", itemId: "radiator-replacement", unit: "each", defaultQuantity: 1 },
+  { job_type: "auto.timing_belt", category: "Repair", keywords: ["timing belt", "timing chain", "cam belt"], trade: "auto-repair", itemId: "timing-belt-replacement", unit: "each", defaultQuantity: 1 },
+  { job_type: "auto.spark_plugs", category: "Repair", keywords: ["spark plug", "spark plugs", "ignition coil", "tune up", "tune-up"], trade: "auto-repair", itemId: "spark-plug-replacement", unit: "each", defaultQuantity: 1 },
+  // "air conditioning recharge" is longer than HVAC's "air condition", so it
+  // wins outright; "car ac" carries the short phrasing without colliding.
+  { job_type: "auto.ac", category: "Repair", keywords: ["ac recharge", "a/c recharge", "air conditioning recharge", "car ac", "car a/c", "auto ac", "freon", "ac not cold", "car air conditioning"], trade: "auto-repair", itemId: "ac-recharge-auto", unit: "each", defaultQuantity: 1 },
+  { job_type: "auto.transmission_fluid", category: "Repair", keywords: ["transmission fluid", "transmission service", "transmission flush"], trade: "auto-repair", itemId: "transmission-fluid-change", unit: "each", defaultQuantity: 1 },
+  { job_type: "auto.catalytic_converter", category: "Repair", keywords: ["catalytic converter", "cat converter", "catalytic"], trade: "auto-repair", itemId: "catalytic-converter-replacement", unit: "each", defaultQuantity: 1 },
+  { job_type: "auto.oxygen_sensor", category: "Repair", keywords: ["oxygen sensor", "o2 sensor", "02 sensor"], trade: "auto-repair", itemId: "oxygen-sensor-replacement", unit: "each", defaultQuantity: 1 },
+  { job_type: "auto.exhaust", category: "Repair", keywords: ["muffler", "exhaust", "tailpipe", "loud exhaust"], trade: "auto-repair", itemId: "muffler-exhaust-repair", unit: "each", defaultQuantity: 1 },
+  { job_type: "auto.suspension", category: "Repair", keywords: ["strut", "struts", "shock absorber", "shocks", "suspension"], trade: "auto-repair", itemId: "strut-shock-per-axle", unit: "axle", defaultQuantity: 1 },
+  { job_type: "auto.cv_axle", category: "Repair", keywords: ["cv axle", "cv joint", "axle shaft", "drive axle"], trade: "auto-repair", itemId: "cv-axle-replacement", unit: "each", defaultQuantity: 1 },
+  { job_type: "auto.fuel_pump", category: "Repair", keywords: ["fuel pump", "fuel injector"], trade: "auto-repair", itemId: "fuel-pump-replacement", unit: "each", defaultQuantity: 1 },
+  { job_type: "auto.clutch", category: "Repair", keywords: ["clutch"], trade: "auto-repair", itemId: "clutch-replacement", unit: "each", defaultQuantity: 1 },
+  { job_type: "auto.diagnostic", category: "Repair", keywords: ["check engine", "diagnostic", "engine light", "scan tool", "obd"], trade: "auto-repair", itemId: "auto-diagnostic-fee", unit: "each", defaultQuantity: 1 },
+  // Moto-only job — no car equivalent, so it points straight at the moto item
+  // rather than going through MOTO_VARIANTS. "timing chain" (12 chars) still
+  // outranks "chain" (5), so a car timing job is unaffected.
+  { job_type: "auto.chain_sprocket", category: "Repair", keywords: ["chain and sprocket", "chain & sprocket", "sprocket", "drive chain", "chain replacement"], trade: "moto-repair", itemId: "moto-chain-sprocket", unit: "each", defaultQuantity: 1 },
+
+  // Tires
+  // Bare noun phrasings ("motorcycle tires", "place tires on the bike") carry
+  // no verb, and requiring one sent them to a labor-only fallback — reported
+  // live 2026-07-20. "tire"/"tires" are word-boundary matched so they cannot
+  // fire inside "entire". Longer keywords on the rotation / flat / TPMS /
+  // alignment entries still outrank the bare noun.
+  { job_type: "auto.tire_replacement", category: "Tires", keywords: ["new tire", "new tires", "tire replacement", "replace tire", "replace tires", "buy tires", "set of tires", "tire", "tires"], trade: "auto-tires", itemId: "tire-replacement-per-tire", unit: "each", defaultQuantity: 4 },
+  { job_type: "auto.tire_mount_balance", category: "Tires", keywords: ["mount and balance", "mount & balance", "tire balancing", "balance tires"], trade: "auto-tires", itemId: "tire-mount-balance-per-tire", unit: "each", defaultQuantity: 4 },
+  { job_type: "auto.tire_rotation", category: "Tires", keywords: ["tire rotation", "rotate tires", "rotate my tires"], trade: "auto-tires", itemId: "tire-rotation", unit: "each", defaultQuantity: 1 },
+  { job_type: "auto.flat_repair", category: "Tires", keywords: ["flat tire", "flat repair", "puncture", "nail in tire", "patch tire"], trade: "auto-tires", itemId: "flat-tire-repair", unit: "each", defaultQuantity: 1 },
+  { job_type: "auto.alignment", category: "Tires", keywords: ["alignment", "wheel alignment", "front end alignment", "pulling to one side"], trade: "auto-tires", itemId: "wheel-alignment", unit: "each", defaultQuantity: 1 },
+  { job_type: "auto.tpms", category: "Tires", keywords: ["tpms", "tire pressure sensor", "tire sensor"], trade: "auto-tires", itemId: "tpms-sensor-per-wheel", unit: "each", defaultQuantity: 1 },
+
+  // Cleaning & Detailing
+  { job_type: "auto.full_detail", category: "Cleaning & Detailing", keywords: ["full detail", "detailing", "detail my car", "car detail", "auto detail", "complete detail"], trade: "auto-detailing", itemId: "full-detail", unit: "each", defaultQuantity: 1 },
+  { job_type: "auto.interior_detail", category: "Cleaning & Detailing", keywords: ["interior detail", "interior cleaning", "shampoo seats", "clean the interior", "steam clean interior"], trade: "auto-detailing", itemId: "interior-detail", unit: "each", defaultQuantity: 1 },
+  { job_type: "auto.exterior_detail", category: "Cleaning & Detailing", keywords: ["exterior detail", "wax", "waxing", "buff and wax", "polish"], trade: "auto-detailing", itemId: "exterior-detail-wax", unit: "each", defaultQuantity: 1 },
+  { job_type: "auto.car_wash", category: "Cleaning & Detailing", keywords: ["car wash", "wash my car", "hand wash"], trade: "auto-detailing", itemId: "car-wash-basic", unit: "each", defaultQuantity: 1 },
+  { job_type: "auto.ceramic_coating", category: "Cleaning & Detailing", keywords: ["ceramic coating", "ceramic", "paint protection film", "ppf", "sealant"], trade: "auto-detailing", itemId: "ceramic-coating", unit: "each", defaultQuantity: 1 },
+  { job_type: "auto.headlight_restoration", category: "Cleaning & Detailing", keywords: ["headlight restoration", "foggy headlight", "cloudy headlight", "restore headlights"], trade: "auto-detailing", itemId: "headlight-restoration", unit: "pair", defaultQuantity: 1 },
+  { job_type: "auto.paint_correction", category: "Cleaning & Detailing", keywords: ["paint correction", "swirl marks", "buff out scratches"], trade: "auto-detailing", itemId: "paint-correction", unit: "each", defaultQuantity: 1 },
+
+  // Body & Paint
+  { job_type: "auto.bumper_repair", category: "Body & Paint", keywords: ["bumper repair", "bumper scuff", "scuffed bumper", "scratched bumper", "bumper scratch"], trade: "auto-body", itemId: "bumper-repair-scuff", unit: "each", defaultQuantity: 1 },
+  { job_type: "auto.bumper_replacement", category: "Body & Paint", keywords: ["bumper replacement", "replace bumper", "new bumper", "bumper"], trade: "auto-body", itemId: "bumper-replacement", unit: "each", defaultQuantity: 1 },
+  { job_type: "auto.dent", category: "Body & Paint", keywords: ["dent", "ding", "paintless dent", "pdr", "hail damage"], trade: "auto-body", itemId: "pdr-dent-repair", unit: "each", defaultQuantity: 1 },
+  { job_type: "auto.panel_respray", category: "Body & Paint", keywords: ["respray", "repaint a panel", "panel paint", "paint one panel", "door paint", "fender paint"], trade: "auto-body", itemId: "panel-respray", unit: "each", defaultQuantity: 1 },
+  { job_type: "auto.full_respray", category: "Body & Paint", keywords: ["full respray", "paint my car", "repaint my car", "whole car paint", "paint the whole car", "car paint job"], trade: "auto-body", itemId: "full-respray", unit: "each", defaultQuantity: 1 },
+  { job_type: "auto.collision", category: "Body & Paint", keywords: ["collision", "accident damage", "fender bender", "body damage", "quarter panel", "replace fender", "replace door skin"], trade: "auto-body", itemId: "collision-panel-replacement", unit: "each", defaultQuantity: 1 },
+
+  // Glass
+  { job_type: "auto.windshield_replacement", category: "Glass", keywords: ["windshield replacement", "replace windshield", "new windshield", "windshield", "windscreen", "cracked windshield"], trade: "auto-glass", itemId: "windshield-replacement", unit: "each", defaultQuantity: 1 },
+  { job_type: "auto.chip_repair", category: "Glass", keywords: ["chip repair", "windshield chip", "rock chip", "star crack", "windshield crack repair"], trade: "auto-glass", itemId: "windshield-chip-repair", unit: "each", defaultQuantity: 1 },
+  { job_type: "auto.adas", category: "Glass", keywords: ["adas", "recalibration", "camera calibration", "lane keep calibration"], trade: "auto-glass", itemId: "adas-recalibration", unit: "each", defaultQuantity: 1 },
+  // "car window" / "door glass" keep the bare "window" for the home entry.
+  { job_type: "auto.side_window", category: "Glass", keywords: ["car window", "side window", "door glass", "rear window", "quarter glass", "auto glass"], trade: "auto-glass", itemId: "side-window-replacement", unit: "each", defaultQuantity: 1 },
 ];
 
 // Per-category fallback used when nothing in JOB_TYPE_TAXONOMY matches the
@@ -704,6 +789,16 @@ export const CATEGORY_GENERAL: Record<string, JobTypeEntry | null> = {
   "Windows & Doors": { job_type: "windows_doors.general", category: "Windows & Doors", keywords: [], trade: "windows", itemId: "vinyl-window-replacement", unit: "each", defaultQuantity: 1 },
   "Landscaping": { job_type: "landscaping.general", category: "Landscaping", keywords: [], trade: "landscaping", itemId: "mulch-installation", unit: "cubic yard", defaultQuantity: 3 },
   "Mold & Pest Control": null,
+  // Auto & moto. "Repair" falls back to the posted door rate x a typical visit,
+  // the same honest shape plumbing/electrical use. The other four fall back to
+  // their most-requested job rather than an hourly rate: nobody buys detailing
+  // or glass by the hour, so an hourly band would be a number the market
+  // doesn't quote.
+  "Repair": { job_type: "auto.general", category: "Repair", keywords: [], trade: "auto-repair", itemId: "auto-labor-hourly", unit: "hour", defaultQuantity: 2 },
+  "Tires": { job_type: "auto.tires_general", category: "Tires", keywords: [], trade: "auto-tires", itemId: "tire-replacement-per-tire", unit: "each", defaultQuantity: 4 },
+  "Cleaning & Detailing": { job_type: "auto.detailing_general", category: "Cleaning & Detailing", keywords: [], trade: "auto-detailing", itemId: "full-detail", unit: "each", defaultQuantity: 1 },
+  "Body & Paint": { job_type: "auto.body_general", category: "Body & Paint", keywords: [], trade: "auto-body", itemId: "panel-respray", unit: "each", defaultQuantity: 1 },
+  "Glass": { job_type: "auto.glass_general", category: "Glass", keywords: [], trade: "auto-glass", itemId: "windshield-replacement", unit: "each", defaultQuantity: 1 },
 };
 
 // The 5 job_types that overlap the original SF-permit engine's coverage
@@ -738,6 +833,15 @@ const CATEGORY_STEMS: Record<string, string[]> = {
   "Windows & Doors": ["window", "door"],
   "Landscaping": ["landscap", "yard", "garden"],
   "Mold & Pest Control": ["pest", "mold"],
+  // Auto stems are narrow on purpose. "Repair" and "Body & Paint" get NO stem:
+  // their category words ("repair", "paint") are owned by the home taxonomy,
+  // and a stem here would hijack "repair my roof" / "paint the kitchen". Those
+  // two categories reach their entries through vehicle-specific job keywords
+  // instead. "Glass" stems on "windshield"/"windscreen" rather than "glass",
+  // which appears in the home "sliding glass" door phrasing.
+  "Tires": ["tire", "tires", "tyre", "tyres"],
+  "Cleaning & Detailing": ["detail"],
+  "Glass": ["windshield", "windscreen"],
 };
 
 // Keywords that disambiguate jobs only *within* a category ("repair" means
@@ -751,12 +855,109 @@ const WITHIN_CATEGORY_ONLY = new Set([
   "lighting", "sand", "cabinet",
 ]);
 
+export type Vehicle = "auto" | "moto";
+export type Vertical = "home" | "auto";
+
+/** App categories belonging to the Auto & moto vertical (see
+ *  autoCategoryItems in Brightglow/Models/Vertical.swift). */
+export const AUTO_CATEGORIES = new Set([
+  "Repair",
+  "Tires",
+  "Cleaning & Detailing",
+  "Body & Paint",
+  "Glass",
+]);
+
+/** Which vertical a taxonomy entry belongs to. Derived from its category so it
+ *  can't drift from the taxonomy the way a hand-maintained flag would. */
+export function verticalForEntry(entry: JobTypeEntry): Vertical {
+  return AUTO_CATEGORIES.has(entry.category) ? "auto" : "home";
+}
+
+// Words that name the vehicle rather than the job. Two jobs for them:
+//
+//  1. They're the vehicle signal when the client doesn't send one (typed
+//     search: "new tires for my motorcycle").
+//  2. They're STRIPPED before keyword matching. Keyword matching is plain
+//     substring, so an interposed word silently breaks a match: "replace
+//     motorcycle tires" does not contain "replace tires", so it missed the
+//     tire entry entirely and fell through to a category-general labor-only
+//     figure ($183 for a job that's ~$440). Removing the vehicle noun makes
+//     the phrase match the base keyword again.
+//
+// "car"/"truck" are deliberately NOT here: several auto keywords deliberately
+// embed them ("car wash", "car ac", "car window") to avoid colliding with the
+// home taxonomy, and stripping would break those.
+const MOTO_WORDS = [
+  "motorcycle", "motorbike", "moto", "scooter", "dirt bike", "dirtbike",
+  "harley", "sportbike", "sport bike",
+];
+
+/** The vehicle the words name, or null when they don't say. */
+export function detectVehicle(description: string): Vehicle | null {
+  const t = ` ${description.toLowerCase()} `;
+  return MOTO_WORDS.some((w) => t.includes(w)) ? "moto" : null;
+}
+
+/** Description with vehicle nouns removed, so job keywords match again. */
+export function stripVehicleWords(description: string): string {
+  let t = description.toLowerCase();
+  for (const w of MOTO_WORDS) t = t.split(w).join(" ");
+  return t.replace(/\s+/g, " ").trim();
+}
+
+/** Auto item → its motorcycle equivalent. Applied after classification when
+ *  the request is for a motorcycle: the taxonomy stays single-vehicle (one
+ *  entry per job) and the swap happens at pricing time. defaultQuantity is
+ *  remapped too — the count differs, most obviously for tires: a car set is 4,
+ *  a bike's is 2. Jobs absent from this map keep the auto item on purpose. */
+export const MOTO_VARIANTS: Record<
+  string,
+  { itemId: string; trade: string; defaultQuantity?: number }
+> = {
+  "tire-replacement-per-tire": { itemId: "moto-tire-replacement-per-tire", trade: "moto-tires", defaultQuantity: 2 },
+  "tire-mount-balance-per-tire": { itemId: "moto-tire-mount-balance-per-tire", trade: "moto-tires", defaultQuantity: 2 },
+  "oil-change-synthetic": { itemId: "moto-oil-change", trade: "moto-repair", defaultQuantity: 1 },
+  "brake-pads-per-axle": { itemId: "moto-brake-pads-per-wheel", trade: "moto-repair", defaultQuantity: 1 },
+  "brake-pads-rotors-per-axle": { itemId: "moto-brake-pads-per-wheel", trade: "moto-repair", defaultQuantity: 1 },
+};
+
+/** The entry to price for a motorcycle request — the moto variant when one
+ *  exists, otherwise the original (auto item is the honest default). */
+export function applyMotoVariant(entry: JobTypeEntry): JobTypeEntry {
+  const v = MOTO_VARIANTS[entry.itemId];
+  if (!v) return entry;
+  return {
+    ...entry,
+    itemId: v.itemId,
+    trade: v.trade,
+    defaultQuantity: v.defaultQuantity ?? entry.defaultQuantity,
+  };
+}
+
 export function classifyJobType(
   category: string,
   description: string,
   photoAttributes: string[] = [],
+  /** Constrains matching to one vertical. Without it, the home taxonomy owns
+   *  the bare words ("window", "paint", "door") and silently swallows vehicle
+   *  requests: "Replace rear left quarter window" classified as a home vinyl
+   *  window and quoted $860 of house glazing for a car window (reported live
+   *  2026-07-20). A cross-vertical miss is the worst kind — not just the wrong
+   *  job, the wrong trade entirely — so when the vertical is known, enforce
+   *  it rather than hoping longest-match lands right. */
+  vertical: Vertical | null = null,
 ): JobTypeEntry | null {
   const text = [description, ...photoAttributes].join(", ").toLowerCase();
+  if (vertical && !category) {
+    const scoped = JOB_TYPE_TAXONOMY.filter((e) => verticalForEntry(e) === vertical);
+    const hit = longestKeywordMatch(scoped, text, true);
+    if (hit) return hit;
+    // No specific match inside the right vertical. Fall through to the normal
+    // path ONLY for home; for a vehicle request, crossing into the home
+    // taxonomy is exactly the failure this parameter exists to stop.
+    if (vertical === "auto") return null;
+  }
   if (category) {
     // Longest keyword wins, not first-declared: "replace 2 french door
     // windows" must land on french_door via "french door", not on the
@@ -772,7 +973,7 @@ export function classifyJobType(
   // "fix my roof" still lands on a real number via the category-general
   // entry even when no job keyword matches.
   const stemmed = Object.keys(CATEGORY_STEMS)
-    .filter((cat) => CATEGORY_STEMS[cat].some((s) => text.includes(s)));
+    .filter((cat) => CATEGORY_STEMS[cat].some((s) => termMatches(text, s)));
   if (stemmed.length === 1) return classifyJobType(stemmed[0], description, photoAttributes);
 
   // No stem (or several) — scan job keywords, longest match wins as the
@@ -785,6 +986,19 @@ export function classifyJobType(
   return longestKeywordMatch(pool, text, stemmed.length === 0);
 }
 
+// Terms whose bare form appears INSIDE unrelated words — "tire" sits in
+// "entire", so a plain substring test routes "replace the entire window" and
+// "redo the entire roof" to the Tires category. These match a whole word only.
+// Everything else stays substring-matched, which is load-bearing elsewhere
+// (the "paint" stem has to catch "repaint", "floor" has to catch "flooring").
+const WORD_BOUNDARY_TERMS = new Set(["tire", "tires", "tyre", "tyres"]);
+
+/** Does `text` contain `term`, respecting word boundaries where required? */
+export function termMatches(text: string, term: string): boolean {
+  if (!WORD_BOUNDARY_TERMS.has(term)) return text.includes(term);
+  return new RegExp(`\\b${term}\\b`).test(text);
+}
+
 function longestKeywordMatch(
   pool: JobTypeEntry[],
   text: string,
@@ -792,16 +1006,35 @@ function longestKeywordMatch(
 ): JobTypeEntry | null {
   let best: JobTypeEntry | null = null;
   let bestLen = 0;
+  let bestPriority = -1;
   for (const entry of pool) {
+    const priority = entry.priority ?? 0;
     for (const kw of entry.keywords) {
       if (excludeWithinCategoryOnly && WITHIN_CATEGORY_ONLY.has(kw)) continue;
-      if (kw.length > bestLen && text.includes(kw)) {
+      if (!termMatches(text, kw)) continue;
+      // Priority outranks length; length breaks ties within a priority.
+      if (priority > bestPriority || (priority === bestPriority && kw.length > bestLen)) {
         best = entry;
         bestLen = kw.length;
+        bestPriority = priority;
       }
     }
   }
   return best;
+}
+
+// Spelled-out counts up to twelve → digits, as their own words only, so
+// "two windows" → "2 windows" but "twelve" inside another token is left alone.
+// Kept small: past twelve, people write digits.
+const SPELLED_NUMBERS: Record<string, string> = {
+  one: "1", two: "2", three: "3", four: "4", five: "5", six: "6",
+  seven: "7", eight: "8", nine: "9", ten: "10", eleven: "11", twelve: "12",
+};
+function spellOutToDigits(text: string): string {
+  return text.replace(
+    /\b(one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve)\b/g,
+    (w) => SPELLED_NUMBERS[w],
+  );
 }
 
 // Explicit quantity beats the taxonomy default — the default is a real
@@ -832,12 +1065,27 @@ export function resolveQuantity(
     // A small count within a few words of a countable noun: "2 french door
     // windows", "install 4 outlets", "2 vanities" (irregular plural, can't
     // take the generic "s?" suffix like the rest). The count must be its own
-    // word, so dimension strings ("72x88") never match.
-    const count = description.toLowerCase().match(
-      /(?:^|[\s,])(\d{1,2})\s+(?:[a-z/-]+\s+){0,3}?(?:(?:window|door|outlet|socket|fan|fixture|light|toilet|faucet|sink|tree|zone|charger|thermostat)s?|vanit(?:y|ies))\b/,
+    // word, so dimension strings ("72x88") never match; a number followed by
+    // a measurement unit is a dimension, not a count — "36 inch bathroom
+    // vanity" priced as 36 vanities before the lookahead (caught 2026-07-15
+    // by the in-house engine's end-to-end test). Spelled-out small numbers
+    // ("two windows") are normalized to digits first so they count too.
+    const normalized = spellOutToDigits(description.toLowerCase());
+    const count = normalized.match(
+      /(?:^|[\s,])(\d{1,2})(?!\s*(?:["”']|-?\s*(?:in|inch|inches|ft|foot|feet|gal|gallon|amp)\b))\s+(?:[a-z/-]+\s+){0,3}?(?:(?:window|door|outlet|socket|fan|fixture|light|toilet|faucet|sink|tree|zone|charger|thermostat)s?|vanit(?:y|ies))\b/,
     );
-    if (count) {
-      let value = Number(count[1]);
+    // Fallback: the count TRAILS the noun — "replace windows 2", "windows: 2",
+    // "windows x2". Real phrasing from a live search ("Replace windows 2,
+    // sliding, 72x80") priced as one window because the matcher only ever
+    // looked for a number *before* the noun (caught 2026-07-16). The same
+    // dimension/measurement guards apply, so "window 72x80" is still a size,
+    // not 72 windows.
+    const trailing = count ? null : normalized.match(
+      /(?:window|door|outlet|socket|fan|fixture|light|toilet|faucet|sink|tree|zone|charger|thermostat)s?\s*(?:[,:;-]|\bx\b)?\s*(\d{1,2})(?!\s*[x×]\s*\d)(?!\s*(?:["”']|-?\s*(?:in|inch|inches|ft|foot|feet|gal|gallon|amp)\b))\b/,
+    );
+    const matched = count ?? trailing;
+    if (matched) {
+      let value = Number(matched[1]);
       if (value > 0) {
         // Pair-priced items counted in single doors: "2 french doors" is
         // one pair, not two.
@@ -900,6 +1148,10 @@ export const SCOPE_ADD_ONS: Array<{
   { categories: ["Flooring"], keywords: ["remov", "tear out", "tear-out", "rip out", "demo"], itemId: "flooring-removal-only", label: "old floor removal" },
   { categories: ["Flooring"], keywords: ["subfloor"], itemId: "subfloor-repair", label: "subfloor repair" },
   { categories: ["Flooring"], keywords: ["leveling", "self-level", "level the"], itemId: "floor-leveling", label: "floor leveling" },
+  // TV mounting's two real cost drivers — without these a fireplace mount with
+  // hidden cords prices the same as a bracket screwed into drywall.
+  { categories: ["Electrical"], keywords: ["conceal", "hide the cord", "hide cord", "hide wire", "hide the wire", "in-wall", "in wall", "wires hidden", "hidden wire", "hide cable"], itemId: "tv-cord-concealment", label: "cord concealment" },
+  { categories: ["Electrical"], keywords: ["fireplace", "brick", "stone", "masonry", "concrete"], itemId: "tv-mount-masonry", label: "masonry mounting" },
 ];
 
 export function detectScopeAddOns(

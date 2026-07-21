@@ -58,9 +58,11 @@ enum ImageClassifier {
             + "silver, front bumper dent\" or \"motorcycle, Harley-Davidson cruiser, black\". "
             + "For a HOME subject, list attributes useful for a repair cost estimate — size, "
             + "capacity (gallons, amps, BTU), material, or type (e.g. \"40 gallon, tankless, "
-            + "gas\" or \"30 inch, vinyl\"). Only include what's actually visible — never guess "
-            + "a make, condition, or problem you can't see. Write \"none\" if nothing relevant "
-            + "is visible.\n"
+            + "gas\" or \"30 inch, vinyl\"). For a window or door, note its operation (sliding, "
+            + "casement, double-hung), a rough size only if you can judge it (e.g. \"~5x4 ft\"), "
+            + "and any visible scope cue (a fogged/cracked pane vs. the whole unit). Only "
+            + "include what's actually visible — never guess a make, dimension, condition, or "
+            + "problem you can't see. Write \"none\" if nothing relevant is visible.\n"
             + "If the photo doesn't clearly show a single repairable subject, reply only: unsure."
     }()
 
@@ -103,7 +105,13 @@ enum ImageClassifier {
         var confident: TradeMatch? = nil
         var details: String? = nil
         var vehicle: VehicleFilter? = nil
-        if let cloud = try? await classifyCloud(image) {
+        // When a single object fills most of the frame it IS the subject: classify
+        // just that region so the model can't latch onto a smaller distractor with
+        // several things in view (e.g. a car parked in front of the house that's
+        // actually being repaired). Falls back to the whole image when nothing
+        // clearly dominates.
+        let subject: UIImage = dominantObject(image).flatMap { cropNormalized(image, $0) } ?? image
+        if let cloud = try? await classifyCloud(subject) {
             matches.append(cloud.match)
             // When the cloud model saw a vehicle it leads DETAILS with the type
             // (car/truck/motorcycle) — read car-vs-moto from there even if the
@@ -117,12 +125,32 @@ enum ImageClassifier {
         // The on-device guess always contributes a carousel suggestion (never a
         // preselection) — it often catches what the cloud model mislabels, e.g.
         // a rug reads as Flooring here while the model may say Carpentry.
-        if let device = try? classifyOnDevice(image, minConfidence: onDeviceMinConfidence),
+        if let device = try? classifyOnDevice(subject, minConfidence: onDeviceMinConfidence),
            !matches.contains(device) {
             matches.append(device)
         }
         return Suggestions(matches: matches, confident: confident, details: details, vehicle: vehicle)
     }
+
+    /// Fraction of the frame a single salient object must exceed to be treated as
+    /// THE subject, overriding a whole-image read that could otherwise fixate on a
+    /// smaller, more visually salient distractor. Tunable.
+    private static let dominantAreaFraction: CGFloat = 0.5
+
+    /// The bounding box of the single salient object occupying more than
+    /// `dominantAreaFraction` of the frame, or nil when nothing clearly dominates.
+    /// On-device saliency, normalized Vision coords (origin bottom-left).
+    private static func dominantObject(_ image: UIImage) -> CGRect? {
+        guard let cg = image.normalizedUp().cgImage else { return nil }
+        let req = VNGenerateObjectnessBasedSaliencyImageRequest()
+        try? VNImageRequestHandler(cgImage: cg, options: [:]).perform([req])
+        guard let obs = req.results?.first as? VNSaliencyImageObservation,
+              let biggest = obs.salientObjects?.max(by: { area($0.boundingBox) < area($1.boundingBox) })
+        else { return nil }
+        return area(biggest.boundingBox) > dominantAreaFraction ? biggest.boundingBox : nil
+    }
+
+    private static func area(_ r: CGRect) -> CGFloat { r.width * r.height }
 
     /// Read car-vs-motorcycle from the cloud model's DETAILS string (it leads
     /// with the vehicle type for vehicles). nil when no vehicle word is present.

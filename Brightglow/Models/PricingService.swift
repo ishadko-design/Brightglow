@@ -34,13 +34,20 @@ enum PricingService {
     /// recoverable from a multi-word phrase) is classified server-side from
     /// job keywords. Requiring a category here silently unpriced every
     /// typed search.
-    static func estimate(category: String, description: String, zip: String?) async -> PriceTier? {
+    /// - Parameter vehicle: the Auto/Moto filter, for the Auto & moto vertical.
+    ///   The server cannot recover this from the words alone — "replace tires"
+    ///   is the same phrase for both — and without it a motorcycle request was
+    ///   priced as four car tires (~$890) instead of two moto tires (~$440).
+    ///   Nil for home categories.
+    static func estimate(category: String, description: String, zip: String?,
+                         vehicle: VehicleFilter? = nil) async -> PriceTier? {
         guard isConfigured, !category.isEmpty || !description.isEmpty,
               let url = URL(string: "https://\(ref).supabase.co/functions/v1/pricing")
         else { return nil }
 
         var body: [String: Any] = ["category": category, "description": description]
         if let zip { body["zip"] = zip }
+        if let vehicle { body["vehicle"] = vehicle == .moto ? "moto" : "auto" }
 
         var req = URLRequest(url: url, timeoutInterval: 10)
         req.httpMethod = "POST"
@@ -63,7 +70,8 @@ enum PricingService {
         return PriceTier(label: range.label,
                          min: Int(range.all_in_low.rounded()),
                          max: Int(range.all_in_high.rounded()),
-                         typical: range.all_in_typical.map { Int($0.rounded()) })
+                         typical: range.all_in_typical.map { Int($0.rounded()) },
+                         laborOnly: range.labor_only ?? false)
     }
 
     /// Only decodes the success shape; the {error, fallback} shape decodes
@@ -77,6 +85,10 @@ enum PricingService {
             let all_in_typical: Double?
             let confidence: String
             let label: String
+            /// True when the figure covers LABOR ONLY (a job outside the
+            /// catalog, where parts are excluded rather than guessed) — the
+            /// header must say so, or the number reads as an all-in price.
+            let labor_only: Bool?
         }
 
         init(from decoder: Decoder) throws {

@@ -67,6 +67,12 @@ porcelain, concrete, brick, stucco, asphalt shingle, metal
 
   return `${domain}
 
+- If the photo is the SHOP ITSELF rather than a specific job — the business's \
+storefront, building exterior, garage bay / shop interior, signage, or logo \
+board (even if parked cars or a work area are visible) — tag it \`storefront\` \
+(plus any other clearly-visible tags). This is NOT a job the user searched for, \
+so it must never lead the results.
+
 Rules:
 - Tag ONLY what is clearly and confidently visible. Omit anything you're unsure \
 of rather than guessing.

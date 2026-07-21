@@ -19,16 +19,21 @@
     </a>
     <div class="topbar-actions">
       <button id="billingBtn" class="ghost-btn" hidden>Billing</button>
-      <!-- Settings sits up here beside the brand, the way the app's gear sits
-           beside the business name. Sign out is NOT here: as in the app it lives
-           only at the bottom of Settings. The button below is the escape hatch
-           for the "nothing to manage" state, where there's no Settings to reach. -->
-      <button type="button" class="ghost-btn settings-btn" id="openEditorBtn" hidden>Settings</button>
+      <!-- Settings is a tab now (see .tabs below), not a topbar button. Sign out
+           stays here: the Figma web header is just the wordmark and the Settings
+           screen has no sign-out row, so the topbar is the only place left. -->
       <button id="signOutBtn" class="ghost-btn" hidden>Sign out</button>
     </div>
   </header>
 
   <main class="wrap">
+    <!-- Three peer tabs (Figma 1140:2933 / 1140:1668 / 1140:1827), landing on
+         Chats. Hidden until there's a claimed business to manage. -->
+    <nav class="tabs" id="tabs" hidden>
+      <button type="button" class="tab is-active" data-view="chats">Chats</button>
+      <button type="button" class="tab" data-view="dash">Dashboard</button>
+      <button type="button" class="tab" data-view="editor">Settings</button>
+    </nav>
     <!-- Boot / loading -->
     <section id="bootView" class="card center">
       <div class="spinner" aria-label="Loading"></div>
@@ -101,24 +106,33 @@
            percentage also rides in the header subtitle, as it does in the app. -->
       <div class="stat-tiles">
         <div class="stat-tile">
-          <span class="stat-value" id="statRequests">0</span>
-          <span class="stat-unit" id="statRequestsUnit">requests</span>
+          <span class="stat-label">Views</span>
+          <span class="stat-value" id="statViews">0</span>
         </div>
         <div class="stat-tile">
+          <span class="stat-label">Leads</span>
+          <span class="stat-value" id="statRequests">0</span>
+          <button type="button" class="tile-btn" data-view="chats">View</button>
+        </div>
+        <div class="stat-tile">
+          <span class="stat-label">Requests</span>
           <span class="stat-value" id="statReply">0</span>
-          <span class="stat-unit">to reply</span>
+          <button type="button" class="tile-btn is-primary" data-view="chats">View</button>
         </div>
       </div>
 
       <div class="readiness" id="readinessCard" hidden>
+        <div class="stat-label">Profile readiness</div>
         <div class="readiness-pct" id="readinessPct">0%</div>
-        <div class="readiness-label">Profile readiness</div>
-        <button type="button" class="primary-btn readiness-cta" id="readinessCta">Set up</button>
+        <button type="button" class="tile-btn readiness-cta" id="readinessCta">Settings</button>
       </div>
 
-      <!-- Requests sit directly on the dashboard, as they do in the app — no
-           tabs. The editor is its own view, reached from the gear or "Set up". -->
-      <h2 class="section-head">Requests</h2>
+    </section>
+
+    <!-- CHATS — the landing tab. The requests list and the open conversation,
+         split out of the dashboard so the dashboard is only tiles + readiness
+         (matching the app, Figma 1096:5241). -->
+    <section id="chatsView" hidden>
       <div class="card" id="leadsCard">
         <div id="leadsList" class="leads-list"></div>
         <p id="leadsEmpty" class="muted center-text" hidden>No requests yet. New customer requests matched to your business show up here.</p>

@@ -27,9 +27,19 @@ class CameraViewModel: NSObject, ObservableObject {
     /// Multiple salient objects (only populated when the frame is ambiguous).
     @Published var detectedObjects: [DetectedObject] = []
 
+    /// Live pinch-to-zoom factor, 1× = no zoom. Published so the preview's
+    /// gesture can pick up where the last pinch left off.
+    @Published private(set) var zoomFactor: CGFloat = 1
+
     nonisolated(unsafe) let session = AVCaptureSession()
     private let output = AVCapturePhotoOutput()
     private var configured = false
+    /// The active capture device — held so pinch can drive its zoom.
+    private var device: AVCaptureDevice?
+    /// Ceiling for pinch. The hardware allows far more, but past ~8× a phone
+    /// camera is upscaling mush — and a photo of a task is what the classifier
+    /// has to read.
+    private let maxZoom: CGFloat = 8
 
     override init() {
         super.init()
@@ -101,6 +111,8 @@ class CameraViewModel: NSObject, ObservableObject {
         session.addInput(input)
         if session.canAddOutput(output) { session.addOutput(output) }
         session.commitConfiguration()
+        self.device = device
+        zoomFactor = device.videoZoomFactor
 
         DispatchQueue.global(qos: .userInitiated).async {
             self.session.startRunning()
@@ -110,6 +122,19 @@ class CameraViewModel: NSObject, ObservableObject {
     func capturePhoto() {
         let settings = AVCapturePhotoSettings()
         output.capturePhoto(with: settings, delegate: self)
+    }
+
+    /// Set the pinch zoom, clamped to what the device actually supports (and to
+    /// `maxZoom`). Applied straight to the device, so the preview and the photo
+    /// it captures zoom together — no cropping on our side.
+    func setZoom(_ factor: CGFloat) {
+        guard let device else { return }
+        let clamped = min(max(factor, device.minAvailableVideoZoomFactor),
+                          min(maxZoom, device.maxAvailableVideoZoomFactor))
+        guard let _ = try? device.lockForConfiguration() else { return }
+        device.videoZoomFactor = clamped
+        device.unlockForConfiguration()
+        zoomFactor = clamped
     }
 
     /// Open a photo in the full-screen draw-over canvas and classify it — the

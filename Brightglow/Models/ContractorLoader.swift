@@ -83,13 +83,21 @@ enum ContractorLoader {
     /// photo, e.g. "40 gallon, tankless") is appended to the description
     /// sent to the pricing engine only — it never changes what businesses
     /// get searched.
+    /// `vehicle` is the Auto & moto filter. It matters because the same words
+    /// mean different jobs on two wheels — "replace tires" is 4 units for a car
+    /// and 2 (cheaper, different labor) for a bike — and the server can't infer
+    /// it from the phrase.
     static func estimate(
         category: String,
         searchQuery: String,
         near coord: CLLocationCoordinate2D,
-        photoDetails: String? = nil
+        photoDetails: String? = nil,
+        vehicle: VehicleFilter? = nil
     ) async -> PriceTier? {
-        guard !isAutoService(category: category, searchQuery: searchQuery) else { return nil }
+        // Auto & moto used to return nil here unconditionally — there was no
+        // vehicle cost data, so every auto result showed "coming soon". The
+        // catalog now covers all five auto categories (2026-07-20), so the
+        // vertical prices like any other; the guard is gone.
         let q = searchQuery.trimmingCharacters(in: .whitespacesAndNewlines)
         let description = [q, photoDetails]
             .compactMap { $0?.trimmingCharacters(in: .whitespacesAndNewlines) }
@@ -101,6 +109,11 @@ enum ContractorLoader {
         // description, which the client can't do from a multi-word phrase.
         let resolvedCategory = category.isEmpty ? (Category.exactTerm(q)?.rawValue ?? "") : category
         let (_, zip) = await EstimateService.geocode(for: coord)
-        return await EstimateService.estimate(category: resolvedCategory, description: description, zip: zip)
+        // An explicit filter wins; otherwise infer it, so a typed "motorcycle
+        // tires" search prices as a bike even with no chip selected.
+        let resolvedVehicle = vehicle
+            ?? (isAutoService(category: category, searchQuery: q) ? VehicleFilter.auto : nil)
+        return await EstimateService.estimate(category: resolvedCategory, description: description,
+                                              zip: zip, vehicle: resolvedVehicle)
     }
 }
