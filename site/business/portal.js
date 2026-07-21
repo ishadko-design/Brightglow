@@ -19,21 +19,6 @@ const sb = createClient(SUPABASE_URL, SUPABASE_KEY, {
   auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true },
 });
 
-// Indicative service templates, mirrored from the app (Brightglow/Models/Types.swift
-// priceTiers) so a business can seed sensible rows in one click, then edit.
-const TRADE_TEMPLATES = {
-  "Plumbing":        [["Minor fix",100,250],["Mid repair",400,900],["Full replacement",1000,3000]],
-  "Electrical":      [["Outlet / fixture",80,200],["Panel work",400,1000],["Full rewire",3000,8000]],
-  "HVAC":            [["Tune-up",100,250],["Repair",300,800],["Full install",3000,7000]],
-  "Painting":        [["Single room",200,600],["Full interior",1500,4000],["Exterior",3000,9000]],
-  "Carpentry":       [["Small repair",150,400],["Custom build",800,3500],["Full remodel",5000,15000]],
-  "Roofing":         [["Patch / repair",300,800],["Partial replace",3000,7000],["Full roof",8000,20000]],
-  "Flooring":        [["Single room",500,1500],["Whole floor",2000,6000],["Full home",8000,20000]],
-  "Windows & Doors": [["Single unit",300,800],["Multiple units",1500,4000],["Full install",5000,12000]],
-  "Landscaping":     [["Lawn / cleanup",100,400],["Garden redesign",1500,5000],["Full landscape",8000,25000]],
-  "Mold & Pest Control": [["Single treatment",150,400],["Mold remediation",1000,4000],["Full fumigation",2000,6000]],
-};
-
 // ── element helpers ─────────────────────────────────────────
 const $ = (id) => document.getElementById(id);
 const show = (el, on = true) => { el.hidden = !on; };
@@ -46,7 +31,16 @@ let current = null;       // the selected business
 let profile = null;       // its business_profiles row (working copy)
 let signedInEmail = "";   // shown in the editor's account section
 let dirty = false;
-const markDirty = () => { dirty = true; $("saveState").textContent = "Unsaved changes"; };
+let autosaveTimer = null;
+// Edits persist on their own, as they do in the app. Every keystroke would be a
+// write, so a change schedules a save and resets the timer — only the pause at
+// the end reaches the network.
+const AUTOSAVE_MS = 1200;
+const markDirty = () => {
+  dirty = true;
+  clearTimeout(autosaveTimer);
+  autosaveTimer = setTimeout(() => { saveProfile(); }, AUTOSAVE_MS);
+};
 
 // ── boot ────────────────────────────────────────────────────
 (async function boot() {
@@ -202,7 +196,6 @@ async function enterDashboard() {
     return;
   }
 
-  populateTradeSelect();
 
   // ?lead=<public_id> — the "Claim profile" button in a job email carries the
   // lead it's about, so open THAT business on Requests rather than dumping the
@@ -403,7 +396,7 @@ function renderSwitcher() {
 }
 
 async function selectBusiness(biz) {
-  if (dirty && !confirm("Discard unsaved changes?")) return;
+  if (dirty) await saveProfile();   // never lose an edit when switching business
   current = biz;
   const { data } = await sb.from("business_profiles").select("*").eq("place_id", biz.place_id).maybeSingle();
   profile = data || {
@@ -418,7 +411,6 @@ async function selectBusiness(biz) {
     profile.services = [{ name: "", price_min: null, price_max: null, unit: "job" }];
   }
   dirty = false;
-  $("saveState").textContent = "";
   thread = null;                      // a thread from the previous business
   show($("threadCard"), false);
   show($("leadsCard"), true);
@@ -472,14 +464,6 @@ $("insured").addEventListener("change", (e) => { profile.insured = e.target.chec
 $("acceptingWork").addEventListener("change", (e) => { profile.accepting_work = e.target.checked; markDirty(); });
 
 // ── services editor ─────────────────────────────────────────
-function populateTradeSelect() {
-  const sel = $("tradePrefill");
-  for (const trade of Object.keys(TRADE_TEMPLATES)) {
-    const o = document.createElement("option");
-    o.value = trade; o.textContent = trade; sel.appendChild(o);
-  }
-}
-
 function renderServices() {
   const wrap = $("serviceRows");
   const rows = (profile.services || []);
@@ -489,12 +473,16 @@ function renderServices() {
     card.querySelector(".name-in").addEventListener("input", (e) => { setSvc(i, "name", e.target.value); });
     // Editing either price commits the row to full strength (mirrors the app).
     const ownPrices = () => {
-      profile.services[i].from_template = false;
-      card.querySelectorAll(".min-in, .max-in").forEach((el) => el.classList.remove("is-template"));
     };
     card.querySelector(".min-in").addEventListener("input", (e) => { setSvc(i, "price_min", numOrNull(e.target.value)); ownPrices(); });
     card.querySelector(".max-in").addEventListener("input", (e) => { setSvc(i, "price_max", numOrNull(e.target.value)); ownPrices(); });
-    card.querySelector(".rm").addEventListener("click", () => { profile.services.splice(i, 1); renderServices(); markDirty(); updateCompleteness(); });
+    card.querySelector(".rm").addEventListener("click", () => {
+      profile.services.splice(i, 1);
+      // There's always one open service row — deleting the last leaves a fresh
+      // blank rather than an empty section (same as the app).
+      if (!profile.services.length) profile.services.push({ name: "", price_min: null, price_max: null, unit: "job" });
+      renderServices(); markDirty(); updateCompleteness();
+    });
   });
 }
 
@@ -508,11 +496,11 @@ function serviceCardHTML(s, i) {
     <div class="price-pair">
       <div>
         <label class="field-label">Price min $</label>
-        <input class="min-in${s.from_template ? " is-template" : ""}" type="number" min="0" placeholder="$" value="${s.price_min ?? ""}">
+        <input class="min-in" type="number" min="0" placeholder="$" value="${s.price_min ?? ""}">
       </div>
       <div>
         <label class="field-label">Price max $</label>
-        <input class="max-in${s.from_template ? " is-template" : ""}" type="number" min="0" placeholder="$" value="${s.price_max ?? ""}">
+        <input class="max-in" type="number" min="0" placeholder="$" value="${s.price_max ?? ""}">
       </div>
     </div>
     <button type="button" class="ghost-btn rm">Delete</button>
@@ -524,22 +512,6 @@ const numOrNull = (v) => (v === "" ? null : Number(v));
 $("addServiceBtn").addEventListener("click", () => {
   (profile.services ||= []).push({ name: "", price_min: null, price_max: null, unit: "job" });
   renderServices(); markDirty();
-});
-$("prefillBtn").addEventListener("click", () => {
-  const trade = $("tradePrefill").value;
-  if (!trade) return;
-  // Drop the blank starter row so the template doesn't land under an empty line,
-  // and skip names already present so a second click can't duplicate rows.
-  // Mirrors addTemplateServices() in BusinessProfileScreen.swift.
-  const kept = (profile.services || []).filter((s) => (s.name || "").trim());
-  const existing = new Set(kept.map((s) => s.name.trim().toLowerCase()));
-  const tmpl = TRADE_TEMPLATES[trade]
-    .filter(([name]) => !existing.has(name.toLowerCase()))
-    // from_template is transient — dims the prices until edited, and is stripped
-    // on save so it never reaches the services JSONB.
-    .map(([name, mn, mx]) => ({ name, price_min: mn, price_max: mx, unit: "job", from_template: true }));
-  profile.services = [...kept, ...tmpl];
-  renderServices(); markDirty(); updateCompleteness();
 });
 
 // ── photos ──────────────────────────────────────────────────
@@ -827,9 +799,9 @@ async function loadViews() {
 }
 
 // ── save ────────────────────────────────────────────────────
-$("saveBtn").addEventListener("click", async () => {
-  const btn = $("saveBtn");
-  btn.disabled = true; $("saveState").textContent = "Saving…";
+async function saveProfile() {
+  if (!current || !profile) return;
+  clearTimeout(autosaveTimer);
   const row = {
     place_id: current.place_id,
     display_name: profile.display_name || null,
@@ -837,8 +809,7 @@ $("saveBtn").addEventListener("click", async () => {
     about: profile.about || null,
     phone: profile.phone || null,
     website: profile.website || null,
-    // Named rows only, reduced to the four persisted fields — this also strips
-    // transient flags like from_template so they never reach the services JSONB.
+    // Named rows only, reduced to the four persisted fields.
     services: (profile.services || [])
       .filter((s) => (s.name || "").trim())
       .map(({ name, price_min, price_max, unit }) => ({ name, price_min, price_max, unit })),
@@ -852,18 +823,19 @@ $("saveBtn").addEventListener("click", async () => {
     logo_path: profile.logo_path || null,
   };
   const { error } = await sb.from("business_profiles").upsert(row, { onConflict: "place_id" });
-  btn.disabled = false;
   if (error) {
-    $("saveState").textContent = "";
-    alert("Save failed: " + (error.message || "unknown error"));
+    // A successful autosave says nothing; a failed one has to, since there is no
+    // Save button left to retry from.
+    console.error("autosave failed:", error);
+    show($("saveFailed"), true);
   } else {
     dirty = false;
-    $("saveState").textContent = "All changes saved ✓";
+    show($("saveFailed"), false);
     // reflect into the switcher label
     current.name = profile.display_name || current.name;
     renderSwitcher();
   }
-});
+}
 
 // ── views + guards ──────────────────────────────────────────
 // Three top-level views mirroring the app's navigation: the dashboard, the
@@ -930,7 +902,8 @@ function wireStaticHandlers() {
   $("billingBack").addEventListener("click", () => showView("dash"));
   $("editorSignOut").addEventListener("click", signOut);
   $("deletePageBtn").addEventListener("click", deletePage);
-  window.addEventListener("beforeunload", (e) => {
-    if (dirty) { e.preventDefault(); e.returnValue = ""; }
-  });
+  // Leaving inside the debounce window must not lose the edit. keepalive-style
+  // flush: fire the save without awaiting, the same shape as the app's onDisappear.
+  window.addEventListener("beforeunload", () => { if (dirty) saveProfile(); });
+  $("retrySaveBtn").addEventListener("click", () => saveProfile());
 }

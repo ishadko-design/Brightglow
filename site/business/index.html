@@ -232,9 +232,11 @@
         <button type="button" class="ghost-btn" id="editorSignOut">Sign out</button>
       </div>
 
-      <div class="save-bar">
-        <span id="saveState" class="muted"></span>
-        <button id="saveBtn" class="primary-btn">Save changes</button>
+      <!-- No Save button: edits autosave, as they do in the app. The only save
+           UI left is a failure notice, since there'd be nothing to retry from. -->
+      <div class="save-bar" id="saveFailed" hidden>
+        <span class="muted">Couldn't save your changes.</span>
+        <button type="button" class="ghost-btn" id="retrySaveBtn">Retry</button>
       </div>
     </section>
 
