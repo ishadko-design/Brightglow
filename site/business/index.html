@@ -196,7 +196,20 @@
               <span>Insured</span>
             </label>
           </div>
+
+          <!-- Pictures belong INSIDE the Profile card and BEFORE Typical
+               services (Figma 1140:1827, and the app's profileSection). They
+               were a separate section after services, which read as swapped. -->
+          <label class="field-label" for="photoInput">Pictures</label>
+          <p class="muted">Show your best relevant work. Drag to reorder; the first photo leads.</p>
+          <!-- Horizontal strip of tiles ending in a "+" add tile, as in the app —
+               not a grid with a separate upload button. The add tile is a <label>
+               for the input, so it opens the picker without any JS. -->
+          <div id="photoStrip" class="photo-strip"></div>
+          <input id="photoInput" type="file" accept="image/png,image/jpeg,image/webp" multiple hidden>
+          <p id="photoMsg" class="form-msg" aria-live="polite"></p>
         </div>
+
         <h2 class="section-head">Typical services</h2>
         <div class="card">
           <p class="muted">Get more leads with transparent price ranges.</p>
@@ -212,17 +225,6 @@
           <div id="serviceRows" class="service-rows"></div>
           <button type="button" class="add-row-btn" id="addServiceBtn">Add service</button>
         </div>
-      <h2 class="section-head">Pictures</h2>
-      <div class="card">
-        <p class="muted">Show your best relevant work. Drag to reorder; the first photo leads.</p>
-        <!-- Horizontal strip of tiles ending in a "+" add tile, as in the app —
-             not a grid with a separate upload button. The add tile is a <label>
-             for the input, so it opens the picker without any JS. -->
-        <div id="photoStrip" class="photo-strip"></div>
-        <input id="photoInput" type="file" accept="image/png,image/jpeg,image/webp" multiple hidden>
-        <p id="photoMsg" class="form-msg" aria-live="polite"></p>
-      </div>
-
       <!-- Delete + account — the tail of the app's Settings screen. -->
       <div class="card account-card">
         <button type="button" class="ghost-btn" id="deletePageBtn">Delete page</button>
