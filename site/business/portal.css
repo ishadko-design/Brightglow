@@ -232,6 +232,8 @@ select { appearance: none; background-image: none; }
 .service-card > .field-label:first-child { margin-top: 0; }
 .price-pair { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
 .service-card .rm { margin-top: 12px; }
+/* Template-seeded prices read as a suggestion until the business edits one. */
+.service-card input.is-template { color: var(--gray50); }
 .service-card .rm:hover { border-color: var(--danger); color: var(--danger); }
 /* Accent capsule, as in the app — not a dashed full-width placeholder. */
 .add-row-btn { margin-top: 16px; background: var(--accent); border: none; color: var(--white); border-radius: 999px; padding: 11px 22px; cursor: pointer; font-family: "Lato"; font-weight: 700; font-size: 14px; }

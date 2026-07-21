@@ -482,8 +482,13 @@ function renderServices() {
   wrap.querySelectorAll(".service-card").forEach((card) => {
     const i = +card.dataset.i;
     card.querySelector(".name-in").addEventListener("input", (e) => { setSvc(i, "name", e.target.value); });
-    card.querySelector(".min-in").addEventListener("input", (e) => { setSvc(i, "price_min", numOrNull(e.target.value)); });
-    card.querySelector(".max-in").addEventListener("input", (e) => { setSvc(i, "price_max", numOrNull(e.target.value)); });
+    // Editing either price commits the row to full strength (mirrors the app).
+    const ownPrices = () => {
+      profile.services[i].from_template = false;
+      card.querySelectorAll(".min-in, .max-in").forEach((el) => el.classList.remove("is-template"));
+    };
+    card.querySelector(".min-in").addEventListener("input", (e) => { setSvc(i, "price_min", numOrNull(e.target.value)); ownPrices(); });
+    card.querySelector(".max-in").addEventListener("input", (e) => { setSvc(i, "price_max", numOrNull(e.target.value)); ownPrices(); });
     card.querySelector(".rm").addEventListener("click", () => { profile.services.splice(i, 1); renderServices(); markDirty(); updateCompleteness(); });
   });
 }
@@ -498,11 +503,11 @@ function serviceCardHTML(s, i) {
     <div class="price-pair">
       <div>
         <label class="field-label">Price min $</label>
-        <input class="min-in" type="number" min="0" placeholder="$" value="${s.price_min ?? ""}">
+        <input class="min-in${s.from_template ? " is-template" : ""}" type="number" min="0" placeholder="$" value="${s.price_min ?? ""}">
       </div>
       <div>
         <label class="field-label">Price max $</label>
-        <input class="max-in" type="number" min="0" placeholder="$" value="${s.price_max ?? ""}">
+        <input class="max-in${s.from_template ? " is-template" : ""}" type="number" min="0" placeholder="$" value="${s.price_max ?? ""}">
       </div>
     </div>
     <button type="button" class="ghost-btn rm">Delete</button>
@@ -525,7 +530,9 @@ $("prefillBtn").addEventListener("click", () => {
   const existing = new Set(kept.map((s) => s.name.trim().toLowerCase()));
   const tmpl = TRADE_TEMPLATES[trade]
     .filter(([name]) => !existing.has(name.toLowerCase()))
-    .map(([name, mn, mx]) => ({ name, price_min: mn, price_max: mx, unit: "job" }));
+    // from_template is transient — dims the prices until edited, and is stripped
+    // on save so it never reaches the services JSONB.
+    .map(([name, mn, mx]) => ({ name, price_min: mn, price_max: mx, unit: "job", from_template: true }));
   profile.services = [...kept, ...tmpl];
   renderServices(); markDirty(); updateCompleteness();
 });
@@ -810,7 +817,11 @@ $("saveBtn").addEventListener("click", async () => {
     about: profile.about || null,
     phone: profile.phone || null,
     website: profile.website || null,
-    services: (profile.services || []).filter((s) => (s.name || "").trim()),
+    // Named rows only, reduced to the four persisted fields — this also strips
+    // transient flags like from_template so they never reach the services JSONB.
+    services: (profile.services || [])
+      .filter((s) => (s.name || "").trim())
+      .map(({ name, price_min, price_max, unit }) => ({ name, price_min, price_max, unit })),
     service_area: profile.service_area || null,
     license_number: profile.license_number || null,
     licensed: !!profile.licensed,
