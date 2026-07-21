@@ -17,8 +17,15 @@
       <img class="appicon" src="../media/appicon.png" alt="">
       <span>Brightglow <em>for Business</em></span>
     </a>
-    <button id="billingBtn" class="ghost-btn" hidden>Billing</button>
-    <button id="signOutBtn" class="ghost-btn" hidden>Sign out</button>
+    <div class="topbar-actions">
+      <button id="billingBtn" class="ghost-btn" hidden>Billing</button>
+      <!-- Settings sits up here beside the brand, the way the app's gear sits
+           beside the business name. Sign out is NOT here: as in the app it lives
+           only at the bottom of Settings. The button below is the escape hatch
+           for the "nothing to manage" state, where there's no Settings to reach. -->
+      <button type="button" class="ghost-btn settings-btn" id="openEditorBtn" hidden>Settings</button>
+      <button id="signOutBtn" class="ghost-btn" hidden>Sign out</button>
+    </div>
   </header>
 
   <main class="wrap">
@@ -82,9 +89,6 @@
             <span class="track"></span>
             <span class="switch-label">Accepting new work</span>
           </label>
-          <!-- Settings — the app's gear entry point, spelled out here because a
-               bare icon on the web reads as decoration next to the toggle. -->
-          <button type="button" class="ghost-btn settings-btn" id="openEditorBtn">Settings</button>
         </div>
       </div>
 

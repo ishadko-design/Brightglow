@@ -218,7 +218,6 @@ async function enterDashboard() {
   }
 
   show($("bootView"), false);
-  show($("signOutBtn"), true);
   showView("dash");
   renderSwitcher();
   loadBilling();   // not awaited: the dashboard is usable while this resolves
@@ -375,9 +374,12 @@ async function openStripePortal() {
   }
 }
 
+// Dead end: there's no Settings to reach, so the topbar Sign out is the only way
+// out — the one place it still appears.
 function fail(text) {
   show($("bootView"), false);
   show($("dashView"), false);
+  show($("openEditorBtn"), false);
   show($("signOutBtn"), true);
   const c = $("authView");
   c.hidden = false;
@@ -853,6 +855,9 @@ function showView(name) {
   show($("dashView"), name === "dash");
   show($("editorView"), name === "editor");
   show($("billingView"), name === "billing");
+  // Settings is only an entry point FROM the dashboard — the editor and billing
+  // each have their own Back.
+  show($("openEditorBtn"), name === "dash");
   window.scrollTo(0, 0);
 }
 
