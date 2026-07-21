@@ -471,11 +471,8 @@ function renderServices() {
   wrap.querySelectorAll(".service-card").forEach((card) => {
     const i = +card.dataset.i;
     card.querySelector(".name-in").addEventListener("input", (e) => { setSvc(i, "name", e.target.value); });
-    // Editing either price commits the row to full strength (mirrors the app).
-    const ownPrices = () => {
-    };
-    card.querySelector(".min-in").addEventListener("input", (e) => { setSvc(i, "price_min", numOrNull(e.target.value)); ownPrices(); });
-    card.querySelector(".max-in").addEventListener("input", (e) => { setSvc(i, "price_max", numOrNull(e.target.value)); ownPrices(); });
+    card.querySelector(".min-in").addEventListener("input", (e) => { setSvc(i, "price_min", numOrNull(e.target.value)); });
+    card.querySelector(".max-in").addEventListener("input", (e) => { setSvc(i, "price_max", numOrNull(e.target.value)); });
     card.querySelector(".rm").addEventListener("click", () => {
       profile.services.splice(i, 1);
       // There's always one open service row — deleting the last leaves a fresh
@@ -869,7 +866,7 @@ async function signOut() {
   location.reload();
 }
 
-// The app's "Delete page": drops only the owner-authored business_profiles row.
+// The app's "Delete profile": drops only the owner-authored business_profiles row.
 // Requests are untouched and the listing reverts to its Google-derived info.
 // RLS gates this to the owner.
 async function deletePage() {
@@ -881,7 +878,7 @@ async function deletePage() {
   const btn = $("deletePageBtn");
   btn.disabled = true; btn.textContent = "Deleting…";
   const { error } = await sb.from("business_profiles").delete().eq("place_id", current.place_id);
-  btn.disabled = false; btn.textContent = "Delete page";
+  btn.disabled = false; btn.textContent = "Delete profile";
   if (error) { alert("Delete failed: " + (error.message || "unknown error")); return; }
   dirty = false;
   await selectBusiness(current);   // re-seed from the lead, as the app does
@@ -900,7 +897,6 @@ function wireStaticHandlers() {
   $("editorBack").addEventListener("click", () => showView("dash"));
   $("billingBtn").addEventListener("click", () => showView("billing"));
   $("billingBack").addEventListener("click", () => showView("dash"));
-  $("editorSignOut").addEventListener("click", signOut);
   $("deletePageBtn").addEventListener("click", deletePage);
   // Leaving inside the debounce window must not lose the edit. keepalive-style
   // flush: fire the save without awaiting, the same shape as the app's onDisappear.

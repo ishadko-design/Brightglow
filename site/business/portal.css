@@ -241,22 +241,25 @@ select { appearance: none; background-image: none; }
 /* Settings on the dashboard header — the app's gear entry point, labelled and
    sized as a real target rather than a 38px icon puck. */
 /* Delete + sign-out sit together at the tail of the editor, as in the app. */
-.account-card { display: flex; flex-direction: column; align-items: flex-start; gap: 12px; }
+/* Tail of Settings: a rule, then a centered Delete profile (Figma 1140:1827). */
+.tail-rule { border: 0; border-top: 1px solid var(--gray20); margin: 32px 0 24px; }
+.tail-actions { display: flex; flex-direction: column; align-items: center; gap: 8px; margin-bottom: 24px; }
 
 /* Section heading — the spacing above is what separates Profile / Services /
    Pictures now that they share one scroll. */
 .section-head { margin: 24px 0 8px; }
+.section-sub { margin: -4px 0 12px; }
 #editorView > .section-head:first-of-type { margin-top: 8px; }
 
 /* ── services editor ─────────────────────────────────────── */
 /* One card per service — the app's ServiceRowEditor shape: name on its own row,
    min/max side by side, Delete beneath. Not a spreadsheet grid. */
+.service-rows > .service-card + .service-card { margin-top: 12px; }
 .service-rows { display: flex; flex-direction: column; gap: 12px; }
-.service-card { background: var(--gray05); border: 1px solid var(--gray10); border-radius: 20px; padding: 16px; }
+.service-card { background: var(--gray05); border: 1px solid var(--gray10); border-radius: 32px; padding: 16px; }
 .service-card > .field-label:first-child { margin-top: 0; }
 .price-pair { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
 .service-card .rm { margin-top: 12px; }
-/* Template-seeded prices read as a suggestion until the business edits one. */
 .service-card .rm:hover { border-color: var(--danger); color: var(--danger); }
 /* Accent capsule, as in the app — not a dashed full-width placeholder. */
 .add-row-btn { margin-top: 16px; background: var(--accent); border: none; color: var(--white); border-radius: 999px; padding: 11px 22px; cursor: pointer; font-family: "Lato"; font-weight: 700; font-size: 14px; }

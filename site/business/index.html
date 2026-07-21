@@ -210,26 +210,21 @@
           <p id="photoMsg" class="form-msg" aria-live="polite"></p>
         </div>
 
-        <h2 class="section-head">Typical services</h2>
-        <div class="card">
-          <p class="muted">Get more leads with transparent price ranges.</p>
-          <div class="prefill">
-            <label class="field-label" for="tradePrefill">Start from a trade template</label>
-            <div class="prefill-row">
-              <select id="tradePrefill">
-                <option value="">Choose a trade…</option>
-              </select>
-              <button type="button" class="ghost-btn" id="prefillBtn">Add typical services</button>
-            </div>
-          </div>
-          <div id="serviceRows" class="service-rows"></div>
-          <button type="button" class="add-row-btn" id="addServiceBtn">Add service</button>
-        </div>
-      <!-- Delete + account — the tail of the app's Settings screen. -->
-      <div class="card account-card">
-        <button type="button" class="ghost-btn" id="deletePageBtn">Delete page</button>
+      <!-- No outer card here: Figma 1140:1827 puts the caption directly under the
+           heading, makes EACH service its own card, and leaves "Add service"
+           standalone below them. Wrapping the lot in one card (as this did) reads
+           as a single panel instead of a list. -->
+      <h2 class="section-head">Typical services</h2>
+      <p class="muted section-sub">Get more leads with transparent price ranges.</p>
+      <div id="serviceRows" class="service-rows"></div>
+      <button type="button" class="add-row-btn" id="addServiceBtn">Add service</button>
+
+      <!-- Tail of the screen, as in Figma: a rule, then a centered Delete profile.
+           Sign out lives in the topbar (the Figma header has no profile icon). -->
+      <hr class="tail-rule">
+      <div class="tail-actions">
+        <button type="button" class="ghost-btn" id="deletePageBtn">Delete profile</button>
         <p class="muted small" id="signedInAs"></p>
-        <button type="button" class="ghost-btn" id="editorSignOut">Sign out</button>
       </div>
 
       <!-- No Save button: edits autosave, as they do in the app. The only save
