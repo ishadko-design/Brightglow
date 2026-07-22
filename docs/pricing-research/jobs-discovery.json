@@ -1,0 +1,3880 @@
+{
+ "generated": "2026-07-22",
+ "runId": "wf_d1f8b85a-e7f",
+ "note": "Discovery phase only. Price anchors did NOT complete (session limit); anchors below are unverified and must not be used as calibration references until re-run.",
+ "byCategory": [
+  {
+   "category": "Plumbing",
+   "allJobs": [
+    {
+     "job": "Drain clog clearing",
+     "phrasings": [
+      "sink is clogged",
+      "drain wont drain",
+      "slow draining sink",
+      "clogged shower drain hair",
+      "unclog bathtub",
+      "snake a drain",
+      "kitchen sink backing up",
+      "drain cleaning near me"
+     ],
+     "unit": "each",
+     "typicalQuantity": 1,
+     "demand": "very-high",
+     "covered": true,
+     "isRepair": true,
+     "notes": "Single most frequent plumbing call. Priced per drain/fixture, NOT per foot of pipe. Cabled/snaked drain is a flat-rate job ($150-350); only escalate to jetting or line repair if the first attempt fails. Distinct from main sewer line clog."
+    },
+    {
+     "job": "Running toilet repair",
+     "phrasings": [
+      "my toilet keeps running",
+      "toilet wont stop running water",
+      "toilet running after flush",
+      "toilet flapper leaking",
+      "toilet fill valve replacement",
+      "water keeps trickling in toilet",
+      "toilet runs every few minutes"
+     ],
+     "unit": "each",
+     "typicalQuantity": 1,
+     "demand": "very-high",
+     "covered": false,
+     "isRepair": true,
+     "notes": "Classic blind-spot job: this is a $100-250 flapper/fill-valve rebuild, not a $400+ toilet replacement. Must route away from toilet install. Often quoted as a flat 'toilet tune-up' with a 1hr minimum."
+    },
+    {
+     "job": "Leaky faucet repair",
+     "phrasings": [
+      "faucet dripping",
+      "kitchen faucet leaking at base",
+      "bathroom sink drips constantly",
+      "leaky faucet fix",
+      "faucet leaks when turned on",
+      "dripping tap wont stop",
+      "faucet cartridge replacement"
+     ],
+     "unit": "each",
+     "typicalQuantity": 1,
+     "demand": "very-high",
+     "covered": false,
+     "isRepair": true,
+     "notes": "Cartridge/washer/O-ring rebuild, $75-200. Currently gets priced as full faucet swap. Key routing signal: 'drip', 'leak', 'fix' = repair; 'new', 'replace', 'install', 'upgrade' = fixture swap."
+    },
+    {
+     "job": "Toilet leaking at base / wax ring replacement",
+     "phrasings": [
+      "water around bottom of toilet",
+      "toilet leaking at base",
+      "toilet wobbles and leaks",
+      "wax ring replacement",
+      "toilet rocking on floor",
+      "puddle under toilet",
+      "toilet reset"
+     ],
+     "unit": "each",
+     "typicalQuantity": 1,
+     "demand": "high",
+     "covered": false,
+     "isRepair": true,
+     "notes": "Pull-and-reset with new wax ring and closet bolts, $150-350. Different job from toilet replacement even though the toilet gets lifted. Add flange repair as an upsell variable."
+    },
+    {
+     "job": "Shower/tub valve cartridge replacement",
+     "phrasings": [
+      "shower drips when off",
+      "shower handle wont turn off water",
+      "no hot water in shower only",
+      "shower cartridge replacement",
+      "tub faucet leaking",
+      "shower valve stuck",
+      "shower handle spins"
+     ],
+     "unit": "each",
+     "typicalQuantity": 1,
+     "demand": "high",
+     "covered": false,
+     "isRepair": true,
+     "notes": "$150-400 cartridge swap. Sharply different from a $1,000-2,500 valve body replacement that requires opening the wall. Price should default to the cartridge job unless the user mentions wall access or tile."
+    },
+    {
+     "job": "Water heater repair",
+     "phrasings": [
+      "no hot water",
+      "water heater not heating",
+      "pilot light wont stay lit",
+      "water heater leaking from top",
+      "not enough hot water anymore",
+      "water heater making popping noise",
+      "thermocouple replacement",
+      "hot water runs out fast"
+     ],
+     "unit": "each",
+     "typicalQuantity": 1,
+     "demand": "very-high",
+     "covered": false,
+     "isRepair": true,
+     "notes": "Big blind spot: 'no hot water' currently prices as full heater replacement ($1,500-3,000) when it is usually a $150-500 thermocouple, heating element, thermostat, or T&P valve fix. Route 'leaking from bottom of tank' to replacement, everything else to repair first."
+    },
+    {
+     "job": "Water heater replacement",
+     "phrasings": [
+      "new water heater",
+      "replace 50 gallon water heater",
+      "water heater install cost",
+      "hot water tank replacement",
+      "water heater flooded my garage",
+      "need a new hot water heater"
+     ],
+     "unit": "each",
+     "typicalQuantity": 1,
+     "demand": "very-high",
+     "covered": true,
+     "isRepair": false,
+     "notes": "Already covered. Gas vs electric and 40/50/75 gal are the main cost drivers; expansion tank, pan, and code upgrades are common add-ons."
+    },
+    {
+     "job": "Tankless water heater install and descaling",
+     "phrasings": [
+      "tankless water heater install",
+      "switch to tankless",
+      "navien rinnai install",
+      "tankless flush",
+      "descale tankless water heater",
+      "tankless error code",
+      "annual tankless maintenance"
+     ],
+     "unit": "each",
+     "typicalQuantity": 1,
+     "demand": "medium",
+     "covered": true,
+     "isRepair": false,
+     "notes": "Install is covered, but the recurring $150-300 descaling/flush maintenance visit is not. Worth a repair-side variant since it is an annual service in hard-water regions."
+    },
+    {
+     "job": "Garbage disposal repair or replacement",
+     "phrasings": [
+      "garbage disposal humming not spinning",
+      "disposal jammed",
+      "garbage disposal leaking underneath",
+      "disposal wont turn on",
+      "replace garbage disposal",
+      "insinkerator not working",
+      "disposal backing up into sink"
+     ],
+     "unit": "each",
+     "typicalQuantity": 1,
+     "demand": "high",
+     "covered": false,
+     "isRepair": true,
+     "notes": "Two-tier job: unjam/reset is $100-200, replacement is $250-625 installed. 'humming' and 'jammed' route to repair; 'leaking' almost always routes to replacement."
+    },
+    {
+     "job": "Sump pump repair or replacement",
+     "phrasings": [
+      "sump pump not working",
+      "sump pump running constantly",
+      "basement flooding sump pump",
+      "sump pump making noise",
+      "replace sump pump",
+      "sump pit filling up",
+      "battery backup sump pump"
+     ],
+     "unit": "each",
+     "typicalQuantity": 1,
+     "demand": "high",
+     "covered": false,
+     "isRepair": true,
+     "notes": "Repair $200-870, replacement $450-1,700 with pump. Highly seasonal and urgency-driven; battery backup add-on is a frequent upsell. Regional (basement markets)."
+    },
+    {
+     "job": "Hidden water leak detection",
+     "phrasings": [
+      "water bill suddenly doubled",
+      "wet spot on ceiling below bathroom",
+      "hear water running in walls",
+      "slab leak detection",
+      "find a leak in my house",
+      "damp drywall no visible leak",
+      "water meter spinning with everything off"
+     ],
+     "unit": "hour",
+     "typicalQuantity": 2,
+     "demand": "high",
+     "covered": false,
+     "isRepair": true,
+     "notes": "Genuinely quoted as a diagnostic \u2014 flat $150-450 or hourly \u2014 SEPARATE from the repair it leads to. The engine needs a diagnose-then-repair two-stage output here rather than jumping straight to repipe. Slab leaks escalate to $2,000-6,000."
+    },
+    {
+     "job": "Burst or frozen pipe emergency repair",
+     "phrasings": [
+      "pipe burst water everywhere",
+      "frozen pipes wont thaw",
+      "emergency plumber burst pipe",
+      "pipe leaking behind wall",
+      "how to shut off water main",
+      "copper pipe cracked",
+      "water spraying under sink"
+     ],
+     "unit": "each",
+     "typicalQuantity": 1,
+     "demand": "high",
+     "covered": false,
+     "isRepair": true,
+     "notes": "Priced per repair/section ($200-800), not per foot. Emergency/after-hours multiplier of 1.5-2x is the dominant cost variable and should be modeled explicitly."
+    },
+    {
+     "job": "Toilet replacement",
+     "phrasings": [
+      "install new toilet",
+      "replace toilet",
+      "toilet cracked need new one",
+      "toilet installation cost",
+      "upgrade to comfort height toilet",
+      "home depot toilet install"
+     ],
+     "unit": "each",
+     "typicalQuantity": 1,
+     "demand": "high",
+     "covered": true,
+     "isRepair": false,
+     "notes": "Covered under fixture swap. $224-533 labor+basic fixture; haul-away of old unit is a standard line item."
+    },
+    {
+     "job": "Faucet replacement",
+     "phrasings": [
+      "install new kitchen faucet",
+      "replace bathroom faucet",
+      "faucet installation cost",
+      "swap out sink faucet",
+      "new pull down faucet install"
+     ],
+     "unit": "each",
+     "typicalQuantity": 1,
+     "demand": "high",
+     "covered": true,
+     "isRepair": false,
+     "notes": "Covered under fixture swap. $170-460 labor. Frequently bundled with angle stop replacement since old stops fail when disturbed."
+    },
+    {
+     "job": "Shutoff valve / angle stop replacement",
+     "phrasings": [
+      "shut off valve under sink wont turn",
+      "angle stop leaking",
+      "toilet supply valve stuck",
+      "water shutoff dripping",
+      "replace supply line under sink",
+      "main shutoff valve replacement"
+     ],
+     "unit": "each",
+     "typicalQuantity": 2,
+     "demand": "high",
+     "covered": false,
+     "isRepair": true,
+     "notes": "Small $100-250 per-valve job that homeowners call about constantly, usually 2 at a time under a sink. Main-house shutoff replacement is a bigger $300-800 variant requiring a curb-stop shutdown."
+    },
+    {
+     "job": "Main sewer line clog / hydro jetting",
+     "phrasings": [
+      "sewage backing up in shower",
+      "toilet and shower backing up at same time",
+      "main line clog",
+      "sewer backup",
+      "hydro jetting cost",
+      "roots in sewer line",
+      "gurgling toilet when washer drains",
+      "camera inspection sewer"
+     ],
+     "unit": "each",
+     "typicalQuantity": 1,
+     "demand": "high",
+     "covered": false,
+     "isRepair": true,
+     "notes": "Distinct from a single fixture clog: multiple fixtures backing up simultaneously is the tell. Cabling $250-600, hydro jetting $400-1,200, camera inspection $250-500 often credited back. This is the gateway job to sewer line repair."
+    },
+    {
+     "job": "Sewer line repair or replacement",
+     "phrasings": [
+      "sewer line replacement cost",
+      "broken sewer pipe in yard",
+      "trenchless sewer repair",
+      "sewer line collapsed",
+      "root damaged sewer line repair",
+      "pipe bursting sewer"
+     ],
+     "unit": "linear foot",
+     "typicalQuantity": 50,
+     "demand": "medium",
+     "covered": true,
+     "isRepair": false,
+     "notes": "Covered. Genuinely quoted per linear foot ($50-250/ft trenched, $60-250/ft trenchless). Depth, permits, and hardscape/landscape restoration dominate variance."
+    },
+    {
+     "job": "Whole-home repipe",
+     "phrasings": [
+      "repipe house cost",
+      "replace all galvanized pipes",
+      "polybutylene repipe",
+      "pex repipe whole house",
+      "old pipes keep leaking need repipe",
+      "copper repipe"
+     ],
+     "unit": "project",
+     "typicalQuantity": 1,
+     "demand": "medium",
+     "covered": true,
+     "isRepair": false,
+     "notes": "Covered. Quoted per project (sometimes per fixture count or per bathroom), never per linear foot in practice. Drywall repair is a major hidden cost homeowners underestimate."
+    }
+   ],
+   "anchors": []
+  },
+  {
+   "category": "Electrical",
+   "allJobs": [
+    {
+     "job": "Electrical troubleshooting / diagnostic service call",
+     "phrasings": [
+      "something electrical is wrong idk what",
+      "electrician to figure out whats wrong",
+      "half my house has no power",
+      "power out in one room but breaker not tripped",
+      "electrical diagnostic",
+      "burning smell from outlet",
+      "buzzing sound in the wall electric"
+     ],
+     "unit": "hour",
+     "typicalQuantity": 2,
+     "demand": "very-high",
+     "covered": false,
+     "isRepair": true,
+     "notes": "The single biggest blind spot. Most electrician calls start as an unknown symptom, not a named install. Priced as a diagnostic/service-call fee ($100-200 trip charge) plus $50-130/hr, NOT as replacing the system. Should be the catch-all route for any symptom phrasing that doesn't map to a specific job."
+    },
+    {
+     "job": "Outlet repair or replacement",
+     "phrasings": [
+      "outlet stopped working",
+      "plug not working in bedroom",
+      "replace outlet",
+      "outlet sparks when i plug something in",
+      "add an outlet",
+      "loose outlet wont hold plug",
+      "outlet is warm"
+     ],
+     "unit": "each",
+     "typicalQuantity": 2,
+     "demand": "very-high",
+     "covered": true,
+     "isRepair": true,
+     "notes": "Covered, but likely modeled as new install only. Replacing an existing receptacle ($90-200) is far cheaper than running a new one ($150-350+). Needs a repair vs. new-circuit branch."
+    },
+    {
+     "job": "Circuit breaker replacement / breaker tripping repair",
+     "phrasings": [
+      "breaker keeps tripping",
+      "circuit breaker wont reset",
+      "replace breaker",
+      "breaker trips when i use microwave",
+      "bad breaker in panel",
+      "add a breaker to my panel"
+     ],
+     "unit": "each",
+     "typicalQuantity": 1,
+     "demand": "very-high",
+     "covered": false,
+     "isRepair": true,
+     "notes": "Extremely common and cheap ($150-300 per breaker). Currently this almost certainly routes to panel upgrade ($2-4k), which is a 10x overquote. Highest-value gap to close."
+    },
+    {
+     "job": "Light switch / dimmer switch replacement",
+     "phrasings": [
+      "replace light switch",
+      "switch doesnt work",
+      "install dimmer",
+      "dimmer swich",
+      "light switch buzzing",
+      "smart switch install",
+      "3 way switch not working"
+     ],
+     "unit": "each",
+     "typicalQuantity": 2,
+     "demand": "very-high",
+     "covered": false,
+     "isRepair": true,
+     "notes": "$75-200 per switch. Homeowners rarely do just one; quantity 2 is realistic. Often bundled, so per-switch price should drop with quantity."
+    },
+    {
+     "job": "GFCI outlet installation / replacement",
+     "phrasings": [
+      "gfci outlet",
+      "gfi wont reset",
+      "bathroom outlet not working",
+      "install gfci in kitchen",
+      "ground fault outlet keeps tripping",
+      "outdoor outlet gfci"
+     ],
+     "unit": "each",
+     "typicalQuantity": 2,
+     "demand": "high",
+     "covered": false,
+     "isRepair": true,
+     "notes": "$90-200 to replace existing, $150-350 for new. Very frequent because a tripped GFCI is the hidden cause of many 'outlet dead' calls. Also a standard home-inspection repair item."
+    },
+    {
+     "job": "Ceiling fan installation or repair",
+     "phrasings": [
+      "install ceiling fan",
+      "ceiling fan wobbles",
+      "replace ceiling fan",
+      "ceiling fan stopped working",
+      "fan makes noise",
+      "swap light for ceiling fan"
+     ],
+     "unit": "each",
+     "typicalQuantity": 1,
+     "demand": "high",
+     "covered": true,
+     "isRepair": false,
+     "notes": "Covered. Big price fork: replacing an existing fan on an existing fan-rated box vs. new install requiring new wiring/box/switch (roughly 2-3x). Repair (wobble, pull chain, capacitor) is much cheaper still."
+    },
+    {
+     "job": "Light fixture installation / replacement",
+     "phrasings": [
+      "hang a chandelier",
+      "replace light fixture",
+      "install pendant lights",
+      "light fixture install",
+      "swap out dining room light",
+      "vanity light install"
+     ],
+     "unit": "each",
+     "typicalQuantity": 2,
+     "demand": "high",
+     "covered": true,
+     "isRepair": false,
+     "notes": "Covered. Height and weight are the real cost drivers (foyer chandelier vs. flush mount)."
+    },
+    {
+     "job": "Recessed lighting / can light installation",
+     "phrasings": [
+      "recessed lighting",
+      "install can lights",
+      "add pot lights to living room",
+      "led recessed lights cost",
+      "canned lighting installation",
+      "retrofit recessed lights"
+     ],
+     "unit": "each",
+     "typicalQuantity": 6,
+     "demand": "high",
+     "covered": false,
+     "isRepair": false,
+     "notes": "$65-150 per fixture depending on new construction vs. retrofit into existing ceiling. Always quoted per can, always multiple at once - quantity default of 6 matters a lot."
+    },
+    {
+     "job": "Smoke / carbon monoxide detector installation or chirp repair",
+     "phrasings": [
+      "smoke detector chirping",
+      "hardwired smoke alarm replacement",
+      "install smoke detectors",
+      "carbon monoxide detector install",
+      "smoke alarm keeps beeping",
+      "interconnected smoke detectors"
+     ],
+     "unit": "each",
+     "typicalQuantity": 3,
+     "demand": "high",
+     "covered": false,
+     "isRepair": true,
+     "notes": "$90-150 each. Chirping/false-alarm calls are constant and are cheap replacements, not system work. Whole-house interconnected replacement is a common realtor/inspection-driven job."
+    },
+    {
+     "job": "New dedicated circuit / 240V outlet",
+     "phrasings": [
+      "240v outlet for dryer",
+      "install outlet for stove",
+      "add a circuit for my garage",
+      "220 line install",
+      "dedicated circuit for window ac",
+      "hot tub wiring",
+      "need a line for my washer"
+     ],
+     "unit": "each",
+     "typicalQuantity": 1,
+     "demand": "high",
+     "covered": false,
+     "isRepair": false,
+     "notes": "$250-800 per circuit; hot tub runs $800-1600. Distinct from a standard 120V outlet - different breaker, wire gauge, sometimes panel capacity. Currently probably absorbed into 'outlet' and badly underpriced."
+    },
+    {
+     "job": "EV charger installation",
+     "phrasings": [
+      "ev charger install",
+      "tesla charger at home",
+      "level 2 charger",
+      "install car charger in garage",
+      "240v charger for my ev"
+     ],
+     "unit": "each",
+     "typicalQuantity": 1,
+     "demand": "high",
+     "covered": true,
+     "isRepair": false,
+     "notes": "Covered. Distance from panel and whether a panel upgrade is required are the dominant variables."
+    },
+    {
+     "job": "Electrical panel upgrade / replacement",
+     "phrasings": [
+      "panel upgrade",
+      "upgrade to 200 amp",
+      "replace fuse box",
+      "my panel is federal pacific",
+      "electrical service upgrade",
+      "need more breaker space"
+     ],
+     "unit": "project",
+     "typicalQuantity": 1,
+     "demand": "high",
+     "covered": true,
+     "isRepair": false,
+     "notes": "Covered. Must NOT be the fallback for breaker/subpanel/circuit requests - that's the main overquote risk."
+    },
+    {
+     "job": "Doorbell / video doorbell installation",
+     "phrasings": [
+      "install ring doorbell",
+      "doorbell doesnt work",
+      "video doorbell install",
+      "doorbell transformer",
+      "replace doorbell chime",
+      "nest doorbell wiring"
+     ],
+     "unit": "each",
+     "typicalQuantity": 1,
+     "demand": "high",
+     "covered": false,
+     "isRepair": true,
+     "notes": "$90-200. Very high volume small job; often really a dead transformer, which is a cheap repair not a replacement."
+    },
+    {
+     "job": "Whole-house surge protector installation",
+     "phrasings": [
+      "whole house surge protector",
+      "surge protection for my panel",
+      "protect appliances from power surges",
+      "install surge protector at breaker box"
+     ],
+     "unit": "each",
+     "typicalQuantity": 1,
+     "demand": "medium",
+     "covered": false,
+     "isRepair": false,
+     "notes": "$200-800 installed. Commonly upsold during panel work but also requested standalone after a storm or lightning event."
+    },
+    {
+     "job": "Standby generator / transfer switch installation",
+     "phrasings": [
+      "generac install",
+      "whole house generator",
+      "generator transfer switch",
+      "hook up my portable generator",
+      "backup power for my house",
+      "interlock kit install"
+     ],
+     "unit": "project",
+     "typicalQuantity": 1,
+     "demand": "medium",
+     "covered": false,
+     "isRepair": false,
+     "notes": "Wide range: a manual transfer switch/interlock for a portable generator is $500-1500, while a standby unit runs $4k+. The cheap version is far more commonly requested and should not be priced as the expensive one."
+    },
+    {
+     "job": "Whole-house rewire",
+     "phrasings": [
+      "rewire my house",
+      "knob and tube wiring replacement",
+      "old house needs new wiring",
+      "aluminum wiring replacement",
+      "rewire 1950s home cost"
+     ],
+     "unit": "sq ft",
+     "typicalQuantity": 1600,
+     "demand": "medium",
+     "covered": true,
+     "isRepair": false,
+     "notes": "Covered. Genuinely quoted per square foot. Partial rewires (one circuit, one room, aluminum pigtailing) are much more common than full rewires and need a separate cheaper path."
+    },
+    {
+     "job": "TV mounting / media wiring",
+     "phrasings": [
+      "mount my tv",
+      "tv wall mount install",
+      "hide tv cords in wall",
+      "outlet behind tv",
+      "tv above fireplace mount"
+     ],
+     "unit": "each",
+     "typicalQuantity": 1,
+     "demand": "medium",
+     "covered": true,
+     "isRepair": false,
+     "notes": "Covered. Often a handyman job unless in-wall power/cable is involved, which is what makes it electrical."
+    },
+    {
+     "job": "Solar panel installation",
+     "phrasings": [
+      "solar panels for my house",
+      "rooftop solar cost",
+      "install solar",
+      "solar with battery backup"
+     ],
+     "unit": "project",
+     "typicalQuantity": 1,
+     "demand": "medium",
+     "covered": true,
+     "isRepair": false,
+     "notes": "Covered. Lowest-frequency item here relative to its price tag; genuinely a specialty vertical rather than a general electrician call."
+    }
+   ],
+   "anchors": []
+  },
+  {
+   "category": "HVAC",
+   "allJobs": [
+    {
+     "job": "AC not cooling \u2014 diagnostic & repair",
+     "phrasings": [
+      "ac not blowing cold air",
+      "my ac is running but not cooling",
+      "air conditioner blowing warm air",
+      "ac stopped working",
+      "ac repair near me",
+      "air conditioning not cold",
+      "central air not cooling house"
+     ],
+     "unit": "project",
+     "typicalQuantity": 1,
+     "demand": "very-high",
+     "covered": false,
+     "isRepair": true,
+     "notes": "The single biggest summer call. Currently gets priced as full AC replacement, which is the worst mispricing in the engine. Trade quotes it as diagnostic fee ($75-200) rolled into a flat repair ($150-1200 typical). Should route to a repair band, not equipment cost."
+    },
+    {
+     "job": "Furnace repair",
+     "phrasings": [
+      "furnace repair",
+      "furnace not turning on",
+      "heat not working",
+      "furnace blowing cold air",
+      "my heater stopped working",
+      "furnace keeps shutting off",
+      "no heat in house"
+     ],
+     "unit": "project",
+     "typicalQuantity": 1,
+     "demand": "very-high",
+     "covered": true,
+     "isRepair": true,
+     "notes": "Already covered. Verify it's modeled as a flat repair, not a furnace swap."
+    },
+    {
+     "job": "HVAC tune-up / seasonal maintenance",
+     "phrasings": [
+      "ac tune up",
+      "hvac maintenance",
+      "furnace tune up",
+      "ac service",
+      "annual hvac checkup",
+      "get my ac serviced before summer",
+      "heating system inspection"
+     ],
+     "unit": "project",
+     "typicalQuantity": 1,
+     "demand": "very-high",
+     "covered": false,
+     "isRepair": true,
+     "notes": "$70-200 per visit; often sold per-system, so quantity 2 for a home with separate heat + cool. Includes filter change, so a standalone 'replace my air filter' query should route here."
+    },
+    {
+     "job": "AC capacitor / contactor replacement",
+     "phrasings": [
+      "ac capacitor replacement",
+      "ac wont start just hums",
+      "outside unit not turning on",
+      "ac fan not spinning",
+      "capacitor cost ac",
+      "hvac contactor replacement",
+      "condenser fan not running"
+     ],
+     "unit": "each",
+     "typicalQuantity": 1,
+     "demand": "very-high",
+     "covered": false,
+     "isRepair": true,
+     "notes": "Classic cheap call: ~$150-400 installed. Very high volume, and the symptom phrasings ('hums but won't start') are what people actually type. Quoted per part."
+    },
+    {
+     "job": "Refrigerant leak repair & recharge",
+     "phrasings": [
+      "freon recharge",
+      "ac low on refrigerant",
+      "add freon to ac",
+      "refrigerant leak repair",
+      "ac needs a recharge",
+      "how much to refill freon",
+      "r410a recharge cost"
+     ],
+     "unit": "project",
+     "typicalQuantity": 1,
+     "demand": "very-high",
+     "covered": false,
+     "isRepair": true,
+     "notes": "$150-800 for recharge; leak search/repair is separate and often quoted together. Homeowners still say 'freon' regardless of refrigerant type \u2014 keyword routing must include it. R-454B transition means quotes vary a lot by refrigerant."
+    },
+    {
+     "job": "Blower motor replacement",
+     "phrasings": [
+      "blower motor replacement",
+      "furnace fan not blowing",
+      "no air coming out of vents",
+      "hvac blower not working",
+      "fan runs but weak airflow",
+      "blower motor cost furnace"
+     ],
+     "unit": "each",
+     "typicalQuantity": 1,
+     "demand": "high",
+     "covered": false,
+     "isRepair": true,
+     "notes": "~$400-800 installed average; ECM/variable-speed motors run much higher. Quoted per motor."
+    },
+    {
+     "job": "Condensate drain clearing / AC water leak",
+     "phrasings": [
+      "ac leaking water inside",
+      "water dripping from ac unit",
+      "condensate drain clogged",
+      "ac drain line clog",
+      "water stain on ceiling under ac",
+      "hvac overflow pan full",
+      "ac shut off float switch"
+     ],
+     "unit": "project",
+     "typicalQuantity": 1,
+     "demand": "high",
+     "covered": false,
+     "isRepair": true,
+     "notes": "Cheap and extremely common ($100-350). Homeowners describe it as water damage, not HVAC, so phrasings must cover ceiling stains and dripping."
+    },
+    {
+     "job": "Furnace ignitor / flame sensor replacement",
+     "phrasings": [
+      "furnace ignitor replacement",
+      "furnace clicks but wont light",
+      "flame sensor cleaning",
+      "furnace lights then shuts off",
+      "furnace short cycling no heat",
+      "hot surface ignitor cost"
+     ],
+     "unit": "each",
+     "typicalQuantity": 1,
+     "demand": "high",
+     "covered": false,
+     "isRepair": true,
+     "notes": "$150-400. The most common single no-heat cause after filters. Quoted per part."
+    },
+    {
+     "job": "Thermostat repair or replacement (non-smart)",
+     "phrasings": [
+      "thermostat not working",
+      "thermostat blank screen",
+      "replace thermostat",
+      "thermostat wont turn on heat",
+      "new thermostat install",
+      "thermostat reading wrong temperature"
+     ],
+     "unit": "each",
+     "typicalQuantity": 1,
+     "demand": "high",
+     "covered": false,
+     "isRepair": true,
+     "notes": "Distinct from the covered smart-thermostat install: this is a $150-350 swap or wiring fix, not a Nest upsell. Route symptom phrasings ('blank screen', 'not working') here, product phrasings ('install my nest') to the smart thermostat job."
+    },
+    {
+     "job": "Evaporator coil replacement",
+     "phrasings": [
+      "evaporator coil replacement",
+      "ac coil leaking",
+      "a coil replacement cost",
+      "frozen evaporator coil",
+      "ice on my ac line",
+      "indoor coil needs replacing"
+     ],
+     "unit": "each",
+     "typicalQuantity": 1,
+     "demand": "high",
+     "covered": false,
+     "isRepair": true,
+     "notes": "$600-2000+. Frequently the pivot point where a repair quote turns into a replacement conversation, so it needs to price as its own job."
+    },
+    {
+     "job": "AC compressor replacement",
+     "phrasings": [
+      "compressor replacement cost",
+      "ac compressor went out",
+      "outside unit not working compressor",
+      "compressor bad worth fixing",
+      "how much is a new compressor"
+     ],
+     "unit": "each",
+     "typicalQuantity": 1,
+     "demand": "medium",
+     "covered": false,
+     "isRepair": true,
+     "notes": "$1200-3000+ installed and highly tonnage-dependent; often out of warranty. Lower call volume than the small parts but high dollar value, and users search it by name."
+    },
+    {
+     "job": "Air duct repair & leak sealing",
+     "phrasings": [
+      "duct repair",
+      "leaky air ducts",
+      "disconnected duct in attic",
+      "some rooms dont get air",
+      "duct sealing cost",
+      "crushed flex duct",
+      "air leaking from ductwork"
+     ],
+     "unit": "linear foot",
+     "typicalQuantity": 30,
+     "demand": "high",
+     "covered": false,
+     "isRepair": true,
+     "notes": "Genuinely quoted per linear foot of duct (roughly $10-30/ft for repair/replace runs), not per project. 'One room is always hot/cold' is the dominant homeowner phrasing and should route here rather than to a new system."
+    },
+    {
+     "job": "Air duct cleaning",
+     "phrasings": [
+      "duct cleaning",
+      "air duct cleaning near me",
+      "dusty vents",
+      "clean my air ducts",
+      "hvac vent cleaning cost",
+      "mold in air ducts"
+     ],
+     "unit": "project",
+     "typicalQuantity": 1,
+     "demand": "high",
+     "covered": false,
+     "isRepair": true,
+     "notes": "$450-1000 typical, priced per project though many contractors bill $25-50 per vent. High search volume and heavily advertised, so users type it directly."
+    },
+    {
+     "job": "Central AC replacement",
+     "phrasings": [
+      "new ac unit cost",
+      "replace central air",
+      "central ac installation",
+      "how much is a 3 ton ac",
+      "ac replacement near me"
+     ],
+     "unit": "each",
+     "typicalQuantity": 1,
+     "demand": "high",
+     "covered": true,
+     "isRepair": false,
+     "notes": "Already covered. Tonnage is the real cost driver."
+    },
+    {
+     "job": "Gas furnace replacement",
+     "phrasings": [
+      "new furnace cost",
+      "replace my furnace",
+      "gas furnace installation",
+      "furnace replacement near me",
+      "how much is a new heater"
+     ],
+     "unit": "each",
+     "typicalQuantity": 1,
+     "demand": "high",
+     "covered": true,
+     "isRepair": false,
+     "notes": "Already covered."
+    },
+    {
+     "job": "Heat pump installation",
+     "phrasings": [
+      "heat pump install",
+      "heat pump cost",
+      "replace furnace with heat pump",
+      "heat pump vs furnace price",
+      "cold climate heat pump installation"
+     ],
+     "unit": "each",
+     "typicalQuantity": 1,
+     "demand": "high",
+     "covered": true,
+     "isRepair": false,
+     "notes": "Already covered. Rebate/incentive sensitivity is high here."
+    },
+    {
+     "job": "Ductless mini-split installation",
+     "phrasings": [
+      "mini split install cost",
+      "ductless ac for one room",
+      "mini split for garage",
+      "how much is a mini split installed",
+      "add ac to a room without ducts"
+     ],
+     "unit": "each",
+     "typicalQuantity": 1,
+     "demand": "high",
+     "covered": true,
+     "isRepair": false,
+     "notes": "Already covered. Quoted per indoor head \u2014 if the user says 'two rooms', quantity should be 2, not 1."
+    },
+    {
+     "job": "Smart thermostat installation",
+     "phrasings": [
+      "install nest thermostat",
+      "smart thermostat installation",
+      "ecobee install cost",
+      "someone to install my nest",
+      "wifi thermostat setup"
+     ],
+     "unit": "each",
+     "typicalQuantity": 1,
+     "demand": "medium",
+     "covered": true,
+     "isRepair": false,
+     "notes": "Already covered. Often a $100-250 add-on rather than a standalone visit; C-wire runs are the common cost surprise."
+    }
+   ],
+   "anchors": []
+  },
+  {
+   "category": "Painting",
+   "allJobs": [
+    {
+     "job": "Interior painting (walls, whole home)",
+     "phrasings": [
+      "paint inside my house",
+      "interior painting",
+      "repaint walls",
+      "house painter interior",
+      "paint my whole house inside",
+      "interor painting cost"
+     ],
+     "unit": "sq ft",
+     "typicalQuantity": 1200,
+     "demand": "very-high",
+     "covered": true,
+     "isRepair": false,
+     "notes": "Already covered. Quoted on wall sq ft, not floor sq ft \u2014 most homeowners give floor area, so conversion matters."
+    },
+    {
+     "job": "Exterior house painting",
+     "phrasings": [
+      "paint outside of house",
+      "exterior painting",
+      "repaint my siding",
+      "house needs painting outside",
+      "exterior house painters near me",
+      "stucco painting"
+     ],
+     "unit": "sq ft",
+     "typicalQuantity": 2000,
+     "demand": "very-high",
+     "covered": true,
+     "isRepair": false,
+     "notes": "Already covered. Prep (wash, scrape, caulk) is often 40%+ of the labor."
+    },
+    {
+     "job": "Cabinet painting / refinishing",
+     "phrasings": [
+      "paint my kitchen cabinets",
+      "cabinet refinishing",
+      "respray cabinets white",
+      "cabinet painters",
+      "repaint bathroom vanity",
+      "kitchen cabnet painting"
+     ],
+     "unit": "linear foot",
+     "typicalQuantity": 25,
+     "demand": "high",
+     "covered": true,
+     "isRepair": false,
+     "notes": "Already covered as cabinet spray. Trade also quotes per door/drawer ($70-125/door); linear foot is the more common estimate unit."
+    },
+    {
+     "job": "Single room repaint",
+     "phrasings": [
+      "paint one room",
+      "how much to paint a bedroom",
+      "paint my living room",
+      "just need one room painted",
+      "cost to paint a 12x12 room",
+      "painter for small room"
+     ],
+     "unit": "project",
+     "typicalQuantity": 1,
+     "demand": "very-high",
+     "covered": false,
+     "isRepair": false,
+     "notes": "The single highest-volume painting request. Needs a flat project price, not a sq ft rate, because minimum-charge economics dominate ($350-900 typical)."
+    },
+    {
+     "job": "Accent wall painting",
+     "phrasings": [
+      "accent wall",
+      "paint one wall",
+      "feature wall painting",
+      "dark accent wall bedroom",
+      "paint just one wall in living room"
+     ],
+     "unit": "each",
+     "typicalQuantity": 1,
+     "demand": "high",
+     "covered": false,
+     "isRepair": false,
+     "notes": "Small-dollar job that hits the painter's minimum. Usually $150-400 regardless of actual sq ft."
+    },
+    {
+     "job": "Ceiling painting",
+     "phrasings": [
+      "paint my ceilings",
+      "ceiling painting cost",
+      "ceilings look dingy",
+      "paint ceiling white",
+      "just the ceilings"
+     ],
+     "unit": "sq ft",
+     "typicalQuantity": 400,
+     "demand": "high",
+     "covered": false,
+     "isRepair": false,
+     "notes": "Priced separately from walls, usually at a lower per-sq-ft rate but with a height/vault surcharge."
+    },
+    {
+     "job": "Water stain / ceiling spot repair and touch-up",
+     "phrasings": [
+      "brown stain on ceiling",
+      "water spot on ceiling",
+      "leak stain wont go away",
+      "ceiling stain keeps coming back",
+      "cover water damage ceiling",
+      "yellow spot ceiling paint"
+     ],
+     "unit": "each",
+     "typicalQuantity": 1,
+     "demand": "very-high",
+     "covered": false,
+     "isRepair": true,
+     "notes": "CLASSIC BLIND SPOT: engine would price this as repainting the whole ceiling. Real job is stain-block prime + spot paint, $150-400, often blending into the full ceiling only if touch-up fails."
+    },
+    {
+     "job": "Drywall patch and paint (holes, nail pops, cracks)",
+     "phrasings": [
+      "hole in my wall",
+      "patch drywall and paint",
+      "nail pops everywhere",
+      "crack in wall keeps coming back",
+      "doorknob hole in wall",
+      "fix dent in drywall",
+      "small hole repair"
+     ],
+     "unit": "each",
+     "typicalQuantity": 2,
+     "demand": "very-high",
+     "covered": false,
+     "isRepair": true,
+     "notes": "Per-patch pricing ($100-300 small, $150-450 with texture match). Must NOT route to interior-per-sq-ft. Texture matching (orange peel/knockdown) is the cost driver."
+    },
+    {
+     "job": "Peeling / failing exterior paint repair (scrape, prime, spot repaint)",
+     "phrasings": [
+      "paint is peeling off my house",
+      "siding paint flaking",
+      "paint bubbling outside",
+      "exterior paint chipping",
+      "one side of house peeling",
+      "paint coming off trim"
+     ],
+     "unit": "project",
+     "typicalQuantity": 1,
+     "demand": "high",
+     "covered": false,
+     "isRepair": true,
+     "notes": "BLIND SPOT: currently prices as full exterior repaint. Real jobs are often one elevation or one trim run, $600-2500."
+    },
+    {
+     "job": "Popcorn / acoustic ceiling removal",
+     "phrasings": [
+      "remove popcorn ceiling",
+      "scrape popcorn ceilings",
+      "get rid of textured ceiling",
+      "popcorn ceiling removal cost",
+      "cottage cheese ceiling"
+     ],
+     "unit": "sq ft",
+     "typicalQuantity": 500,
+     "demand": "high",
+     "covered": false,
+     "isRepair": false,
+     "notes": "$3-9/sq ft including retexture and paint. Asbestos test on pre-1980 homes changes the price radically \u2014 worth a flag, not a price."
+    },
+    {
+     "job": "Wallpaper removal and wall prep",
+     "phrasings": [
+      "remove wallpaper",
+      "take down wallpaper and paint",
+      "wallpaper removal cost",
+      "strip wallpaper",
+      "get rid of old wallpaper in bathroom"
+     ],
+     "unit": "sq ft",
+     "typicalQuantity": 300,
+     "demand": "high",
+     "covered": false,
+     "isRepair": false,
+     "notes": "Almost always bundled with a repaint. Price varies 3x on whether the wall was primed before papering."
+    },
+    {
+     "job": "Trim, baseboard and crown molding painting",
+     "phrasings": [
+      "paint my trim",
+      "baseboards need painting",
+      "paint crown molding",
+      "white trim painting",
+      "just the baseboards and doors",
+      "paint moulding"
+     ],
+     "unit": "linear foot",
+     "typicalQuantity": 150,
+     "demand": "high",
+     "covered": false,
+     "isRepair": false,
+     "notes": "Genuinely quoted per linear foot ($2-6/lf). Frequently requested as a standalone job when walls are fine."
+    },
+    {
+     "job": "Exterior door / garage door painting",
+     "phrasings": [
+      "paint my front door",
+      "front door painting cost",
+      "paint garage door",
+      "repaint my entry door",
+      "door looks faded from sun",
+      "stain front door"
+     ],
+     "unit": "each",
+     "typicalQuantity": 1,
+     "demand": "high",
+     "covered": false,
+     "isRepair": false,
+     "notes": "$150-500 per door; garage doors at the top of that range. Small curb-appeal job people call about constantly."
+    },
+    {
+     "job": "Deck staining and sealing",
+     "phrasings": [
+      "stain my deck",
+      "deck sealing",
+      "deck looks gray and weathered",
+      "reseal wood deck",
+      "deck stain cost per square foot",
+      "waterproof my deck"
+     ],
+     "unit": "sq ft",
+     "typicalQuantity": 400,
+     "demand": "very-high",
+     "covered": false,
+     "isRepair": true,
+     "notes": "Recurring maintenance job (every 2-3 years), not an install. Includes wash/strip and sanding. $2-5/sq ft."
+    },
+    {
+     "job": "Fence painting / staining",
+     "phrasings": [
+      "stain my fence",
+      "paint wood fence",
+      "fence needs restaining",
+      "fence looks gray",
+      "how much to stain 100 feet of fence"
+     ],
+     "unit": "linear foot",
+     "typicalQuantity": 150,
+     "demand": "high",
+     "covered": false,
+     "isRepair": true,
+     "notes": "Quoted per linear foot of fence run ($5-12/lf), sometimes doubled for both sides \u2014 clarify sides."
+    },
+    {
+     "job": "Exterior caulking, wood rot and trim repair before paint",
+     "phrasings": [
+      "rotted trim needs replacing",
+      "caulk around windows",
+      "gaps around my window frames",
+      "soft wood on window sill",
+      "fascia board rotted",
+      "re caulk and paint exterior"
+     ],
+     "unit": "linear foot",
+     "typicalQuantity": 60,
+     "demand": "medium",
+     "covered": false,
+     "isRepair": true,
+     "notes": "Carpentry prep that painters do and quote separately. Big blind spot \u2014 currently would read as full exterior repaint."
+    },
+    {
+     "job": "Pressure washing (house, deck, driveway)",
+     "phrasings": [
+      "power wash my house",
+      "pressure washing cost",
+      "green stuff on my siding",
+      "wash siding before painting",
+      "clean my driveway",
+      "mildew on north side of house"
+     ],
+     "unit": "sq ft",
+     "typicalQuantity": 2000,
+     "demand": "very-high",
+     "covered": false,
+     "isRepair": true,
+     "notes": "Cheap standalone maintenance job ($0.15-0.40/sq ft, $250-500 typical) that painters upsell from. Often the actual fix when someone thinks they need repainting."
+    },
+    {
+     "job": "Paint touch-up / scuff and mark repair",
+     "phrasings": [
+      "touch up paint",
+      "scuff marks on walls",
+      "fill nail holes and paint",
+      "walls got marked up by movers",
+      "paint touch ups before i move out",
+      "fix scratches on wall paint"
+     ],
+     "unit": "hour",
+     "typicalQuantity": 4,
+     "demand": "very-high",
+     "covered": false,
+     "isRepair": true,
+     "notes": "Genuinely quoted hourly ($70-130/hr) with a 2-4 hour minimum. Extremely high call volume around move-outs and rentals; sheen mismatch means it often escalates to a wall-to-wall repaint."
+    }
+   ],
+   "anchors": [
+    {
+     "job": "Interior painting (walls, whole home)",
+     "unit": "sq ft",
+     "low": 2,
+     "high": 6,
+     "setupShare": 0.3,
+     "bayAreaMultiplier": 1.6,
+     "confidence": "high",
+     "sources": [
+      "Angi (2026): $2\u2013$6/sq ft of floor area; national average $2.75/sq ft walls-only, $4.70/sq ft including walls + trim + ceilings; typical whole-job average $2,022 with a $350\u2013$5,800 range",
+      "HomeGuide (2026): $2\u2013$6/sq ft; 1,000 sq ft home $2,000\u2013$6,000, 1,500 sq ft $4,500\u2013$6,000, 2,500 sq ft $7,500\u2013$10,000; $300\u2013$1,000 per room, ~$624 national per-room average",
+      "Fixr (2026): $5.75\u2013$10.70/sq ft of floor space to prime, paint and seal walls \u2014 high outlier; also cites $172 as a low-end small-bathroom walls total",
+      "NerdWallet (2026): interior painting $2\u2013$6/sq ft; 2,000 sq ft home $4,000\u2013$12,000",
+      "HouseCall Pro Painting Price Guide (2026): painter minimum charges $250\u2013$500 typical (some shops $500\u2013$1,000 seasonal, $2,000 project minimums); labor is 80%+ of final cost, paint/materials only 10\u201315%",
+      "Improovy (2026): $300\u2013$800 for a 10x12 room; painters $25\u2013$75/hr",
+      "Facade Colorizer / Fresh Start Painting SF / Moondance Painting / Rojas Painting (2026, SF Bay Area): interior $3.50\u2013$7.25/sq ft in San Francisco, often $4\u2013$8; North Bay $2.00\u2013$4.00/sq ft"
+     ],
+     "conflicts": "Two things to watch. (1) Unit basis: nearly every consumer source quotes per sq ft of FLOOR area (home size), not wall area \u2014 a 1,200 sq ft home at $3.50/sq ft floor is ~$4,200. A few contractor sources quote per sq ft of wall surface (~$1.50\u2013$3), which is roughly 2.5\u20133x cheaper per unit for the same job. Do not mix the two. (2) Fixr is a hard outlier: $5.75\u2013$10.70/sq ft versus the $2\u2013$6 consensus of Angi, HomeGuide, NerdWallet and several contractor blogs \u2014 roughly 2x the consensus midpoint. Fixr's figure bundles prime + paint + seal and appears to assume more coats and full prep; I kept the range at the $2\u2013$6 consensus rather than averaging Fixr in, but the top end is genuinely soft and jobs with heavy patching, high ceilings, or trim + ceilings included legitimately land at $5\u2013$7. Scope is the third axis of disagreement: Angi's own walls-only ($2.75) versus walls+trim+ceilings ($4.70) is a 1.7x spread on identical square footage, which explains most of the low/high band by itself.",
+     "category": "Painting",
+     "meta": {
+      "job": "Interior painting (walls, whole home)",
+      "phrasings": [
+       "paint inside my house",
+       "interior painting",
+       "repaint walls",
+       "house painter interior",
+       "paint my whole house inside",
+       "interor painting cost"
+      ],
+      "unit": "sq ft",
+      "typicalQuantity": 1200,
+      "demand": "very-high",
+      "covered": true,
+      "isRepair": false,
+      "notes": "Already covered. Quoted on wall sq ft, not floor sq ft \u2014 most homeowners give floor area, so conversion matters."
+     },
+     "verdict": null
+    },
+    {
+     "job": "Exterior house painting",
+     "unit": "sq ft",
+     "low": 1.5,
+     "high": 5.3,
+     "setupShare": 0.2,
+     "bayAreaMultiplier": 1.45,
+     "confidence": "high",
+     "sources": [
+      "Angi (2026 data): $1.50\u2013$4.00/sq ft; national average total $3,177; full range $600\u2013$7,700; by siding \u2014 vinyl $1.25\u2013$3, wood $1\u2013$3, brick $1.50\u2013$4.50",
+      "HomeAdvisor (2025/26): $1.50\u2013$4.00/sq ft; average $3,177, typical spend $1,819\u2013$4,551; prep work alone $0.50\u2013$2.50/sq ft; labor $1.00\u2013$3.50/sq ft",
+      "Fixr.com: $2.84\u2013$5.28/sq ft for exterior walls; national average total $6,242\u2013$11,617; metal siding $2.30\u2013$4.30, fiber cement/vinyl/wood $3.10\u2013$5.80, brick/masonry $2.90\u2013$5.40; poor-condition siding costs 60%+ more",
+      "HomeGuide (2026): $1.50\u2013$5.00/sq ft; $3,000\u2013$10,000 for a 2,000 sq ft house",
+      "HouseCall Pro / contractor pricing guides (2026): $1.50\u2013$4.00/sq ft exterior; labor is 80\u201385% of total job cost, materials 15\u201320%",
+      "Homewyse / regional guides: cheapest markets (Texas Triangle, Midwest) $1.05\u2013$1.50/sq ft; coastal California $4.50\u2013$10/sq ft",
+      "SF Bay Area cross-check: Angi SF $2.75\u2013$5.25/sq ft; HomeBlue SF $2.00\u2013$4.90/sq ft; local contractor guides $2.10\u2013$5.00/sq ft (outlier guide claims $4.50\u2013$10)"
+     ],
+     "conflicts": "Two clusters, not a continuum. The lead-gen marketplaces (Angi, HomeAdvisor, HomeGuide) cluster at $1.50\u2013$4.00/sq ft with a ~$3,200 average total for a 2,000 sq ft home. Fixr sits materially higher at $2.84\u2013$5.28/sq ft with an average total of $6,242\u2013$11,617 \u2014 roughly 2x the Angi/HomeAdvisor total. The gap is mostly definitional: Angi/HomeAdvisor appear to divide by home floor area (2,000 sq ft house), while Fixr quotes per square foot of actual paintable wall surface, which is a smaller number for the same job, so the per-unit rate is higher. That also explains why Fixr's totals are higher despite a similar underlying job. Second disagreement: regional spread is very wide and sources do not agree on the Bay Area premium \u2014 mainstream aggregators put SF at $2.00\u2013$5.25/sq ft (~1.3\u20131.5x national), while contractor-marketing blogs claim $4.50\u2013$10/sq ft (~2.5x). I used the aggregator-grounded 1.45x and treat the $10 figure as promotional. Prep is also inconsistently bundled: HomeAdvisor breaks out $0.50\u2013$2.50/sq ft of prep as a separate line, meaning a heavy-prep job can land above the published high even in a cheap market.",
+     "category": "Painting",
+     "meta": {
+      "job": "Exterior house painting",
+      "phrasings": [
+       "paint outside of house",
+       "exterior painting",
+       "repaint my siding",
+       "house needs painting outside",
+       "exterior house painters near me",
+       "stucco painting"
+      ],
+      "unit": "sq ft",
+      "typicalQuantity": 2000,
+      "demand": "very-high",
+      "covered": true,
+      "isRepair": false,
+      "notes": "Already covered. Prep (wash, scrape, caulk) is often 40%+ of the labor."
+     },
+     "verdict": null
+    },
+    {
+     "job": "Single room repaint (interior, walls; ceiling/trim often included)",
+     "unit": "project (one room)",
+     "low": 350,
+     "high": 1600,
+     "setupShare": 0,
+     "bayAreaMultiplier": 1.4,
+     "confidence": "high",
+     "sources": [
+      "Angi (2026 data, \"How Much Does It Cost to Paint a Room?\"): average ~$1,100 per room; full range $200\u2013$2,000; 100 sq ft room $200\u2013$600, 250 sq ft room $500\u2013$1,500; pros charge $2\u2013$6/sq ft",
+      "HomeGuide (2026, \"Cost to Paint a Room\"): $300\u2013$1,000 per room on average; labor $1\u2013$3/sq ft; notes some painters carry a $250\u2013$500 minimum project fee",
+      "Fixr.com (\"Cost to Paint a Room\"): national average $1,200, typical band $990\u2013$1,320; walls only $1.50\u2013$3.50/sq ft, full room (walls+ceiling+trim) $3\u2013$4/sq ft; 12x12 room $215\u2013$505 walls only, $430\u2013$575 full room; bedroom $600\u2013$1,240, living room $900\u2013$1,600",
+      "Improovy (2026 price guide, national painting contractor): average $624 per room; $731\u2013$923 with ceilings and baseboards; small 12x12 room ~$468; labor $312\u2013$436; paint $96\u2013$148",
+      "HomeAdvisor / Airtasker / Mr. Handyman 2025 interior-painting guides: $2\u2013$6 per sq ft interior, ~$2.75/sq ft walls-only national average, ~$4.70/sq ft with walls+trim+ceilings",
+      "Homewyse 2026 \"Cost to Paint Bedroom\" calculator (RSMeans-style unit-cost build-up): consistent with the $400\u2013$950 single-room band",
+      "Angi San Francisco interior-painting page + GreatBuildz/Moondance Bay Area guides: Bay Area interior painting $3\u2013$6/sq ft vs $2\u2013$5 national, SF painter labor premium \u2014 implies roughly 1.3\u20131.5x national"
+     ],
+     "conflicts": "Two distinct clusters, not a smooth spread. Contractor-side and HomeGuide data cluster LOW: Improovy $624 average (12x12 ~$468), HomeGuide $300\u2013$1,000, Fixr's own 12x12 line item $430\u2013$575 full room. Lead-gen aggregators cluster HIGH: Angi average ~$1,100 and Fixr's headline national average $1,200 ($990\u2013$1,320). That is nearly a 2x gap on the same nominal job. Cause appears to be scope, not geography: the low cluster prices walls-only or a small 12x12 bedroom, while the high cluster assumes a larger room with ceiling, trim, baseboards, doors, and two coats. Fixr contradicts itself internally \u2014 $1,200 headline vs $430\u2013$575 for a full 12x12 room and $60\u2013$400 for a bathroom. Fixr's stated band ($990\u2013$1,320) is also implausibly narrow versus Angi's $200\u2013$2,000, so treat Fixr's tight band as a marketing artifact rather than real dispersion. Per-sq-ft rates disagree too: $1.50\u2013$3.50/sq ft walls-only (Fixr) vs $3.75/sq ft (Improovy) vs $2\u2013$6/sq ft (Angi/HomeAdvisor), partly because some quote floor area and others wall surface area \u2014 a real trap for a pricing engine. Recommendation: anchor a bare walls-only small bedroom near $350\u2013$500 and a full room with ceiling and trim near $900\u2013$1,600, rather than averaging to a single ~$800 midpoint.",
+     "job_notes_setup": "setupShare is 0 because this job is genuinely project-priced \u2014 every source quotes it per room, not per unit. Worth flagging for the engine anyway: the fixed component inside a single-room price is very large. HomeGuide reports a $250\u2013$500 minimum project fee, and Fixr prices a 40 sq ft bathroom at $120\u2013$160 full-room versus $430\u2013$575 for a 144 sq ft room \u2014 28% of the area for roughly 30% of the price, so scaling is near-linear at Fixr but the minimum charge truncates it hard at the bottom. Practical read: no single room repaint should price below about $300\u2013$350 regardless of computed area, because masking, moving furniture, drop cloths, cutting in, patching nail holes, and cleanup are the same work in a 9x9 as in a 12x14. If the engine ever decomposes this into per-sq-ft, use a fixed floor of roughly $250\u2013$350 plus $1.50\u2013$3.50 per sq ft of wall area.",
+     "category": "Painting",
+     "meta": {
+      "job": "Single room repaint",
+      "phrasings": [
+       "paint one room",
+       "how much to paint a bedroom",
+       "paint my living room",
+       "just need one room painted",
+       "cost to paint a 12x12 room",
+       "painter for small room"
+      ],
+      "unit": "project",
+      "typicalQuantity": 1,
+      "demand": "very-high",
+      "covered": false,
+      "isRepair": false,
+      "notes": "The single highest-volume painting request. Needs a flat project price, not a sq ft rate, because minimum-charge economics dominate ($350-900 typical)."
+     },
+     "verdict": null
+    },
+    {
+     "job": "Accent wall painting",
+     "unit": "each",
+     "low": 100,
+     "high": 600,
+     "setupShare": 0.6,
+     "bayAreaMultiplier": 1.4,
+     "confidence": "med",
+     "sources": [
+      "HomeGuide (Interior Painting Costs, 2026): 'A single accent wall costs $80 to $200 to paint'; painters charge $20-$50/hr; some painters charge a $250-$500 minimum fee",
+      "Brush & Roll Painting contractor blog (2025-2026): $150-$250 for one accent wall as an add-on to other work, but $400-$700 standalone because company project minimums run $400-$600",
+      "Angi (2026 Cost to Paint an Accent Wall): $2-$6 per sq ft, average ~$1,259, range $300-$3,000, typical accent wall 70-150 sq ft \u2014 but this article mixes painted accent walls with wood/shiplap/slat feature walls",
+      "Homewyse (May 2026, Cost to Paint a Wall): $1.29-$2.78 per sq ft all-in; 2-hour minimum labor charge; job supplies (masking, patching, primer, cleanup) roughly equal to basic labor dollar-for-dollar on a small wall",
+      "Fixr/aggregated contractor-quote guides (2026): an accent wall in a contrasting color adds $50-$150 to a room repaint due to extra taping and cutting-in; 'small home project painting costs $400-$1,200' for jobs like one accent wall",
+      "HomeAdvisor / interior painting cost guides (2025-2026): interior walls $2-$6 per sq ft nationally, labor 70-85% of total",
+      "Regional data: San Francisco interior painting $3.50-$7.25 per sq ft (homeyou / brushquote / facadecolorizer SF guides) vs $2-$6 national; guides cite 20-40% premium in SF/NYC/Seattle/Boston"
+     ],
+     "conflicts": "Very wide disagreement, driven by definition rather than by market. Angi's accent-wall page ($300-$3,000, avg $1,259) is measuring \"accent wall\" as a feature-wall installation \u2014 shiplap, wood slats, board-and-batten, stone \u2014 not paint, so it is roughly 5-10x the paint-only figures and should not be used as the anchor for this job. Paint-only sources still split by framing: marginal/add-on pricing when the painter is already in the room (HomeGuide $80-$200; Fixr $50-$150 add-on; Brush & Roll $150-$250) vs standalone pricing where the painter shows up for one wall and the project minimum dominates (Brush & Roll $400-$700; HomeGuide/HomeAdvisor cite $250-$500 minimums; \"small project\" bucket $400-$1,200). The gap is 3-5x for identical work. My low=100 reflects the add-on case, high=600 the standalone-with-minimum case; a true standalone median is ~$400-$450, not the ~$140 midpoint of the add-on quotes. Per-sq-ft rates ($1.29-$2.78 Homewyse, $2-$6 Angi/HomeAdvisor) also conflict roughly 2x, with Homewyse being unit-cost-only and the $2-$6 figures being retail quotes.",
+     "category": "Painting",
+     "meta": {
+      "job": "Accent wall painting",
+      "phrasings": [
+       "accent wall",
+       "paint one wall",
+       "feature wall painting",
+       "dark accent wall bedroom",
+       "paint just one wall in living room"
+      ],
+      "unit": "each",
+      "typicalQuantity": 1,
+      "demand": "high",
+      "covered": false,
+      "isRepair": false,
+      "notes": "Small-dollar job that hits the painter's minimum. Usually $150-400 regardless of actual sq ft."
+     },
+     "verdict": null
+    },
+    {
+     "job": "Ceiling painting",
+     "unit": "sq ft",
+     "low": 1,
+     "high": 3,
+     "setupShare": 0.35,
+     "bayAreaMultiplier": 1.6,
+     "confidence": "high",
+     "sources": [
+      "HomeGuide (2026, 'How Much Does It Cost to Paint a Ceiling?') \u2014 $1\u2013$2/sq ft flat, $1.00\u2013$3.50/sq ft textured; $150\u2013$300 for a 12x12 (144 sq ft) room = ~$1.04\u2013$2.08/sq ft; labor 70\u201385% of total; painter minimum project fees $250\u2013$500",
+      "Fixr.com ('Ceiling Painting Cost') \u2014 $1\u2013$2.50/sq ft standard; by type: flat $1\u2013$2.50, acoustic $1\u2013$3, popcorn $2\u2013$3.50, cathedral/vaulted $2\u2013$4; by height: 8\u20139ft $1, 10\u201312ft $1.50, 12\u201318ft $2.50; national average job $250 (range $120\u2013$300); labor ~60% of cost at $40\u2013$60/hr",
+      "HomeAdvisor (2025, 'Cost to Paint a Ceiling') \u2014 $0.50\u2013$5/sq ft; average total ~$250, typical $200\u2013$500; 300 sq ft ceiling $150\u2013$1,500; 500 sq ft $250\u2013$2,500; minimum fee $150\u2013$300 regardless of job size; skim coating prep adds $1.10\u2013$1.30/sq ft",
+      "Angi (2026, 'Cost to Paint a Ceiling') \u2014 $0.50\u2013$5/sq ft overall envelope; most ceiling styles $1\u2013$3/sq ft; specialty (exposed basement, tongue-and-groove) $1.50\u2013$6/sq ft; +$100\u2013$500 for ceilings above 10 ft",
+      "Homewyse ('Cost to Paint Ceiling', May 2026 national average) \u2014 $1.37\u2013$2.95/sq ft on a 267 sq ft basis quantity; explicitly includes labor setup and mobilization time typical of small ceiling jobs, plus a 2-hour minimum labor charge",
+      "HouseCall Pro ('Painting Price Guide 2026') \u2014 painter minimum charges $250\u2013$500 depending on market; labor is 60\u201390% of a per-sq-ft quote; notes travel time and prep do not shrink with job size",
+      "GreatBuildz / Angi San Francisco / Moondance Painting (Bay Area) \u2014 SF interior painting $4\u2013$8/sq ft and broader Bay Area $3\u2013$6/sq ft against a $2\u2013$5/sq ft national interior figure"
+     ],
+     "conflicts": "Two tiers of published numbers exist and should not be blended. The lead-gen sites (Angi, HomeAdvisor) publish a very wide $0.50\u2013$5/sq ft envelope that spans everything from a cheap flat 8-ft ceiling to a vaulted/specialty ceiling; the cost-data sites (HomeGuide, Fixr, Homewyse) cluster tightly at $1.00\u2013$2.95/sq ft for a standard flat ceiling. I used the $1\u2013$3 consensus core rather than the outer tails. Second real disagreement: texture. Flat ceilings sit at $1\u2013$2.50, but popcorn/acoustic runs $2\u2013$3.50 (Fixr) and textured $1.00\u2013$3.50 (HomeGuide), and vaulted/cathedral pushes $2\u2013$4 (Fixr) or up to $6 (Angi specialty) \u2014 so ceiling type moves the rate more than region does. Third: minimum fees disagree by 2x \u2014 HomeAdvisor says $150\u2013$300, HomeGuide and HouseCall Pro say $250\u2013$500. Fourth, and important for calibration: Fixr's room table is purely linear (50 sq ft bathroom = $50\u2013$125), which contradicts every source that publishes a minimum charge \u2014 a $50 ceiling job does not exist. Trust the minimum-fee sources over Fixr's small-room rows.",
+     "category": "Painting",
+     "meta": {
+      "job": "Ceiling painting",
+      "phrasings": [
+       "paint my ceilings",
+       "ceiling painting cost",
+       "ceilings look dingy",
+       "paint ceiling white",
+       "just the ceilings"
+      ],
+      "unit": "sq ft",
+      "typicalQuantity": 400,
+      "demand": "high",
+      "covered": false,
+      "isRepair": false,
+      "notes": "Priced separately from walls, usually at a lower per-sq-ft rate but with a height/vault surcharge."
+     },
+     "verdict": null
+    },
+    {
+     "job": "Water stain / ceiling spot repair and touch-up (Painting)",
+     "unit": "each (one stain/spot, cleaned, stain-blocking primer, repainted)",
+     "low": 150,
+     "high": 475,
+     "setupShare": 0.8,
+     "bayAreaMultiplier": 1.3,
+     "confidence": "med",
+     "sources": [
+      "HomeGuide (Ceiling Repair Cost, 2026) \u2014 cosmetic fix (clean, prime, paint) on a small dry stain $150\u2013$400 per spot; painters $20\u2013$50/hr for cleaning and repainting dry stains",
+      "Homewyse (Cost to Repair Ceiling Water Damage, May 2026) \u2014 $311\u2013$472 per patch national; simple patch up to 16\"x16\" $306\u2013$464; explicitly states the figure includes worksite prep plus labor setup and mobilization time typical of small jobs",
+      "Certified Water & Fire Restoration (2026 update) \u2014 small dry stain, discoloration only, $150\u2013$400; national average for one patch $215\u2013$465; small 2 sq ft drywall repair $100\u2013$170; ceiling pros $45\u2013$90/sq ft",
+      "Bob Vila (Ceiling Repair Cost) \u2014 water-damaged ceiling $45\u2013$55/sq ft incl. labor and materials; ceiling painting $1\u2013$2/sq ft ($1\u2013$3 more with sanding/patching); callout fee $50\u2013$100, often waived if hired",
+      "Angi (Ceiling Repair Cost, 2026 Data) \u2014 national ceiling repair $419\u2013$1,359, average $884 (whole-ceiling scope, not a single spot); San Francisco average $1,130, range $925\u2013$1,950; SF water-damaged ceiling $327\u2013$1,637",
+      "Tex Painting (small jobs & touch-ups page) \u2014 published minimum small-job charge of $410",
+      "Angi (Handyman Prices, 2026) \u2014 $50\u2013$150/hr with a minimum call-out fee covering the first hour; travel/minimum service fee $50\u2013$100"
+     ],
+     "conflicts": "Three source families disagree on scope, and the spread is wide. (1) Cosmetic-only sources (HomeGuide, Certified Water & Fire) put a dry stain at $150\u2013$400 per spot \u2014 clean, stain-block prime, repaint, no drywall work. (2) Patch-inclusive sources (Homewyse) put the same nominal job at $311\u2013$472 per patch because they assume cut-out and drywall patching; its low end sits above the cosmetic sources' midpoint. (3) Restoration-firm blogs bundle leak diagnosis and drying into a \"minor damage\" bucket of $300\u2013$800, and Angi's $419\u2013$1,359 / $884 average is whole-ceiling repair, not a single spot \u2014 it should NOT be used as an anchor for this job and is roughly 2-3x too high for it. Sq-ft rates also conflict badly: Bob Vila says $45\u2013$55/sq ft while Certified says $45\u2013$90/sq ft. Chose $150\u2013$475 to span the cosmetic-only range through the patch-inclusive high end, deliberately excluding the whole-ceiling and restoration buckets.",
+     "category": "Painting",
+     "meta": {
+      "job": "Water stain / ceiling spot repair and touch-up",
+      "phrasings": [
+       "brown stain on ceiling",
+       "water spot on ceiling",
+       "leak stain wont go away",
+       "ceiling stain keeps coming back",
+       "cover water damage ceiling",
+       "yellow spot ceiling paint"
+      ],
+      "unit": "each",
+      "typicalQuantity": 1,
+      "demand": "very-high",
+      "covered": false,
+      "isRepair": true,
+      "notes": "CLASSIC BLIND SPOT: engine would price this as repainting the whole ceiling. Real job is stain-block prime + spot paint, $150-400, often blending into the full ceiling only if touch-up fails."
+     },
+     "verdict": null
+    },
+    {
+     "job": "Drywall patch and paint (holes, nail pops, cracks)",
+     "unit": "each (one patched + painted hole/crack/nail-pop area)",
+     "low": 75,
+     "high": 500,
+     "setupShare": 0.65,
+     "bayAreaMultiplier": 1.5,
+     "confidence": "med",
+     "sources": [
+      "HomeGuide (2025/26): $300\u2013$500 to patch a small hole as a billed job; nail pop repair $75\u2013$140; drywall pros $60\u2013$90/hr; typical repair total ~$610",
+      "Angi (2026 data): drywall repair average $612, normal range $296\u2013$928; small holes $20\u2013$120, large holes $50\u2013$200, nail pop $10\u2013$60, cracks/chips $60\u2013$400; $50\u2013$75/sq ft; painter $70\u2013$130/hr or $2\u2013$6/sq ft; texturing $100\u2013$900",
+      "Fixr (2026): national average $350, range $200\u2013$550 (low $75, high $1,000); hole repair $60\u2013$200, patch $75\u2013$115, nail pop $75\u2013$140, anchor hole $75\u2013$105, crack $60\u2013$330; $70\u2013$80/hr with a one-hour minimum on small projects; 1-room repairs $75\u2013$300",
+      "Homewyse (May 2026): $297\u2013$472 per drywall repair / per hole patch, estimate built on a 4-hour minimum labor charge; optional painting offered for patches up to 4 sq ft",
+      "Thumbtack / HomeAdvisor drywall repair cost guide: national $294\u2013$920, most common ~$515; dents and nail holes start ~$75\u2013$100; labor from $75/hr; worked examples \u2014 5-ft wall crack $125, 3-ft ceiling crack $150, sand/texture 5 wall patches $200",
+      "AllBetter (2026 per-hole guide): small holes under 4 in $75\u2013$150 each, explicitly noting this reflects a $75\u2013$100 minimum service fee rather than true per-hole cost; five nail holes in one visit cost far less per hole because the minimum applies once; full-wall repaint for an invisible blend adds $150\u2013$400 per wall",
+      "Homeblue / Handoff / homeyou (San Francisco): $70\u2013$110/hr per person plus materials, minimum charge $160\u2013$250 for 1 hour + materials; small holes and patches start at $120, larger repairs $175\u2013$200; $4.45\u2013$8.10/sq ft"
+     ],
+     "conflicts": "The single biggest disagreement is definitional, not regional, and spans roughly 5x. Angi/HomeAdvisor quote small holes at $20\u2013$120 and nail pops at $10\u2013$60 \u2014 these are marginal, incremental-patch figures (materials plus a few minutes of labor) that assume the pro is already on site for other work and often exclude paint. HomeGuide ($300\u2013$500 to patch a small hole) and Homewyse ($297\u2013$472 per repair, built on a 4-hour minimum labor charge) quote the same physical task as a complete billed service call including trip, prep, multiple mud/sand cycles, texture match and paint. Fixr sits in between at $60\u2013$200 per hole / $75\u2013$115 per patch with a stated one-hour minimum, which is closest to a true marginal rate. AllBetter is the only source that names the gap explicitly, stating that its $75\u2013$150 \"per small hole\" figure is really the $75\u2013$100 minimum service fee. Second conflict: paint inclusion. Fixr treats painting as entirely separate ($990\u2013$1,320 to paint a room); AllBetter says a spot-paint blend often fails under side lighting and a full-wall repaint at $150\u2013$400/wall is the only invisible result; Angi prices paint at $2\u2013$6/sq ft on top. So a \"patch and paint\" quote can legitimately land anywhere from ~$150 to ~$700 for one hole depending on whether the pro spot-blends or repaints wall to wall. Third, smaller conflict: cracks that keep reopening (structural/settlement or a failed tape joint) are priced far above simple holes \u2014 Fixr $60\u2013$330, Angi up to $400 \u2014 because they require cutting out and re-taping the joint rather than a mesh patch.",
+     "category": "Painting",
+     "meta": {
+      "job": "Drywall patch and paint (holes, nail pops, cracks)",
+      "phrasings": [
+       "hole in my wall",
+       "patch drywall and paint",
+       "nail pops everywhere",
+       "crack in wall keeps coming back",
+       "doorknob hole in wall",
+       "fix dent in drywall",
+       "small hole repair"
+      ],
+      "unit": "each",
+      "typicalQuantity": 2,
+      "demand": "very-high",
+      "covered": false,
+      "isRepair": true,
+      "notes": "Per-patch pricing ($100-300 small, $150-450 with texture match). Must NOT route to interior-per-sq-ft. Texture matching (orange peel/knockdown) is the cost driver."
+     },
+     "verdict": null
+    },
+    {
+     "job": "Peeling / failing exterior paint repair (scrape, prime, spot repaint)",
+     "unit": "project",
+     "low": 400,
+     "high": 4500,
+     "setupShare": 0,
+     "bayAreaMultiplier": 1.55,
+     "confidence": "med",
+     "sources": [
+      "HomeRepairCalc \u2014 Peeling Paint Repair Cost: small patch $150\u2013$500; larger wall/area repair $400\u2013$1,500+; moisture-related or complex repairs $1,000\u2013$3,000+; door $250\u2013$700+, trim/baseboard $300\u2013$1,500+",
+      "HomeGuide (cost-to-paint-exterior-of-house, 2026) \u2014 scraping and sanding peeling paint $0.50\u2013$2.00/sq ft; prep work adds $500\u2013$2,000 to a job; full exterior repaint $1.50\u2013$5.00/sq ft or $3,000\u2013$10,000 for a 2,000 sq ft house",
+      "HonestCasa Exterior Paint Cost Guide (2026) \u2014 itemized prep: pressure wash $150\u2013$400, scrape/sand $500\u2013$2,500 (4\u20136 hrs light vs 40+ hrs severe), caulk $150\u2013$400, primer for bare wood/stained areas $200\u2013$600",
+      "Angi \u2014 Cost to Paint House Exterior (2026 data): national average $3,177/project, $1.50\u2013$4.00/sq ft; prep and surface condition named as the dominant cost driver",
+      "Fixr.com \u2014 Exterior Painting Cost: wall painting $2.84\u2013$5.28/sq ft including prep",
+      "Clear Home Projects (2026) \u2014 spot-priming bare wood/patched areas $0.25\u2013$0.50/sq ft; standalone trim $2\u2013$6/linear ft vs $1\u2013$4/LF when added to a larger job; minor wood rot repair $200\u2013$800 per area",
+      "Homewyse (May 2026) \u2014 national average to paint house exterior $2.20\u2013$4.37/sq ft; exterior trim $2.55\u2013$5.21/linear ft",
+      "HomeAdvisor / Bob Vila \u2014 prep labor $25\u2013$50/hr; painter labor $25\u2013$100/hr per painter",
+      "facadecolorizer / Moondance Painting / Rojas Painting (SF Bay Area) \u2014 SF exterior $4.50\u2013$10/sq ft; Bay Area $2.10\u2013$5.00/sq ft; SF average project $5,514\u2013$7,383"
+     ],
+     "conflicts": "Three different things get called \"peeling paint repair\" and the sources do not agree on which one they are pricing. (1) Localized repair-only sources (HomeRepairCalc, Clear Home Projects) land at $150\u2013$1,500 for a patch, one wall, trim run, or door \u2014 these skew interior and assume no staging or whole-elevation work. (2) Prep-line-item sources (HonestCasa, HomeGuide) put scrape/sand alone at $500\u2013$2,500 and total prep at $1,000\u2013$3,900 before any finish coat is applied, which already exceeds the entire \"repair\" total from group 1. (3) Whole-house sources (Angi $3,177 avg, HomeGuide $3,000\u2013$10,000) treat failing paint as a trigger for a full repaint, since painters commonly refuse to spot-repaint a badly failed elevation for blend/warranty reasons. The gap between group 1's high ($1,500) and group 3's low ($3,000) is real, not noise: it is the boundary between a spot repair and a forced full repaint, and no source prices the middle case (one or two failed elevations) directly. Per-sq-ft scrape rates also disagree by 4x: $0.50\u2013$2.00/sq ft (HomeGuide) vs $0.57\u2013$1.12/sq ft (Bob Vila-cited). My $400\u2013$4,500 range deliberately spans group 1's realistic floor through a two-elevation prep-and-repaint, and excludes the full-house repaint case as a different job. Bay Area multiplier itself is uncertain: SF-city figures imply 2.0x+ while broader Bay Area figures imply ~1.4x; 1.55 is a midpoint, not a consensus.",
+     "category": "Painting",
+     "meta": {
+      "job": "Peeling / failing exterior paint repair (scrape, prime, spot repaint)",
+      "phrasings": [
+       "paint is peeling off my house",
+       "siding paint flaking",
+       "paint bubbling outside",
+       "exterior paint chipping",
+       "one side of house peeling",
+       "paint coming off trim"
+      ],
+      "unit": "project",
+      "typicalQuantity": 1,
+      "demand": "high",
+      "covered": false,
+      "isRepair": true,
+      "notes": "BLIND SPOT: currently prices as full exterior repaint. Real jobs are often one elevation or one trim run, $600-2500."
+     },
+     "verdict": null
+    },
+    {
+     "job": "Popcorn / acoustic ceiling removal",
+     "unit": "sq ft",
+     "low": 1,
+     "high": 4,
+     "setupShare": 0.3,
+     "bayAreaMultiplier": 1.3,
+     "confidence": "high",
+     "sources": [
+      "Fixr (2026): $1\u2013$4/sq ft, labor only, excludes testing/supplies/disposal; national total $900\u2013$2,500, avg ~$1,700; room tables 200 sq ft = $200\u2013$800, 330 sq ft = $330\u2013$1,320",
+      "Thumbtack (2025/26): $1\u2013$3/sq ft; national total $1,525\u2013$3,945, avg $2,454; 330 sq ft living room ~$660",
+      "Bob Vila: $1\u2013$3/sq ft; scraping 500 sq ft = $300\u2013$750 ($0.60\u2013$1.50/sq ft) PLUS $150\u2013$170 flat debris removal for that same 500 sq ft",
+      "HomeAdvisor (2026): $1\u2013$6/sq ft removal alone; typical range $932\u2013$3,084, avg $2,006; jobs as low as $300; disposal $150\u2013$400 flat",
+      "Angi (2026 data): $1\u2013$6/sq ft or $15\u2013$40/hr; avg ~$1,985, most spend $927\u2013$3,043; SF page $1.70\u2013$7.25/sq ft, SF avg $2,638; LA $2.70\u2013$4.80/sq ft; Seattle $3\u2013$6/sq ft",
+      "HomeGuide (2026): scraping alone $1\u2013$2/sq ft; $2\u2013$6/sq ft or $2,000\u2013$9,000 WITH retexture+paint; ~20+ labor hours per 500 sq ft",
+      "CeilingPrime (2026): $1\u2013$6/sq ft, most pay $1.50\u2013$3.50/sq ft standard removal, $2.50\u2013$7.00/sq ft with skim/prime/paint; disposal $100\u2013$300 flat; California runs 20\u201340% above national"
+     ],
+     "conflicts": "Two things drive nearly all the spread. (1) Scope: sources that quote $1\u2013$2/sq ft (HomeGuide \"scraping alone\", Bob Vila's $300\u2013$750 per 500 sq ft) mean scrape-and-go, bare drywall left. Sources topping out at $6\u2013$7.25/sq ft (Angi, HomeAdvisor, CeilingPrime, Angi SF) are bundling skim coat, prime and repaint, which every source separately prices at $1\u2013$3/sq ft. Removal-only consensus is tight at $1\u2013$3.50; I set the high at $4 to cover Fixr's labor-only top and heavy/painted texture, not to absorb the refinishing tail. Do NOT read $6/sq ft as a removal price. (2) Whether disposal is in or out of the per-sq-ft number: Fixr explicitly excludes it, Bob Vila and HomeAdvisor break it out as a $150\u2013$400 flat line, CeilingPrime says $100\u2013$300. Also worth flagging: asbestos is a step-function, not a factor \u2014 pre-1981 texture that tests positive moves the job to $5\u2013$20/sq ft (HomeAdvisor, Angi) or $3\u2013$7/sq ft (Fixr), a 2\u20135x jump that no blended rate should try to average in. Testing alone is $250\u2013$850. Angi's own hourly figure ($15\u2013$40/hr national) is inconsistent with its metro pages ($65\u2013$125/hr), so its national numbers look stale relative to its local ones.",
+     "category": "Painting",
+     "meta": {
+      "job": "Popcorn / acoustic ceiling removal",
+      "phrasings": [
+       "remove popcorn ceiling",
+       "scrape popcorn ceilings",
+       "get rid of textured ceiling",
+       "popcorn ceiling removal cost",
+       "cottage cheese ceiling"
+      ],
+      "unit": "sq ft",
+      "typicalQuantity": 500,
+      "demand": "high",
+      "covered": false,
+      "isRepair": false,
+      "notes": "$3-9/sq ft including retexture and paint. Asbestos test on pre-1980 homes changes the price radically \u2014 worth a flag, not a price."
+     },
+     "verdict": null
+    },
+    {
+     "job": "Wallpaper removal and wall prep",
+     "unit": "sq ft",
+     "low": 0.75,
+     "high": 3,
+     "sources": [
+      "HomeGuide (2026): $0.80-$3.00/sq ft for dry stripping + steaming; $320-$1,200 typical job; $3-$8/sq ft for soaking-and-scraping stubborn paper; minimum service fee $75-$200; $400-$1,200 per room, $800 national average; contractors alternatively bill $65-$100/hr",
+      "Angi / HomeAdvisor (2025-2026 data): $0.60-$3.00/sq ft labor; national average total $793, normal range $423-$1,192; 12x12 room ~$535; by size 100 sq ft $60-$300, 300 sq ft $180-$900, 500 sq ft $300-$1,500; materials $50-$100; steamer rental $50; painting after removal $2-$6/sq ft",
+      "Fixr.com: $0.75-$2.00+/sq ft plus a $50-$75 equipment/materials fee; minimum charge $250; national average $740 (typical $650-$950); bathroom (170 sq ft) $130-$340, bedroom (303 sq ft) $230-$610, kitchen (385 sq ft) $290-$770; strip-and-paint combined $2.75-$6.00/sq ft; skim coating $0.75-$1.50/sq ft; wall repair/texturing +$1.50-$3.00/sq ft",
+      "Inch Calculator (2026): $1-$5/sq ft general; stripping $0.75-$1.75/sq ft, steaming $1.00-$2.00/sq ft, saturating and scraping $3-$10/sq ft; national average $800, typical $400-$1,200 per room, minimum $250, maximum $2,000",
+      "Homewyse (May 2026 national calculator): $2.99-$6.09/sq ft including labor, job supplies (masking, primers, cleanup) and equipment allowance - excludes GC overhead of 13-22%",
+      "Craftsman Painters (Oakland, CA contractor): $1-$3/sq ft for Bay Area removal depending on age, adhesive and wall surface",
+      "homeyou (San Francisco, CA): fair price $929-$1,572 for a 1,200 sq ft project = ~$0.77-$1.31/sq ft at that scale",
+      "BrushQuote / SF painting benchmarks 2026: SF interior painting $3.50-$7.25/sq ft with loaded labor $75-$100/hr vs. $2-$5/sq ft national - implies ~1.4-1.7x regional labor factor"
+     ],
+     "confidence": "high",
+     "setupShare": 0.35,
+     "bayAreaMultiplier": 1.45,
+     "conflicts": "Two things split the sources. (1) Method, not geography, drives the spread: every source agrees that easy dry-strip/steam work runs roughly $0.60-$3.00/sq ft (HomeGuide $0.80-$3.00, Angi/HomeAdvisor $0.60-$3.00, Fixr $0.75-$2.00, Inch Calculator strip $0.75-$1.75 / steam $1.00-$2.00), but painted-over, multi-layer, or pre-1980s glued paper that needs soaking and scraping is quoted at $3-$8/sq ft (HomeGuide) up to $3-$10/sq ft (Inch Calculator) - a 4-5x jump off the same base. The anchor band above covers the normal case only; a \"painted over / multiple layers\" modifier is needed, not a wider average. (2) Homewyse is a clear outlier at $2.99-$6.09/sq ft, roughly 2-4x the aggregator consensus, because its unit price bundles masking, primer, cleanup and equipment allowance into the square-foot rate rather than pricing them as separate fixed setup - it is effectively an all-in rate for a small job, and averaging it against Angi/Fixr would corrupt both the per-unit rate and the setup share. Also note Fixr's own room examples reconcile exactly to its per-sq-ft rate (170 sq ft bathroom at $130-$340 = $0.76-$2.00/sq ft) with no setup added, which contradicts its stated $250 minimum charge - the room tables are arithmetic, not observed small-job quotes. Bay Area evidence is genuinely mixed: SF painting benchmarks imply 1.4-1.7x national, an Oakland contractor quotes $1-$3/sq ft (mid-to-high of national, not above it), and homeyou's SF figure of ~$0.77-$1.31/sq ft is at or below national - though that is a 1,200 sq ft job where setup is amortized away, so it is not comparable to a single-room quote. 1.45 is the labor-rate-derived figure and is the more defensible one; confidence on the multiplier alone is medium at best.",
+     "category": "Painting",
+     "meta": {
+      "job": "Wallpaper removal and wall prep",
+      "phrasings": [
+       "remove wallpaper",
+       "take down wallpaper and paint",
+       "wallpaper removal cost",
+       "strip wallpaper",
+       "get rid of old wallpaper in bathroom"
+      ],
+      "unit": "sq ft",
+      "typicalQuantity": 300,
+      "demand": "high",
+      "covered": false,
+      "isRepair": false,
+      "notes": "Almost always bundled with a repaint. Price varies 3x on whether the wall was primed before papering."
+     },
+     "verdict": null
+    },
+    {
+     "job": "Trim, baseboard and crown molding painting",
+     "unit": "linear foot",
+     "low": 1,
+     "high": 4.5,
+     "setupShare": 0.4,
+     "bayAreaMultiplier": 1.35,
+     "confidence": "high",
+     "sources": [
+      "HomeGuide (2026, 'Cost To Paint Trim & Baseboards'): $1-$4/linear foot; whole jobs $500-$2,000; basic baseboard/window trim $1-$2/lf, decorative crown $2-$4/lf, specialty hardwood/stained profiles $3-$6/lf; prep (cleaning, sanding, paint removal) adds $0.20-$3/lf; trim above 8ft adds $1/lf; painters charge $20-$50/hr; small-job minimum fee $250-$500",
+      "Angi (2026, baseboard painting cost + crown molding cost): $1-$4/linear foot for trim and baseboards, $25-$200 per room; painting crown molding $1-$4/lf, i.e. $200-$800 for 200 linear feet; a single-room trim job often runs $500-$800; whole-house work cuts the per-foot rate 10-20%",
+      "Fixr.com ('Cost to Paint Interior Trim'): $1-$6/linear foot labor+materials; national average project $1,000-$3,000 with a typical $1,500 job covering ~500 linear feet in a 1,500 sq ft home = $3.00/lf implied; crown molding $1-$4/lf, baseboards $1-$4/lf, door casing $1-$4/lf, chair/picture rail $1-$6/lf; prep (sanding, caulking, crack filling) included in standard single-story quotes",
+      "HomeAdvisor (2025, 'Cost to Paint Trim & Baseboards'): $1-$4/linear foot; average total $1,000, typical range $700-$2,500; crown molding $1-$5/lf; doors and windows $1-$4/lf; labor $20-$50/hr with jobs taking 5-25 hours; paint stripping adds $1-$3/lf",
+      "Homewyse (May 2026, 'Cost to Paint Baseboards'): $2.30-$4.88 per linear foot basic cost \u2014 the tightest and highest-floor of the published ranges",
+      "HomeGuide ('How Much to Charge for Painting', 2026) and contractor guides: small jobs carry a $200-$500 minimum charge to cover setup and travel"
+     ],
+     "conflicts": "Four of five sources land on a near-identical $1-$4/lf band, so the headline agreement is unusually strong. The disagreement is at the edges. Floor: Homewyse puts the low at $2.30/lf, more than double the $1.00/lf floor used by Angi, HomeGuide, HomeAdvisor and Fixr \u2014 Homewyse models loaded labor rates, so the $1/lf figure from the lead-gen sites is probably a bare-trim, high-volume, easy-access number that a real crew rarely hits. Ceiling: Fixr extends to $6/lf and HomeGuide to $6/lf for specialty hardwood or stained profiles, while Angi and HomeAdvisor cap at $4-$5/lf; the spread is driven by profile complexity (flat baseboard vs. multi-piece built-up crown) rather than by region. Implied typical rate also varies: Fixr's own typical job ($1,500 / 500 lf) implies $3.00/lf, HomeAdvisor's average ($1,000 over an unstated run) implies roughly $2-$3/lf, and one aggregator cites a $2.43/lf average \u2014 so the central tendency is $2.40-$3.00/lf, meaningfully above the midpoint of the published $1-$4 band. Per-foot rates and per-room totals also conflict directly: Angi says $25-$200 per room in one place and $500-$800 for a single room's trim in another, a gap that is only explicable as minimum-charge and setup effects, not as a different per-foot rate. Bay Area evidence is the weakest link \u2014 one SF-specific contractor guide quotes $1-$4/lf, identical to national, which would imply a 1.0x multiplier, but that conflicts with painter wage data and every general cost-of-living adjustment for the metro; the 1.35 figure is inferred from Bay Area painter labor rates rather than read off a trim-specific SF source, so treat it as the softest number here.",
+     "category": "Painting",
+     "meta": {
+      "job": "Trim, baseboard and crown molding painting",
+      "phrasings": [
+       "paint my trim",
+       "baseboards need painting",
+       "paint crown molding",
+       "white trim painting",
+       "just the baseboards and doors",
+       "paint moulding"
+      ],
+      "unit": "linear foot",
+      "typicalQuantity": 150,
+      "demand": "high",
+      "covered": false,
+      "isRepair": false,
+      "notes": "Genuinely quoted per linear foot ($2-6/lf). Frequently requested as a standalone job when walls are fine."
+     },
+     "verdict": null
+    },
+    {
+     "job": "Exterior door / garage door painting",
+     "unit": "each (per door)",
+     "low": 125,
+     "high": 450,
+     "setupShare": 0.55,
+     "bayAreaMultiplier": 1.25,
+     "confidence": "med",
+     "sources": [
+      "Fixr (Cost to Paint Exterior Doors, 2026): $112-$205 per standard 80\"x36\" door painted one side, average $156; $225-$409 for both sides; painting companies charge $4-$7.50/sq ft; painter labor $51-$94/hr",
+      "HomeGuide (Cost to Paint a Door / Cost to Paint a Garage Door, 2026): single front door $100-$220 to paint; professional front door painting $150-$300, averaging $225; garage door $1-$4 per sq ft; 1-car garage door $100-$230, 2-car $120-$500; painter labor $20-$50/hr; DIY supplies $30-$60",
+      "Angi (How Much Does It Cost to Paint a Door, 2026): exterior door $100-$225 on average, including prep, primer and 2-3 coats",
+      "HomeAdvisor (What Does Garage Door Painting Cost, 2025): garage door average $350, normal range $200-$500, full range $150-$1,200; single-car $100-$250, two-car $200-$500, three-car $300-$750; materials $65-$155; exterior painter labor $25-$100/hr; 2-8 hours typical",
+      "Homewyse (Cost to Paint Exterior Door, 2026): $177-$362 per door national average; includes a 2-hour minimum labor charge. Companion page Cost to Stain Exterior Door: $188-$393 per door / $3.14-$6.27 per sq ft",
+      "BuildsAndBuys Door Painting Cost Guide (2025): front/exterior door $150-$250 per door; single garage door $200-$400 per door",
+      "HomeGuide 'How Much to Charge for Painting' + CertaPro franchise pricing: painters commonly apply a $250-$500 job minimum to cover travel, setup and cleanup on small jobs (one CertaPro franchise publishes a $400 job minimum)",
+      "Moondance Painting / Tom the Painter (San Francisco): SF painters $50-$75/hr vs ~$55/hr national; SF crews quote roughly $1.50-$5 per sq ft on exterior work"
+     ],
+     "conflicts": "Three real disagreements, not noise. (1) Entry door per-door range varies ~1.7x between aggregators: Fixr is the low outlier at $112-$205 (explicitly ONE side only, avg $156), while Homewyse is the high outlier at $177-$362 for the same standard door; HomeGuide ($100-$220), Angi ($100-$225) and BuildsAndBuys ($150-$250) cluster in the middle. Much of the Fixr/Homewyse gap is a definitional one - Fixr's both-sides figure ($225-$409) lands almost exactly on Homewyse's range, so Homewyse appears to be pricing a full door treatment. (2) The 'each' unit conflates two jobs with a 2-3x spread: a single entry door runs ~$100-$300 while a garage door runs $200-$500 (HomeAdvisor avg $350, full range to $1,200 for 3-car doors). I kept the range wide rather than averaging, because 'paint my front door' and 'paint garage door' both route here. (3) Labor rates disagree badly: HomeGuide says $20-$50/hr, HomeAdvisor $25-$100/hr, Fixr $51-$94/hr - roughly a 2x spread on the input that dominates this job. (4) Staining an entry door prices above painting it (Homewyse $188-$393 vs $177-$362); no other source separated stain from paint. Bay Area multiplier is weakly supported - no source published a Bay Area door-painting figure, so 1.25 is inferred from SF painter hourly rates ($50-$75 vs ~$55 national) and SF exterior project totals running 1.2-1.5x national; treat it as an estimate.",
+     "category": "Painting",
+     "meta": {
+      "job": "Exterior door / garage door painting",
+      "phrasings": [
+       "paint my front door",
+       "front door painting cost",
+       "paint garage door",
+       "repaint my entry door",
+       "door looks faded from sun",
+       "stain front door"
+      ],
+      "unit": "each",
+      "typicalQuantity": 1,
+      "demand": "high",
+      "covered": false,
+      "isRepair": false,
+      "notes": "$150-500 per door; garage doors at the top of that range. Small curb-appeal job people call about constantly."
+     },
+     "verdict": null
+    },
+    {
+     "job": "Deck staining and sealing",
+     "unit": "sq ft",
+     "low": 2,
+     "high": 5,
+     "setupShare": 0.28,
+     "bayAreaMultiplier": 0,
+     "confidence": "high",
+     "sources": [
+      "Fixr (2026): $2-$5/sq ft including light sanding and sealing; national average $750 for a 14'x18' (252 sq ft) deck, typical range $550-$850. Labor $1.50-$3.00/sq ft, materials $0.50-$2.00/sq ft. Prep priced separately at $2.25-$9.00/sq ft (cleaning $0.25-$0.50, power washing $0.30-$0.40, stripping $1-$3, sanding $1-$4). Size table: 80 sq ft $160-$400; 144 sq ft $290-$720; 320 sq ft $640-$1,600; 400 sq ft $800-$2,000.",
+      "Homewyse (May 2026, national average, zip-adjustable): $2.96-$6.16/sq ft basic mid-range work; notes a 2-hour minimum labor charge.",
+      "Decks.com: professional staining $1.75-$4.50/sq ft on a well-maintained deck, up to $6.00/sq ft on a neglected deck; professional sealing alone about $1.00-$1.25/sq ft including light sanding. Railings priced separately at $4-$12/linear ft (good condition) or $6-$16/linear ft (poor condition).",
+      "HomeGuide (2026): deck sealing $550-$1,400 total, or roughly $0.75-$4.00/sq ft; staining $2-$4/sq ft with most decks 300-400 sq ft. Stain-plus-seal combined $800-$1,700 total (~$2.00-$4.25/sq ft at 400 sq ft).",
+      "Angi (2026): staining $2-$4/sq ft; deck sealing article gives $550-$1,400 total. Sealing added to a staining job raises the total to about $800-$1,700.",
+      "HomeAdvisor (2025-2026): $550-$1,250 total, or $1-$4/sq ft ($1.38-$3.13/sq ft at the 400 sq ft typical size). Low end: as little as $300 for a small deck with no repairs and minimal cleaning; a 200 sq ft deck runs about $400-$500 in labor. Re-stain with no prep work $0.50-$1.00/sq ft; light sanding $1.00-$1.50/sq ft including staining; heavy sanding $2-$4/sq ft; paint stripping $9-$12/sq ft."
+     ],
+     "conflicts": "Three real disagreements, not noise.\n\n1) Whether prep is included in the headline rate. Fixr's $2-$5/sq ft explicitly bundles light sanding and sealing, then lists prep as a SEPARATE $2.25-$9.00/sq ft line \u2014 meaning a heavy-prep Fixr job lands well above its own headline. HomeAdvisor instead decomposes by prep level: $0.50-$1.00/sq ft for a clean re-stain, $1.00-$1.50 with light sanding, $2-$4 with heavy sanding, $9-$12 for paint stripping. So the same deck reads as $0.50/sq ft or $12/sq ft depending on which decomposition you use. The $2-$5 consensus band assumes normal wash-and-light-sand prep.\n\n2) Low-end floor. HomeAdvisor's $1-$4/sq ft and Decks.com's $1.75 floor sit meaningfully below Homewyse's $2.96 floor \u2014 a ~3x spread at the bottom. Homewyse is RSMeans-style loaded costing (burdened labor, mobilization, minimum crew hours) and runs consistently hotter than the lead-gen sites at both ends ($2.96-$6.16 vs $2-$5). Do not average these: Homewyse is measuring a different thing (true loaded contractor cost) than Angi/HomeAdvisor (reported homeowner spend, which skews toward handyman and low-prep jobs).\n\n3) Stain vs. seal as separate scopes. Sealing alone is cheap and tightly clustered (Decks.com $1.00-$1.25/sq ft; HomeGuide $0.75-$4.00). Stain + seal together is $800-$1,700 total per both Angi and HomeGuide. Since the user phrasings mix both intents (\"deck sealing\" and \"reseal wood deck\" vs \"stain my deck\"), a seal-only job should price near $1-$1.50/sq ft, roughly half the stain-and-seal rate. Treat these as distinct scopes rather than one range.\n\nAlso note: Fixr's size table is perfectly linear ($2-$5/sq ft at every size, including 80 sq ft), which is an artifact of the table being generated from the rate rather than observed small-job pricing. It contradicts HomeAdvisor's real-world floor of ~$300 minimum and ~$400-$500 labor on a 200 sq ft deck. Trust the minimums over the table.",
+     "category": "Painting",
+     "meta": {
+      "job": "Deck staining and sealing",
+      "phrasings": [
+       "stain my deck",
+       "deck sealing",
+       "deck looks gray and weathered",
+       "reseal wood deck",
+       "deck stain cost per square foot",
+       "waterproof my deck"
+      ],
+      "unit": "sq ft",
+      "typicalQuantity": 400,
+      "demand": "very-high",
+      "covered": false,
+      "isRepair": true,
+      "notes": "Recurring maintenance job (every 2-3 years), not an install. Includes wash/strip and sanding. $2-5/sq ft."
+     },
+     "verdict": null
+    },
+    {
+     "job": "Fence painting / staining",
+     "unit": "linear foot",
+     "low": 2,
+     "high": 14,
+     "setupShare": 0.25,
+     "bayAreaMultiplier": 1.4,
+     "confidence": "high",
+     "sources": [
+      "HomeGuide (2026), 'Cost to Stain or Paint a Fence': $2\u2013$14/linear ft overall; picket $2\u2013$5, wood privacy $3\u2013$10, shadow-box $4\u2013$14; painters' minimum charge $250\u2013$500",
+      "Angi (2026), 'Fence Painting Cost': $3\u2013$14/linear ft or $1\u2013$3/sq ft; average total $1,700, range $300\u2013$4,800; prep (pressure wash + repairs) adds $150\u2013$900",
+      "HomeAdvisor (2025), 'Paint or Stain a Fence': $3\u2013$14/linear ft ($1\u2013$3/sq ft); average $1,700, typical range $750\u2013$4,250; pressure washing $150\u2013$300; labor $25\u2013$100/hr",
+      "Fixr.com (2026), 'Fence Painting Cost': $2.25\u2013$10/linear ft for ONE side, $4.50\u2013$20 for both sides; $0.35\u2013$0.90/sq ft; national average $1,000\u2013$4,000 (most ~$2,000); 4-ft fence $2.25\u2013$3.50/lf vs 8-ft $4.50\u2013$7.50/lf; pressure washing $125\u2013$235; labor $40\u2013$60/hr",
+      "Bob Vila (2025/26), 'Fence Painting Cost': $3\u2013$14/linear ft; average $1,700 (range $750\u2013$4,250); minimum fee $250\u2013$500; by length: 50 lf $150\u2013$700, 100 lf $300\u2013$1,400, 200 lf $600\u2013$2,800, 300 lf $900\u2013$4,200",
+      "Ergeon (2026), real-project data from 111 completed staining jobs in CA/TX/GA: $655\u2013$2,118 per project, median $1,298; $3\u2013$5/sq ft pro, $1\u2013$2/sq ft DIY materials; CA median ~$1,323 vs TX ~$912",
+      "Craftsman Painters (Oakland, CA contractor page): $3\u2013$8/linear ft baseline, with a 100-ft Bay Area fence commonly $1,500\u2013$4,000+ ($15\u2013$40/lf) once full prep is included"
+     ],
+     "conflicts": "Three real disagreements, none of which should be averaged away. (1) One side vs. both sides: Fixr is the only source that states its per-foot figure explicitly covers a single face and says most fences need both, doubling to $4.50\u2013$20/lf. Angi/HomeAdvisor/Bob Vila/HomeGuide quote $2\u2013$14/lf without saying which \u2014 their $1,700 average on a ~150-lf fence implies ~$11/lf, which is consistent with the both-sides interpretation, so the headline low end of $2\u2013$3/lf is realistically a single-side picket number, not a typical privacy-fence job. (2) Unit basis: Ergeon (the only source using real completed-job data) argues linear foot is the wrong unit and prices $3\u2013$5/sq ft of surface \u2014 a 150-lf x 6-ft fence is 900 sq ft per side / 1,800 sq ft both sides, which at $3\u2013$5/sq ft yields far more than the aggregator per-foot math produces. Ergeon's own median project is $1,298, i.e. ~$8.65/lf on a 150-ft fence, so their per-sq-ft rate appears to be a both-sides-plus-prep figure. (3) Total-job spread: Fixr's national average ($1,000\u2013$4,000, ~$2,000 typical) sits materially above Angi/HomeAdvisor/Bob Vila ($1,700 average, $750\u2013$4,250) and well above Ergeon's real-job $655\u2013$2,118. The aggregator content-farm figures skew high relative to the only measured dataset.",
+     "category": "Painting",
+     "meta": {
+      "job": "Fence painting / staining",
+      "phrasings": [
+       "stain my fence",
+       "paint wood fence",
+       "fence needs restaining",
+       "fence looks gray",
+       "how much to stain 100 feet of fence"
+      ],
+      "unit": "linear foot",
+      "typicalQuantity": 150,
+      "demand": "high",
+      "covered": false,
+      "isRepair": true,
+      "notes": "Quoted per linear foot of fence run ($5-12/lf), sometimes doubled for both sides \u2014 clarify sides."
+     },
+     "verdict": null
+    }
+   ]
+  },
+  {
+   "category": "Carpentry",
+   "allJobs": [
+    {
+     "job": "Door repair / adjustment",
+     "phrasings": [
+      "door wont close",
+      "my door sticks",
+      "bedroom door doesnt latch",
+      "door rubs on the floor",
+      "fix a sagging door",
+      "door hinge broken",
+      "front door wont shut all the way",
+      "door is crooked"
+     ],
+     "unit": "each",
+     "typicalQuantity": 1,
+     "demand": "very-high",
+     "covered": false,
+     "isRepair": true,
+     "notes": "The single most common carpentry call. Currently would likely route to a door replacement price ($400-1,200) when the real job is planing/shimming/rehanging at $100-300. Needs its own cheap repair path."
+    },
+    {
+     "job": "Exterior wood rot repair (trim, siding, sill)",
+     "phrasings": [
+      "wood rot around window",
+      "rotted trim outside",
+      "soft wood by the front door",
+      "dry rot repair",
+      "rotted window sill",
+      "wood is crumbling outside my house",
+      "termite damaged wood repair"
+     ],
+     "unit": "linear foot",
+     "typicalQuantity": 12,
+     "demand": "very-high",
+     "covered": false,
+     "isRepair": true,
+     "notes": "Quoted per LF of trim replaced ($9-25/LF materials, $65-105/hr labor). People almost never state quantity - assume a section, not a whole elevation. Epoxy patch vs. replace is the main price fork."
+    },
+    {
+     "job": "Cabinet door & drawer repair",
+     "phrasings": [
+      "cabinet door wont stay closed",
+      "kitchen drawer broken",
+      "cabinet hinge broken",
+      "drawer slide replacement",
+      "cabinet door hanging crooked",
+      "fix my kitchen cabinets",
+      "soft close hinges installed"
+     ],
+     "unit": "each",
+     "typicalQuantity": 2,
+     "demand": "very-high",
+     "covered": false,
+     "isRepair": true,
+     "notes": "Critical blind spot: engine has 'stock cabinets' only, so 'fix my cabinet door' would price as a cabinet run. Real job is $30-80 per door for hinges, $120-350 per drawer."
+    },
+    {
+     "job": "Fence repair",
+     "phrasings": [
+      "fence is leaning",
+      "fence post broken",
+      "fence blew down in the wind",
+      "replace a few fence boards",
+      "wobbly fence",
+      "fix my fence",
+      "fence panel fell over"
+     ],
+     "unit": "linear foot",
+     "typicalQuantity": 16,
+     "demand": "very-high",
+     "covered": false,
+     "isRepair": true,
+     "notes": "$302-922 typical repair, roughly 2 panels. Must not price as full fence install. Leaning-post repair and broken-board swap are the two dominant sub-jobs."
+    },
+    {
+     "job": "Baseboard, trim & molding installation",
+     "phrasings": [
+      "baseboards installed",
+      "crown molding cost",
+      "replace baseboard in living room",
+      "trim around doors",
+      "new molding",
+      "baseboard came off the wall",
+      "shoe molding"
+     ],
+     "unit": "linear foot",
+     "typicalQuantity": 60,
+     "demand": "high",
+     "covered": false,
+     "isRepair": false,
+     "notes": "Baseboard $4-8/LF installed, crown $7-16/LF installed. Quantity should default to one room's perimeter, not a whole house."
+    },
+    {
+     "job": "Fascia & soffit repair",
+     "phrasings": [
+      "soffit falling down",
+      "fascia board rotted",
+      "wood under my roof is rotting",
+      "birds got into my soffit",
+      "fascia repair near me",
+      "that board behind the gutter is rotted"
+     ],
+     "unit": "linear foot",
+     "typicalQuantity": 20,
+     "demand": "high",
+     "covered": false,
+     "isRepair": true,
+     "notes": "Often discovered during gutter work. Access/height is the main cost driver; two-story adds significantly."
+    },
+    {
+     "job": "Squeaky floor / subfloor repair",
+     "phrasings": [
+      "my floor squeaks",
+      "floor is bouncy",
+      "soft spot in the floor",
+      "floor creaks when i walk",
+      "subfloor repair",
+      "floor feels spongy near the bathroom"
+     ],
+     "unit": "project",
+     "typicalQuantity": 1,
+     "demand": "high",
+     "covered": false,
+     "isRepair": true,
+     "notes": "$200-1,000 per room for squeaks; $100-300 for a small subfloor patch. Symptom-first phrasing is the norm - almost nobody says 'subfloor'."
+    },
+    {
+     "job": "Stair & railing repair",
+     "phrasings": [
+      "stairs are squeaky",
+      "loose handrail",
+      "stair tread cracked",
+      "banister is wobbly",
+      "railing came off the wall",
+      "broken step",
+      "my stairs feel unsafe"
+     ],
+     "unit": "each",
+     "typicalQuantity": 3,
+     "demand": "high",
+     "covered": false,
+     "isRepair": true,
+     "notes": "Priced per tread ($35-50 material + labor) or per LF for handrail ($30-45/LF). 'Loose handrail' is a sub-$200 call that must not price as a new staircase."
+    },
+    {
+     "job": "Shelving & closet shelf installation",
+     "phrasings": [
+      "install shelves",
+      "floating shelf mounted",
+      "closet shelving",
+      "need shelves in my garage",
+      "built in shelves cost",
+      "shelf fell off the wall"
+     ],
+     "unit": "each",
+     "typicalQuantity": 3,
+     "demand": "high",
+     "covered": false,
+     "isRepair": false,
+     "notes": "Very common small-ticket job. Price per shelf; built-in/custom is a different tier from mounting a prefab shelf."
+    },
+    {
+     "job": "Gate repair",
+     "phrasings": [
+      "gate wont close",
+      "gate is dragging on the ground",
+      "sagging gate",
+      "side gate broken",
+      "gate latch doesnt line up",
+      "fix my wooden gate"
+     ],
+     "unit": "each",
+     "typicalQuantity": 1,
+     "demand": "high",
+     "covered": false,
+     "isRepair": true,
+     "notes": "$50-400. Distinct from fence repair because it's quoted per gate, not per foot, and is a very frequent standalone call."
+    },
+    {
+     "job": "Build deck",
+     "phrasings": [
+      "build a deck",
+      "new deck cost",
+      "backyard deck",
+      "add a deck off my kitchen",
+      "deck builder near me"
+     ],
+     "unit": "sq ft",
+     "typicalQuantity": 320,
+     "demand": "high",
+     "covered": true,
+     "isRepair": false,
+     "notes": "Already covered."
+    },
+    {
+     "job": "Deck board replacement",
+     "phrasings": [
+      "replace deck boards",
+      "rotten deck boards",
+      "few boards on my deck are soft",
+      "deck plank replacement"
+     ],
+     "unit": "sq ft",
+     "typicalQuantity": 320,
+     "demand": "high",
+     "covered": true,
+     "isRepair": true,
+     "notes": "Already covered. Watch that partial-board swaps ('a few boards') don't default to full-deck square footage."
+    },
+    {
+     "job": "Deck refinishing / staining",
+     "phrasings": [
+      "stain my deck",
+      "deck sealing",
+      "refinish deck",
+      "deck looks gray and faded",
+      "power wash and stain deck"
+     ],
+     "unit": "sq ft",
+     "typicalQuantity": 320,
+     "demand": "high",
+     "covered": true,
+     "isRepair": false,
+     "notes": "Already covered. Seasonal maintenance job."
+    },
+    {
+     "job": "Deck railing",
+     "phrasings": [
+      "deck railing replacement",
+      "new deck rail",
+      "railing on my deck is loose",
+      "deck balusters"
+     ],
+     "unit": "linear foot",
+     "typicalQuantity": 40,
+     "demand": "medium",
+     "covered": true,
+     "isRepair": false,
+     "notes": "Already covered."
+    },
+    {
+     "job": "Deck structural repair",
+     "phrasings": [
+      "deck is wobbly",
+      "deck feels unsafe",
+      "deck joist rotted",
+      "deck pulling away from the house",
+      "deck post rotted at the bottom"
+     ],
+     "unit": "project",
+     "typicalQuantity": 1,
+     "demand": "medium",
+     "covered": true,
+     "isRepair": true,
+     "notes": "Already covered. 'Deck is wobbly' should land here, not on a rebuild."
+    },
+    {
+     "job": "Vanity installation",
+     "phrasings": [
+      "install bathroom vanity",
+      "new vanity",
+      "replace vanity and sink",
+      "bathroom cabinet install"
+     ],
+     "unit": "each",
+     "typicalQuantity": 1,
+     "demand": "medium",
+     "covered": true,
+     "isRepair": false,
+     "notes": "Already covered."
+    },
+    {
+     "job": "Stock cabinet installation",
+     "phrasings": [
+      "install kitchen cabinets",
+      "new cabinets",
+      "cabinet installation cost",
+      "hang upper cabinets"
+     ],
+     "unit": "linear foot",
+     "typicalQuantity": 20,
+     "demand": "medium",
+     "covered": true,
+     "isRepair": false,
+     "notes": "Already covered. Must not absorb 'fix my cabinet door' queries - see cabinet door & drawer repair."
+    },
+    {
+     "job": "Wall framing",
+     "phrasings": [
+      "frame a wall",
+      "build a partition wall",
+      "divide a room",
+      "new wall in basement",
+      "frame out a closet"
+     ],
+     "unit": "linear foot",
+     "typicalQuantity": 20,
+     "demand": "medium",
+     "covered": true,
+     "isRepair": false,
+     "notes": "Already covered."
+    }
+   ],
+   "anchors": []
+  },
+  {
+   "category": "Roofing",
+   "allJobs": [
+    {
+     "job": "Roof leak repair (find & fix)",
+     "phrasings": [
+      "roof leak repair",
+      "water dripping from ceiling when it rains",
+      "water stain on ceiling roof leak",
+      "find where my roof is leaking",
+      "roof leaking near chimney",
+      "leak in attic after rain",
+      "roofer to fix small leak"
+     ],
+     "unit": "project",
+     "typicalQuantity": 1,
+     "demand": "very-high",
+     "covered": false,
+     "isRepair": true,
+     "notes": "The #1 roofing call by a wide margin. Homeowners describe a symptom (ceiling stain, drip), not a roof component. Should be the default catch-all route for any leak-symptom phrasing rather than falling through to full replacement. Typical $150-$1,500, national average ~$650; diagnosis/leak-detection is often a separate $75-$200 line."
+    },
+    {
+     "job": "Missing / blown-off shingle replacement",
+     "phrasings": [
+      "missing shingles",
+      "shingles blew off in the wind",
+      "replace a few shingles",
+      "shingle fell off roof",
+      "some shingles came off after storm",
+      "couple shingles missing repair"
+     ],
+     "unit": "each",
+     "typicalQuantity": 12,
+     "demand": "very-high",
+     "covered": false,
+     "isRepair": true,
+     "notes": "Distinct from 'repair patch' \u2014 this is the classic tiny job with a minimum-charge floor ($300-$600 service minimum) that dwarfs material cost. Quoted per shingle/bundle but realistically a trip-charge job. Must NOT route to full replacement."
+    },
+    {
+     "job": "Architectural shingle roof installation",
+     "phrasings": [
+      "architectural shingles",
+      "new asphalt shingle roof",
+      "dimensional shingle install",
+      "30 year shingles cost",
+      "shingle roof price per square"
+     ],
+     "unit": "sq ft",
+     "typicalQuantity": 1800,
+     "demand": "very-high",
+     "covered": true,
+     "isRepair": false,
+     "notes": "Already covered. Quoted per square (100 sq ft) in the trade; sq ft is the safe app-facing unit."
+    },
+    {
+     "job": "Full roof replacement / tear-off",
+     "phrasings": [
+      "full roof replacement",
+      "new roof cost",
+      "tear off and replace my roof",
+      "roof is 25 years old need new one",
+      "reroof my house",
+      "how much for a whole new roof"
+     ],
+     "unit": "sq ft",
+     "typicalQuantity": 1800,
+     "demand": "very-high",
+     "covered": true,
+     "isRepair": false,
+     "notes": "Already covered. Include tear-off vs. layover as a modifier; disposal is a real cost driver."
+    },
+    {
+     "job": "Roof repair patch (small section)",
+     "phrasings": [
+      "roof patch",
+      "patch a hole in my roof",
+      "small section of roof repair",
+      "fix a spot on the roof",
+      "repair damaged area of roof"
+     ],
+     "unit": "project",
+     "typicalQuantity": 1,
+     "demand": "very-high",
+     "covered": true,
+     "isRepair": true,
+     "notes": "Already covered. Keep it clearly bounded so it does not absorb the more specific repair jobs below (boot, flashing, valley) which price very differently."
+    },
+    {
+     "job": "Flashing repair / replacement (chimney, wall, step)",
+     "phrasings": [
+      "roof flashing repair",
+      "chimney flashing leaking",
+      "leak where roof meets wall",
+      "step flashing replacement",
+      "reseal flashing around chimney",
+      "water coming in at chimney"
+     ],
+     "unit": "linear foot",
+     "typicalQuantity": 20,
+     "demand": "high",
+     "covered": false,
+     "isRepair": true,
+     "notes": "Second-most-common leak source after shingles. Chimney flashing $300-$950; wall/step flashing $200-$600. Quoted per linear foot of flashing run but frequently sold as a flat repair; linear foot is what the trade actually measures."
+    },
+    {
+     "job": "Pipe boot / vent boot replacement",
+     "phrasings": [
+      "pipe boot replacement",
+      "rubber boot on roof cracked",
+      "leak around vent pipe",
+      "plumbing vent leaking roof",
+      "vent boot cracked and leaking",
+      "that rubber thing around the pipe is split"
+     ],
+     "unit": "each",
+     "typicalQuantity": 2,
+     "demand": "high",
+     "covered": false,
+     "isRepair": true,
+     "notes": "Extremely common and cheap ($150-$500 each) \u2014 the single most classic 'small roof leak' cause. Dried-out cracked EPDM boots. Prime example of the blind spot: currently would get priced as a replacement."
+    },
+    {
+     "job": "Gutter cleaning",
+     "phrasings": [
+      "gutter cleaning",
+      "clean my gutters",
+      "gutters overflowing",
+      "gutters full of leaves",
+      "water pouring over the side of the gutter",
+      "gutter cleaning near me"
+     ],
+     "unit": "linear foot",
+     "typicalQuantity": 160,
+     "demand": "very-high",
+     "covered": false,
+     "isRepair": true,
+     "notes": "Highest-frequency, lowest-ticket job in the whole category and a repeat/seasonal one. $0.95-$2.25 per linear foot, with a $75-$200 minimum. Distinct from 'gutters' (install) which is already covered."
+    },
+    {
+     "job": "Gutter repair (leaking seams, sagging, downspouts)",
+     "phrasings": [
+      "gutter repair",
+      "gutter is sagging",
+      "gutter pulling away from house",
+      "leaking gutter joint",
+      "downspout came loose",
+      "gutter leaking at the corner",
+      "reattach gutter"
+     ],
+     "unit": "linear foot",
+     "typicalQuantity": 40,
+     "demand": "high",
+     "covered": false,
+     "isRepair": true,
+     "notes": "$100-$425 typical for sectional repairs; reseal $1.50-$6.50/lf; downspout replacement $30-$75 each. Should never route to full gutter replacement."
+    },
+    {
+     "job": "Gutter installation / replacement",
+     "phrasings": [
+      "new gutters",
+      "seamless gutters cost",
+      "replace gutters",
+      "install rain gutters",
+      "gutter replacement per foot"
+     ],
+     "unit": "linear foot",
+     "typicalQuantity": 160,
+     "demand": "high",
+     "covered": true,
+     "isRepair": false,
+     "notes": "Already covered as 'gutters'. Worth splitting from cleaning/repair explicitly in routing."
+    },
+    {
+     "job": "Gutter guard installation",
+     "phrasings": [
+      "gutter guards",
+      "leaf filter cost",
+      "gutter covers to keep leaves out",
+      "gutter screens installed",
+      "leafguard price"
+     ],
+     "unit": "linear foot",
+     "typicalQuantity": 160,
+     "demand": "high",
+     "covered": false,
+     "isRepair": false,
+     "notes": "Enormously advertised, so search demand is high. Huge spread: $3-$6/lf budget screens up to $13-$22/lf branded micro-mesh. Homeowners often search a brand name."
+    },
+    {
+     "job": "Emergency roof tarping",
+     "phrasings": [
+      "emergency roof tarp",
+      "tarp my roof",
+      "tree fell on my roof",
+      "need roof covered tonight",
+      "storm damage roof emergency",
+      "urgent roof leak someone come today"
+     ],
+     "unit": "project",
+     "typicalQuantity": 1,
+     "demand": "high",
+     "covered": false,
+     "isRepair": true,
+     "notes": "Urgency-driven, converts at high rate. $150-$3,300, avg ~$450, $0.70-$2.80/sq ft with an emergency premium. Should be routed on urgency words ('today', 'tonight', 'emergency', 'tree fell') regardless of the rest of the query."
+    },
+    {
+     "job": "Roof inspection / certification",
+     "phrasings": [
+      "roof inspection",
+      "how much life left in my roof",
+      "roof inspection for home sale",
+      "get my roof looked at",
+      "roof certification for insurance",
+      "is my roof ok"
+     ],
+     "unit": "project",
+     "typicalQuantity": 1,
+     "demand": "high",
+     "covered": false,
+     "isRepair": true,
+     "notes": "$100-$400, plus $75-$200 for a certification letter. Frequent real-estate and insurance-driven trigger, and a common low-commitment first ask ('can someone just look at it')."
+    },
+    {
+     "job": "Roof cleaning / moss & algae removal",
+     "phrasings": [
+      "roof cleaning",
+      "black streaks on roof",
+      "moss on my roof",
+      "soft wash roof",
+      "green stuff growing on shingles",
+      "remove algae from roof"
+     ],
+     "unit": "sq ft",
+     "typicalQuantity": 1800,
+     "demand": "high",
+     "covered": false,
+     "isRepair": true,
+     "notes": "$0.20-$0.75/sq ft soft wash; manual moss removal $0.60-$1.00/sq ft. Very high in the Pacific Northwest and Southeast. Cosmetic trigger \u2014 homeowners search the visual symptom (streaks/green), not the word 'cleaning'."
+    },
+    {
+     "job": "Fascia & soffit repair (rotted wood)",
+     "phrasings": [
+      "rotted fascia board",
+      "soffit repair",
+      "wood behind gutter is rotting",
+      "fascia rot repair",
+      "birds getting into my soffit",
+      "trim under the roof edge is falling"
+     ],
+     "unit": "linear foot",
+     "typicalQuantity": 40,
+     "demand": "medium",
+     "covered": false,
+     "isRepair": true,
+     "notes": "$9-$34 per linear foot; typical job $600-$2,600. Almost always discovered alongside a gutter or leak call. Homeowners rarely know the words 'fascia' or 'soffit' \u2014 route on 'rotted wood under roof edge'."
+    },
+    {
+     "job": "Roof vent / ridge vent & attic ventilation",
+     "phrasings": [
+      "ridge vent installation",
+      "attic is way too hot",
+      "roof vent replacement",
+      "turbine vent leaking",
+      "add ventilation to my attic",
+      "attic ventilation roof"
+     ],
+     "unit": "each",
+     "typicalQuantity": 4,
+     "demand": "medium",
+     "covered": false,
+     "isRepair": false,
+     "notes": "Ridge vent runs per linear foot of ridge, but box/turbine/static vents quote per unit, and per-unit is the more common homeowner-scale job. Trigger is usually 'hot attic' or 'high energy bill', not the vent itself."
+    },
+    {
+     "job": "Roof decking / sheathing replacement (rot, sagging)",
+     "phrasings": [
+      "roof decking replacement",
+      "roof is sagging",
+      "soft spot on my roof",
+      "rotted plywood under shingles",
+      "dip in the roofline",
+      "spongy roof deck"
+     ],
+     "unit": "sq ft",
+     "typicalQuantity": 200,
+     "demand": "medium",
+     "covered": false,
+     "isRepair": true,
+     "notes": "$2-$5/sq ft, or roughly $70-$150 per sheet installed. Almost always a change-order discovered mid-replacement, but 'my roof is sagging' is a real standalone search. Structural sag can escalate to framing work."
+    },
+    {
+     "job": "Skylight leak repair / replacement",
+     "phrasings": [
+      "skylight leaking",
+      "fix leaking skylight",
+      "skylight repair",
+      "water coming in around skylight",
+      "replace skylight"
+     ],
+     "unit": "each",
+     "typicalQuantity": 1,
+     "demand": "medium",
+     "covered": false,
+     "isRepair": true,
+     "notes": "Leak/reflash repair $300-$800; full replacement up to ~$2,800. Homeowners almost always describe the leak, not the unit."
+    },
+    {
+     "job": "Tile roof repair (cracked / slipped tiles)",
+     "phrasings": [
+      "cracked roof tiles",
+      "broken tile on roof",
+      "slipped roof tiles",
+      "spanish tile roof repair",
+      "clay tile roof leak",
+      "tiles fell off my roof"
+     ],
+     "unit": "each",
+     "typicalQuantity": 15,
+     "demand": "medium",
+     "covered": false,
+     "isRepair": true,
+     "notes": "Regionally huge (CA, FL, AZ, TX). $5-$25/sq ft or $200-$500 for a few tiles; underlayment replacement is the expensive hidden version. Distinct trade skill from asphalt \u2014 matters for matching, not just pricing."
+    },
+    {
+     "job": "Metal roof installation",
+     "phrasings": [
+      "metal roof cost",
+      "standing seam roof",
+      "tin roof install",
+      "metal roofing price",
+      "steel roof for my house"
+     ],
+     "unit": "sq ft",
+     "typicalQuantity": 1800,
+     "demand": "medium",
+     "covered": true,
+     "isRepair": false,
+     "notes": "Already covered. Note the sibling gap: metal roof REPAIR (loose fasteners, failed sealant at seams, exposed-fastener washer replacement) is a real and separate small job that currently has no route."
+    },
+    {
+     "job": "Storm / hail damage repair & insurance claim",
+     "phrasings": [
+      "hail damage roof",
+      "storm damage roof repair",
+      "insurance adjuster roof",
+      "wind damage to my roof",
+      "roofer that works with insurance",
+      "hail dents on roof"
+     ],
+     "unit": "project",
+     "typicalQuantity": 1,
+     "demand": "high",
+     "covered": false,
+     "isRepair": true,
+     "notes": "Seasonal and geographically spiky, but a dominant lead source in hail belt states. Price is usually deductible-driven rather than scope-driven, so the useful output is a matching signal ('works with insurance claims') more than a dollar estimate."
+    },
+    {
+     "job": "Ice dam removal",
+     "phrasings": [
+      "ice dam removal",
+      "icicles hanging off my roof",
+      "ice building up on roof edge",
+      "water leaking inside during winter thaw",
+      "steam ice off roof"
+     ],
+     "unit": "hour",
+     "typicalQuantity": 4,
+     "demand": "medium",
+     "covered": false,
+     "isRepair": true,
+     "notes": "Strictly northern and strictly winter, but during an event it is the highest-volume emergency call in the trade. Genuinely quoted hourly: $400-$600/hr for steam, $100-$150/hr for salt, with a 2-3 hour minimum."
+    }
+   ],
+   "anchors": []
+  },
+  {
+   "category": "Flooring",
+   "allJobs": [
+    {
+     "job": "Hardwood floor installation",
+     "phrasings": [
+      "hardwood floor install",
+      "install hardwood floors",
+      "new wood floors",
+      "hardwood flooring installer near me",
+      "put in real wood floor",
+      "engineered hardwood install"
+     ],
+     "unit": "sq ft",
+     "typicalQuantity": 500,
+     "demand": "very-high",
+     "covered": true,
+     "isRepair": false,
+     "notes": "Big-ticket anchor job. Solid vs engineered changes price materially; nail-down vs glue-down matters on slab."
+    },
+    {
+     "job": "Luxury vinyl plank (LVP) installation",
+     "phrasings": [
+      "lvp install",
+      "vinyl plank flooring install",
+      "click flooring installation",
+      "waterproof vinyl floors",
+      "luxury vinyl floor installer",
+      "lvp over concrete"
+     ],
+     "unit": "sq ft",
+     "typicalQuantity": 500,
+     "demand": "very-high",
+     "covered": true,
+     "isRepair": false,
+     "notes": "Now the highest-volume install request in most markets, ahead of laminate and often carpet."
+    },
+    {
+     "job": "Laminate flooring installation",
+     "phrasings": [
+      "laminate floor install",
+      "install laminate flooring",
+      "cheap floating floor install",
+      "laminate installer near me",
+      "pergo installation"
+     ],
+     "unit": "sq ft",
+     "typicalQuantity": 400,
+     "demand": "high",
+     "covered": true,
+     "isRepair": false,
+     "notes": "Losing share to LVP but still heavily searched; users often say 'laminate' when they mean LVP."
+    },
+    {
+     "job": "Carpet installation",
+     "phrasings": [
+      "carpet install",
+      "new carpet for bedroom",
+      "carpet installer near me",
+      "carpet and pad install",
+      "recarpet my house",
+      "wall to wall carpet"
+     ],
+     "unit": "sq ft",
+     "typicalQuantity": 400,
+     "demand": "high",
+     "covered": true,
+     "isRepair": false,
+     "notes": "Frequently quoted per square yard by the trade but consumers think in sq ft and rooms; padding and tack strip are usual add-ons."
+    },
+    {
+     "job": "Tile floor installation",
+     "phrasings": [
+      "tile floor install",
+      "install ceramic tile floor",
+      "porcelain tile flooring",
+      "tile guy for bathroom floor",
+      "tile installer near me",
+      "tile my kitchen floor"
+     ],
+     "unit": "sq ft",
+     "typicalQuantity": 200,
+     "demand": "high",
+     "covered": true,
+     "isRepair": false,
+     "notes": "Usually room-scoped (bath/kitchen/entry), not whole-house, so typical quantity is much smaller than plank jobs."
+    },
+    {
+     "job": "Hardwood floor refinishing (sand & finish)",
+     "phrasings": [
+      "refinish hardwood floors",
+      "sand and refinish wood floors",
+      "hardwood floor refinishing cost",
+      "restain my wood floors",
+      "floor sanding near me",
+      "make old wood floors look new"
+     ],
+     "unit": "sq ft",
+     "typicalQuantity": 600,
+     "demand": "very-high",
+     "covered": true,
+     "isRepair": false,
+     "notes": "Full sand-to-bare-wood job. Must stay distinct from screen-and-recoat, which is 60-70% cheaper."
+    },
+    {
+     "job": "Old flooring removal and haul-away",
+     "phrasings": [
+      "remove old carpet",
+      "tear out tile floor",
+      "flooring removal",
+      "rip up old flooring",
+      "carpet removal and disposal",
+      "remove glued down vinyl"
+     ],
+     "unit": "sq ft",
+     "typicalQuantity": 400,
+     "demand": "high",
+     "covered": true,
+     "isRepair": false,
+     "notes": "Often bundled but priced separately; glued/thinset tile tear-out is several times the cost of carpet pull-up."
+    },
+    {
+     "job": "Subfloor repair / replacement",
+     "phrasings": [
+      "subfloor repair",
+      "replace rotted subfloor",
+      "soft spot in bathroom floor",
+      "floor feels spongy",
+      "plywood under floor is rotten",
+      "floor sinking in one spot"
+     ],
+     "unit": "sq ft",
+     "typicalQuantity": 60,
+     "demand": "high",
+     "covered": true,
+     "isRepair": true,
+     "notes": "Almost always a partial-area job (a bathroom around the toilet, a spot near a dishwasher) - never the whole house. If this gets priced as full-house subfloor replacement the estimate is off by 10x."
+    },
+    {
+     "job": "Floor leveling / self-leveling underlayment",
+     "phrasings": [
+      "floor leveling",
+      "uneven floor fix",
+      "self leveling concrete",
+      "my floor slopes",
+      "level floor before lvp",
+      "dip in my floor"
+     ],
+     "unit": "sq ft",
+     "typicalQuantity": 200,
+     "demand": "medium",
+     "covered": true,
+     "isRepair": true,
+     "notes": "Usually surfaces as prep discovered mid-install rather than a standalone call."
+    },
+    {
+     "job": "Squeaky floor repair",
+     "phrasings": [
+      "squeaky floor fix",
+      "my floors creak when i walk",
+      "stop floor from squeaking",
+      "creaky floorboards upstairs",
+      "noisy hardwood floor",
+      "how much to fix squeaky floors"
+     ],
+     "unit": "project",
+     "typicalQuantity": 1,
+     "demand": "very-high",
+     "covered": false,
+     "isRepair": true,
+     "notes": "Classic small-job blind spot. Priced per room or as a half-day minimum ($200-$500), not per square foot, and definitely not as a floor replacement. Access from below vs. face-screwing from above is the main cost driver."
+    },
+    {
+     "job": "Hardwood board spot repair (scratches, gouges, damaged planks)",
+     "phrasings": [
+      "fix scratched hardwood floor",
+      "replace a few hardwood boards",
+      "dog scratched my wood floors",
+      "water stain on hardwood",
+      "gouge in wood floor",
+      "patch hardwood floor where wall was",
+      "pet stain black spot on floor"
+     ],
+     "unit": "project",
+     "typicalQuantity": 1,
+     "demand": "very-high",
+     "covered": false,
+     "isRepair": true,
+     "notes": "Weave-in board replacement plus blend/feather. Typically a $250-$600 half-to-full-day minimum. Very high call volume; must not route to full refinishing or hardwood install."
+    },
+    {
+     "job": "Screen and recoat (buff and polyurethane refresh)",
+     "phrasings": [
+      "screen and recoat",
+      "buff and recoat hardwood",
+      "refresh wood floors without sanding",
+      "floors look dull need shine",
+      "polyurethane coat over existing floor",
+      "cheap alternative to refinishing"
+     ],
+     "unit": "sq ft",
+     "typicalQuantity": 500,
+     "demand": "high",
+     "covered": false,
+     "isRepair": true,
+     "notes": "$1-$3/sq ft vs $3-$8 for a full refinish, one day instead of three to five. Homeowners often ask for 'refinishing' when this is what they need; big overpricing risk if collapsed into refinishing."
+    },
+    {
+     "job": "Cracked or broken tile replacement",
+     "phrasings": [
+      "replace cracked tile",
+      "broken floor tile",
+      "one tile is cracked",
+      "loose tile floor",
+      "hollow sounding tiles",
+      "chipped tile fix",
+      "tile popped up"
+     ],
+     "unit": "each",
+     "typicalQuantity": 3,
+     "demand": "very-high",
+     "covered": false,
+     "isRepair": true,
+     "notes": "Priced per tile but with a hard $150-$300 service minimum - the minimum dominates for 1-3 tiles. Matching tile availability is the usual complication."
+    },
+    {
+     "job": "Grout repair, regrouting and sealing",
+     "phrasings": [
+      "regrout tile floor",
+      "grout is cracking",
+      "grout repair near me",
+      "dirty grout needs replacing",
+      "reseal grout bathroom floor",
+      "grout falling out between tiles"
+     ],
+     "unit": "sq ft",
+     "typicalQuantity": 100,
+     "demand": "high",
+     "covered": false,
+     "isRepair": true,
+     "notes": "$3-$25/sq ft with a $100-$700 typical job range. Often bundled with a tile-and-grout deep clean; very common standalone maintenance call."
+    },
+    {
+     "job": "Carpet re-stretching",
+     "phrasings": [
+      "carpet stretching",
+      "carpet has ripples",
+      "wrinkles in my carpet",
+      "loose carpet needs tightening",
+      "carpet buckling",
+      "carpet pulling away from wall"
+     ],
+     "unit": "project",
+     "typicalQuantity": 1,
+     "demand": "high",
+     "covered": false,
+     "isRepair": true,
+     "notes": "$100-$300 for the first room, $40-$80 per additional room. Room-based, not sq ft. Cheap, frequent, and completely unlike a carpet replacement."
+    },
+    {
+     "job": "Carpet patching / seam repair",
+     "phrasings": [
+      "carpet patch",
+      "dog chewed carpet",
+      "burn hole in carpet",
+      "fix torn carpet seam",
+      "carpet coming apart at the seam",
+      "bleach stain on carpet cut out"
+     ],
+     "unit": "project",
+     "typicalQuantity": 1,
+     "demand": "high",
+     "covered": false,
+     "isRepair": true,
+     "notes": "$140-$400, average around $250. Needs donor carpet from a closet - homeowners rarely mention this. Pet damage and seam separation are the two dominant triggers."
+    },
+    {
+     "job": "Vinyl / laminate plank replacement (individual planks)",
+     "phrasings": [
+      "replace one vinyl plank",
+      "damaged lvp plank",
+      "laminate board is swollen",
+      "vinyl floor gouged",
+      "lifted plank in the middle of the floor",
+      "plank separated gap in vinyl floor"
+     ],
+     "unit": "each",
+     "typicalQuantity": 4,
+     "demand": "high",
+     "covered": false,
+     "isRepair": true,
+     "notes": "Growing fast as first-gen LVP ages. Click-lock floors may require unlocking back to the damaged plank, which drives cost far above the plank count; glue-down is a simpler cut-out."
+    },
+    {
+     "job": "Water-damaged floor repair",
+     "phrasings": [
+      "water damaged floor",
+      "floor buckling after leak",
+      "dishwasher leaked under my floor",
+      "warped wood floor from water",
+      "cupping hardwood floor",
+      "floor swelling near fridge",
+      "toilet leaked onto the floor"
+     ],
+     "unit": "sq ft",
+     "typicalQuantity": 80,
+     "demand": "high",
+     "covered": false,
+     "isRepair": true,
+     "notes": "Very high-intent, often insurance-adjacent. Scope is drying plus partial board/subfloor replacement plus blending - almost never the whole floor. Cupping may self-correct after drying, so the honest answer is sometimes a moisture test first."
+    },
+    {
+     "job": "Transition strips, thresholds and shoe molding",
+     "phrasings": [
+      "transition strip between rooms",
+      "threshold strip install",
+      "gap between carpet and tile",
+      "quarter round after new floor",
+      "shoe molding install",
+      "doorway strip came loose",
+      "baseboard trim after flooring"
+     ],
+     "unit": "each",
+     "typicalQuantity": 3,
+     "demand": "medium",
+     "covered": false,
+     "isRepair": true,
+     "notes": "Tiny job ($5-$20 per threshold piece, shoe molding around $4.60/linear foot installed) that people call about constantly, usually as a punch-list item after a DIY install. Almost always below any pro's minimum on its own, so expect it to bundle."
+    }
+   ],
+   "anchors": []
+  },
+  {
+   "category": "Windows & Doors",
+   "allJobs": [
+    {
+     "job": "Window glass pane replacement (broken/cracked)",
+     "phrasings": [
+      "broken window glass",
+      "cracked window pane replacement",
+      "kid broke my window",
+      "replace one pane of glass",
+      "window shattered need fix asap",
+      "glass repair for house window",
+      "single pane replacement cost"
+     ],
+     "unit": "each",
+     "typicalQuantity": 1,
+     "demand": "very-high",
+     "covered": false,
+     "isRepair": true,
+     "notes": "Highest-volume window call. Currently gets misrouted to full vinyl window replacement, which is 3-5x the real price. Glass-only swap is $75-$400 per sash depending on single vs double pane and tempered/low-e."
+    },
+    {
+     "job": "Foggy / failed seal insulated glass unit (IGU) replacement",
+     "phrasings": [
+      "foggy window between the panes",
+      "moisture inside my window glass",
+      "condensation between glass",
+      "cloudy windows wont wipe off",
+      "double pane window fogged up",
+      "broken seal window repair"
+     ],
+     "unit": "each",
+     "typicalQuantity": 2,
+     "demand": "very-high",
+     "covered": false,
+     "isRepair": true,
+     "notes": "People almost never have just one \u2014 quote 2-3. IGU-only swap $125-$550/unit installed vs ~$750 full replacement. Big engine blind spot: this is the classic 'repair not replace' case."
+    },
+    {
+     "job": "Window won't stay up / balance, sash cord, crank repair",
+     "phrasings": [
+      "window wont stay open falls down",
+      "double hung window slams shut",
+      "window balance broken",
+      "window crank not working",
+      "hard to open my windows",
+      "sash spring repair",
+      "casement crank stripped"
+     ],
+     "unit": "each",
+     "typicalQuantity": 2,
+     "demand": "high",
+     "covered": false,
+     "isRepair": true,
+     "notes": "$150-$300/window plus a service-call minimum. Includes balance shoes, tilt pins, casement operators. Often multiple windows in one visit."
+    },
+    {
+     "job": "Window screen repair or rescreen",
+     "phrasings": [
+      "torn window screen",
+      "cat ripped my screen",
+      "rescreen my windows",
+      "screen repair near me",
+      "new screens for windows",
+      "fix hole in bug screen",
+      "screen popped out of frame"
+     ],
+     "unit": "each",
+     "typicalQuantity": 4,
+     "demand": "very-high",
+     "covered": false,
+     "isRepair": true,
+     "notes": "Very cheap per unit ($20-$65 rescreen, $7-$200 range) so pros price by the batch and enforce a minimum. Assume 4 screens \u2014 nobody calls out a pro for one."
+    },
+    {
+     "job": "Sticking / sagging door adjustment (won't close or latch)",
+     "phrasings": [
+      "my door wont close all the way",
+      "door sticks in the summer",
+      "door wont latch shut",
+      "door rubs the frame",
+      "bedroom door sags",
+      "door doesnt line up with the strike plate",
+      "have to slam my door"
+     ],
+     "unit": "each",
+     "typicalQuantity": 1,
+     "demand": "very-high",
+     "covered": false,
+     "isRepair": true,
+     "notes": "Classic tiny job: hinge shimming, long screws, strike plate move, planing. $130-$375, ~$250 if planing needed. Handyman-tier. Engine must not price this as a door replacement."
+    },
+    {
+     "job": "Door lock / deadbolt / handleset replacement",
+     "phrasings": [
+      "install a deadbolt",
+      "change the locks on my house",
+      "new door knob installation",
+      "smart lock install front door",
+      "lock is sticking wont turn",
+      "key doesnt work in my door anymore",
+      "rekey my locks"
+     ],
+     "unit": "each",
+     "typicalQuantity": 2,
+     "demand": "very-high",
+     "covered": false,
+     "isRepair": true,
+     "notes": "$100-$350 per lock installed; rekey $50-$125/cylinder. Usually 2+ doors at once (front + back). Overlaps locksmith trade but routes here constantly."
+    },
+    {
+     "job": "Weatherstripping / door sweep / draft sealing",
+     "phrasings": [
+      "cold air coming under my door",
+      "drafty windows fix",
+      "weather stripping replacement",
+      "can see daylight under front door",
+      "seal around door is falling off",
+      "stop drafts around windows"
+     ],
+     "unit": "each",
+     "typicalQuantity": 2,
+     "demand": "high",
+     "covered": false,
+     "isRepair": true,
+     "notes": "$132-$437 per door average; sweep alone $75-$150. Priced per opening. Spikes hard in fall."
+    },
+    {
+     "job": "Sliding patio door roller / track repair",
+     "phrasings": [
+      "sliding door hard to open",
+      "patio door off track",
+      "slider door sticks and grinds",
+      "glass door wont slide",
+      "replace rollers on sliding door",
+      "screen slider keeps coming off"
+     ],
+     "unit": "each",
+     "typicalQuantity": 1,
+     "demand": "high",
+     "covered": false,
+     "isRepair": true,
+     "notes": "$200-$800; simple roller job 1-2 hrs at $75-$180/hr. Distinct from the covered 'sliding patio' install job \u2014 this is the repair version and far more common."
+    },
+    {
+     "job": "Garage door spring / cable repair",
+     "phrasings": [
+      "garage door spring broke loud bang",
+      "garage door wont open manually heavy",
+      "cable came off garage door",
+      "torsion spring replacement cost",
+      "garage door only opens a few inches"
+     ],
+     "unit": "each",
+     "typicalQuantity": 1,
+     "demand": "very-high",
+     "covered": false,
+     "isRepair": true,
+     "notes": "THE most common garage call. $150-$350 single, $250-$450 pair; emergency $300-$500. Never a door replacement."
+    },
+    {
+     "job": "Garage door opener repair or replacement",
+     "phrasings": [
+      "garage door opener not working",
+      "remote wont open garage",
+      "garage door reverses right back up",
+      "opener making grinding noise",
+      "sensor light blinking garage door",
+      "new garage door opener install"
+     ],
+     "unit": "each",
+     "typicalQuantity": 1,
+     "demand": "very-high",
+     "covered": false,
+     "isRepair": true,
+     "notes": "Gear/capacitor $75-$150, logic board $120-$220, full new opener $400-$800 installed. Sensor realignment is often a minimum-charge visit."
+    },
+    {
+     "job": "Garage door off-track / panel repair",
+     "phrasings": [
+      "garage door came off the track",
+      "backed into my garage door",
+      "dented garage door panel",
+      "garage door crooked wont close",
+      "replace one garage door panel"
+     ],
+     "unit": "each",
+     "typicalQuantity": 1,
+     "demand": "high",
+     "covered": false,
+     "isRepair": true,
+     "notes": "$150-$700, over $1,000 with structural damage. Single-panel swap is much cheaper than the covered full garage door replacement."
+    },
+    {
+     "job": "Garage door replacement",
+     "phrasings": [
+      "new garage door installed",
+      "replace my garage door",
+      "two car garage door cost",
+      "insulated garage door quote"
+     ],
+     "unit": "each",
+     "typicalQuantity": 1,
+     "demand": "high",
+     "covered": true,
+     "isRepair": false,
+     "notes": "Already covered. Keep, but make sure repair phrasings above never fall through to this."
+    },
+    {
+     "job": "Exterior entry door replacement",
+     "phrasings": [
+      "new front door installed",
+      "replace my front entry door",
+      "steel entry door cost",
+      "fiberglass front door with install",
+      "back door replacement"
+     ],
+     "unit": "each",
+     "typicalQuantity": 1,
+     "demand": "high",
+     "covered": true,
+     "isRepair": false,
+     "notes": "Covered as 'exterior steel'. Broaden to fiberglass/wood \u2014 homeowners rarely say the material."
+    },
+    {
+     "job": "Interior door replacement",
+     "phrasings": [
+      "replace interior doors",
+      "new bedroom door",
+      "hollow core door install",
+      "closet door replacement",
+      "prehung interior door with frame"
+     ],
+     "unit": "each",
+     "typicalQuantity": 3,
+     "demand": "medium",
+     "covered": true,
+     "isRepair": false,
+     "notes": "Covered. Typical quantity should be 3+, not 1 \u2014 people redo several at once."
+    },
+    {
+     "job": "Vinyl / double-hung window replacement",
+     "phrasings": [
+      "replace all my windows",
+      "new vinyl windows cost",
+      "window replacement quote whole house",
+      "energy efficient windows install"
+     ],
+     "unit": "each",
+     "typicalQuantity": 8,
+     "demand": "very-high",
+     "covered": true,
+     "isRepair": false,
+     "notes": "Covered. Highest-dollar job in the category; per-window unit with 8-10 typical."
+    },
+    {
+     "job": "Door frame / jamb / threshold rot repair",
+     "phrasings": [
+      "rotted wood around my door",
+      "door frame is soft and rotting",
+      "water damage around front door",
+      "replace door threshold",
+      "termite damage door jamb",
+      "rot under my window sill"
+     ],
+     "unit": "each",
+     "typicalQuantity": 1,
+     "demand": "high",
+     "covered": false,
+     "isRepair": true,
+     "notes": "Common carpentry add-on that gets discovered during any door job. Sill/jamb/threshold repair $200-$700. Also applies to window sills."
+    },
+    {
+     "job": "Storm door / screen door installation",
+     "phrasings": [
+      "install a storm door",
+      "screen door for front entry",
+      "retractable screen door",
+      "storm door with pet flap",
+      "replace old screen door"
+     ],
+     "unit": "each",
+     "typicalQuantity": 1,
+     "demand": "high",
+     "covered": false,
+     "isRepair": false,
+     "notes": "$300-$700 installed. Distinct SKU on every contractor menu and an Angi category of its own."
+    },
+    {
+     "job": "Pet door installation",
+     "phrasings": [
+      "doggy door install",
+      "cut a pet door in my door",
+      "cat flap in exterior door",
+      "dog door in sliding glass door",
+      "electronic pet door install"
+     ],
+     "unit": "each",
+     "typicalQuantity": 1,
+     "demand": "medium",
+     "covered": false,
+     "isRepair": false,
+     "notes": "$200-$1,000+ depending on door vs wall vs glass slider insert. Own Angi category. Low volume but very high intent."
+    },
+    {
+     "job": "Bay / bow window installation",
+     "phrasings": [
+      "bay window installation",
+      "bow window replacement",
+      "turn my window into a bay window"
+     ],
+     "unit": "each",
+     "typicalQuantity": 1,
+     "demand": "medium",
+     "covered": true,
+     "isRepair": false,
+     "notes": "Covered."
+    },
+    {
+     "job": "Egress / basement window installation",
+     "phrasings": [
+      "egress window for basement bedroom",
+      "basement window to code",
+      "cut in an egress window",
+      "window well install"
+     ],
+     "unit": "each",
+     "typicalQuantity": 1,
+     "demand": "medium",
+     "covered": true,
+     "isRepair": false,
+     "notes": "Covered."
+    },
+    {
+     "job": "French door installation",
+     "phrasings": [
+      "french doors to the backyard",
+      "interior french doors install",
+      "double glass doors"
+     ],
+     "unit": "each",
+     "typicalQuantity": 1,
+     "demand": "medium",
+     "covered": true,
+     "isRepair": false,
+     "notes": "Covered."
+    },
+    {
+     "job": "Emergency board-up / glass boarding",
+     "phrasings": [
+      "window broken need boarded up tonight",
+      "emergency window boarding",
+      "break in broke my window",
+      "24 hour window repair"
+     ],
+     "unit": "each",
+     "typicalQuantity": 1,
+     "demand": "medium",
+     "covered": false,
+     "isRepair": true,
+     "notes": "After-hours flat fee $150-$400 plus the later glass job. Should route to emergency-capable pros, not replacement quotes."
+    }
+   ],
+   "anchors": [
+    {
+     "job": "Window glass pane replacement (broken/cracked)",
+     "unit": "each",
+     "low": 150,
+     "high": 650,
+     "setupShare": 0.5,
+     "bayAreaMultiplier": 1.25,
+     "confidence": "high",
+     "sources": [
+      "Angi (2026, \"Window Glass Replacement Cost\") \u2014 $285 average per window, typical range $181\u2013$413; explicitly the tightest/lowest range of any source",
+      "HomeGuide (2026, \"Window Glass Replacement Cost\") \u2014 $300\u2013$650 per pane for single-pane; $150\u2013$1,500+ for a double-pane/IGU unit",
+      "Fixr (2026, \"Window Glass Replacement Cost\") \u2014 $300\u2013$880 installed, most common $375 for a 30\"x36\" double-pane; low end $200 single-pane, labor $50\u2013$125 per window, 45\u201360 min per pane, emergency service $120\u2013$150/hr",
+      "This Old House (2026, \"Window Glass Replacement Cost\") \u2014 national average $375 installed, $300\u2013$880 range; single-pane $150\u2013$400 (avg $275), double-pane $150\u2013$600 (avg $375); glazing labor $50\u2013$125/hr",
+      "Modernize (2026, \"Guide to Window Glass Replacement Costs\") \u2014 $400 average per window, $200\u2013$600 range; single-pane $150\u2013$400 total ($60\u2013$150 material + $90\u2013$250 labor)",
+      "GlassAndAuto.com (2026 cost guide) \u2014 $350 national average, $150\u2013$600 typical; itemized fixed costs: $125\u2013$150 service call/trip charge, $100\u2013$200 first panel install, $35\u2013$45 per ADDITIONAL panel same visit, $25\u2013$50 old glass removal/disposal, $15\u2013$30 glazing putty",
+      "Homewyse (Jan 2026 calculator) \u2014 $140\u2013$169 per pane basic labor+supplies, with a 2-hour minimum labor charge noted",
+      "Homeyou (San Francisco local data) \u2014 SF window glass replacement $394\u2013$465 typical, range $359\u2013$500",
+      "Insight Glass (SF 2026 pricing guide) \u2014 SF install $200\u2013$400 per window vs $150\u2013$300 elsewhere in the Bay Area; SF labor $100\u2013$300 per window"
+     ],
+     "conflicts": "Two clusters that do not overlap well at the low end. Angi is the outlier low: $285 average, $181\u2013$413, roughly 25% below everyone else, and appears to describe a plain single-pane or small sash swap. Fixr and This Old House share an identical dataset ($375 avg, $300\u2013$880) and are effectively one source, not two \u2014 both are anchored on a double-pane insulated glass unit (IGU), which is the real cost driver. HomeGuide inverts the usual logic: it quotes single-pane HIGHER ($300\u2013$650) than the low end of double-pane ($150+), which contradicts Modernize, TOH, and GlassAndAuto, all of which put single-pane clear glass at $150\u2013$400. HomeGuide's single-pane figure is likely an installed-with-trip-fee number while its double-pane low end is glass-only. Second axis of disagreement is scope: sources quoting $100\u2013$150 \"small repairs\" are describing crack/chip patching or reglazing, not a full pane swap, and should not set the floor. Double-pane IGU replacement is genuinely $500\u2013$900 in several sources, so the $650 high is conservative for anything low-E, argon, tempered, or oversized \u2014 bay-window and tempered/safety-glass jobs run $700\u2013$1,200+ and blow past the range entirely.",
+     "category": "Windows & Doors",
+     "meta": {
+      "job": "Window glass pane replacement (broken/cracked)",
+      "phrasings": [
+       "broken window glass",
+       "cracked window pane replacement",
+       "kid broke my window",
+       "replace one pane of glass",
+       "window shattered need fix asap",
+       "glass repair for house window",
+       "single pane replacement cost"
+      ],
+      "unit": "each",
+      "typicalQuantity": 1,
+      "demand": "very-high",
+      "covered": false,
+      "isRepair": true,
+      "notes": "Highest-volume window call. Currently gets misrouted to full vinyl window replacement, which is 3-5x the real price. Glass-only swap is $75-$400 per sash depending on single vs double pane and tempered/low-e."
+     },
+     "verdict": null
+    },
+    {
+     "job": "Weatherstripping / door sweep / draft sealing",
+     "unit": "each (per door or window opening sealed)",
+     "low": 75,
+     "high": 400,
+     "setupShare": 0.6,
+     "bayAreaMultiplier": 1.25,
+     "confidence": "med",
+     "sources": [
+      "Angi (2026 data) \u2014 weatherstripping replacement averages $350 per door, typical range $200\u2013$600; door sweep install $75\u2013$150 per door; removal/disposal of old stripping adds $20\u2013$50 per door; threshold upgrade adds $40\u2013$150; whole-project installs $130\u2013$436",
+      "HomeAdvisor (2025) \u2014 $125\u2013$400 per door, $50\u2013$150 per window, $200\u2013$600 per garage door; average project $350, normal range $200\u2013$600, budget minimum $60, high-end $950; labor $40\u2013$100/hr plus a $50\u2013$100 initial service fee; notes replacing existing stripping costs more than sealing a bare opening because of removal and prep",
+      "Fixr.com \u2014 $35\u2013$90 per door installed ($35\u2013$80 hinged, $50\u2013$90 French, $60\u2013$90 sliding glass, $60\u2013$85 garage), $5\u2013$10 per window; national average project $350, range $200\u2013$600; low-end single-door job $55, whole 3,000 sq ft home $800; labor $50\u2013$100/hr handyman, $60\u2013$110/hr for replacement; materials $0.16\u2013$25/linear ft (door sweep stock $13\u2013$20)",
+      "HomeGuide (2026) \u2014 $35\u2013$90 per door, $5\u2013$10 per window installed; labor $50\u2013$150/hr; average whole-home project $130\u2013$470",
+      "Homewyse (2026 calculator) \u2014 $117\u2013$307 per door all-in, explicitly built on a 2-hour minimum labor charge",
+      "Handoff.ai construction cost data \u2014 US national door weatherstripping $3.06\u2013$6.34 per linear ft installed vs San Francisco, CA $3.86\u2013$7.62 per linear ft"
+     ],
+     "conflicts": "Sources split into two camps that differ by roughly 4x, and averaging them would be wrong because they are pricing different things. Camp A (Fixr, HomeGuide) quotes $35\u2013$90 per door and $5\u2013$10 per window \u2014 that is essentially materials plus the marginal labor of one more opening once a tech is already on site, and it ignores any trip charge or minimum. Camp B (Angi, HomeAdvisor, Homewyse) quotes $125\u2013$400 per door with a $350 average \u2014 that is what a homeowner actually pays for a real service call, and Homewyse states outright that it is built on a 2-hour minimum. Fixr itself exposes the gap: it lists $35\u2013$90 per door but a $55 floor for a single-door job and a $350 national average. HomeAdvisor exposes it too: $125\u2013$400 per door but a separate $50\u2013$100 initial service fee on top of $40\u2013$100/hr labor. Secondary disagreements: Angi's door-sweep-only figure ($75\u2013$150) sits well below its full-weatherstrip figure ($200\u2013$600), so scope (sweep only vs. full jamb + sweep + threshold) drives a 3\u20134x spread on its own; and hourly labor ranges span $40/hr (HomeAdvisor low) to $150/hr (HomeGuide high). No source treats this as a project-priced job. The recommended $75\u2013$400 per each straddles both camps: the low end assumes an add-on opening on a multi-opening visit, the high end a single-door replacement with removal, prep, and a threshold detail.",
+     "category": "Windows & Doors",
+     "meta": {
+      "job": "Weatherstripping / door sweep / draft sealing",
+      "phrasings": [
+       "cold air coming under my door",
+       "drafty windows fix",
+       "weather stripping replacement",
+       "can see daylight under front door",
+       "seal around door is falling off",
+       "stop drafts around windows"
+      ],
+      "unit": "each",
+      "typicalQuantity": 2,
+      "demand": "high",
+      "covered": false,
+      "isRepair": true,
+      "notes": "$132-$437 per door average; sweep alone $75-$150. Priced per opening. Spikes hard in fall."
+     },
+     "verdict": null
+    }
+   ]
+  },
+  {
+   "category": "Landscaping",
+   "allJobs": [
+    {
+     "job": "Lawn mowing / recurring lawn maintenance",
+     "phrasings": [
+      "lawn mowing near me",
+      "someone to cut my grass",
+      "weekly grass cutting",
+      "mow my lawn",
+      "yard maintenance service",
+      "lawn service every 2 weeks",
+      "grass too long need mowing"
+     ],
+     "unit": "project",
+     "typicalQuantity": 1,
+     "demand": "very-high",
+     "covered": false,
+     "isRepair": true,
+     "notes": "Highest-volume request in the category and completely unmodeled. Quoted per visit for a typical lot ($40-90), often on a recurring plan. Do NOT let this route to sod or full landscaping."
+    },
+    {
+     "job": "Yard cleanup / overgrown yard + leaf removal",
+     "phrasings": [
+      "yard cleanup",
+      "my backyard is overgrown",
+      "weeds everywhere need cleanup",
+      "spring cleanup landscaping",
+      "fall leaf removal",
+      "clean up my yard its a jungle",
+      "haul away yard waste",
+      "overgrown lot mowing"
+     ],
+     "unit": "project",
+     "typicalQuantity": 1,
+     "demand": "very-high",
+     "covered": false,
+     "isRepair": true,
+     "notes": "Vague catch-all people type constantly. $200-600 typical, driven by debris volume and dump fees, not area. Covers spring/fall cleanup and leaf blowing."
+    },
+    {
+     "job": "Hedge / shrub trimming",
+     "phrasings": [
+      "hedge trimming",
+      "trim my bushes",
+      "shrub trimming near me",
+      "bushes are out of control",
+      "cut back overgrown hedges",
+      "prune shrubs front yard"
+     ],
+     "unit": "each",
+     "typicalQuantity": 8,
+     "demand": "very-high",
+     "covered": false,
+     "isRepair": true,
+     "notes": "Quoted per shrub ($8-40 each) with a crew minimum around $100-150. Cheap, frequent, repeat call."
+    },
+    {
+     "job": "Tree trimming / pruning",
+     "phrasings": [
+      "tree trimming",
+      "trim tree branches over my roof",
+      "prune my tree",
+      "branches hanging over house",
+      "cut back tree limbs",
+      "tree needs trimming before storm"
+     ],
+     "unit": "each",
+     "typicalQuantity": 1,
+     "demand": "very-high",
+     "covered": false,
+     "isRepair": true,
+     "notes": "$255-655 per tree typical, $75 low end for a small tree. Distinct from removal by a wide margin - important that 'trim' does not price as 'remove'."
+    },
+    {
+     "job": "Tree removal",
+     "phrasings": [
+      "tree removal",
+      "cut down a tree",
+      "dead tree in my yard",
+      "remove big tree near house",
+      "take down tree",
+      "tree fell need it removed"
+     ],
+     "unit": "each",
+     "typicalQuantity": 1,
+     "demand": "very-high",
+     "covered": true,
+     "isRepair": false,
+     "notes": "Already covered. Height and proximity to structures dominate price."
+    },
+    {
+     "job": "Stump grinding",
+     "phrasings": [
+      "stump grinding",
+      "grind stump",
+      "stump removal near me",
+      "old stump in the yard",
+      "get rid of tree stump",
+      "stump left after tree removal"
+     ],
+     "unit": "each",
+     "typicalQuantity": 1,
+     "demand": "high",
+     "covered": false,
+     "isRepair": true,
+     "notes": "$120-400 first stump, only $30-60 each additional - strong quantity discount curve. Often quoted per inch of diameter ($2-6/in) with an $80-160 minimum."
+    },
+    {
+     "job": "Sprinkler head repair / replacement",
+     "phrasings": [
+      "sprinkler head broken",
+      "sprinkler repair",
+      "sprinkler spraying everywhere",
+      "broken sprinkler head replacement",
+      "sprinkler head wont pop up",
+      "ran over sprinkler with mower",
+      "geyser from sprinkler"
+     ],
+     "unit": "each",
+     "typicalQuantity": 3,
+     "demand": "very-high",
+     "covered": false,
+     "isRepair": true,
+     "notes": "Critical blind-spot fix. $60-90 per head all-in; first head carries the $60-150 trip charge, additional heads only $15-40. Must never price as a system install."
+    },
+    {
+     "job": "Irrigation zone / valve repair (zone not working)",
+     "phrasings": [
+      "one sprinkler zone not working",
+      "irrigation valve stuck",
+      "zone wont turn on",
+      "sprinklers keep running wont shut off",
+      "soggy spot in yard sprinkler",
+      "sprinkler wiring problem",
+      "irrigation troubleshooting"
+     ],
+     "unit": "each",
+     "typicalQuantity": 1,
+     "demand": "high",
+     "covered": false,
+     "isRepair": true,
+     "notes": "Valve repair/replace $75-300; wiring or zone diagnosis $75-200 per zone. Symptom-phrased searches ('wont shut off') should land here, not on new irrigation install."
+    },
+    {
+     "job": "Irrigation system installation (per zone)",
+     "phrasings": [
+      "sprinkler system installation",
+      "install irrigation system",
+      "add sprinklers to backyard",
+      "new sprinkler zone",
+      "automatic watering system cost"
+     ],
+     "unit": "each",
+     "typicalQuantity": 4,
+     "demand": "high",
+     "covered": true,
+     "isRepair": false,
+     "notes": "Already covered per zone. Typical residential yard is 4-6 zones."
+    },
+    {
+     "job": "Sprinkler winterization / spring startup",
+     "phrasings": [
+      "sprinkler blowout",
+      "winterize sprinkler system",
+      "blow out irrigation lines",
+      "sprinkler startup spring",
+      "turn on sprinkler system for the season",
+      "de winterize sprinklers"
+     ],
+     "unit": "project",
+     "typicalQuantity": 1,
+     "demand": "high",
+     "covered": false,
+     "isRepair": true,
+     "notes": "$50-150 flat, twice a year in cold climates. Very high call volume Oct-Nov and Mar-Apr, tiny ticket."
+    },
+    {
+     "job": "Sod installation",
+     "phrasings": [
+      "sod installation",
+      "new sod for my yard",
+      "lay sod",
+      "replace lawn with sod",
+      "sod cost per square foot"
+     ],
+     "unit": "sq ft",
+     "typicalQuantity": 1000,
+     "demand": "high",
+     "covered": true,
+     "isRepair": false,
+     "notes": "Already covered."
+    },
+    {
+     "job": "Lawn patch repair / overseeding",
+     "phrasings": [
+      "dead spots in my lawn",
+      "bare patches in grass",
+      "overseed lawn",
+      "patch up dead grass",
+      "brown spots lawn repair",
+      "reseed part of my yard",
+      "dog pee killed my grass"
+     ],
+     "unit": "sq ft",
+     "typicalQuantity": 400,
+     "demand": "very-high",
+     "covered": false,
+     "isRepair": true,
+     "notes": "Key repair-vs-replace case: currently 'dead spots' would price as full sod. Overseed/patch runs roughly $0.10-0.30/sq ft versus $1.50-2.50 for sod, with a $150-250 minimum."
+    },
+    {
+     "job": "Weed control / fertilization treatment",
+     "phrasings": [
+      "weed control service",
+      "lawn full of weeds",
+      "spray my lawn for weeds",
+      "fertilize lawn",
+      "crabgrass treatment",
+      "lawn care treatment plan",
+      "dandelions everywhere"
+     ],
+     "unit": "project",
+     "typicalQuantity": 1,
+     "demand": "very-high",
+     "covered": false,
+     "isRepair": true,
+     "notes": "Quoted per application ($50-120) or as a 5-7 visit annual plan. Also fold aeration requests ('aerate my lawn', $80-250) in here or model separately if room."
+    },
+    {
+     "job": "Mulch installation",
+     "phrasings": [
+      "mulch delivery and install",
+      "spread mulch in my beds",
+      "new mulch flower beds",
+      "mulch cost",
+      "need mulch refreshed"
+     ],
+     "unit": "sq ft",
+     "typicalQuantity": 600,
+     "demand": "high",
+     "covered": true,
+     "isRepair": false,
+     "notes": "Already covered. Trade often quotes by cubic yard installed ($70-130/yd); depth assumption of 3 inches drives the sq ft conversion."
+    },
+    {
+     "job": "Paver patio installation",
+     "phrasings": [
+      "paver patio",
+      "build a patio in backyard",
+      "brick patio installation",
+      "stone patio cost per square foot"
+     ],
+     "unit": "sq ft",
+     "typicalQuantity": 300,
+     "demand": "high",
+     "covered": true,
+     "isRepair": false,
+     "notes": "Already covered."
+    },
+    {
+     "job": "Paver repair / releveling sunken pavers",
+     "phrasings": [
+      "sunken pavers",
+      "patio pavers uneven",
+      "reset pavers",
+      "my brick patio is sinking",
+      "wobbly pavers trip hazard",
+      "paver walkway lifted by roots",
+      "regrout patio pavers",
+      "re sand paver joints"
+     ],
+     "unit": "sq ft",
+     "typicalQuantity": 80,
+     "demand": "high",
+     "covered": false,
+     "isRepair": true,
+     "notes": "Major blind-spot fix. $3-15/sq ft to reset an affected section versus $15-30/sq ft to rebuild, and only the sunken area is touched - typically 50-150 sq ft, not the whole patio. Expect a $300-500 minimum."
+    },
+    {
+     "job": "Retaining wall repair",
+     "phrasings": [
+      "retaining wall leaning",
+      "retaining wall repair",
+      "block wall bulging",
+      "my retaining wall is falling over",
+      "fix crumbling retaining wall",
+      "rebuild part of retaining wall"
+     ],
+     "unit": "sq ft",
+     "typicalQuantity": 60,
+     "demand": "medium",
+     "covered": false,
+     "isRepair": true,
+     "notes": "Quoted per face square foot of wall. Partial rebuild of a failing section $40-90/sq ft; usually only 40-80 sq ft is affected. Drainage failure behind the wall is the common root cause and adds scope."
+    },
+    {
+     "job": "Yard drainage / French drain",
+     "phrasings": [
+      "standing water in my yard",
+      "yard floods when it rains",
+      "french drain installation",
+      "water pooling next to house",
+      "backyard wont drain",
+      "soggy lawn drainage fix",
+      "regrade yard away from house"
+     ],
+     "unit": "linear foot",
+     "typicalQuantity": 60,
+     "demand": "high",
+     "covered": false,
+     "isRepair": true,
+     "notes": "$10-35 per linear foot for exterior French drain; full yard systems $2,100-7,200. Nearly always arrives as a symptom search ('yard floods'), so keyword routing matters more than the job name here."
+    }
+   ],
+   "anchors": []
+  },
+  {
+   "category": "Mold & Pest Control",
+   "allJobs": [
+    {
+     "job": "General pest control treatment (one-time)",
+     "phrasings": [
+      "bugs in my house",
+      "exterminator for bugs",
+      "one time pest control",
+      "pest spray for house",
+      "bugs everywhere in kitchen",
+      "need exterminater",
+      "spray house for bugs"
+     ],
+     "unit": "project",
+     "typicalQuantity": 1,
+     "demand": "very-high",
+     "covered": false,
+     "isRepair": true,
+     "notes": "The catch-all entry point. Most people don't know what pest they have. Interior+exterior perimeter spray, $150-$350 typical. Should be the fallback route for any vague bug query."
+    },
+    {
+     "job": "Recurring pest control plan (quarterly service)",
+     "phrasings": [
+      "quarterly pest control",
+      "monthly pest service",
+      "pest control plan cost",
+      "regular bug spraying service",
+      "pest control subscription"
+     ],
+     "unit": "project",
+     "typicalQuantity": 1,
+     "demand": "very-high",
+     "covered": false,
+     "isRepair": true,
+     "notes": "Quoted per visit ($75-$150) inside an annual contract, often with a higher initial service fee. Price as per-visit, not annual, or estimates look absurd."
+    },
+    {
+     "job": "Ant extermination",
+     "phrasings": [
+      "ants in my kitchen",
+      "ant problem",
+      "tiny ants on counter",
+      "get rid of ants",
+      "carpenter ants in wall",
+      "sugar ants everywhere",
+      "ant exterminater cost"
+     ],
+     "unit": "project",
+     "typicalQuantity": 1,
+     "demand": "very-high",
+     "covered": false,
+     "isRepair": true,
+     "notes": "Highest-volume single-pest call. $150-$350 for standard ants; carpenter ants run higher ($250-$600) because of wood damage inspection."
+    },
+    {
+     "job": "Cockroach extermination",
+     "phrasings": [
+      "roaches in my apartment",
+      "cockroach problem",
+      "german roaches kitchen",
+      "get rid of roaches",
+      "roach exterminator cost",
+      "seeing roaches at night"
+     ],
+     "unit": "project",
+     "typicalQuantity": 1,
+     "demand": "very-high",
+     "covered": false,
+     "isRepair": true,
+     "notes": "$150-$500 per treatment, usually needs 2-3 follow-up visits for German roaches. Users rarely know follow-ups are included."
+    },
+    {
+     "job": "Mice / rat trapping and removal",
+     "phrasings": [
+      "mice in my walls",
+      "hear scratching in ceiling at night",
+      "rat in my attic",
+      "mouse droppings in pantry",
+      "get rid of mice",
+      "rodent problem",
+      "i think i have rats"
+     ],
+     "unit": "project",
+     "typicalQuantity": 1,
+     "demand": "very-high",
+     "covered": false,
+     "isRepair": true,
+     "notes": "$150-$600. Trapping/removal only. Distinct from exclusion; homeowners assume trapping includes sealing and it usually does not."
+    },
+    {
+     "job": "Rodent exclusion / sealing entry points",
+     "phrasings": [
+      "seal holes where mice get in",
+      "rodent proofing my house",
+      "mice keep coming back",
+      "seal up crawl space vents",
+      "block entry points for rats",
+      "rodent exclusion cost"
+     ],
+     "unit": "project",
+     "typicalQuantity": 1,
+     "demand": "high",
+     "covered": false,
+     "isRepair": true,
+     "notes": "$300-$1,500 depending on structure. Sometimes quoted per linear foot of foundation, but project pricing is the norm for residential. Key repair job to model separately from trapping."
+    },
+    {
+     "job": "Bed bug treatment",
+     "phrasings": [
+      "bed bugs in my mattress",
+      "think i have bed bugs",
+      "bed bug bites",
+      "bedbug exterminator cost",
+      "heat treatment for bed bugs",
+      "bugs biting me at night"
+     ],
+     "unit": "each",
+     "typicalQuantity": 2,
+     "demand": "high",
+     "covered": false,
+     "isRepair": true,
+     "notes": "Genuinely quoted per room: $300-$500 per room chemical, more for heat. Whole house $2,500-$5,000. Unit MUST be per room or estimates are wildly off."
+    },
+    {
+     "job": "Termite inspection",
+     "phrasings": [
+      "termite inspection",
+      "termite inspection for home sale",
+      "wdo report",
+      "think i have termites",
+      "do i have termites",
+      "termite letter for closing"
+     ],
+     "unit": "project",
+     "typicalQuantity": 1,
+     "demand": "high",
+     "covered": false,
+     "isRepair": true,
+     "notes": "$0-$250; often free if untied to a real-estate transaction, $75-$150 for an escrow WDO report. Cheap job people call about constantly."
+    },
+    {
+     "job": "Termite treatment (liquid barrier or bait system)",
+     "phrasings": [
+      "termite treatment cost",
+      "termite damage in door frame",
+      "swarming termites in spring",
+      "subterranean termite treatment",
+      "termite baiting system",
+      "mud tubes on foundation"
+     ],
+     "unit": "linear foot",
+     "typicalQuantity": 150,
+     "demand": "high",
+     "covered": false,
+     "isRepair": true,
+     "notes": "$3-$20 per linear foot of foundation/perimeter; $500-$2,500 typical whole-home. Linear foot is the trade's real unit. 150 lf approximates an average home perimeter."
+    },
+    {
+     "job": "Termite fumigation / tenting",
+     "phrasings": [
+      "tenting my house for termites",
+      "fumigation cost",
+      "drywood termites",
+      "whole house termite tent",
+      "how much to tent a house"
+     ],
+     "unit": "project",
+     "typicalQuantity": 1,
+     "demand": "medium",
+     "covered": false,
+     "isRepair": true,
+     "notes": "$1,200-$4,000 flat. Mostly CA/FL/Southwest drywood termites. Big-ticket but distinct enough to route separately from liquid barrier."
+    },
+    {
+     "job": "Wasp, hornet, or bee nest removal",
+     "phrasings": [
+      "wasp nest on my porch",
+      "hornets nest in tree",
+      "bees in my wall",
+      "yellow jackets in ground",
+      "remove wasp nest cost",
+      "nest under my eaves"
+     ],
+     "unit": "each",
+     "typicalQuantity": 1,
+     "demand": "very-high",
+     "covered": false,
+     "isRepair": true,
+     "notes": "$100-$700 per nest, avg ~$375. Quoted per nest. Small, cheap, extremely high call volume in summer. Honeybee live relocation prices higher."
+    },
+    {
+     "job": "Mosquito and tick yard treatment",
+     "phrasings": [
+      "mosquito spraying for backyard",
+      "yard treatment for mosquitos",
+      "tick spray for lawn",
+      "mosquito service cost",
+      "cant sit outside mosquitos"
+     ],
+     "unit": "project",
+     "typicalQuantity": 1,
+     "demand": "high",
+     "covered": false,
+     "isRepair": true,
+     "notes": "$80-$150 per visit, $350-$1,000 per season (typically 6-8 visits). Price per treatment and note the seasonal package."
+    },
+    {
+     "job": "Flea treatment",
+     "phrasings": [
+      "fleas in my house",
+      "flea bomb didnt work",
+      "fleas from my dog in carpet",
+      "flea exterminator",
+      "get rid of fleas"
+     ],
+     "unit": "project",
+     "typicalQuantity": 1,
+     "demand": "high",
+     "covered": false,
+     "isRepair": true,
+     "notes": "$100-$300 per treatment, usually 2 visits 2 weeks apart. Common, cheap, and almost always paired with pet ownership."
+    },
+    {
+     "job": "Wildlife removal (raccoon, squirrel, opossum)",
+     "phrasings": [
+      "squirrels in my attic",
+      "raccoon in the crawl space",
+      "animal in my ceiling",
+      "something living in my attic",
+      "possum under the deck",
+      "critter removal"
+     ],
+     "unit": "project",
+     "typicalQuantity": 1,
+     "demand": "high",
+     "covered": false,
+     "isRepair": true,
+     "notes": "$300-$1,500. Trapping plus exclusion; attic cleanup usually billed separately. Homeowners describe it by sound, not species."
+    },
+    {
+     "job": "Bat exclusion and removal",
+     "phrasings": [
+      "bats in my attic",
+      "bat got in my house",
+      "bat removal cost",
+      "bats in the chimney",
+      "how to get rid of bats"
+     ],
+     "unit": "project",
+     "typicalQuantity": 1,
+     "demand": "medium",
+     "covered": false,
+     "isRepair": true,
+     "notes": "$400-$1,800. Seasonally restricted in most states (no exclusion during pup season) and legally protected, so quotes are project-based with guano cleanup extra."
+    },
+    {
+     "job": "Mold inspection and testing",
+     "phrasings": [
+      "mold test for my house",
+      "musty smell in basement",
+      "think theres mold behind the wall",
+      "mold inspection cost",
+      "air quality test for mold",
+      "black spots on bathroom ceiling"
+     ],
+     "unit": "project",
+     "typicalQuantity": 1,
+     "demand": "very-high",
+     "covered": false,
+     "isRepair": true,
+     "notes": "$300-$1,000 ($300-$400 under 4,000 sq ft; air/surface sampling $250-$350 extra). The most common mold-side entry point by far, and it is cheap - do not let a musty-smell query price as full remediation."
+    },
+    {
+     "job": "Mold remediation (small area / single room)",
+     "phrasings": [
+      "mold in my bathroom",
+      "black mold on drywall",
+      "mold behind the washing machine",
+      "mold removal cost",
+      "mold under the sink",
+      "get rid of mold in closet"
+     ],
+     "unit": "sq ft",
+     "typicalQuantity": 100,
+     "demand": "very-high",
+     "covered": false,
+     "isRepair": true,
+     "notes": "$15-$30 per sq ft of affected area, $500-$1,500 for a small patch. Critical: quantity is the MOLDY area, not the house's square footage - misreading this inflates estimates 10-50x."
+    },
+    {
+     "job": "Crawl space mold treatment and cleanout",
+     "phrasings": [
+      "mold in crawl space",
+      "crawl space smells musty",
+      "crawl space cleanout",
+      "moldy insulation under house",
+      "vapor barrier for crawl space",
+      "mold under my floor"
+     ],
+     "unit": "sq ft",
+     "typicalQuantity": 1000,
+     "demand": "high",
+     "covered": false,
+     "isRepair": true,
+     "notes": "$1,500-$4,000 typical crawl space. Often upsold to full encapsulation ($5,000-$15,000) - keep remediation and encapsulation as separate line items so the cheap version stays quotable."
+    }
+   ],
+   "anchors": []
+  }
+ ]
+}
