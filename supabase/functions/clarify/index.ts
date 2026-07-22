@@ -26,7 +26,7 @@
 //           skips the chat and goes straight to results)
 
 import Anthropic from "npm:@anthropic-ai/sdk";
-import { CATEGORY_GENERAL, JOB_TYPE_TAXONOMY } from "../pricing/pricingEngine.ts";
+import { CATEGORY_GENERAL, COUNTABLE_NOUNS, JOB_TYPE_TAXONOMY } from "../pricing/pricingEngine.ts";
 
 const APP_TOKEN = Deno.env.get("APP_TOKEN") ?? "";
 const ANTHROPIC_API_KEY = Deno.env.get("ANTHROPIC_API_KEY") ?? "";
@@ -125,15 +125,20 @@ Auto: one of ${AUTO_SERVICES.join(", ")}. Use "" only if nothing fits.
   brake caliper disc", "dented car bumper", "hardwood floor living room".
 - details: HOME ONLY — a short comma-separated summary of the cost-relevant
   facts the user confirmed, phrased canonically so the pricing engine can parse
-  them: areas as "N sq ft", lengths as "N linear ft", counts as "N windows" /
-  "N doors" / "N outlets", vanity widths as "N inch vanity", window/door
+  them: areas as "N sq ft", lengths as "N linear ft", counts as "N <thing>"
+  where <thing> is one of: ${COUNTABLE_NOUNS.join(", ")} (these are the ONLY
+  nouns the engine can count — a count of anything else is dropped silently, so
+  don't spend a question on it), vanity widths as "N inch vanity", window/door
   dimensions as "WxH window" / "WxH door" in inches (e.g. "72x80 window"), roof
   materials as "asphalt shingle roof" / "metal roof", french doors as
   "N pair(s) of french doors", scope as "remove old flooring" / "subfloor repair"
   / "keep existing faucet". For an opening, state the replacement scope in these
   exact words so it prices right: "glass only" (just the pane/foggy seal),
   "full frame replacement" (tear out to the rough opening), or nothing for a
-  standard insert. Only facts the user explicitly stated or confirmed — never guess.
+  standard insert. Write every measurement as ONE number, never a range: the
+  engine reads the last number it sees, so "100-300 sq ft" silently prices the
+  top end. If the user answered with a range, record its midpoint ("200 sq ft").
+  Only facts the user explicitly stated or confirmed — never guess.
   Use "" for auto/moto, or if no cost fact was pinned down.
 - summary: a plain-English overview of the job for the BUSINESS to read at a
   glance — 1-2 short sentences that fold the user's request together with the

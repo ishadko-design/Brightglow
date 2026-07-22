@@ -15,6 +15,7 @@
 import { assert } from "jsr:@std/assert@1";
 import { computeInHouseItems } from "./inHouseEngine.ts";
 import { COST_CATALOG } from "./costCatalog.ts";
+import { JOB_TYPE_TAXONOMY } from "./pricingEngine.ts";
 
 interface Ref {
   low: number;
@@ -64,6 +65,10 @@ const REFERENCE: Record<string, Ref> = {
   "cabinet-painting-spray": { low: 60, high: 160 },
   // carpentry trades
   "pressure-treated-installed": { low: 25, high: 60 },
+  "deck-board-replacement": { low: 35, high: 110 },
+  "deck-refinish": { low: 2, high: 5 },
+  "deck-structural-repair": { low: 500, high: 3000 },
+  "deck-railing": { low: 30, high: 100 },
   "bathroom-vanity-installation": { low: 150, high: 500 },
   "stock-cabinets-installed": { low: 200, high: 500 },
   "wall-framing": { low: 20, high: 60 },
@@ -168,13 +173,30 @@ const REFERENCE: Record<string, Ref> = {
   "moto-chain-sprocket": { low: 150, high: 450 },
 };
 
-/** Every catalog item priced at national wages, by id. */
+/** Every catalog item priced at national wages, by id, as an ALL-IN PER-UNIT
+ *  rate at a reference job size — i.e. (per-unit x quantity + setup) / quantity.
+ *
+ *  Published per-unit figures ("$10-25 per sq ft of tile") are quoted for
+ *  typical job sizes and silently include the job's setup spread across it. So
+ *  once setup is split out of the per-unit rate, comparing the bare marginal
+ *  rate against those anchors would flag every item as far too cheap. The
+ *  reference size is the taxonomy's own defaultQuantity — what the engine
+ *  actually assumes when the user states no size. */
 function nationalItems(): Map<string, { low: number; typical: number; high: number }> {
+  const sizeFor = new Map<string, number>();
+  for (const e of JOB_TYPE_TAXONOMY) {
+    if (!sizeFor.has(e.itemId)) sizeFor.set(e.itemId, e.defaultQuantity);
+  }
   const trades = [...new Set(COST_CATALOG.map((e) => e.trade))];
   const out = new Map<string, { low: number; typical: number; high: number }>();
   for (const trade of trades) {
     for (const item of computeInHouseItems(trade, undefined)) {
-      out.set(item.id, { low: item.low, typical: item.typical, high: item.high });
+      const q = sizeFor.get(item.id) ?? 1;
+      out.set(item.id, {
+        low: (item.low * q + (item.setupLow ?? 0)) / q,
+        typical: (item.typical * q + (item.setupTypical ?? 0)) / q,
+        high: (item.high * q + (item.setupHigh ?? 0)) / q,
+      });
     }
   }
   return out;

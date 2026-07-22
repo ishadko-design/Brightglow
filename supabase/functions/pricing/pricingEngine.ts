@@ -588,6 +588,18 @@ export interface EPCIItem {
   typical: number;
   high: number;
   regionallyAdjusted: boolean;
+  /** Job cost that does NOT scale with quantity — mobilization, demo and
+   *  disposal, protection and masking, layout, edge/trim detail, cleanup, the
+   *  half-day nobody bills below. Added once per job; the per-unit rates above
+   *  carry only the marginal cost of one more unit.
+   *
+   *  Without this the engine was linear to zero: 40 sq ft of bathroom tile
+   *  computed to $585 against a real $1,800-6,300, because a small job pays
+   *  almost the same setup as a large one over a fifth of the area (reported
+   *  2026-07-22). Absent on items already priced as a whole project. */
+  setupLow?: number;
+  setupTypical?: number;
+  setupHigh?: number;
 }
 
 export interface JobTypeEntry {
@@ -656,7 +668,14 @@ export const JOB_TYPE_TAXONOMY: JobTypeEntry[] = [
   { job_type: "painting.cabinet", category: "Painting", keywords: ["cabinet"], trade: "paint", itemId: "cabinet-painting-spray", unit: "linear foot", defaultQuantity: 20 },
 
   // Carpentry
-  { job_type: "carpentry.deck", category: "Carpentry", keywords: ["deck"], trade: "deck", itemId: "pressure-treated-installed", unit: "sq ft", defaultQuantity: 300 },
+  // Build vs. repair. The bare "deck" entry means BUILD, so any repair word
+  // has to veto it or "fix my deck" quotes new construction; the three repair
+  // entries below carry priority 1 so they win outright when both match.
+  { job_type: "carpentry.deck", category: "Carpentry", keywords: ["deck"], trade: "deck", itemId: "pressure-treated-installed", unit: "sq ft", defaultQuantity: 300, notIfContains: ["fix", "repair", "rot", "rotten", "rotted", "refinish", "resurface", "restain", "re-stain", "stain", "seal", "sand", "some boards", "few boards", "replace boards", "deck board", "loose", "wobbly", "squeak", "railing", "baluster", "baby proof", "babyproof", "baby-proof", "child proof", "childproof"] },
+  { job_type: "carpentry.deck_boards", category: "Carpentry", keywords: ["deck board", "deck boards", "replace boards", "some boards", "few boards", "rotten boards", "rotted boards", "board replacement"], trade: "deck", itemId: "deck-board-replacement", unit: "each", defaultQuantity: 12, priority: 1 },
+  { job_type: "carpentry.deck_refinish", category: "Carpentry", keywords: ["refinish", "refinishing", "resurface", "restain", "re-stain", "stain", "seal", "sealing", "sand"], trade: "deck", itemId: "deck-refinish", unit: "sq ft", defaultQuantity: 300, priority: 1 },
+  { job_type: "carpentry.deck_railing", category: "Carpentry", keywords: ["railing", "railings", "guardrail", "baluster", "balusters", "baby proof", "babyproof", "baby-proof", "child proof", "childproof"], trade: "deck", itemId: "deck-railing", unit: "linear foot", defaultQuantity: 24, priority: 1 },
+  { job_type: "carpentry.deck_repair", category: "Carpentry", keywords: ["deck repair", "repair deck", "fix deck", "fix my deck", "deck rot", "rotten deck", "wobbly deck", "loose deck"], trade: "deck", itemId: "deck-structural-repair", unit: "project", defaultQuantity: 1, priority: 1 },
   // "vanity cabinet" (14 chars) outranks the generic "cabinet" (7) under
   // longest-keyword matching, so a vanity swap doesn't price as 15 linear
   // feet of kitchen cabinets.
@@ -837,7 +856,10 @@ const CATEGORY_STEMS: Record<string, string[]> = {
   "Electrical": ["electric"],
   "HVAC": ["hvac"],
   "Painting": ["paint"],
-  "Carpentry": ["carpent"],
+  // "deck" is unambiguously carpentry and is the word people actually type —
+  // without it "refinish my deck" had no stem at all and the global scan handed
+  // it to flooring's "refinish" (hardwood floors), 2026-07-22.
+  "Carpentry": ["carpent", "deck"],
   "Roofing": ["roof"],
   "Flooring": ["floor"],
   "Windows & Doors": ["window", "door"],
@@ -1001,7 +1023,13 @@ export function classifyJobType(
 // "redo the entire roof" to the Tires category. These match a whole word only.
 // Everything else stays substring-matched, which is load-bearing elsewhere
 // (the "paint" stem has to catch "repaint", "floor" has to catch "flooring").
-const WORD_BOUNDARY_TERMS = new Set(["tire", "tires", "tyre", "tyres"]);
+// "roof" sits inside "proof": "fix deck, replace shone decks and baby proof"
+// stem-matched Roofing and priced a whole roof replacement for a deck repair
+// (reported 2026-07-22). "baby proof", "waterproof", "soundproof" and
+// "proofing" are all common in real requests, so this one has to be a word.
+const WORD_BOUNDARY_TERMS = new Set([
+  "tire", "tires", "tyre", "tyres", "roof", "roofs",
+]);
 
 /** Does `text` contain `term`, respecting word boundaries where required? */
 export function termMatches(text: string, term: string): boolean {
@@ -1047,6 +1075,31 @@ function spellOutToDigits(text: string): string {
     (w) => SPELLED_NUMBERS[w],
   );
 }
+
+/** The nouns the quantity parser can count. Exported because the clarifying
+ *  chat's prompt is built from this list: a question like "how many boards?"
+ *  is only worth asking if the answer lands on a lever the engine reads. When
+ *  the two drifted, the chat collected "20 deck boards" and the price did not
+ *  move at all (2026-07-22). Add a noun here when you add an each-priced item.
+ *  "vanity" is handled alongside these but spelled separately — its plural is
+ *  irregular, so it can't take the shared `s?` suffix. */
+export const COUNTABLE_NOUNS = [
+  "window", "door", "outlet", "socket", "fan", "fixture", "light", "toilet",
+  "faucet", "sink", "tree", "zone", "charger", "thermostat", "panel", "board",
+] as const;
+
+const COUNTABLE = COUNTABLE_NOUNS.join("|");
+
+// A number followed by a measurement unit is a dimension, not a count — "36
+// inch bathroom vanity" priced as 36 vanities before this lookahead.
+const NOT_A_MEASUREMENT =
+  `(?!\\s*(?:["\u201d']|-?\\s*(?:in|inch|inches|ft|foot|feet|gal|gallon|amp)\\b))`;
+const COUNT_BEFORE_NOUN = new RegExp(
+  `(?:^|[\\s,])(\\d{1,2})${NOT_A_MEASUREMENT}\\s+(?:[a-z/-]+\\s+){0,3}?(?:(?:${COUNTABLE})s?|vanit(?:y|ies))\\b`,
+);
+const COUNT_AFTER_NOUN = new RegExp(
+  `(?:${COUNTABLE})s?\\s*(?:[,:;-]|\\bx\\b)?\\s*(\\d{1,2})(?!\\s*[x\u00d7]\\s*\\d)${NOT_A_MEASUREMENT}\\b`,
+);
 
 // Explicit quantity beats the taxonomy default — the default is a real
 // number too, just a rougher one, reflected in the caller's confidence level
@@ -1094,18 +1147,14 @@ export function resolveQuantity(
     // by the in-house engine's end-to-end test). Spelled-out small numbers
     // ("two windows") are normalized to digits first so they count too.
     const normalized = spellOutToDigits(description.toLowerCase());
-    const count = normalized.match(
-      /(?:^|[\s,])(\d{1,2})(?!\s*(?:["”']|-?\s*(?:in|inch|inches|ft|foot|feet|gal|gallon|amp)\b))\s+(?:[a-z/-]+\s+){0,3}?(?:(?:window|door|outlet|socket|fan|fixture|light|toilet|faucet|sink|tree|zone|charger|thermostat|panel)s?|vanit(?:y|ies))\b/,
-    );
+    const count = normalized.match(COUNT_BEFORE_NOUN);
     // Fallback: the count TRAILS the noun — "replace windows 2", "windows: 2",
     // "windows x2". Real phrasing from a live search ("Replace windows 2,
     // sliding, 72x80") priced as one window because the matcher only ever
     // looked for a number *before* the noun (caught 2026-07-16). The same
     // dimension/measurement guards apply, so "window 72x80" is still a size,
     // not 72 windows.
-    const trailing = count ? null : normalized.match(
-      /(?:window|door|outlet|socket|fan|fixture|light|toilet|faucet|sink|tree|zone|charger|thermostat|panel)s?\s*(?:[,:;-]|\bx\b)?\s*(\d{1,2})(?!\s*[x×]\s*\d)(?!\s*(?:["”']|-?\s*(?:in|inch|inches|ft|foot|feet|gal|gallon|amp)\b))\b/,
-    );
+    const trailing = count ? null : normalized.match(COUNT_AFTER_NOUN);
     const matched = count ?? trailing;
     if (matched) {
       let value = Number(matched[1]);
@@ -1208,10 +1257,12 @@ export function calculateEPCIRange(
     high += addOn.high;
     typical += typicalOf(addOn);
   }
+  // Setup is added ONCE, outside the multiply — that is the whole point of
+  // splitting it out of the per-unit rate.
   return {
-    all_in_low: low * quantity,
-    all_in_high: high * quantity,
-    all_in_typical: typical * quantity,
+    all_in_low: low * quantity + (item.setupLow ?? 0),
+    all_in_high: high * quantity + (item.setupHigh ?? 0),
+    all_in_typical: typical * quantity + (item.setupTypical ?? 0),
   };
 }
 

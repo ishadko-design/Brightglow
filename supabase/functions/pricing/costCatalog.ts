@@ -24,8 +24,15 @@ export interface CostCatalogEntry {
   description: string;
   unit: string; // must match the taxonomy entry's unit
   soc: string; // OEWS occupation whose wage prices the labor (wageTable.generated.ts)
-  laborHours: Band;
-  materials: Band;
+  laborHours: Band;  // CREW-hours per unit — the MARGINAL cost of one more unit
+  materials: Band;   // USD per unit, incl. typical contractor markup
+  /** One-time job cost that does not scale with quantity: mobilization, demo
+   *  and disposal, protection, layout, edge and trim detail, cleanup. Set it on
+   *  any item priced per sq ft / per each where a small job is not simply a
+   *  fraction of a large one — which is most measured work. When present, pull
+   *  the per-unit bands DOWN to the marginal rate, or large jobs inflate by the
+   *  setup they used to have baked in. */
+  setup?: { hours: Band; materials: Band };
 }
 
 /** Wage → billed-rate multiplier: payroll burden (~1.35) × overhead + profit
@@ -185,6 +192,24 @@ export const COST_CATALOG: CostCatalogEntry[] = [
   // --- deck / framing / cabinetry (carpentry trades) ---------------------
   // sanity: pressure-treated deck $25–60 per sq ft built
   { itemId: "pressure-treated-installed", trade: "deck", description: "Pressure-treated deck, framed + decked + rails", unit: "sq ft", soc: CARPENTER, laborHours: b(0.25, 0.35, 0.5), materials: b(8, 14, 22) },
+  // Deck REPAIR, added 2026-07-22. The trade had exactly one item — build a
+  // whole deck — so "fix deck, replace some boards" priced a new 300 sq ft
+  // deck at $14.4k, more than a full roof replacement, and no answer the
+  // clarifying chat collected could move it. Repair is its own job, not a
+  // fraction of construction: the framing stays, the work is selective
+  // demo, sourcing stock that matches a weathered deck, and fastening into
+  // existing joists.
+  // sanity: $35–110 per board replaced by a pro (a 20-board job $800–2,500)
+  { itemId: "deck-board-replacement", trade: "deck", description: "Replace individual deck boards on existing framing", unit: "each", soc: CARPENTER, laborHours: b(0.25, 0.4, 0.7), materials: b(12, 22, 45), setup: { hours: b(1.5, 3, 5), materials: b(40, 100, 220) } },
+  // sanity: sand + re-stain/seal a deck $2–5 per sq ft
+  { itemId: "deck-refinish", trade: "deck", description: "Sand and re-stain/seal an existing deck", unit: "sq ft", soc: CARPENTER, laborHours: b(0.012, 0.02, 0.03), materials: b(0.4, 0.7, 1.2), setup: { hours: b(2, 3.5, 6), materials: b(60, 130, 260) } },
+  // Railings — their own job, and the one "baby proof the deck" actually means
+  // (closing baluster gaps to the 4-inch code max, or adding mesh/panels).
+  // sanity: $30–100 per linear foot of railing installed
+  { itemId: "deck-railing", trade: "deck", description: "Deck railing — install, replace, or close baluster gaps", unit: "linear foot", soc: CARPENTER, laborHours: b(0.25, 0.4, 0.65), materials: b(14, 28, 55), setup: { hours: b(1, 2, 4), materials: b(30, 70, 160) } },
+  // Structural rot/joist/post/rail work — quoted as a visit, not by area.
+  // sanity: deck repair $500–3,000
+  { itemId: "deck-structural-repair", trade: "deck", description: "Deck structural repair — joists, posts, rails, rot", unit: "project", soc: CARPENTER, laborHours: b(6, 14, 30), materials: b(120, 380, 900) },
   // Labor + sundries only — top and faucet come in via JOB_COMPONENTS,
   // mirroring the EPCI item this id was scoped to. sanity: $150–500 set-only
   { itemId: "bathroom-vanity-installation", trade: "cabinetry", description: "Set vanity cabinet, attach hardware (top/plumbing separate)", unit: "each", soc: CARPENTER, laborHours: b(2, 3, 5), materials: b(30, 60, 120) },
@@ -218,7 +243,13 @@ export const COST_CATALOG: CostCatalogEntry[] = [
   // sanity: carpet incl. pad $3.50–8 per sq ft installed
   { itemId: "carpet-installed", trade: "flooring", description: "Carpet + pad, supplied + installed", unit: "sq ft", soc: CARPET_INSTALLER, laborHours: b(0.015, 0.025, 0.04), materials: b(2, 4, 6.5) },
   // sanity: ceramic/porcelain tile $10–25 per sq ft installed
-  { itemId: "tile-installed", trade: "flooring", description: "Ceramic/porcelain tile, supplied + installed", unit: "sq ft", soc: TILE_SETTER, laborHours: b(0.08, 0.12, 0.18), materials: b(3, 6, 11) },
+  // Per-unit bands pulled down to the MARGINAL rate and the job's fixed cost
+  // moved into `setup` (2026-07-22): tear-out and haul-away of the old floor,
+  // substrate prep and waterproofing, layout, thresholds and edge trim, and the
+  // cure day nobody bills below. At the 150 sq ft reference this still totals
+  // the same $10-25/sq ft anchor, but a 40 sq ft bathroom no longer computes to
+  // $585 the way linear-to-zero scaling made it.
+  { itemId: "tile-installed", trade: "flooring", description: "Ceramic/porcelain tile, supplied + installed", unit: "sq ft", soc: TILE_SETTER, laborHours: b(0.055, 0.085, 0.13), materials: b(2.2, 4.4, 8), setup: { hours: b(3, 6, 10), materials: b(120, 260, 560) } },
   // 47-2043 is suppressed in many states — falls back to national wages.
   // sanity: sand + refinish $3–8 per sq ft
   { itemId: "hardwood-refinishing", trade: "flooring", description: "Hardwood sand + refinish", unit: "sq ft", soc: FLOOR_SANDER, laborHours: b(0.03, 0.045, 0.07), materials: b(0.8, 1.5, 2.5) },

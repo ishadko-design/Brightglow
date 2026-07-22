@@ -263,6 +263,10 @@ function computeItem(
   // quantity downstream, so rounding $1.19/sq ft to $1 is a 16% error
   // across a lawn. Display rounding is the client's job.
   const cents = (n: number) => Math.round(n * 100) / 100;
+  // Setup takes the local wage and cost level like everything else, but NOT the
+  // size scale — a bigger unit doesn't lengthen the mobilization — and not the
+  // grade factor, since demo and disposal cost the same whatever goes back in.
+  const setup = entry.setup;
   return {
     id: entry.itemId,
     description: entry.description,
@@ -271,6 +275,13 @@ function computeItem(
     typical: cents(entry.laborHours.typical * hours * rate(wage.median) + entry.materials.typical * matFactor),
     high: cents(entry.laborHours.high * hours * rate(wage.p75) + entry.materials.high * matFactor),
     regionallyAdjusted: regional,
+    ...(setup
+      ? {
+        setupLow: cents(setup.hours.low * rate(wage.p25) + setup.materials.low * areaCostFactor(cbsa, state)),
+        setupTypical: cents(setup.hours.typical * rate(wage.median) + setup.materials.typical * areaCostFactor(cbsa, state)),
+        setupHigh: cents(setup.hours.high * rate(wage.p75) + setup.materials.high * areaCostFactor(cbsa, state)),
+      }
+      : {}),
   };
 }
 
