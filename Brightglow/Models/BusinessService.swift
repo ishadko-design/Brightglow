@@ -297,17 +297,6 @@ enum BusinessService {
             .execute()
     }
 
-    /// Delete the business's page row. Removes only the owner-authored `business_profiles`
-    /// record — the underlying leads/requests are untouched, and the place reverts
-    /// to its Google-derived enrichment. RLS gates this to the owner.
-    static func deleteProfile(placeId: String) async throws {
-        try await supabase
-            .from("business_profiles")
-            .delete()
-            .eq("place_id", value: placeId)
-            .execute()
-    }
-
     // MARK: - Storage (logo + photos)
 
     private static let bucket = "business-photos"
