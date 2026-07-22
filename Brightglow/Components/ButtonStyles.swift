@@ -9,8 +9,13 @@ import SwiftUI
 //           .frame(maxWidth: .infinity).frame(height: 56)
 //   }
 //   .buttonStyle(.gradient)          // primary action
-//   .buttonStyle(.frosted)           // secondary action
+//   .buttonStyle(.secondary)         // secondary action
 //   .buttonStyle(.textAction)        // tertiary / text-only
+//
+// The secondary style has exactly one visual definition — `secondaryButtonBackground()`
+// in SecondaryButton.swift. Use `.buttonStyle(.secondary)` when the button owns its
+// whole label, or call `.secondaryButtonBackground()` directly when the background
+// wraps a label inside a `.plain` button. Both render identically by construction.
 // ─────────────────────────────────────────────────────────────────────────────
 
 // MARK: - Gradient (primary)
@@ -31,19 +36,12 @@ struct GradientButtonStyle: ButtonStyle {
     }
 }
 
-// MARK: - Frosted (secondary)
+// MARK: - Secondary
 
-struct FrostedButtonStyle: ButtonStyle {
+struct SecondaryButtonStyle: ButtonStyle {
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
-            .background {
-                ZStack {
-                    Color.clear.background(.ultraThinMaterial)
-                    Color.white.opacity(0.2)
-                }
-            }
-            .clipShape(RoundedRectangle(cornerRadius: 32))
-            .overlay(RoundedRectangle(cornerRadius: 32).stroke(Color.white.opacity(0.2), lineWidth: 1))
+            .secondaryButtonBackground()
             .opacity(configuration.isPressed ? 0.8 : 1)
             .animation(.easeOut(duration: 0.1), value: configuration.isPressed)
     }
@@ -65,8 +63,8 @@ extension ButtonStyle where Self == GradientButtonStyle {
     static var gradient: GradientButtonStyle { GradientButtonStyle() }
 }
 
-extension ButtonStyle where Self == FrostedButtonStyle {
-    static var frosted: FrostedButtonStyle { FrostedButtonStyle() }
+extension ButtonStyle where Self == SecondaryButtonStyle {
+    static var secondary: SecondaryButtonStyle { SecondaryButtonStyle() }
 }
 
 extension ButtonStyle where Self == TextActionButtonStyle {

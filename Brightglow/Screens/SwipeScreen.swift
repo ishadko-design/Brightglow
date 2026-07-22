@@ -434,7 +434,7 @@ struct ContractorCardView: View {
                             .foregroundStyle(.white)
                             .frame(width: skipW, height: 48)
                     }
-                    .buttonStyle(.frosted)
+                    .buttonStyle(.secondary)
 
                     Button(action: onQuote) {
                         Text("Request quote")

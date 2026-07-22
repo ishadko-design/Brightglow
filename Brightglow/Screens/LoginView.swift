@@ -167,7 +167,7 @@ struct LoginView: View {
                 .clipShape(RoundedRectangle(cornerRadius: 32))
                 .opacity(0.011)
 
-            frostedButton(icon: {
+            secondaryButton(icon: {
                 Image(systemName: "apple.logo")
                     .font(.system(size: 18, weight: .semibold))
                     .foregroundStyle(.white)
@@ -179,7 +179,7 @@ struct LoginView: View {
 
     private var googleButton: some View {
         Button(action: auth.signInWithGoogle) {
-            frostedButton(icon: {
+            secondaryButton(icon: {
                 Image("GoogleIcon")
                     .resizable()
                     .interpolation(.high)
@@ -190,8 +190,12 @@ struct LoginView: View {
         .frame(height: 56)
     }
 
+    /// The social buttons are secondary actions, so they wear the shared secondary
+    /// surface. This stays a helper only because both need the same icon + label
+    /// layout — the background itself is `secondaryButtonBackground()` like
+    /// everywhere else.
     @ViewBuilder
-    private func frostedButton<I: View>(icon: () -> I, label: String) -> some View {
+    private func secondaryButton<I: View>(icon: () -> I, label: String) -> some View {
         HStack(spacing: 8) {
             icon()
             Text(label)
@@ -200,14 +204,7 @@ struct LoginView: View {
         }
         .frame(maxWidth: .infinity)
         .frame(height: 56)
-        .background {
-            ZStack {
-                Color.clear.background(.ultraThinMaterial)
-                Color.white.opacity(0.2)
-            }
-        }
-        .clipShape(RoundedRectangle(cornerRadius: 32))
-        .overlay(RoundedRectangle(cornerRadius: 32).stroke(Color.white.opacity(0.2), lineWidth: 1))
+        .secondaryButtonBackground()
     }
 
     // MARK: - Action

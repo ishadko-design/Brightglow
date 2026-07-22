@@ -1,7 +1,7 @@
 import SwiftUI
 
 struct FixrButton: View {
-    enum Style { case gradient, frosted, text }
+    enum Style { case gradient, secondary, text }
 
     let label: String
     var style: Style = .gradient
@@ -9,8 +9,8 @@ struct FixrButton: View {
     let action: () -> Void
 
     var body: some View {
-        if style == .frosted {
-            coreButton.buttonStyle(.frosted)
+        if style == .secondary {
+            coreButton.buttonStyle(.secondary)
         } else if style == .text {
             coreButton.buttonStyle(.textAction)
         } else {
@@ -39,7 +39,7 @@ struct FixrButton: View {
 #Preview {
     VStack(spacing: 16) {
         FixrButton(label: "Request Quote", style: .gradient) {}
-        FixrButton(label: "Skip",          style: .frosted) {}
+        FixrButton(label: "Skip",          style: .secondary) {}
         FixrButton(label: "Use a different email", style: .text) {}
         FixrButton(label: "Loading…",      style: .gradient, loading: true) {}
     }
