@@ -59,6 +59,12 @@ struct ContractorGalleryScreen: View {
     /// the list so review ordering here matches the list's — the review quoted on
     /// the list card must lead the reviews sheet, not a different one.
     var photoMatchTerms: String = ""
+    /// Identity of the review the list card quoted, when the user arrived by
+    /// tapping that quote. Pinned to the top of the reviews sheet so the comment
+    /// they tapped is the first one they see — the card shows a single sentence
+    /// lifted from mid-review, so without this the source review reads as a
+    /// different comment entirely and the quote appears to have vanished.
+    var pinnedReviewID: String? = nil
     /// The landing clarifying Q&A, carried through to the quote-request screen so
     /// the message a business receives includes the AI-clarified details.
     var clarifyTranscript: ClarifyTranscript = .empty
@@ -270,13 +276,25 @@ struct ContractorGalleryScreen: View {
     }
 
     /// Reviews ordered so the one describing the searched job leads — e.g.
-    /// searching "vanity cabinet" surfaces reviews about that first. Uses the
-    /// exact same `PhotoFilter` subject-term ordering the list card uses, so the
-    /// review quoted on the card is the one pinned to the top here. Falls back to
+    /// searching "vanity cabinet" surfaces reviews about that first. Falls back to
     /// original order when the query has no subject term (a plain category browse).
+    ///
+    /// `pinnedReviewID` then overrides that ordering. Both screens used to derive
+    /// their own query string and rely on the two agreeing; they don't in every
+    /// case (this screen falls back to `searchQuery`/`category`, the list card
+    /// deliberately does not), so the quoted review could sort first on the card
+    /// and mid-list here. Carrying the identity makes the match exact instead of
+    /// coincidental. `firstIndex` is scoped to this contractor's own reviews, so a
+    /// pin from the list can't disturb any other business in the stack.
     private func orderedReviews(for contractor: Contractor) -> [Review] {
-        PhotoFilter.orderReviewsByJob(contractor.reviews, query: reviewMatchQuery,
-                                      text: { $0.text })
+        let ordered = PhotoFilter.orderReviewsByJob(contractor.reviews, query: reviewMatchQuery,
+                                                    text: { $0.text })
+        guard let pinnedReviewID,
+              let idx = ordered.firstIndex(where: { $0.id == pinnedReviewID })
+        else { return ordered }
+        var rest = ordered
+        let lead = rest.remove(at: idx)
+        return [lead] + rest
     }
 
     /// The query that decides review relevance — the chat's `photo_terms` when

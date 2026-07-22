@@ -112,6 +112,9 @@ struct ContractorListScreen: View {
     /// with the reviews sheet expanded rather than the default collapsed peek.
     @State private var startReviewsExpanded = false
     @State private var startContractorID: String? = nil
+    /// The review quoted on the row the user opened, pinned to the top of the
+    /// gallery's reviews sheet. Cleared when opening by any other route.
+    @State private var pinnedReviewID: String? = nil
     /// Which photo in the tapped contractor's strip was tapped — the gallery
     /// opens on that exact shot.
     @State private var startPhotoIndex: Int = 0
@@ -243,6 +246,14 @@ struct ContractorListScreen: View {
         PhotoFilter.mostRelevantReview(c.reviews.map(\.text), query: matchQuery)
     }
 
+    /// Identity of the review `matchingReview` quoted, handed to the gallery so
+    /// the sheet leads with that exact comment. The quote is a sentence pulled
+    /// from mid-review, so it can't be matched by text on the other side.
+    private func matchingReviewID(_ c: Contractor) -> String? {
+        PhotoFilter.mostRelevantReviewIndex(c.reviews.map(\.text), query: matchQuery)
+            .map { c.reviews[$0].id }
+    }
+
     /// More to show: either already-fetched businesses held back by the limit, or
     /// another page still available from Places.
     private var hasMore: Bool {
@@ -291,6 +302,7 @@ struct ContractorListScreen: View {
                 attachedImages: attachedImages,
                 startReviewsExpanded: startReviewsExpanded,
                 photoMatchTerms: photoMatchTerms,
+                pinnedReviewID: pinnedReviewID,
                 clarifyTranscript: clarifyTranscript
             )
         }
@@ -551,16 +563,22 @@ struct ContractorListScreen: View {
         startContractorID = contractor.id
         startPhotoIndex = photoIndex
         startReviewsExpanded = false
+        pinnedReviewID = matchingReviewID(contractor)
         goGallery = true
     }
 
     /// The "N reviews" link opens the gallery for this contractor with its bottom
     /// sheet expanded to the reviews (in-app), rather than jumping straight out to
     /// Google — the Google link now lives at the end of that sheet.
+    ///
+    /// Also the destination for tapping the quoted review on the row, which is why
+    /// the quoted review is pinned to the top of the sheet: the user tapped that
+    /// comment and it must be the first one waiting for them.
     private func openReviews(for contractor: Contractor) {
         startContractorID = contractor.id
         startPhotoIndex = 0
         startReviewsExpanded = true
+        pinnedReviewID = matchingReviewID(contractor)
         goGallery = true
     }
 

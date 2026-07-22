@@ -449,18 +449,32 @@ enum PhotoFilter {
             .map(\.element)
     }
 
+    /// Index of the review the list card quotes. Exposed separately from the
+    /// snippet so the caller can carry that review's *identity* to the gallery and
+    /// pin the exact same one to the top of the sheet — the card shows only a
+    /// sentence lifted from the middle of the review, so "the same text" is not
+    /// something the two screens can match on after the fact.
+    ///
+    /// Ties keep the lowest index, the same tiebreak `orderReviewsByJob` uses.
+    nonisolated static func mostRelevantReviewIndex(_ reviews: [String], query: String) -> Int? {
+        let terms = subjectTerms(query)
+        guard !terms.isEmpty else { return nil }
+        var best: (index: Int, score: Int)?
+        for (i, text) in reviews.enumerated() {
+            let score = matchScore(reviewTokens(text), terms)
+            guard score > 0 else { continue }
+            if best == nil || score > best!.score { best = (i, score) }
+        }
+        return best?.index
+    }
+
     /// The single review that most specifically describes the searched job,
     /// trimmed to the sentence that actually names it — the customer's own words
     /// shown as the "why" behind a match on the list card. Nil when none mention
-    /// it. Picks the same review `orderReviewsByJob` puts first, so the card quote
-    /// and the gallery's lead review always agree.
+    /// it.
     nonisolated static func mostRelevantReview(_ reviews: [String], query: String) -> String? {
-        let terms = subjectTerms(query)
-        guard !terms.isEmpty else { return nil }
-        guard let best = orderReviewsByJob(reviews, query: query, text: { $0 }).first,
-              matchScore(reviewTokens(best), terms) > 0
-        else { return nil }
-        return focusedSnippet(best, terms: terms)
+        guard let i = mostRelevantReviewIndex(reviews, query: query) else { return nil }
+        return focusedSnippet(reviews[i], terms: subjectTerms(query))
     }
 
     /// The sentence within a review that names a subject term, so the quoted line
