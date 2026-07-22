@@ -11,15 +11,18 @@
 // index.ts keeps the dormant EPCI branch and owns HTTP, caching, and the LLM
 // classifier — the LLM's pick arrives here as `entryOverride`.
 //
-// Note there is no "labor only" outcome. It existed until 2026-07-20 and is
-// gone deliberately: for a job we don't model, a fixed visit-length guess is
-// not a partial answer, it's a fabricated one ("Install solar panels" →
-// "~$270 labor only" against a real $15–25k). Unmodelled jobs decline.
+// "Labor only" survives for Auto & moto ONLY. On a vehicle, a shop bills a
+// posted hourly rate against a book time and the parts are a separate line, so
+// a labor figure is how the trade actually quotes. Contractor work is sold as
+// one all-in number, so a labor figure there is not a partial answer, it's a
+// fabricated one: "Install solar panels" showed "~$270 labor only" against a
+// real $15–25k (2026-07-20/22). Unmodelled home jobs decline.
 
 import {
   applyServiceMinimum,
   combineSizeScope,
   computeInHouseItems,
+  laborOnlyEstimate,
   qualityTier,
   sizeScale,
   windowScopeScale,
@@ -67,6 +70,15 @@ export type EstimateResult =
     isDefaulted: boolean;
   }
   | {
+    /** Auto & moto only — hours x local billed rate, parts excluded. */
+    kind: "labor";
+    low: number;
+    typical: number;
+    high: number;
+    label: string;
+    entry: JobTypeEntry;
+  }
+  | {
     kind: "insufficient";
     /** Why we declined, for the harness's coverage breakdown and the logs. */
     reason: "unclassified" | "general_suppressed" | "no_items";
@@ -95,17 +107,37 @@ export function estimateInHouse(input: EstimateInput): EstimateResult {
   // The user described a specific job and the best we could do was a
   // category-general bucket — meaning we do NOT model this job. Decline.
   //
-  // This used to emit a "labor only" figure from a fixed 2.5-hour visit
+  // On a vehicle, a labor figure is a real half of the quote — shops bill a
+  // posted rate against book time and itemise parts separately — so Auto & moto
+  // still gets one, labelled.
+  //
+  // For home trades this emitted a figure from a fixed 2.5-hour visit
   // assumption, which is only sane for service-call work. Reported live
-  // 2026-07-20: "Install solar panels" landed on electrical.general and showed
-  // "~$270 labor only" against a real 10+ panel install of $15–25k — off by
-  // ~100x, and a number a user reasonably reads as the price. The visit-length
-  // guess carries no information about a job we by definition didn't model,
-  // so it cannot be right except by luck.
+  // 2026-07-20 and again 2026-07-22: "Install solar panels" landed on
+  // electrical.general and showed "~$270 labor only" against a real 10+ panel
+  // install of $15–25k — off by ~100x, and a number a user reasonably reads as
+  // the price. The visit-length guess carries no information about a job we by
+  // definition didn't model, so it cannot be right except by luck. Contractor
+  // work is quoted all-in or not at all.
   //
   // A bare category browse (no description) still gets its general figure
   // below — that IS a fair "typical job for this trade".
   if (isGeneral && trimmedDesc.length >= 3) {
+    const isAuto = (input.vertical ?? (vehicle ? "auto" : null)) === "auto";
+    const labor = isAuto ? laborOnlyEstimate(entry.trade, zip) : null;
+    if (labor) {
+      return {
+        kind: "labor",
+        low: labor.low,
+        typical: labor.typical,
+        high: labor.high,
+        label:
+          `Typical labor only — ~${labor.hoursLow}–${labor.hoursHigh} hrs at ~$${
+            Math.round(labor.hourlyTypical)
+          }/hr locally. Parts extra.`,
+        entry,
+      };
+    }
     return { kind: "insufficient", reason: "general_suppressed", entry };
   }
 
