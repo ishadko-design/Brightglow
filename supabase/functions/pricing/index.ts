@@ -241,8 +241,17 @@ Deno.serve(async (req) => {
     if (llm.jobType) {
       const generalEntries = Object.values(CATEGORY_GENERAL)
         .filter((e): e is NonNullable<typeof e> => e !== null);
-      entry = [...JOB_TYPE_TAXONOMY, ...generalEntries]
-        .find((e) => e.job_type === llm.jobType) ?? entry;
+      const picked = [...JOB_TYPE_TAXONOMY, ...generalEntries]
+        .find((e) => e.job_type === llm.jobType);
+      // notIfContains is a hard veto on the entry, not a keyword-matcher
+      // tiebreak — the model picks "install solar" for "solar panel repair"
+      // just as readily as the keywords did, and that entry prices a whole
+      // 20-panel array. Fall back to the keyword result (usually the
+      // category-general bucket, which then declines).
+      const vetoed = picked?.notIfContains?.some((w) =>
+        trimmedDesc.toLowerCase().includes(w)
+      );
+      entry = (picked && !vetoed ? picked : null) ?? entry;
     }
     llmVehicle = llm.vehicle;
     llmVertical = llm.vertical;

@@ -124,6 +124,22 @@ export const COST_CATALOG: CostCatalogEntry[] = [
   { itemId: "ceiling-fan-install", trade: "electrical", description: "Install ceiling fan on existing box (fan not included)", unit: "each", soc: ELECTRICIAN, laborHours: b(1.5, 2.5, 4), materials: b(0, 20, 80) },
   // sanity: Level-2 EV charger $1,000–2,500 installed incl. unit
   { itemId: "ev-charger-level2", trade: "electrical", description: "Level-2 EV charger, incl. unit and 240V circuit", unit: "each", soc: ELECTRICIAN, laborHours: b(4, 6, 10), materials: b(450, 900, 1800) },
+  // Rooftop solar, priced per panel. Added 2026-07-22: "Install solar panels"
+  // had no item, fell through to electrical.general, and showed "~$270 labor
+  // only" — a top-of-funnel search this app cannot be silent on.
+  //
+  // Per-panel is the unit the customer counts in and the unit that scales
+  // honestly: residential PV is near-linear in array size once the inverter and
+  // permitting are spread across it, so a 6-panel array and a 24-panel array
+  // both land near the same $/W. Materials carry the panel, its share of the
+  // inverter, racking, balance-of-system, and permitting/interconnection.
+  // At a 400W panel this computes to ~$2.30–3.30/W, against a published
+  // national $2.50–3.50/W before the federal credit (2026). Quoted GROSS —
+  // incentives are a rebate the user claims later, not a lower price, and
+  // netting them out would understate every quote the business actually sends.
+  // sanity: $850–1,550 per installed panel ($17k–31k for a typical 20-panel,
+  // 8 kW system)
+  { itemId: "solar-panel-install", trade: "electrical", description: "Rooftop solar PV, per panel, incl. inverter share, racking and permitting", unit: "each", soc: ELECTRICIAN, laborHours: b(1.2, 1.8, 2.6), materials: b(760, 1000, 1350) },
   // sanity: whole-house rewire $4–10 per sq ft
   { itemId: "whole-house-rewire", trade: "electrical", description: "Whole-house rewire", unit: "sq ft", soc: ELECTRICIAN, laborHours: b(0.04, 0.06, 0.09), materials: b(1, 1.8, 3) },
   // sanity: light fixture swap $75–250 (fixture customer-supplied)

@@ -72,6 +72,16 @@ export const GROUND_TRUTH: GroundTruthCase[] = [
     vertical: "home",
   },
   {
+    // The default 20-panel / ~8 kW array, the case that used to read "~$270".
+    query: "install solar panels",
+    category: "Electrical",
+    expectJobType: "electrical.solar",
+    low: 15000,
+    high: 28000,
+    source: "EnergySage / NREL 2026 (gross, before the federal credit)",
+    vertical: "home",
+  },
+  {
     query: "install central air conditioning",
     category: "HVAC",
     expectJobType: "hvac.ac",

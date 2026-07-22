@@ -606,6 +606,12 @@ export interface JobTypeEntry {
    *  conditioner" (→ central AC) and "metal roof replacement" (→ generic
    *  reroof). Set to 1 on the entry that must win when both match. */
   priority?: number;
+  /** Words that disqualify this entry outright, however well its keywords
+   *  match. For whole-system items where a maintenance verb means a completely
+   *  different job: "solar panel repair" matched the install entry and quoted
+   *  a full 20-panel array (~$25k) for what is a service call. Declining beats
+   *  answering with another job's price. */
+  notIfContains?: string[];
 }
 
 // One flagship job per category that EPCI prices well, plus a per-category
@@ -628,6 +634,10 @@ export const JOB_TYPE_TAXONOMY: JobTypeEntry[] = [
   { job_type: "electrical.ceiling_fan", category: "Electrical", keywords: ["ceiling fan"], trade: "electrical", itemId: "ceiling-fan-install", unit: "each", defaultQuantity: 1 },
   { job_type: "electrical.ev_charger", category: "Electrical", keywords: ["ev charger", "car charger"], trade: "electrical", itemId: "ev-charger-level2", unit: "each", defaultQuantity: 1 },
   { job_type: "electrical.rewire", category: "Electrical", keywords: ["rewire", "rewiring"], trade: "electrical", itemId: "whole-house-rewire", unit: "sq ft", defaultQuantity: 1500 },
+  // Solar outranks "panel" (electrical.panel) and "light"/"power" — a solar
+  // request must never price as a breaker panel. Default 20 panels ≈ 8 kW, the
+  // median US residential system.
+  { job_type: "electrical.solar", category: "Electrical", keywords: ["solar", "solar panel", "solar panels", "pv system", "photovoltaic"], trade: "electrical", itemId: "solar-panel-install", unit: "each", defaultQuantity: 20, priority: 1, notIfContains: ["repair", "fix", "clean", "cleaning", "inspect", "inspection", "maintenance", "remove", "removal"] },
   { job_type: "electrical.lighting", category: "Electrical", keywords: ["light", "lighting"], trade: "electrical", itemId: "light-fixture-install", unit: "each", defaultQuantity: 1 },
   // Multi-word keywords only — a bare "tv" would substring-match unrelated text.
   { job_type: "electrical.tv_mount", category: "Electrical", keywords: ["tv mount", "mount tv", "mount a tv", "mount the tv", "mounting tv", "mounting a tv", "install tv", "install a tv", "install the tv", "tv install", "tv wall", "tv on wall", "tv on the wall", "wall mount tv", "hang tv", "hang a tv", "hang the tv", "tv bracket", "television", "flat screen", "flatscreen"], trade: "electrical", itemId: "tv-mount-install", unit: "each", defaultQuantity: 1 },
@@ -1008,6 +1018,7 @@ function longestKeywordMatch(
   let bestLen = 0;
   let bestPriority = -1;
   for (const entry of pool) {
+    if (entry.notIfContains?.some((w) => termMatches(text, w))) continue;
     const priority = entry.priority ?? 0;
     for (const kw of entry.keywords) {
       if (excludeWithinCategoryOnly && WITHIN_CATEGORY_ONLY.has(kw)) continue;
@@ -1052,6 +1063,18 @@ export function resolveQuantity(
     return { quantity: 1, isDefaulted: false };
   }
   if (entry.unit === "each" || entry.unit === "pair") {
+    // Solar is the one item people size in system watts rather than in units
+    // ("6.5 kW system", "10kw array"). Convert at a 400 W panel — the current
+    // residential norm — so the two phrasings price the same array.
+    if (entry.itemId === "solar-panel-install") {
+      const kw = description.toLowerCase().match(
+        /(\d{1,2}(?:\.\d)?)\s*(kw|kilowatt)/,
+      );
+      if (kw) {
+        const panels = Math.round((Number(kw[1]) * 1000) / 400);
+        if (panels > 0) return { quantity: panels, isDefaulted: false };
+      }
+    }
     // Explicit pair counts win outright for pair-priced items — "2 pairs of
     // french doors" is 2 units, no halving. This is the canonical phrasing
     // the clarify chat emits once the user resolves panels-vs-pairs.
@@ -1072,7 +1095,7 @@ export function resolveQuantity(
     // ("two windows") are normalized to digits first so they count too.
     const normalized = spellOutToDigits(description.toLowerCase());
     const count = normalized.match(
-      /(?:^|[\s,])(\d{1,2})(?!\s*(?:["”']|-?\s*(?:in|inch|inches|ft|foot|feet|gal|gallon|amp)\b))\s+(?:[a-z/-]+\s+){0,3}?(?:(?:window|door|outlet|socket|fan|fixture|light|toilet|faucet|sink|tree|zone|charger|thermostat)s?|vanit(?:y|ies))\b/,
+      /(?:^|[\s,])(\d{1,2})(?!\s*(?:["”']|-?\s*(?:in|inch|inches|ft|foot|feet|gal|gallon|amp)\b))\s+(?:[a-z/-]+\s+){0,3}?(?:(?:window|door|outlet|socket|fan|fixture|light|toilet|faucet|sink|tree|zone|charger|thermostat|panel)s?|vanit(?:y|ies))\b/,
     );
     // Fallback: the count TRAILS the noun — "replace windows 2", "windows: 2",
     // "windows x2". Real phrasing from a live search ("Replace windows 2,
@@ -1081,7 +1104,7 @@ export function resolveQuantity(
     // dimension/measurement guards apply, so "window 72x80" is still a size,
     // not 72 windows.
     const trailing = count ? null : normalized.match(
-      /(?:window|door|outlet|socket|fan|fixture|light|toilet|faucet|sink|tree|zone|charger|thermostat)s?\s*(?:[,:;-]|\bx\b)?\s*(\d{1,2})(?!\s*[x×]\s*\d)(?!\s*(?:["”']|-?\s*(?:in|inch|inches|ft|foot|feet|gal|gallon|amp)\b))\b/,
+      /(?:window|door|outlet|socket|fan|fixture|light|toilet|faucet|sink|tree|zone|charger|thermostat|panel)s?\s*(?:[,:;-]|\bx\b)?\s*(\d{1,2})(?!\s*[x×]\s*\d)(?!\s*(?:["”']|-?\s*(?:in|inch|inches|ft|foot|feet|gal|gallon|amp)\b))\b/,
     );
     const matched = count ?? trailing;
     if (matched) {

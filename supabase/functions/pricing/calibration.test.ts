@@ -44,6 +44,7 @@ const REFERENCE: Record<string, Ref> = {
   "ceiling-fan-install": { low: 150, high: 400 },
   "ev-charger-level2": { low: 1000, high: 2500 },
   "whole-house-rewire": { low: 4, high: 10 },
+  "solar-panel-install": { low: 850, high: 1550 },
   "light-fixture-install": { low: 75, high: 250 },
   "electrician-hourly": { low: 85, high: 200, loose: true },
   "tv-mount-install": { low: 200, high: 600 },

@@ -16,7 +16,7 @@ enum Category: String, CaseIterable, Codable {
     var keywords: [String] {
         switch self {
         case .plumbing:     return ["plumb", "tap", "faucet", "leak", "pipe", "drain", "toilet", "sink", "water heater", "sewer", "clog"]
-        case .electrical:   return ["electric", "wire", "wiring", "outlet", "socket", "breaker", "panel", "light", "lighting", "fixture", "rewire", "power", "charger", "charging", "evse"]
+        case .electrical:   return ["electric", "wire", "wiring", "outlet", "socket", "breaker", "panel", "light", "lighting", "fixture", "rewire", "power", "charger", "charging", "evse", "solar", "photovoltaic"]
         case .hvac:         return ["hvac", "heat", "heating", "ac", "air condition", "furnace", "thermostat", "cooling", "vent", "duct"]
         case .painting:     return ["paint", "painting", "wall color", "primer", "repaint"]
         case .carpentry:    return ["carpent", "wood", "cabinet", "shelf", "shelving", "framing", "trim", "handyman", "remodel", "deck",
