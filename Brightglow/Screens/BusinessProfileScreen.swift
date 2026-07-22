@@ -22,7 +22,6 @@ struct BusinessProfileScreen: View {
     var embedded = false
 
     @EnvironmentObject private var store: BusinessStore
-    @EnvironmentObject private var auth: AuthService
     @Environment(\.dismiss) private var dismiss
 
     @State private var working = BusinessService.BusinessProfile(placeIdOnly: "")
@@ -39,8 +38,6 @@ struct BusinessProfileScreen: View {
     /// the sole signal that something didn't persist — so it must never be silent.
     @State private var errorMessage: String?
     @State private var autosaveTask: Task<Void, Never>?
-    @State private var confirmDelete = false
-    @State private var deleting = false
 
     private var dirty: Bool { loaded && working != original }
 
@@ -70,16 +67,6 @@ struct BusinessProfileScreen: View {
         .onDisappear { flushPendingSave() }
         .onChange(of: logoItem) { _, item in Task { await uploadLogo(item) } }
         .onChange(of: photoItems) { _, items in Task { await uploadPhotos(items) } }
-        .confirmationDialog(
-            "Delete this page?",
-            isPresented: $confirmDelete,
-            titleVisibility: .visible
-        ) {
-            Button("Delete page", role: .destructive) { Task { await deleteProfile() } }
-            Button("Cancel", role: .cancel) {}
-        } message: {
-            Text("Your photos, services and description are removed. Your requests stay, and your listing falls back to its public info. You can rebuild the page anytime.")
-        }
     }
 
     // MARK: - Header
@@ -109,10 +96,7 @@ struct BusinessProfileScreen: View {
                 if let errorMessage { errorBanner(errorMessage) }
                 profileSection
                 servicesSection
-                Divider().overlay(Color.white.opacity(0.15))
-                    .padding(.horizontal, 16)
-                deleteSection
-                signOutSection
+                AccountFooter()
             }
             .padding(.top, 12)
             .padding(.bottom, 24)
@@ -291,50 +275,6 @@ struct BusinessProfileScreen: View {
         }
     }
 
-    // MARK: Delete
-
-    private var deleteSection: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            Button(action: { confirmDelete = true }) {
-                HStack(spacing: 6) {
-                    if deleting { ProgressView().tint(.white).controlSize(.small) }
-                    Text("Delete page")
-                        .font(.h4).foregroundStyle(.white)
-                }
-                .padding(.horizontal, 16).frame(height: 32)
-                .secondaryButtonBackground()
-            }
-            .buttonStyle(.plain)
-            .disabled(deleting)
-
-        }
-        .padding(.horizontal, 16)
-    }
-
-    // MARK: Account
-
-    /// Sign out sits at the very bottom, below everything else — the last thing on
-    /// the page, the way the consumer profile ends. Full-width frosted CTA rather
-    /// than a menu item so it reads as a real action.
-    private var signOutSection: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            if let email = auth.user?.email, !email.isEmpty {
-                Text("Signed in as \(email)")
-                    .font(.bodySmall).foregroundStyle(AppColors.textSecondary)
-                    .padding(.horizontal, 16)
-            }
-            Button(action: { auth.signOut() }) {
-                Text("Sign out")
-                    .font(.h3)
-                    .foregroundStyle(.white)
-                    .frame(maxWidth: .infinity)
-                    .frame(height: 56)
-            }
-            .buttonStyle(.frosted)
-            .padding(.horizontal, 16)
-        }
-    }
-
     /// The one piece of save UI left: shown only when a write actually failed.
     private func errorBanner(_ message: String) -> some View {
         HStack(spacing: 12) {
@@ -434,24 +374,6 @@ struct BusinessProfileScreen: View {
         saving = false
     }
 
-    private func deleteProfile() async {
-        guard let placeId else { return }
-        deleting = true
-        do {
-            try await BusinessService.deleteProfile(placeId: placeId)
-            // Re-seed the store's copy from the lead so the dashboard reflects an
-            // empty page rather than the just-deleted one.
-            await store.select(placeId)
-            dismiss()
-        } catch {
-            #if DEBUG
-            print("🏢 profile delete failed — \(error)")
-            #endif
-            errorMessage = "Couldn't delete your page."
-        }
-        deleting = false
-    }
-
     // MARK: - Uploads
 
     private func uploadLogo(_ item: PhotosPickerItem?) async {
@@ -488,16 +410,8 @@ struct BusinessProfileScreen: View {
         uploadMsg = added > 0 ? "Added \(added) photo\(added == 1 ? "" : "s"). Remember to Save." : "Upload failed."
     }
 
-    /// Sniff the image type from the bytes so the upload's Content-Type is right
-    /// (the bucket accepts png/jpeg/webp). Defaults to JPEG.
     private func contentType(for data: Data) -> String {
-        let bytes = [UInt8](data.prefix(12))
-        if bytes.count >= 2, bytes[0] == 0x89, bytes[1] == 0x50 { return "image/png" }
-        if bytes.count >= 3, bytes[0] == 0xFF, bytes[1] == 0xD8, bytes[2] == 0xFF { return "image/jpeg" }
-        if bytes.count >= 12,
-           bytes[0] == 0x52, bytes[1] == 0x49, bytes[2] == 0x46, bytes[3] == 0x46,
-           bytes[8] == 0x57, bytes[9] == 0x45, bytes[10] == 0x42, bytes[11] == 0x50 { return "image/webp" }
-        return "image/jpeg"
+        BusinessService.imageContentType(for: data)
     }
 
     // MARK: - Mutations

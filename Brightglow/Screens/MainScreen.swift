@@ -34,6 +34,11 @@ struct MainScreen: View {
     /// only when the captured photo shows a motorcycle, so results flip to the
     /// Moto toggle. Nil (grid taps) lets the list default to cars.
     @State private var autoInitialVehicle: VehicleFilter? = nil
+    /// The Auto & moto category the capture's classifier recognised, held for the
+    /// duration of a clarifying chat. The photo establishes the vertical before a
+    /// single question is asked, so abandoning the chat must fall back to it — not
+    /// to an empty category, which reads downstream as a home search.
+    @State private var clarifyDetectedAuto: AutoCategory? = nil
     @State private var submittedQuery = ""
     /// Photo-derived cost-relevant attributes (size, capacity, material) from
     /// the most recent capture, carried to the contractor list to narrow the
@@ -631,22 +636,12 @@ struct MainScreen: View {
                 .navigationDestination(isPresented: $showBusiness) {
                     BusinessDashboardScreen()
                 }
-                .navigationDestination(isPresented: $goSearch) {
-                    // goSearch is reached either from the camera flow (attachedImages
-                    // set) or the search bar's own + picker (pickedImages, up to 5).
-                    // The clarifying chat's outcome drives the match: search_terms
-                    // refines the business query (with a fallback to the raw text),
-                    // photo_terms rank each business's photos, priceable gates price.
-                    ContractorListScreen(category: chatCategory,
-                                         searchQuery: submittedQuery,
-                                         presetCoordinate: locationStore.coordinate,
-                                         attachedImages: attachedImages.isEmpty ? pickedImages : attachedImages,
-                                         photoDetails: mergedDetails,
-                                         businessSearchOverride: chatSearchTerms,
-                                         photoMatchTerms: chatPhotoTerms,
-                                         priceable: chatPriceable,
-                                         clarifyTranscript: clarifyTranscript)
+                // Pushed, not presented: the profile is the same slide-in screen
+                // as the business Settings it mirrors (Figma 1150:3839).
+                .navigationDestination(isPresented: $showProfile) {
+                    ProfileScreen()
                 }
+                .navigationDestination(isPresented: $goSearch) { searchResults }
                 .navigationDestination(isPresented: Binding(
                     get: { goAuto != nil },
                     set: { if !$0 { goAuto = nil } }
@@ -710,22 +705,6 @@ struct MainScreen: View {
             }
         }
         .preferredColorScheme(.dark)
-        .sheet(isPresented: $showProfile) {
-            ProfileScreen(onSelectSearch: { query in
-                showProfile = false
-                // Let the sheet dismiss before the clarifying chat opens over the
-                // landing, so the transition doesn't fight the sheet animation.
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
-                    startClarify(query: query)
-                }
-            }, onOpenBusiness: {
-                showProfile = false
-                // Same beat as above: dismiss the sheet, then push the dashboard.
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
-                    showBusiness = true
-                }
-            })
-        }
         // ── Draw mode — proper full-screen cover with its own layout + keyboard handling
         .fullScreenCover(isPresented: $camera.showDrawingCanvas) {
             if let img = camera.capturedImage {
@@ -763,7 +742,15 @@ struct MainScreen: View {
                                 // search — the photo's extracted details ride
                                 // along as chat context (see advanceChat), and
                                 // the photo itself stays on screen behind it.
-                                startClarify(query: q, backdrop: resultImage)
+                                //
+                                // The typed word only wins the *query*; it does not
+                                // overrule the vertical the photo established. Hand
+                                // the detected auto category and vehicle to the chat
+                                // so cancelling it falls back to Auto & moto rather
+                                // than dropping into home results.
+                                startClarify(query: q, backdrop: resultImage,
+                                             detectedAuto: Self.autoCategory(from: detected),
+                                             detectedVehicle: detectedVehicle)
                             } else {
                                 switch detected {
                                 case .home(let cat): goSwipe = cat
@@ -878,11 +865,50 @@ struct MainScreen: View {
     /// `backdrop` is the capture the chat is about, shown behind it. Always
     /// assigned (nil for a typed search), so a photo from an earlier capture can
     /// never linger behind an unrelated conversation.
-    private func startClarify(query: String? = nil, backdrop: UIImage? = nil) {
+    /// Results for a searched/clarified request. Extracted from `body` because the
+    /// destination's argument list pushed that expression past the type-checker's
+    /// budget.
+    ///
+    /// `goSearch` is reached either from the camera flow (attachedImages set) or the
+    /// search bar's own + picker (pickedImages, up to 5). The clarifying chat's
+    /// outcome drives the match: search_terms refines the business query (with a
+    /// fallback to the raw text), photo_terms rank each business's photos, priceable
+    /// gates price.
+    private var searchResults: some View {
+        ContractorListScreen(category: chatCategory,
+                             searchQuery: submittedQuery,
+                             presetCoordinate: locationStore.coordinate,
+                             attachedImages: attachedImages.isEmpty ? pickedImages : attachedImages,
+                             photoDetails: mergedDetails,
+                             businessSearchOverride: chatSearchTerms,
+                             photoMatchTerms: chatPhotoTerms,
+                             priceable: chatPriceable,
+                             clarifyTranscript: clarifyTranscript,
+                             // Nil unless a capture identified the vehicle, so a
+                             // motorcycle photo opens on Moto, not the car default.
+                             initialVehicle: autoInitialVehicle)
+    }
+
+    /// The Auto & moto category a capture resolved to, if it resolved to that
+    /// vertical at all. A free function rather than an inline `if case` at the call
+    /// site: the capture closure is already at the compiler's type-check limit.
+    private static func autoCategory(from match: TradeMatch?) -> AutoCategory? {
+        if case .auto(let auto)? = match { return auto }
+        return nil
+    }
+
+    /// `detectedAuto` / `detectedVehicle` carry what the capture's classifier
+    /// already established about the vertical. They're assigned here (rather than
+    /// at the call site) so a plain typed search resets them and can't inherit the
+    /// vertical from an earlier photo.
+    private func startClarify(query: String? = nil, backdrop: UIImage? = nil,
+                              detectedAuto: AutoCategory? = nil,
+                              detectedVehicle: VehicleFilter? = nil) {
         let q = (query ?? searchText).trimmingCharacters(in: .whitespacesAndNewlines)
         guard !q.isEmpty else { return }
         submittedQuery = q
-        SearchHistoryStore.record(q)   // profile's search history
+        clarifyDetectedAuto = detectedAuto
+        autoInitialVehicle = detectedVehicle
         clarifyTranscript = .empty
         chatDetails = nil
         chatCategory = ""
@@ -964,6 +990,10 @@ struct MainScreen: View {
         clarifyTranscript = .empty
         searchText = ""
         submittedQuery = ""
+        // The abandoned request's vertical goes with it — the next search starts
+        // from nothing rather than inheriting this photo's verdict.
+        clarifyDetectedAuto = nil
+        autoInitialVehicle = nil
         // Closing the clarify chat abandons the request, so the photo(s) that
         // seeded it shouldn't linger in the input bar — clear both the camera
         // capture and library picks.
@@ -976,7 +1006,13 @@ struct MainScreen: View {
     /// results are shown exactly as if the chat hadn't run.
     private func finishChat(_ outcome: ClarifyService.ClarifyOutcome?) {
         chatDetails = outcome?.details.isEmpty == false ? outcome?.details : nil
-        chatCategory = outcome?.category ?? ""
+        // A nil/blank category means the chat ended without resolving one — Skip,
+        // the ✕, or an API failure. Falling through to "" routes the search as a
+        // home trade, which is how photographing a motorcycle and abandoning the
+        // questions returned house painters. The photo's own verdict outranks a
+        // chat that never finished.
+        let resolvedCategory = outcome?.category ?? ""
+        chatCategory = resolvedCategory.isEmpty ? (clarifyDetectedAuto?.name ?? "") : resolvedCategory
         chatSearchTerms = outcome?.searchTerms ?? ""
         chatPhotoTerms = outcome?.photoTerms ?? ""
         chatPriceable = outcome?.priceable ?? true

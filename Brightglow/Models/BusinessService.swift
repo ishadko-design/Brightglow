@@ -334,13 +334,28 @@ enum BusinessService {
         try? supabase.storage.from(bucket).getPublicURL(path: path)
     }
 
-    private static func ext(for contentType: String) -> String {
+    private static func ext(for contentType: String) -> String { fileExtension(for: contentType) }
+
+    static func fileExtension(for contentType: String) -> String {
         switch contentType.lowercased() {
         case "image/png": return "png"
         case "image/webp": return "webp"
         case "image/heic": return "heic"
         default: return "jpg"
         }
+    }
+
+    /// Sniff the image type from the leading bytes so an upload's Content-Type is
+    /// right (the buckets accept png/jpeg/webp). Defaults to JPEG. Shared by the
+    /// business editor's logo/photo uploads and the consumer profile's avatar.
+    static func imageContentType(for data: Data) -> String {
+        let bytes = [UInt8](data.prefix(12))
+        if bytes.count >= 2, bytes[0] == 0x89, bytes[1] == 0x50 { return "image/png" }
+        if bytes.count >= 3, bytes[0] == 0xFF, bytes[1] == 0xD8, bytes[2] == 0xFF { return "image/jpeg" }
+        if bytes.count >= 12,
+           bytes[0] == 0x52, bytes[1] == 0x49, bytes[2] == 0x46, bytes[3] == 0x46,
+           bytes[8] == 0x57, bytes[9] == 0x45, bytes[10] == 0x42, bytes[11] == 0x50 { return "image/webp" }
+        return "image/jpeg"
     }
 
     // MARK: - Completeness
