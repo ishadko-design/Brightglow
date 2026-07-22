@@ -75,19 +75,10 @@ struct BusinessDashboardScreen: View {
                     .foregroundStyle(.white)
                     .lineLimit(1)
                 Spacer()
-                // Figma puts a profile icon here. Account actions live on the
-                // Settings tab (sign out is the last thing on it), so this opens
-                // that rather than carrying a menu of its own — one sign-out, one
-                // place.
-                Button {
-                    withAnimation(.easeOut(duration: 0.18)) { tab = .settings }
-                } label: {
-                    Image(systemName: "person.crop.circle")
-                        .font(.system(size: 22, weight: .regular))
-                        .foregroundStyle(.white)
-                        .frame(width: 44, height: 44)
-                        .contentShape(Rectangle())
-                }
+                // Figma puts a profile icon here, but the Settings tab it would
+                // open is already one of the two tabs directly below — so it's a
+                // second control for a destination that's never more than one tap
+                // away. Left out.
             }
             .padding(.leading, 8)
             .padding(.trailing, 8)
