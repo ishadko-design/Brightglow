@@ -791,6 +791,12 @@ export const JOB_TYPE_TAXONOMY: JobTypeEntry[] = [
   { job_type: "auto.dent", category: "Body & Paint", keywords: ["dent", "ding", "paintless dent", "pdr", "hail damage"], trade: "auto-body", itemId: "pdr-dent-repair", unit: "each", defaultQuantity: 1 },
   { job_type: "auto.panel_respray", category: "Body & Paint", keywords: ["respray", "repaint a panel", "panel paint", "paint one panel", "door paint", "fender paint"], trade: "auto-body", itemId: "panel-respray", unit: "each", defaultQuantity: 1 },
   { job_type: "auto.full_respray", category: "Body & Paint", keywords: ["full respray", "paint my car", "repaint my car", "whole car paint", "paint the whole car", "car paint job"], trade: "auto-body", itemId: "full-respray", unit: "each", defaultQuantity: 1 },
+  // "wrap" alone means the full job; partial and removal carry priority 1 and
+  // also veto the full entry, so "removing an old wrap" can never quote a
+  // whole colour change.
+  { job_type: "auto.wrap_full", category: "Body & Paint", keywords: ["wrap", "car wrap", "wrap car", "wrap my car", "vinyl wrap", "full wrap", "colour change wrap", "color change wrap", "wrapping"], trade: "auto-body", itemId: "vehicle-wrap-full", unit: "each", defaultQuantity: 1, notIfContains: ["partial wrap", "panel wrap", "half wrap", "hood wrap", "roof wrap", "remove", "removal", "removing", "strip", "take off"] },
+  { job_type: "auto.wrap_partial", category: "Body & Paint", keywords: ["partial wrap", "panel wrap", "half wrap", "hood wrap", "roof wrap", "accent wrap", "chrome delete"], trade: "auto-body", itemId: "vehicle-wrap-partial", unit: "each", defaultQuantity: 1, priority: 1 },
+  { job_type: "auto.wrap_removal", category: "Body & Paint", keywords: ["wrap removal", "remove wrap", "remove the wrap", "removing wrap", "removing an old wrap", "take off wrap", "strip wrap", "old wrap"], trade: "auto-body", itemId: "vehicle-wrap-removal", unit: "each", defaultQuantity: 1, priority: 1 },
   { job_type: "auto.collision", category: "Body & Paint", keywords: ["collision", "accident damage", "fender bender", "body damage", "quarter panel", "replace fender", "replace door skin"], trade: "auto-body", itemId: "collision-panel-replacement", unit: "each", defaultQuantity: 1 },
 
   // Glass

@@ -160,6 +160,9 @@ const REFERENCE: Record<string, Ref> = {
   "panel-respray": { low: 200, high: 1500 },
   "full-respray": { low: 1500, high: 5000 },
   "collision-panel-replacement": { low: 600, high: 2000 },
+  "vehicle-wrap-full": { low: 2000, high: 6000 },
+  "vehicle-wrap-partial": { low: 500, high: 2000 },
+  "vehicle-wrap-removal": { low: 300, high: 1500 },
   // glass
   "windshield-replacement": { low: 250, high: 800 },
   "windshield-chip-repair": { low: 60, high: 150 },

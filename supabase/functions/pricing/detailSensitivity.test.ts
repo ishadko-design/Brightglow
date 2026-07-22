@@ -45,6 +45,9 @@ const CASES: Case[] = [
   { base: "replace windows", detailed: "replace 6 windows", lever: "window count" },
   { base: "install solar panels", detailed: "install 32 solar panels", lever: "panel count" },
   { base: "install outlets", detailed: "install 5 outlets", lever: "outlet count" },
+  // Auto: the chat asks full / partial / removal, so that answer must land.
+  { base: "wrap car", detailed: "wrap car, partial wrap", lever: "wrap coverage" },
+  { base: "wrap car", detailed: "wrap car, removing an old wrap", lever: "wrap vs removal" },
   // Scope words, not sizes.
   { base: "replace windows", detailed: "replace windows, glass only", lever: "replacement scope" },
 ];

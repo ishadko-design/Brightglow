@@ -412,6 +412,24 @@ export const COST_CATALOG: CostCatalogEntry[] = [
   // sanity: collision panel replaced $600–2,000
   { itemId: "collision-panel-replacement", trade: "auto-body", description: "Collision panel replaced + painted", unit: "each", soc: BODY_REPAIRER, laborHours: b(4, 6, 9.5), materials: b(300, 600, 1200) },
 
+  // Vinyl wrap, added 2026-07-22 — "Wrap car" returned results with no price
+  // line at all. It's a standard, well-published service, and wrap shops quote
+  // it off a posted hourly rate plus film, which is exactly this engine's
+  // shape. Priced under auto-body rather than detailing because the trade bills
+  // $75-130/hr for it; auto-body's burden lands at ~$90/hr against that, while
+  // detailing's vehicle-cleaner wage would compute ~$56/hr.
+  //
+  // Full / partial / removal are three items on purpose: the clarifying chat
+  // already asks which one this is, and that answer has to move the price.
+  // sanity: full wrap $2,000–6,000 (sedan $2,000–3,500, SUV/truck $3,500–6,500;
+  // exotics with premium film run past $8,000 and are out of band deliberately)
+  { itemId: "vehicle-wrap-full", trade: "auto-body", description: "Full vehicle vinyl wrap, colour change", unit: "each", soc: BODY_REPAIRER, laborHours: b(16, 26, 40), materials: b(700, 1000, 1800) },
+  // sanity: partial/panel wrap $500–2,000 (hood, roof, accents)
+  { itemId: "vehicle-wrap-partial", trade: "auto-body", description: "Partial or panel vinyl wrap (hood, roof, accents)", unit: "each", soc: BODY_REPAIRER, laborHours: b(4, 8, 14), materials: b(150, 300, 650) },
+  // Age is the real driver: a wrap under 3 years peels clean, a sun-baked
+  // 5-year-old one can exceed $2,000. sanity: $300–1,500
+  { itemId: "vehicle-wrap-removal", trade: "auto-body", description: "Vinyl wrap removal, incl. adhesive cleanup", unit: "each", soc: BODY_REPAIRER, laborHours: b(4, 6.5, 11), materials: b(20, 50, 120) },
+
   // --- glass -------------------------------------------------------------
   // sanity: windshield replaced $250–800 (avg ~$450)
   { itemId: "windshield-replacement", trade: "auto-glass", description: "Windshield replacement", unit: "each", soc: GLASS_INSTALLER, laborHours: b(1.2, 1.8, 2.8), materials: b(180, 290, 520) },

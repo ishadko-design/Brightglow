@@ -142,6 +142,30 @@ export const GROUND_TRUTH: GroundTruthCase[] = [
 
   // === AUTO =============================================================
   {
+    // Reported 2026-07-22: "Wrap car" showed results with no price line at all.
+    query: "wrap my car",
+    category: "Body & Paint",
+    expectJobType: "auto.wrap_full",
+    low: 2000,
+    high: 6000,
+    source: "Wrapmate / vinylwrapro / CarWrapHub 2026 (sedan $2k-3.5k, SUV $3.5k-6.5k)",
+    vertical: "auto",
+  },
+  {
+    // Banded to the STANDARD sedan/small-SUV case, which is what the engine
+    // assumes when the user names no vehicle. The full published span runs
+    // $300 (compact) to $1,500+ (box truck, sun-baked film), but scoring
+    // against that put the midpoint at $900 — a vehicle nobody defaulted to —
+    // and made a correct $599 look 33% low.
+    query: "removing an old wrap",
+    category: "Body & Paint",
+    expectJobType: "auto.wrap_removal",
+    low: 500,
+    high: 900,
+    source: "vinylwrapro / RM Window Tint / Yeahgor 2026 (sedan & small SUV)",
+    vertical: "auto",
+  },
+  {
     query: "brake pads and rotors",
     category: "Repair",
     expectJobType: "auto.brakes_pads_rotors",
