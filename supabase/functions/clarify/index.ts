@@ -27,6 +27,7 @@
 
 import Anthropic from "npm:@anthropic-ai/sdk";
 import { CATEGORY_GENERAL, COUNTABLE_NOUNS, JOB_TYPE_TAXONOMY } from "../pricing/pricingEngine.ts";
+import { GENERIC_REPLIES, normalizeQuickReplies } from "./quickReplies.ts";
 
 const APP_TOKEN = Deno.env.get("APP_TOKEN") ?? "";
 const ANTHROPIC_API_KEY = Deno.env.get("ANTHROPIC_API_KEY") ?? "";
@@ -73,9 +74,21 @@ photo — that may be after a single question. Keep asking (up to the limit) onl
 while the request still straddles clearly different businesses or services.
 Never pad to the limit with low-value questions.
 
-Question style: one per turn, plain non-technical language, under 20 words,
-2-4 short quick_replies when natural options exist. Never ask for contact info,
-address, or timing.
+Question style: one per turn, plain non-technical language, under 20 words.
+Never ask for contact info, address, or timing.
+
+EVERY question MUST ship with 2-4 quick_replies. This is not optional and an
+empty list is never acceptable — tapping is the whole interaction on a phone,
+and a question with no options strands the user at a keyboard.
+- Either/or question? The options ARE the alternatives you just named. Asking
+  "is it inside the house, or the main line to the street?" and returning no
+  options is the exact failure this rule exists to stop (reported 2026-07-22).
+- Quantity or size? Offer representative values ("Under 20 ft", "20-50 ft",
+  "Over 50 ft"), not an open prompt.
+- Genuinely open ("describe the noise")? Then rephrase it as a choice, or offer
+  the likeliest answers plus "Something else".
+Add "Not sure" as the last option whenever a homeowner plausibly wouldn't know.
+Keep each label under 4 words so it fits a chip.
 
 TRUST THE PHOTO: when the request carries a "(Visible in the user's photo: …)"
 note, treat every attribute it states as ALREADY ESTABLISHED and never ask what
@@ -162,6 +175,11 @@ const SCHEMA = {
   properties: {
     action: { type: "string", enum: ["ask", "done"] },
     question: { type: "string" },
+    // NB: no minItems/maxItems here. They look like the obvious fix for the
+    // empty-chips bug, but the structured-output API rejects the schema
+    // outright with them present and every turn 502s (caught 2026-07-22 before
+    // it reached anyone). The guarantee lives in the prompt and in the retry
+    // in retryQuickReplies instead.
     quick_replies: { type: "array", items: { type: "string" } },
     vertical: { type: "string", enum: ["home", "auto_moto", ""] },
     category: { type: "string", enum: [...ALL_CATEGORIES, ""] },
@@ -193,6 +211,46 @@ function json(payload: unknown, status = 200): Response {
 /// category the pricing engine doesn't know are match-only.
 function isPriceable(vertical: string, category: string): boolean {
   return vertical === "home" && HOME_CATEGORIES.includes(category);
+}
+
+/** Ask the model for options for a question it already produced without them.
+ *  Falls back to a generic tappable set if this call also comes up short —
+ *  never returns fewer than two, since one option is as much a dead end as
+ *  none. Never throws: chips are an enhancement, not a reason to fail the turn. */
+async function retryQuickReplies(question: string): Promise<string[]> {
+  try {
+    const client = new Anthropic({ apiKey: ANTHROPIC_API_KEY, timeout: 8_000, maxRetries: 0 });
+    const r = await client.messages.create({
+      model: "claude-sonnet-5",
+      max_tokens: 150,
+      thinking: { type: "disabled" },
+      system:
+        'Return 2-4 short tappable answer options for the question, as JSON ' +
+        '{"quick_replies":["..."]}. For an either/or question the options are ' +
+        'the alternatives it names. Each label under 4 words, no punctuation. ' +
+        'Add "Not sure" last when someone plausibly would not know.',
+      output_config: {
+        format: {
+          type: "json_schema",
+          schema: {
+            type: "object",
+            properties: {
+              quick_replies: { type: "array", items: { type: "string" } },
+            },
+            required: ["quick_replies"],
+            additionalProperties: false,
+          },
+        },
+      },
+      messages: [{ role: "user", content: question }],
+    });
+    const text = r.content.find((b) => b.type === "text")?.text ?? "";
+    const { replies, usable } = normalizeQuickReplies(JSON.parse(text).quick_replies);
+    if (usable) return replies;
+  } catch (err) {
+    console.error("clarify: quick-reply retry failed", err);
+  }
+  return GENERIC_REPLIES;
 }
 
 Deno.serve(async (req) => {
@@ -274,10 +332,23 @@ Deno.serve(async (req) => {
   }
 
   if (parsed.action === "ask" && parsed.question) {
+    // Last line of defence for the empty-chips bug. The prompt demands options,
+    // but nothing enforces that, and a question with nothing to tap is a dead
+    // end on a phone.
+    //
+    // Recovery is a second, narrowly-scoped model call rather than splitting the
+    // question's own "A, or B?" with a regex: that produces mid-phrase labels
+    // ("This pipe inside the") which look broken. This path is rare, so the
+    // extra ~1s is paid almost never.
+    let { replies, usable } = normalizeQuickReplies(parsed.quick_replies);
+    if (!usable) {
+      console.log("clarify: empty quick_replies", JSON.stringify({ question: parsed.question }));
+      replies = await retryQuickReplies(parsed.question);
+    }
     return json({
       action: "ask",
       question: parsed.question,
-      quick_replies: (parsed.quick_replies ?? []).slice(0, 4),
+      quick_replies: replies,
       vertical: parsed.vertical ?? "",
       category: parsed.category ?? "",
     });
