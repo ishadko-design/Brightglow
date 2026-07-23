@@ -110,7 +110,7 @@ export const COST_CATALOG: CostCatalogEntry[] = [
   // pricing $2,410, flagged by calibration.test.ts 2026-07-16).
   { itemId: "tankless-water-heater-install", trade: "plumbing", description: "Tankless water heater, incl. venting/gas-line work", unit: "project", soc: PLUMBER, laborHours: b(8, 12, 20), materials: b(1300, 2100, 3400) },
   // sanity: faucet/toilet swap $150–600 installed
-  { itemId: "fixture-install", trade: "plumbing", description: "Replace one plumbing fixture (faucet, toilet, sink)", unit: "each", soc: PLUMBER, laborHours: b(1, 2, 3), materials: b(120, 250, 600) },
+  { itemId: "fixture-install", trade: "plumbing", description: "Replace one plumbing fixture (faucet, toilet, sink)", unit: "each", soc: PLUMBER, laborHours: b(0.55, 1.1, 1.65), materials: b(66, 137.5, 330), setup: { hours: b(0.45, 0.9, 1.35), materials: b(54, 112.5, 270) } },
   // sanity: leak/clog service call $150–700
   { itemId: "pipe-repair", trade: "plumbing", description: "Localized pipe/drain repair or clog clearing", unit: "project", soc: PLUMBER, laborHours: b(1.5, 3, 6), materials: b(30, 80, 250) },
   // Plumbing REPAIRS, added 2026-07-22. The category modelled installs only, so
@@ -150,9 +150,9 @@ export const COST_CATALOG: CostCatalogEntry[] = [
   // after-hours multiplier, which the engine cannot express yet)
   { itemId: "burst-pipe-repair", trade: "plumbing", description: "Burst or frozen pipe repair, per section", unit: "each", soc: PLUMBER, laborHours: b(1, 2, 4), materials: b(40, 110, 350), setup: { hours: b(1.5, 2.5, 4), materials: b(30, 70, 180) } },
   // sanity: whole-house PEX repipe $4,000–15,000 for ~1,500 sq ft
-  { itemId: "whole-house-repipe-pex", trade: "plumbing", description: "Whole-house PEX repipe", unit: "sq ft", soc: PLUMBER, laborHours: b(0.03, 0.05, 0.08), materials: b(0.8, 1.5, 2.5) },
+  { itemId: "whole-house-repipe-pex", trade: "plumbing", description: "Whole-house PEX repipe", unit: "sq ft", soc: PLUMBER, laborHours: b(0.027, 0.045, 0.072), materials: b(0.72, 1.35, 2.25), setup: { hours: b(4.5, 7.5, 12), materials: b(120, 225, 375) } },
   // sanity: sewer line replacement $50–250 per linear foot (open trench)
-  { itemId: "sewer-line-replacement", trade: "plumbing", description: "Sewer lateral replacement, open trench", unit: "linear foot", soc: PLUMBER, laborHours: b(0.5, 0.8, 1.2), materials: b(15, 30, 60) },
+  { itemId: "sewer-line-replacement", trade: "plumbing", description: "Sewer lateral replacement, open trench", unit: "linear foot", soc: PLUMBER, laborHours: b(0.35, 0.56, 0.84), materials: b(10.5, 21, 42), setup: { hours: b(7.5, 12, 18), materials: b(225, 450, 900) } },
   // category-general fallback: one plumber, small parts allowance
   { itemId: "plumber-hourly", trade: "plumbing", description: "General plumbing labor", unit: "hour", soc: PLUMBER, laborHours: b(1, 1, 1), materials: b(0, 10, 30) },
   // vanity JOB_COMPONENT; mid-grade faucet included
@@ -162,7 +162,7 @@ export const COST_CATALOG: CostCatalogEntry[] = [
   // sanity: 200A panel upgrade $1,800–4,000 (permit/utility coordination in hours)
   { itemId: "panel-upgrade-200amp", trade: "electrical", description: "200-amp service panel upgrade", unit: "project", soc: ELECTRICIAN, laborHours: b(8, 12, 18), materials: b(800, 1300, 2200) },
   // sanity: new/replaced outlet $100–350
-  { itemId: "outlet-installation", trade: "electrical", description: "Install or replace an outlet", unit: "each", soc: ELECTRICIAN, laborHours: b(0.75, 1.25, 2.5), materials: b(10, 25, 80) },
+  { itemId: "outlet-installation", trade: "electrical", description: "Install or replace an outlet", unit: "each", soc: ELECTRICIAN, laborHours: b(0.4125, 0.6875, 1.375), materials: b(5.5, 13.75, 44), setup: { hours: b(0.3375, 0.5625, 1.125), materials: b(4.5, 11.25, 36) } },
   // sanity: ceiling fan install (fan customer-supplied) $150–400
   { itemId: "ceiling-fan-install", trade: "electrical", description: "Install ceiling fan on existing box (fan not included)", unit: "each", soc: ELECTRICIAN, laborHours: b(1.5, 2.5, 4), materials: b(0, 20, 80) },
   // sanity: Level-2 EV charger $1,000–2,500 installed incl. unit
@@ -182,11 +182,11 @@ export const COST_CATALOG: CostCatalogEntry[] = [
   // netting them out would understate every quote the business actually sends.
   // sanity: $850–1,550 per installed panel ($17k–31k for a typical 20-panel,
   // 8 kW system)
-  { itemId: "solar-panel-install", trade: "electrical", description: "Rooftop solar PV, per panel, incl. inverter share, racking and permitting", unit: "each", soc: ELECTRICIAN, laborHours: b(1.2, 1.8, 2.6), materials: b(760, 1000, 1350) },
+  { itemId: "solar-panel-install", trade: "electrical", description: "Rooftop solar PV, per panel, incl. inverter share, racking and permitting", unit: "each", soc: ELECTRICIAN, laborHours: b(0.9, 1.35, 1.95), materials: b(570, 750, 1012.5), setup: { hours: b(6, 9, 13), materials: b(3800, 5000, 6750) } },
   // sanity: whole-house rewire $4–10 per sq ft
-  { itemId: "whole-house-rewire", trade: "electrical", description: "Whole-house rewire", unit: "sq ft", soc: ELECTRICIAN, laborHours: b(0.04, 0.06, 0.09), materials: b(1, 1.8, 3) },
+  { itemId: "whole-house-rewire", trade: "electrical", description: "Whole-house rewire", unit: "sq ft", soc: ELECTRICIAN, laborHours: b(0.036, 0.054, 0.081), materials: b(0.9, 1.62, 2.7), setup: { hours: b(6, 9, 13.5), materials: b(150, 270, 450) } },
   // sanity: light fixture swap $75–250 (fixture customer-supplied)
-  { itemId: "light-fixture-install", trade: "electrical", description: "Install light fixture (fixture not included)", unit: "each", soc: ELECTRICIAN, laborHours: b(0.75, 1.5, 2.5), materials: b(5, 20, 60) },
+  { itemId: "light-fixture-install", trade: "electrical", description: "Install light fixture (fixture not included)", unit: "each", soc: ELECTRICIAN, laborHours: b(0.4125, 0.825, 1.375), materials: b(2.75, 11, 33), setup: { hours: b(0.3375, 0.675, 1.125), materials: b(2.25, 9, 27) } },
   { itemId: "electrician-hourly", trade: "electrical", description: "General electrical labor", unit: "hour", soc: ELECTRICIAN, laborHours: b(1, 1, 1), materials: b(0, 10, 30) },
   // TV mounting — an installer/handyman job, not a licensed electrician, so it
   // prices on the general-maintenance wage. Added 2026-07-16: "install tv" had
@@ -209,7 +209,7 @@ export const COST_CATALOG: CostCatalogEntry[] = [
   // sanity: ducted heat pump $4,500–9,500
   { itemId: "heat-pump-installed", trade: "hvac", description: "Ducted heat pump system", unit: "project", soc: HVAC_TECH, laborHours: b(10, 16, 24), materials: b(2800, 4500, 8000) },
   // sanity: ductless mini-split $2,000–4,000 per zone
-  { itemId: "mini-split-per-zone", trade: "hvac", description: "Ductless mini-split, per zone", unit: "each", soc: HVAC_TECH, laborHours: b(4, 7, 10), materials: b(1200, 2000, 3200) },
+  { itemId: "mini-split-per-zone", trade: "hvac", description: "Ductless mini-split, per zone", unit: "each", soc: HVAC_TECH, laborHours: b(2.8, 4.9, 7), materials: b(840, 1400, 2240), setup: { hours: b(1.2, 2.1, 3), materials: b(360, 600, 960) } },
   // sanity: smart thermostat $200–500 installed incl. unit
   { itemId: "thermostat-installation-smart", trade: "hvac", description: "Smart thermostat, incl. unit", unit: "each", soc: HVAC_TECH, laborHours: b(0.75, 1.25, 2), materials: b(120, 220, 350) },
   // sanity: furnace/AC repair visit $150–800
@@ -219,15 +219,15 @@ export const COST_CATALOG: CostCatalogEntry[] = [
   // --- paint -----------------------------------------------------------
   // Per sq ft of room FLOOR area (matches the taxonomy's 250 sq ft room
   // default): walls + trim, two coats. sanity: $300–800 per average room
-  { itemId: "paint-interior-labor", trade: "paint", description: "Interior painting, walls + trim, per sq ft of floor area", unit: "sq ft", soc: PAINTER, laborHours: b(0.016, 0.024, 0.035), materials: b(0.25, 0.45, 0.8) },
+  { itemId: "paint-interior-labor", trade: "paint", description: "Interior painting, walls + trim, per sq ft of floor area", unit: "sq ft", soc: PAINTER, laborHours: b(0.0112, 0.0168, 0.0245), materials: b(0.175, 0.315, 0.56), setup: { hours: b(1.2, 1.8, 2.625), materials: b(18.75, 33.75, 60) } },
   // Per sq ft of paintable siding. sanity: 1,500 sq ft house $2,000–5,000
-  { itemId: "paint-exterior-labor", trade: "paint", description: "Exterior painting, per sq ft of siding", unit: "sq ft", soc: PAINTER, laborHours: b(0.015, 0.025, 0.04), materials: b(0.4, 0.7, 1.2) },
+  { itemId: "paint-exterior-labor", trade: "paint", description: "Exterior painting, per sq ft of siding", unit: "sq ft", soc: PAINTER, laborHours: b(0.012, 0.02, 0.032), materials: b(0.32, 0.56, 0.96), setup: { hours: b(4.5, 7.5, 12), materials: b(120, 210, 360) } },
   // sanity: kitchen cabinet spray-refinish $1,500–4,000 (~25 LF)
-  { itemId: "cabinet-painting-spray", trade: "paint", description: "Cabinet spray painting, per linear foot of cabinetry", unit: "linear foot", soc: PAINTER, laborHours: b(1, 1.5, 2.5), materials: b(8, 15, 25) },
+  { itemId: "cabinet-painting-spray", trade: "paint", description: "Cabinet spray painting, per linear foot of cabinetry", unit: "linear foot", soc: PAINTER, laborHours: b(0.7, 1.05, 1.75), materials: b(5.6, 10.5, 17.5), setup: { hours: b(6, 9, 15), materials: b(48, 90, 150) } },
 
   // --- deck / framing / cabinetry (carpentry trades) ---------------------
   // sanity: pressure-treated deck $25–60 per sq ft built
-  { itemId: "pressure-treated-installed", trade: "deck", description: "Pressure-treated deck, framed + decked + rails", unit: "sq ft", soc: CARPENTER, laborHours: b(0.25, 0.35, 0.5), materials: b(8, 14, 22) },
+  { itemId: "pressure-treated-installed", trade: "deck", description: "Pressure-treated deck, framed + decked + rails", unit: "sq ft", soc: CARPENTER, laborHours: b(0.2125, 0.2975, 0.425), materials: b(6.8, 11.9, 18.7), setup: { hours: b(11.25, 15.75, 22.5), materials: b(360, 630, 990) } },
   // Deck REPAIR, added 2026-07-22. The trade had exactly one item — build a
   // whole deck — so "fix deck, replace some boards" priced a new 300 sq ft
   // deck at $14.4k, more than a full roof replacement, and no answer the
@@ -250,34 +250,34 @@ export const COST_CATALOG: CostCatalogEntry[] = [
   // mirroring the EPCI item this id was scoped to. sanity: $150–500 set-only
   { itemId: "bathroom-vanity-installation", trade: "cabinetry", description: "Set vanity cabinet, attach hardware (top/plumbing separate)", unit: "each", soc: CARPENTER, laborHours: b(2, 3, 5), materials: b(30, 60, 120) },
   // sanity: stock cabinets installed $200–500 per LF
-  { itemId: "stock-cabinets-installed", trade: "cabinetry", description: "Stock cabinets, supplied + installed", unit: "linear foot", soc: CARPENTER, laborHours: b(1, 1.5, 2.5), materials: b(80, 150, 300) },
+  { itemId: "stock-cabinets-installed", trade: "cabinetry", description: "Stock cabinets, supplied + installed", unit: "linear foot", soc: CARPENTER, laborHours: b(0.8, 1.2, 2), materials: b(64, 120, 240), setup: { hours: b(3, 4.5, 7.5), materials: b(240, 450, 900) } },
   // sanity: non-bearing interior wall framing $20–60 per LF
-  { itemId: "wall-framing", trade: "framing", description: "Wall framing, per linear foot", unit: "linear foot", soc: CARPENTER, laborHours: b(0.35, 0.6, 0.9), materials: b(4, 8, 14) },
+  { itemId: "wall-framing", trade: "framing", description: "Wall framing, per linear foot", unit: "linear foot", soc: CARPENTER, laborHours: b(0.2625, 0.45, 0.675), materials: b(3, 6, 10.5), setup: { hours: b(1.75, 3, 4.5), materials: b(20, 40, 70) } },
   // carpentry.general fallback — intentionally vague, always low confidence
   { itemId: "framing-labor-rate", trade: "framing", description: "General carpentry, per sq ft of project area", unit: "sq ft", soc: CARPENTER, laborHours: b(0.08, 0.15, 0.25), materials: b(1, 3, 8) },
 
   // --- roofing ---------------------------------------------------------
   // sanity: architectural shingles $4.50–8 per sq ft installed (tear-off incl.)
-  { itemId: "architectural-installed", trade: "roofing", description: "Architectural shingles, tear-off + install", unit: "sq ft", soc: ROOFER, laborHours: b(0.025, 0.035, 0.05), materials: b(2, 3, 4.5) },
+  { itemId: "architectural-installed", trade: "roofing", description: "Architectural shingles, tear-off + install", unit: "sq ft", soc: ROOFER, laborHours: b(0.0213, 0.0298, 0.0425), materials: b(1.7, 2.55, 3.825), setup: { hours: b(6.375, 8.925, 12.75), materials: b(510, 765, 1147.5) } },
   // sanity: standing-seam metal $8–16 per sq ft
-  { itemId: "metal-roofing-installed", trade: "roofing", description: "Metal roofing, tear-off + install", unit: "sq ft", soc: ROOFER, laborHours: b(0.04, 0.06, 0.09), materials: b(4.5, 7, 11) },
+  { itemId: "metal-roofing-installed", trade: "roofing", description: "Metal roofing, tear-off + install", unit: "sq ft", soc: ROOFER, laborHours: b(0.034, 0.051, 0.0765), materials: b(3.825, 5.95, 9.35), setup: { hours: b(10.2, 15.3, 22.95), materials: b(1147.5, 1785, 2805) } },
   // Whole-project band for unknown size/material — wide by design.
   // sanity: full replacement $6,000–18,000 (~1,700 sq ft equivalent)
   { itemId: "roof-replacement-total", trade: "roofing", description: "Full roof replacement, size/material unknown", unit: "project", soc: ROOFER, laborHours: b(40, 60, 90), materials: b(3500, 5500, 9000) },
   // Small-job overhead baked into hours. sanity: patch repair $300–1,200
-  { itemId: "roof-repair-patch", trade: "roofing", description: "Localized roof repair, per sq ft of patch", unit: "sq ft", soc: ROOFER, laborHours: b(0.06, 0.1, 0.16), materials: b(1.5, 3, 6) },
+  { itemId: "roof-repair-patch", trade: "roofing", description: "Localized roof repair, per sq ft of patch", unit: "sq ft", soc: ROOFER, laborHours: b(0.033, 0.055, 0.088), materials: b(0.825, 1.65, 3.3), setup: { hours: b(1.35, 2.25, 3.6), materials: b(33.75, 67.5, 135) } },
   // sanity: seamless aluminum gutters $6–14 per LF
-  { itemId: "gutter-install-aluminum", trade: "roofing", description: "Seamless aluminum gutters", unit: "linear foot", soc: ROOFER, laborHours: b(0.05, 0.08, 0.12), materials: b(3, 5, 8) },
+  { itemId: "gutter-install-aluminum", trade: "roofing", description: "Seamless aluminum gutters", unit: "linear foot", soc: ROOFER, laborHours: b(0.04, 0.064, 0.096), materials: b(2.4, 4, 6.4), setup: { hours: b(1.5, 2.4, 3.6), materials: b(90, 150, 240) } },
 
   // --- flooring ---------------------------------------------------------
   // sanity: solid hardwood $8–17 per sq ft installed
-  { itemId: "hardwood-installed", trade: "flooring", description: "Solid hardwood, supplied + installed", unit: "sq ft", soc: FLOOR_LAYER, laborHours: b(0.04, 0.06, 0.09), materials: b(4, 7, 11) },
+  { itemId: "hardwood-installed", trade: "flooring", description: "Solid hardwood, supplied + installed", unit: "sq ft", soc: FLOOR_LAYER, laborHours: b(0.0288, 0.0432, 0.0648), materials: b(2.88, 5.04, 7.92), setup: { hours: b(2.24, 3.36, 5.04), materials: b(224, 392, 616) } },
   // sanity: laminate $3–8 per sq ft installed
-  { itemId: "laminate-installed", trade: "flooring", description: "Laminate flooring, supplied + installed", unit: "sq ft", soc: FLOOR_LAYER, laborHours: b(0.025, 0.035, 0.05), materials: b(1.5, 3, 5) },
+  { itemId: "laminate-installed", trade: "flooring", description: "Laminate flooring, supplied + installed", unit: "sq ft", soc: FLOOR_LAYER, laborHours: b(0.0175, 0.0245, 0.035), materials: b(1.05, 2.1, 3.5), setup: { hours: b(1.5, 2.1, 3), materials: b(90, 180, 300) } },
   // sanity: luxury vinyl plank $4–9 per sq ft installed
-  { itemId: "lvp-installed", trade: "flooring", description: "Luxury vinyl plank, supplied + installed", unit: "sq ft", soc: FLOOR_LAYER, laborHours: b(0.025, 0.035, 0.05), materials: b(2, 3.5, 6) },
+  { itemId: "lvp-installed", trade: "flooring", description: "Luxury vinyl plank, supplied + installed", unit: "sq ft", soc: FLOOR_LAYER, laborHours: b(0.0175, 0.0245, 0.035), materials: b(1.4, 2.45, 4.2), setup: { hours: b(1.5, 2.1, 3), materials: b(120, 210, 360) } },
   // sanity: carpet incl. pad $3.50–8 per sq ft installed
-  { itemId: "carpet-installed", trade: "flooring", description: "Carpet + pad, supplied + installed", unit: "sq ft", soc: CARPET_INSTALLER, laborHours: b(0.015, 0.025, 0.04), materials: b(2, 4, 6.5) },
+  { itemId: "carpet-installed", trade: "flooring", description: "Carpet + pad, supplied + installed", unit: "sq ft", soc: CARPET_INSTALLER, laborHours: b(0.0105, 0.0175, 0.028), materials: b(1.4, 2.8, 4.55), setup: { hours: b(0.9, 1.5, 2.4), materials: b(120, 240, 390) } },
   // sanity: ceramic/porcelain tile $10–25 per sq ft installed
   // Per-unit bands pulled down to the MARGINAL rate and the job's fixed cost
   // moved into `setup` (2026-07-22): tear-out and haul-away of the old floor,
@@ -288,7 +288,7 @@ export const COST_CATALOG: CostCatalogEntry[] = [
   { itemId: "tile-installed", trade: "flooring", description: "Ceramic/porcelain tile, supplied + installed", unit: "sq ft", soc: TILE_SETTER, laborHours: b(0.055, 0.085, 0.13), materials: b(2.2, 4.4, 8), setup: { hours: b(3, 6, 10), materials: b(120, 260, 560) } },
   // 47-2043 is suppressed in many states — falls back to national wages.
   // sanity: sand + refinish $3–8 per sq ft
-  { itemId: "hardwood-refinishing", trade: "flooring", description: "Hardwood sand + refinish", unit: "sq ft", soc: FLOOR_SANDER, laborHours: b(0.03, 0.045, 0.07), materials: b(0.8, 1.5, 2.5) },
+  { itemId: "hardwood-refinishing", trade: "flooring", description: "Hardwood sand + refinish", unit: "sq ft", soc: FLOOR_SANDER, laborHours: b(0.0195, 0.0292, 0.0455), materials: b(0.52, 0.975, 1.625), setup: { hours: b(2.1, 3.15, 4.9), materials: b(56, 105, 175) } },
   // SCOPE_ADD_ONS — priced per sq ft of the base job's area
   // sanity: flooring tear-out + disposal $1–3 per sq ft
   { itemId: "flooring-removal-only", trade: "flooring", description: "Old flooring removal + disposal", unit: "sq ft", soc: FLOOR_LAYER, laborHours: b(0.015, 0.025, 0.04), materials: b(0.2, 0.4, 0.8) },
@@ -301,38 +301,38 @@ export const COST_CATALOG: CostCatalogEntry[] = [
   // Band is for a full-unit INSERT (frame stays). Glass-only and full-frame
   // tear-out are reached via windowScopeScale off this reference, not separate
   // rows. sanity: vinyl insert $500–1,300 installed
-  { itemId: "vinyl-window-replacement", trade: "windows", description: "Vinyl replacement window, insert", unit: "each", soc: CARPENTER, laborHours: b(2, 3, 4.5), materials: b(300, 540, 950) },
+  { itemId: "vinyl-window-replacement", trade: "windows", description: "Vinyl replacement window, insert", unit: "each", soc: CARPENTER, laborHours: b(1.5, 2.25, 3.375), materials: b(225, 405, 712.5), setup: { hours: b(0.5, 0.75, 1.125), materials: b(75, 135, 237.5) } },
   // sanity: bay/bow window $2,000–6,000 installed
-  { itemId: "bay-bow-window-replacement", trade: "windows", description: "Bay/bow window replacement", unit: "each", soc: CARPENTER, laborHours: b(8, 12, 18), materials: b(1200, 2200, 4000) },
+  { itemId: "bay-bow-window-replacement", trade: "windows", description: "Bay/bow window replacement", unit: "each", soc: CARPENTER, laborHours: b(6.8, 10.2, 15.3), materials: b(1020, 1870, 3400), setup: { hours: b(1.2, 1.8, 2.7), materials: b(180, 330, 600) } },
   // sanity: casement window $500–1,400 installed
-  { itemId: "casement-window-replacement", trade: "windows", description: "Casement window replacement", unit: "each", soc: CARPENTER, laborHours: b(2, 3, 4.5), materials: b(350, 600, 1000) },
+  { itemId: "casement-window-replacement", trade: "windows", description: "Casement window replacement", unit: "each", soc: CARPENTER, laborHours: b(1.5, 2.25, 3.375), materials: b(262.5, 450, 750), setup: { hours: b(0.5, 0.75, 1.125), materials: b(87.5, 150, 250) } },
   // Includes foundation cut + well. sanity: egress install $2,500–6,000
-  { itemId: "egress-window-installation", trade: "windows", description: "Egress window, incl. cut + well", unit: "each", soc: CARPENTER, laborHours: b(12, 18, 26), materials: b(1000, 1800, 3200) },
+  { itemId: "egress-window-installation", trade: "windows", description: "Egress window, incl. cut + well", unit: "each", soc: CARPENTER, laborHours: b(10.2, 15.3, 22.1), materials: b(850, 1530, 2720), setup: { hours: b(1.8, 2.7, 3.9), materials: b(150, 270, 480) } },
 
   // --- doors -----------------------------------------------------------
   // sanity: french door pair $1,500–4,500 installed
-  { itemId: "french-door-installation", trade: "doors", description: "French doors, supplied + installed", unit: "pair", soc: CARPENTER, laborHours: b(5, 8, 12), materials: b(1200, 2200, 4000) },
+  { itemId: "french-door-installation", trade: "doors", description: "French doors, supplied + installed", unit: "pair", soc: CARPENTER, laborHours: b(4, 6.4, 9.6), materials: b(960, 1760, 3200), setup: { hours: b(1, 1.6, 2.4), materials: b(240, 440, 800) } },
   // sanity: sliding patio door $1,200–3,500 installed
-  { itemId: "sliding-patio-door", trade: "doors", description: "Sliding patio door, supplied + installed", unit: "each", soc: CARPENTER, laborHours: b(4, 6, 9), materials: b(1000, 1700, 3000) },
+  { itemId: "sliding-patio-door", trade: "doors", description: "Sliding patio door, supplied + installed", unit: "each", soc: CARPENTER, laborHours: b(3, 4.5, 6.75), materials: b(750, 1275, 2250), setup: { hours: b(1, 1.5, 2.25), materials: b(250, 425, 750) } },
   // sanity: steel entry door $600–1,800 installed
-  { itemId: "exterior-door-steel", trade: "doors", description: "Steel exterior door, supplied + installed", unit: "each", soc: CARPENTER, laborHours: b(3, 5, 8), materials: b(350, 650, 1200) },
+  { itemId: "exterior-door-steel", trade: "doors", description: "Steel exterior door, supplied + installed", unit: "each", soc: CARPENTER, laborHours: b(2.25, 3.75, 6), materials: b(262.5, 487.5, 900), setup: { hours: b(0.75, 1.25, 2), materials: b(87.5, 162.5, 300) } },
   // sanity: hollow-core interior door $150–500 installed
-  { itemId: "interior-door-hollow-core", trade: "doors", description: "Hollow-core interior door, supplied + installed", unit: "each", soc: CARPENTER, laborHours: b(1.5, 2.5, 4), materials: b(80, 150, 280) },
+  { itemId: "interior-door-hollow-core", trade: "doors", description: "Hollow-core interior door, supplied + installed", unit: "each", soc: CARPENTER, laborHours: b(1.05, 1.75, 2.8), materials: b(56, 105, 196), setup: { hours: b(0.45, 0.75, 1.2), materials: b(24, 45, 84) } },
   // Specialty installers, not carpenters — general-maintenance wage is the
   // closest OEWS fit. sanity: single garage door $700–2,200 installed
-  { itemId: "garage-door-single", trade: "doors", description: "Single garage door, supplied + installed", unit: "each", soc: MAINTENANCE, laborHours: b(3, 4.5, 7), materials: b(600, 1000, 1800) },
+  { itemId: "garage-door-single", trade: "doors", description: "Single garage door, supplied + installed", unit: "each", soc: MAINTENANCE, laborHours: b(2.4, 3.6, 5.6), materials: b(480, 800, 1440), setup: { hours: b(0.6, 0.9, 1.4), materials: b(120, 200, 360) } },
 
   // --- landscaping -------------------------------------------------------
   // sanity: sod $1–2.50 per sq ft installed
-  { itemId: "sod-installation", trade: "landscaping", description: "Sod, supplied + installed", unit: "sq ft", soc: LANDSCAPER, laborHours: b(0.008, 0.012, 0.02), materials: b(0.4, 0.7, 1.1) },
+  { itemId: "sod-installation", trade: "landscaping", description: "Sod, supplied + installed", unit: "sq ft", soc: LANDSCAPER, laborHours: b(0.006, 0.009, 0.015), materials: b(0.3, 0.525, 0.825), setup: { hours: b(2, 3, 5), materials: b(100, 175, 275) } },
   // Size drives the huge spread; hours are crew-hours. sanity: $300–2,000
-  { itemId: "tree-removal", trade: "landscaping", description: "Tree removal, size unknown", unit: "each", soc: LANDSCAPER, laborHours: b(6, 14, 28), materials: b(50, 150, 400) },
+  { itemId: "tree-removal", trade: "landscaping", description: "Tree removal, size unknown", unit: "each", soc: LANDSCAPER, laborHours: b(4.2, 9.8, 19.6), materials: b(35, 105, 280), setup: { hours: b(1.8, 4.2, 8.4), materials: b(15, 45, 120) } },
   // sanity: irrigation $600–1,700 per zone
-  { itemId: "irrigation-system-per-zone", trade: "landscaping", description: "Irrigation system, per zone", unit: "each", soc: LANDSCAPER, laborHours: b(6, 10, 15), materials: b(250, 450, 800) },
+  { itemId: "irrigation-system-per-zone", trade: "landscaping", description: "Irrigation system, per zone", unit: "each", soc: LANDSCAPER, laborHours: b(4.2, 7, 10.5), materials: b(175, 315, 560), setup: { hours: b(1.8, 3, 4.5), materials: b(75, 135, 240) } },
   // sanity: paver patio $10–30 per sq ft
-  { itemId: "paver-patio-installation", trade: "landscaping", description: "Paver patio, incl. base prep", unit: "sq ft", soc: LANDSCAPER, laborHours: b(0.15, 0.25, 0.4), materials: b(4, 7, 12) },
+  { itemId: "paver-patio-installation", trade: "landscaping", description: "Paver patio, incl. base prep", unit: "sq ft", soc: LANDSCAPER, laborHours: b(0.117, 0.195, 0.312), materials: b(3.12, 5.46, 9.36), setup: { hours: b(6.6, 11, 17.6), materials: b(176, 308, 528) } },
   // sanity: mulch delivered + spread $45–130 per cu yd
-  { itemId: "mulch-installation", trade: "landscaping", description: "Mulch, delivered + spread", unit: "cubic yard", soc: LANDSCAPER, laborHours: b(0.5, 0.75, 1.2), materials: b(25, 40, 65) },
+  { itemId: "mulch-installation", trade: "landscaping", description: "Mulch, delivered + spread", unit: "cubic yard", soc: LANDSCAPER, laborHours: b(0.35, 0.525, 0.84), materials: b(17.5, 28, 45.5), setup: { hours: b(0.75, 1.125, 1.8), materials: b(37.5, 60, 97.5) } },
 
   // --- countertops (vanity JOB_COMPONENT) --------------------------------
   // sanity: laminate countertop $25–70 per sq ft installed
