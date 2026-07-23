@@ -633,9 +633,26 @@ export interface JobTypeEntry {
 // against estimationpro.ai/api/v1/costs this session — not guessed.
 export const JOB_TYPE_TAXONOMY: JobTypeEntry[] = [
   // Plumbing
-  { job_type: "plumbing.water_heater", category: "Plumbing", keywords: ["water heater"], trade: "plumbing", itemId: "water-heater-install", unit: "project", defaultQuantity: 1 },
+  // REPLACE entries carry vetoes for the symptoms that mean REPAIR. Without
+  // them "my toilet keeps running" matched the generic fixture entry on the
+  // word "toilet" and quoted a $433 swap for a $30 flapper (2026-07-22).
+  { job_type: "plumbing.water_heater", category: "Plumbing", keywords: ["water heater"], trade: "plumbing", itemId: "water-heater-install", unit: "project", defaultQuantity: 1, notIfContains: ["repair", "no hot water", "not heating", "pilot light", "thermocouple", "not enough hot water", "runs out fast", "popping noise"] },
+  // Plumbing REPAIRS. Symptom phrasings are the point: people describe what
+  // their house is doing, not which part failed. These carry priority 1 so a
+  // symptom always beats the bare noun ("faucet", "toilet") on the install
+  // entries. The LLM classifier is primary for typed text and picks from this
+  // same taxonomy, so the job_type existing at all is most of the fix.
+  { job_type: "plumbing.toilet_repair", category: "Plumbing", keywords: ["toilet keeps running", "running toilet", "toilet running", "toilet wont stop", "toilet won't stop", "toilet runs", "flapper", "fill valve", "flush valve", "toilet repair", "fix toilet", "fix my toilet", "toilet tune"], trade: "plumbing", itemId: "toilet-repair-internals", unit: "each", defaultQuantity: 1, priority: 1 },
+  { job_type: "plumbing.faucet_repair", category: "Plumbing", keywords: ["faucet dripping", "dripping faucet", "faucet drips", "leaky faucet", "leaking faucet", "faucet leaking", "dripping tap", "tap dripping", "faucet cartridge", "faucet repair", "fix faucet", "drips constantly"], trade: "plumbing", itemId: "faucet-repair-cartridge", unit: "each", defaultQuantity: 1, priority: 1 },
+  { job_type: "plumbing.water_heater_repair", category: "Plumbing", keywords: ["no hot water", "not enough hot water", "water heater repair", "water heater not heating", "pilot light", "thermocouple", "hot water runs out", "runs out fast", "water heater making noise", "popping noise"], trade: "plumbing", itemId: "water-heater-repair", unit: "each", defaultQuantity: 1, priority: 1 },
+  { job_type: "plumbing.toilet_reset", category: "Plumbing", keywords: ["toilet leaking at base", "leaking at base", "water around bottom of toilet", "puddle under toilet", "wax ring", "toilet wobbles", "toilet rocking", "toilet reset"], trade: "plumbing", itemId: "toilet-reset-wax-ring", unit: "each", defaultQuantity: 1, priority: 1 },
+  { job_type: "plumbing.shower_valve", category: "Plumbing", keywords: ["shower drips", "shower dripping", "shower valve", "shower cartridge", "shower handle", "tub faucet leaking", "no hot water in shower", "shower wont turn off", "shower won't turn off"], trade: "plumbing", itemId: "shower-valve-cartridge", unit: "each", defaultQuantity: 1, priority: 1 },
+  { job_type: "plumbing.garbage_disposal", category: "Plumbing", keywords: ["garbage disposal", "disposal jammed", "disposal humming", "disposal wont turn on", "insinkerator", "waste disposal", "disposer"], trade: "plumbing", itemId: "garbage-disposal-service", unit: "each", defaultQuantity: 1, priority: 1 },
+  { job_type: "plumbing.sump_pump", category: "Plumbing", keywords: ["sump pump", "sump pit", "basement flooding"], trade: "plumbing", itemId: "sump-pump-service", unit: "each", defaultQuantity: 1, priority: 1 },
+  { job_type: "plumbing.leak_detection", category: "Plumbing", keywords: ["leak detection", "find a leak", "hidden leak", "slab leak", "water bill", "water running in walls", "wet spot on ceiling", "damp drywall", "water meter spinning"], trade: "plumbing", itemId: "leak-detection", unit: "hour", defaultQuantity: 2, priority: 1 },
+  { job_type: "plumbing.burst_pipe", category: "Plumbing", keywords: ["burst pipe", "pipe burst", "frozen pipe", "frozen pipes", "pipe cracked", "cracked pipe", "water spraying", "emergency plumber", "pipe leaking behind wall"], trade: "plumbing", itemId: "burst-pipe-repair", unit: "each", defaultQuantity: 1, priority: 1 },
   { job_type: "plumbing.tankless_water_heater", category: "Plumbing", keywords: ["tankless", "on-demand water heater"], trade: "plumbing", itemId: "tankless-water-heater-install", unit: "project", defaultQuantity: 1, priority: 1 },
-  { job_type: "plumbing.fixture", category: "Plumbing", keywords: ["faucet", "toilet", "sink", "fixture"], trade: "plumbing", itemId: "fixture-install", unit: "each", defaultQuantity: 1 },
+  { job_type: "plumbing.fixture", category: "Plumbing", keywords: ["faucet", "toilet", "sink", "fixture"], trade: "plumbing", itemId: "fixture-install", unit: "each", defaultQuantity: 1, notIfContains: ["dripping", "drips", "keeps running", "running toilet", "wont stop", "won't stop", "leaking at base", "wax ring", "wobbles", "rocking", "cartridge", "flapper", "fill valve", "repair"] },
   { job_type: "plumbing.pipe_repair", category: "Plumbing", keywords: ["leak", "clog", "drain"], trade: "plumbing", itemId: "pipe-repair", unit: "project", defaultQuantity: 1 },
   { job_type: "plumbing.repipe", category: "Plumbing", keywords: ["repipe", "repiping"], trade: "plumbing", itemId: "whole-house-repipe-pex", unit: "sq ft", defaultQuantity: 1500 },
   { job_type: "plumbing.sewer_line", category: "Plumbing", keywords: ["sewer"], trade: "plumbing", itemId: "sewer-line-replacement", unit: "linear foot", defaultQuantity: 50 },

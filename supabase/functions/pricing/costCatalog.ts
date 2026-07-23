@@ -113,6 +113,42 @@ export const COST_CATALOG: CostCatalogEntry[] = [
   { itemId: "fixture-install", trade: "plumbing", description: "Replace one plumbing fixture (faucet, toilet, sink)", unit: "each", soc: PLUMBER, laborHours: b(1, 2, 3), materials: b(120, 250, 600) },
   // sanity: leak/clog service call $150–700
   { itemId: "pipe-repair", trade: "plumbing", description: "Localized pipe/drain repair or clog clearing", unit: "project", soc: PLUMBER, laborHours: b(1.5, 3, 6), materials: b(30, 80, 250) },
+  // Plumbing REPAIRS, added 2026-07-22. The category modelled installs only, so
+  // the most-called-about jobs in the trade either priced as a replacement or
+  // not at all: "my toilet keeps running" quoted a $433 fixture swap for a $30
+  // flapper, and "no hot water" returned nothing. Bands and setup shares from
+  // docs/pricing-research/anchors-verified.json (Fixr, HomeGuide, HomeAdvisor,
+  // Angi 2025-26).
+  //
+  // Setup carries most of these on purpose: a service call is mostly the truck
+  // roll and the diagnosis, so a second toilet on the same visit costs a
+  // fraction of the first. That is what the setupShare in the research measures.
+  // sanity: running-toilet repair $80–400 (flapper/fill valve/flush valve)
+  { itemId: "toilet-repair-internals", trade: "plumbing", description: "Running toilet — flapper, fill valve or flush valve", unit: "each", soc: PLUMBER, laborHours: b(0.2, 0.35, 0.6), materials: b(10, 20, 45), setup: { hours: b(1, 1.5, 2.2), materials: b(15, 30, 60) } },
+  // sanity: leaky faucet repair $100–400 (cartridge/washer/O-ring)
+  { itemId: "faucet-repair-cartridge", trade: "plumbing", description: "Leaky faucet — cartridge, washer or O-ring rebuild", unit: "each", soc: PLUMBER, laborHours: b(0.35, 0.6, 0.9), materials: b(18, 42, 75), setup: { hours: b(1.2, 2.05, 2.9), materials: b(25, 58, 105) } },
+  // "No hot water" is usually a $150–500 thermocouple, element, thermostat or
+  // T&P valve — not the $1,500–3,000 replacement it used to quote.
+  // sanity: water heater repair $150–900
+  { itemId: "water-heater-repair", trade: "plumbing", description: "Water heater repair — thermocouple, element, thermostat, T&P valve", unit: "each", soc: PLUMBER, laborHours: b(0.7, 1.2, 2.1), materials: b(25, 65, 190), setup: { hours: b(1.3, 1.8, 3.4), materials: b(25, 70, 210) } },
+  // sanity: pull-and-reset with new wax ring $150–350
+  { itemId: "toilet-reset-wax-ring", trade: "plumbing", description: "Toilet leaking at base — pull, reset, new wax ring", unit: "each", soc: PLUMBER, laborHours: b(0.4, 0.6, 0.9), materials: b(10, 18, 30), setup: { hours: b(1.2, 1.8, 2.6), materials: b(20, 35, 60) } },
+  // Sharply different from a $1,000–2,500 valve BODY replacement that opens the
+  // wall; default here unless the description mentions tile or wall access.
+  // sanity: shower/tub cartridge $100–400
+  { itemId: "shower-valve-cartridge", trade: "plumbing", description: "Shower/tub valve cartridge replacement", unit: "each", soc: PLUMBER, laborHours: b(0.3, 0.5, 0.9), materials: b(15, 35, 75), setup: { hours: b(1, 1.7, 2.6), materials: b(25, 50, 110) } },
+  // Two-tier: unjam/reset at the low end, full replacement at the high end.
+  // sanity: garbage disposal repair or replacement $150–650
+  { itemId: "garbage-disposal-service", trade: "plumbing", description: "Garbage disposal — unjam, repair or replace", unit: "each", soc: PLUMBER, laborHours: b(0.5, 0.9, 1.5), materials: b(30, 130, 350), setup: { hours: b(1, 1.6, 2.4), materials: b(20, 45, 100) } },
+  // sanity: sump pump repair or replacement $250–1,200
+  { itemId: "sump-pump-service", trade: "plumbing", description: "Sump pump repair or replacement", unit: "each", soc: PLUMBER, laborHours: b(1, 1.8, 3), materials: b(80, 240, 600), setup: { hours: b(1.2, 2, 3), materials: b(40, 90, 200) } },
+  // Genuinely billed as a DIAGNOSTIC, separate from whatever repair it leads to
+  // — the engine has no two-stage output yet, so this prices the finding only.
+  // sanity: leak detection $75–200 per hour
+  { itemId: "leak-detection", trade: "plumbing", description: "Hidden leak detection — acoustic/thermal, diagnosis only", unit: "hour", soc: PLUMBER, laborHours: b(1, 1, 1), materials: b(0, 5, 15), setup: { hours: b(0.4, 0.7, 1.2), materials: b(15, 35, 80) } },
+  // sanity: burst/frozen pipe repair $200–1,500 per section (before any
+  // after-hours multiplier, which the engine cannot express yet)
+  { itemId: "burst-pipe-repair", trade: "plumbing", description: "Burst or frozen pipe repair, per section", unit: "each", soc: PLUMBER, laborHours: b(1, 2, 4), materials: b(40, 110, 350), setup: { hours: b(1.5, 2.5, 4), materials: b(30, 70, 180) } },
   // sanity: whole-house PEX repipe $4,000–15,000 for ~1,500 sq ft
   { itemId: "whole-house-repipe-pex", trade: "plumbing", description: "Whole-house PEX repipe", unit: "sq ft", soc: PLUMBER, laborHours: b(0.03, 0.05, 0.08), materials: b(0.8, 1.5, 2.5) },
   // sanity: sewer line replacement $50–250 per linear foot (open trench)

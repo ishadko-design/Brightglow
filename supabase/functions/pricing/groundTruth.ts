@@ -140,6 +140,45 @@ export const GROUND_TRUTH: GroundTruthCase[] = [
     vertical: "home",
   },
 
+  // Plumbing REPAIRS, added 2026-07-22. Held out from the build sources
+  // (Fixr / HomeGuide / HomeAdvisor / Angi) on purpose — these come from
+  // Homewyse and Thumbtack, which disagree with them and with each other.
+  {
+    // Sources conflict hard: Thumbtack puts toilet repair at $159 average,
+    // Homewyse at $275-376 for a fuller "leaky toilet" scope that includes
+    // pulling the bowl. THIS query is the flapper/fill-valve job — the cheap
+    // end — so the band runs from Thumbtack's average to Homewyse's low rather
+    // than spanning both scopes and calling the midpoint truth.
+    query: "my toilet keeps running",
+    category: "Plumbing",
+    expectJobType: "plumbing.toilet_repair",
+    low: 159,
+    high: 311,
+    source: "Thumbtack $159 avg / Homewyse $311 low, 2026",
+    vertical: "home",
+    wide: true,
+  },
+  {
+    query: "faucet dripping",
+    category: "Plumbing",
+    expectJobType: "plumbing.faucet_repair",
+    low: 269,
+    high: 324,
+    source: "Homewyse 2026 (repair leaky faucet, incl. labor + materials)",
+    vertical: "home",
+  },
+  {
+    // The blind spot that mattered most: this used to quote a full heater
+    // replacement, or nothing at all.
+    query: "no hot water",
+    category: "Plumbing",
+    expectJobType: "plumbing.water_heater_repair",
+    low: 303,
+    high: 365,
+    source: "Homewyse 2026 (basic hot water heater repair)",
+    vertical: "home",
+  },
+
   // === AUTO =============================================================
   {
     // Reported 2026-07-22: "Wrap car" showed results with no price line at all.

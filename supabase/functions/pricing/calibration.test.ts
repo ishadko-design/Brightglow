@@ -39,6 +39,16 @@ const REFERENCE: Record<string, Ref> = {
   "sewer-line-replacement": { low: 50, high: 250 },
   "plumber-hourly": { low: 75, high: 200, loose: true },
   "faucet-install-plumbing": { low: 150, high: 450 },
+  // Plumbing repairs — bands from docs/pricing-research/anchors-verified.json
+  "toilet-repair-internals": { low: 80, high: 400 },
+  "faucet-repair-cartridge": { low: 100, high: 400 },
+  "water-heater-repair": { low: 150, high: 900 },
+  "toilet-reset-wax-ring": { low: 150, high: 350 },
+  "shower-valve-cartridge": { low: 100, high: 400 },
+  "garbage-disposal-service": { low: 150, high: 650 },
+  "sump-pump-service": { low: 250, high: 1200 },
+  "leak-detection": { low: 75, high: 200 },
+  "burst-pipe-repair": { low: 200, high: 1500 },
   // electrical
   "panel-upgrade-200amp": { low: 1800, high: 4000 },
   "outlet-installation": { low: 100, high: 350 },
