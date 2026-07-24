@@ -188,7 +188,7 @@ export interface ScopeScale {
   materials: number;
   labor: number;
   /** Canonical label surfaced to the user, e.g. "glass only". */
-  scope: "glass only" | "full-frame replacement";
+  scope: "glass only" | "full-frame replacement" | "new install";
 }
 
 /** Which replacement scope the words assert, as multipliers off the item's
@@ -212,19 +212,40 @@ export function windowScopeScale(itemId: string, description: string): ScopeScal
   return null;
 }
 
+/** Recessed lighting is priced as a RETROFIT — a can into an existing ceiling
+ *  with power nearby — because that is what most requests mean and what the
+ *  consumer aggregators publish ($125-330/light). A from-scratch install runs
+ *  ~2.5x that (Homewyse $380-529) for the new circuit, wire fishing, and
+ *  cutting and patching the ceiling. The engine cannot tell them apart from
+ *  "install recessed lighting" alone, so the clarify chat asks and writes the
+ *  answer into the description; this reads it. Absent signal → retrofit, the
+ *  common case. New-install cost is mostly labor, hence the split factors.
+ *  NB: the signals deliberately avoid "new circuit" — that phrase is a keyword
+ *  of the dedicated-circuit job and would steal the routing. The clarify chat
+ *  is told to write "no existing light there" instead. */
+export function recessedInstallScale(itemId: string, description: string): ScopeScale | null {
+  if (itemId !== "recessed-light-install") return null;
+  const t = ` ${description.toLowerCase()} `;
+  const newInstall =
+    /\b(no light there|no existing (light|fixture)|no existing|from scratch|brand[- ]new spot|add lights|adding lights|never had a light|no power there)\b/;
+  if (newInstall.test(t)) return { materials: 1.5, labor: 2.6, scope: "new install" };
+  return null;
+}
+
 /** Fold a stated size and a stated scope into the single SizeScale the item
  *  computation consumes — both are plain multipliers on materials and labor,
  *  so they compose. Null when neither was stated (the catalog band stands). */
 export function combineSizeScope(
   itemId: string,
   size: SizeScale | null,
-  scope: ScopeScale | null,
+  ...scopes: (ScopeScale | null)[]
 ): SizeScale | null {
-  if (!size && !scope) return null;
+  const present = scopes.filter((s): s is ScopeScale => s != null);
+  if (!size && present.length === 0) return null;
   return {
     itemId,
-    materials: (size?.materials ?? 1) * (scope?.materials ?? 1),
-    labor: (size?.labor ?? 1) * (scope?.labor ?? 1),
+    materials: (size?.materials ?? 1) * present.reduce((m, s) => m * s.materials, 1),
+    labor: (size?.labor ?? 1) * present.reduce((l, s) => l * s.labor, 1),
   };
 }
 

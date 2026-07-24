@@ -25,6 +25,7 @@ import {
   emergencyFactor,
   laborOnlyEstimate,
   qualityTier,
+  recessedInstallScale,
   sizeScale,
   windowScopeScale,
 } from "./inHouseEngine.ts";
@@ -144,7 +145,8 @@ export function estimateInHouse(input: EstimateInput): EstimateResult {
 
   const tier = qualityTier(description);
   const size = sizeScale(entry.itemId, description);
-  const scope = windowScopeScale(entry.itemId, description);
+  const scope = windowScopeScale(entry.itemId, description) ??
+    recessedInstallScale(entry.itemId, description);
   const sizing = combineSizeScope(entry.itemId, size, scope);
 
   const componentTrades = [

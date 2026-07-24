@@ -131,7 +131,9 @@ Per-vertical priorities:
   pane vs. the whole window incl. frame vs. a full-frame tear-out), and
   approximate size (W×H) and how many; flooring -> material + area + whether the
   old floor is removed; roof -> material + approx area; vanity -> width +
-  whether faucet/top are replaced.
+  whether faucet/top are replaced; recessed lighting -> how many, AND whether
+  there is already a light there or it's a brand-new spot (that doubles the
+  per-light price).
 
 Finishing (action "done") — fill EVERY field:
 - vertical: "home" | "auto_moto".
@@ -156,7 +158,11 @@ Auto: one of ${AUTO_SERVICES.join(", ")}. Use "" only if nothing fits.
   / "keep existing faucet". For an opening, state the replacement scope in these
   exact words so it prices right: "glass only" (just the pane/foggy seal),
   "full frame replacement" (tear out to the rough opening), or nothing for a
-  standard insert. Write every measurement as ONE number, never a range: the
+  standard insert. For RECESSED / can lighting, the price turns on whether a
+  light is already there: write "no existing light there" for a brand-new spot
+  (new hole, wire fishing, ceiling patch — about 2x), or nothing for a swap or
+  a spot with power already present. Do NOT write "new circuit" for this — that
+  phrase means a different job. Write every measurement as ONE number, never a range: the
   engine reads the last number it sees, so "100-300 sq ft" silently prices the
   top end. If the user answered with a range, record its midpoint ("200 sq ft").
   Only facts the user explicitly stated or confirmed — never guess.

@@ -6,18 +6,25 @@ struct CategoryItem: Identifiable {
     let assetName: String
 }
 
+// Ordered by how often U.S. homeowners actually hire a pro for the work.
+// The urgent "big three" trades lead (electricians ~38%, HVAC ~37%, plumbers
+// ~35% of homeowners hiring a specialty pro; plumbing is the #1 home-service
+// search). Then high-frequency recurring maintenance (landscaping is the most
+// common maintenance job; pest control converts fastest), appliance repair, and
+// handyman/carpentry + painting (common but DIY-heavy). Big-ticket, infrequent
+// exterior/structural jobs — roofing, flooring, windows & doors — come last.
 let categoryItems: [CategoryItem] = [
     CategoryItem(category: .plumbing,     assetName: "fig_plumbing"),
     CategoryItem(category: .electrical,   assetName: "fig_electrical"),
-    CategoryItem(category: .appliances,   assetName: "fig_appliances"),
-    CategoryItem(category: .painting,     assetName: "fig_painting"),
     CategoryItem(category: .hvac,         assetName: "fig_hvac"),
+    CategoryItem(category: .landscaping,  assetName: "fig_landscaping"),
+    CategoryItem(category: .pestControl,  assetName: "fig_pest"),
+    CategoryItem(category: .appliances,   assetName: "fig_appliances"),
     CategoryItem(category: .carpentry,    assetName: "fig_carpentry"),
+    CategoryItem(category: .painting,     assetName: "fig_painting"),
     CategoryItem(category: .roofing,      assetName: "fig_roofing"),
     CategoryItem(category: .flooring,     assetName: "fig_flooring"),
     CategoryItem(category: .windowsDoors, assetName: "fig_windows"),
-    CategoryItem(category: .landscaping,  assetName: "fig_landscaping"),
-    CategoryItem(category: .pestControl,  assetName: "fig_pest"),
 ]
 
 /// Generic image card used across the landing sheet (verticals) and the

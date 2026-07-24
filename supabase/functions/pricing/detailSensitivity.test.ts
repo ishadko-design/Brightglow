@@ -50,6 +50,8 @@ const CASES: Case[] = [
   { base: "pressure wash my house", detailed: "pressure wash my house, 2200 sq ft", lever: "washed area" },
   // Count-priced electrical: a stated number of lights must move the price.
   { base: "install recessed lighting", detailed: "install 9 recessed lights", lever: "can light count" },
+  // Recessed scope: a new-spot install costs ~2x a retrofit swap.
+  { base: "install 6 recessed lights", detailed: "install 6 recessed lights, no existing light there", lever: "recessed new-install scope" },
   // Auto: the chat asks full / partial / removal, so that answer must land.
   { base: "wrap car", detailed: "wrap car, partial wrap", lever: "wrap coverage" },
   { base: "wrap car", detailed: "wrap car, removing an old wrap", lever: "wrap vs removal" },
