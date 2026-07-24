@@ -1405,6 +1405,11 @@ export const SCOPE_ADD_ONS: Array<{
   keywords: string[];
   itemId: string;
   label: string;
+  /** When set, the add-on fires ONLY for these job_types, not the whole
+   *  category. A removal add-on for a light fixture must not attach to "replace
+   *  outlet" — the word "replace" is shared, the job is not. Category-only
+   *  gating can't express that; this can. */
+  jobTypes?: string[];
   /** True when the add-on is a FIXED cost for the job rather than a per-unit
    *  rate — add it once, after the quantity multiply.
    *
@@ -1424,6 +1429,9 @@ export const SCOPE_ADD_ONS: Array<{
   // hidden cords prices the same as a bracket screwed into drywall.
   { categories: ["Electrical"], keywords: ["conceal", "hide the cord", "hide cord", "hide wire", "hide the wire", "in-wall", "in wall", "wires hidden", "hidden wire", "hide cable"], itemId: "tv-cord-concealment", label: "cord concealment" },
   { categories: ["Electrical"], keywords: ["fireplace", "brick", "stone", "masonry", "concrete"], itemId: "tv-mount-masonry", label: "masonry mounting" },
+  // Taking the old fixture down is real labor a bare "install" misses. Gated to
+  // the lighting jobs so "replace outlet" can't pull it (2026-07-23).
+  { categories: ["Electrical"], jobTypes: ["electrical.lighting", "electrical.ceiling_fan"], keywords: ["remov", "replac", "swap", "take down", "take out", "old fixture", "old light", "light bar", "existing fixture", "existing light", "get rid of", "rip out", "tear out"], itemId: "fixture-removal", label: "old fixture removal" },
   // The biggest fork in a remediation quote: a wipe-down versus a sealed,
   // negative-air containment. Flat — see `flat` above.
   { categories: ["Mold & Pest Control"], keywords: ["containment", "negative air", "seal off", "sealed off", "hepa", "spore", "cross-contamination", "black mold", "toxic"], itemId: "mold-containment", label: "full containment", flat: true },
@@ -1440,6 +1448,7 @@ export function detectScopeAddOns(
   const text = description.toLowerCase();
   return SCOPE_ADD_ONS
     .filter((a) => a.categories.includes(entry.category))
+    .filter((a) => !a.jobTypes || a.jobTypes.includes(entry.job_type))
     .filter((a) => a.keywords.some((k) => text.includes(k)))
     .map((a) => ({ itemId: a.itemId, label: a.label, flat: a.flat === true }));
 }

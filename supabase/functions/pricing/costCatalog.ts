@@ -230,6 +230,15 @@ export const COST_CATALOG: CostCatalogEntry[] = [
   { itemId: "whole-house-rewire", trade: "electrical", description: "Whole-house rewire", unit: "sq ft", soc: ELECTRICIAN, laborHours: b(0.036, 0.054, 0.081), materials: b(0.9, 1.62, 2.7), setup: { hours: b(6, 9, 13.5), materials: b(150, 270, 450) } },
   // sanity: light fixture swap $75–250 (fixture customer-supplied)
   { itemId: "light-fixture-install", trade: "electrical", description: "Install light fixture (fixture not included)", unit: "each", soc: ELECTRICIAN, laborHours: b(0.4125, 0.825, 1.375), materials: b(2.75, 11, 33), setup: { hours: b(0.3375, 0.675, 1.125), materials: b(2.25, 9, 27) } },
+  // Taking DOWN an existing fixture before hanging the new one, as a scope
+  // add-on (see SCOPE_ADD_ONS). Added 2026-07-23: "remove the light bar and
+  // install a single light" priced as install-only (~$170) because the engine
+  // counted the install and not the removal — the job is a swap, not a fresh
+  // hang. A light bar or a heavy/old fixture takes real time to take down, cap
+  // and haul; a basic ceiling fixture comes down in minutes. sanity: removal
+  // adds ~$50–150 of labor (HomeGuide/Angi replacement labor $50–300 total,
+  // of which the removal is the front half).
+  { itemId: "fixture-removal", trade: "electrical", description: "Remove and cap an existing light fixture / light bar", unit: "each", soc: ELECTRICIAN, laborHours: b(0.4, 0.75, 1.4), materials: b(0, 5, 18) },
   { itemId: "electrician-hourly", trade: "electrical", description: "General electrical labor", unit: "hour", soc: ELECTRICIAN, laborHours: b(1, 1, 1), materials: b(0, 10, 30) },
   // ELECTRICAL REPAIRS + small jobs, added 2026-07-23 from
   // docs/pricing-research/anchors-verified.json. Everything here is dominated by

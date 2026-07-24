@@ -418,3 +418,19 @@ Deno.test("detectScopeAddOns only fires for the entry's own category", () => {
   const plumbing = classifyJobType("", "water heater replacement")!;
   assertEquals(detectScopeAddOns(plumbing, "water heater replacement, remove old unit"), []);
 });
+
+Deno.test("fixture removal attaches to a lighting swap, not to a replaced outlet", () => {
+  // The reported case: "remove the light bar and install a single light" priced
+  // as install-only. A swap must add the removal.
+  const light = classifyJobType("Electrical", "remove the light bar and install a ceiling fixture")!;
+  assertEquals(light.job_type, "electrical.lighting");
+  assertEquals(
+    detectScopeAddOns(light, "remove the light bar and install a ceiling fixture").map((a) => a.itemId),
+    ["fixture-removal"],
+  );
+  // A fresh install (no removal words) does NOT get it.
+  assertEquals(detectScopeAddOns(light, "install a ceiling fixture"), []);
+  // The jobTypes gate: "replace" is shared, but an outlet is not a fixture.
+  const outlet = classifyJobType("Electrical", "replace outlet")!;
+  assertEquals(detectScopeAddOns(outlet, "replace outlet"), []);
+});

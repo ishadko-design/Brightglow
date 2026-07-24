@@ -58,6 +58,7 @@ const REFERENCE: Record<string, Ref> = {
   "whole-house-rewire": { low: 4, high: 10 },
   "solar-panel-install": { low: 850, high: 1550 },
   "light-fixture-install": { low: 75, high: 250 },
+  "fixture-removal": { low: 40, high: 200, loose: true },
   "electrician-hourly": { low: 85, high: 200, loose: true },
   // Electrical repairs / small jobs — same source file
   "circuit-breaker-replacement": { low: 100, high: 400 },
