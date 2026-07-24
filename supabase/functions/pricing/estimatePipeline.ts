@@ -27,6 +27,7 @@ import {
   qualityTier,
   recessedInstallScale,
   sizeScale,
+  vehicleSizeScale,
   windowScopeScale,
 } from "./inHouseEngine.ts";
 import {
@@ -147,7 +148,8 @@ export function estimateInHouse(input: EstimateInput): EstimateResult {
   const size = sizeScale(entry.itemId, description);
   const scope = windowScopeScale(entry.itemId, description) ??
     recessedInstallScale(entry.itemId, description);
-  const sizing = combineSizeScope(entry.itemId, size, scope);
+  const vehicleSize = vehicleSizeScale(entry.itemId, description);
+  const sizing = combineSizeScope(entry.itemId, size, scope, vehicleSize);
 
   const componentTrades = [
     ...new Set(resolveJobComponents(entry.job_type, description).map((c) => c.trade)),
@@ -188,6 +190,7 @@ export function estimateInHouse(input: EstimateInput): EstimateResult {
   const includedLabels = [...addOns.map((a) => a.label), ...range.includedLabels];
   if (includedLabels.length > 0) label += ` — incl. ${includedLabels.join(", ")}`;
   if (scope) label += `${includedLabels.length > 0 ? "," : " —"} ${scope.scope}`;
+  if (vehicleSize) label += `${includedLabels.length > 0 || scope ? "," : " —"} ${vehicleSize.scope}`;
   if (tier.tier) {
     label += `${includedLabels.length > 0 || scope ? "," : " —"} ${tier.tier} materials`;
   }

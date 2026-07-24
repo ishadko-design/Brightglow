@@ -188,7 +188,7 @@ export interface ScopeScale {
   materials: number;
   labor: number;
   /** Canonical label surfaced to the user, e.g. "glass only". */
-  scope: "glass only" | "full-frame replacement" | "new install";
+  scope: "glass only" | "full-frame replacement" | "new install" | "full-size vehicle" | "SUV/truck" | "compact car";
 }
 
 /** Which replacement scope the words assert, as multipliers off the item's
@@ -229,6 +229,46 @@ export function recessedInstallScale(itemId: string, description: string): Scope
   const newInstall =
     /\b(no light there|no existing (light|fixture)|no existing|from scratch|brand[- ]new spot|add lights|adding lights|never had a light|no power there)\b/;
   if (newInstall.test(t)) return { materials: 1.5, labor: 2.6, scope: "new install" };
+  return null;
+}
+
+/** Auto jobs whose cost scales with the VEHICLE'S SIZE — wrap film and detail
+ *  hours and respray area all grow with the body. A bumper, a windshield or an
+ *  alternator does not, so those are deliberately excluded: an F-250's
+ *  alternator is the same part as a Miata's. */
+const VEHICLE_SIZE_SENSITIVE = new Set([
+  "vehicle-wrap-full",
+  "vehicle-wrap-partial",
+  "vehicle-wrap-removal",
+  "full-detail",
+  "interior-detail",
+  "exterior-detail-wax",
+  "ceramic-coating",
+  "paint-correction",
+  "full-respray",
+  "panel-respray",
+]);
+
+/** Coarse vehicle-size multiplier. An F-250 and a Miata used to price the same
+ *  wrap; this reads the size the clarify chat pins down ("SUV", "full-size
+ *  truck") and scales the size-sensitive auto items. Deliberately COARSE —
+ *  four tiers, not per-model — because the app has no vehicle database, and a
+ *  tier captures most of the spread honestly where a made-up exact figure
+ *  would not. Both sides scale: more body is more film AND more hours. Default
+ *  (no size stated) is 1.0, the mid-size the catalog bands already assume. */
+export function vehicleSizeScale(itemId: string, description: string): ScopeScale | null {
+  if (!VEHICLE_SIZE_SENSITIVE.has(itemId)) return null;
+  const t = ` ${description.toLowerCase()} `;
+  // Order matters: check the big tier before the plain "truck"/"suv" tier.
+  if (/\b(full[- ]size|full size|dually|lifted|3500|2500|f-?250|f-?350|sprinter|box truck|cargo van|suburban|expedition|tahoe)\b/.test(t)) {
+    return { materials: 1.55, labor: 1.55, scope: "full-size vehicle" };
+  }
+  if (/\b(suv|truck|pickup|van|minivan|jeep|crossover|4runner|tacoma|silverado|f-?150|ram)\b/.test(t)) {
+    return { materials: 1.3, labor: 1.3, scope: "SUV/truck" };
+  }
+  if (/\b(compact|subcompact|sedan|coupe|hatchback|small car|two[- ]door|2[- ]door|miata|civic|corolla|smart car)\b/.test(t)) {
+    return { materials: 0.85, labor: 0.85, scope: "compact car" };
+  }
   return null;
 }
 

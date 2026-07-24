@@ -1,17 +1,19 @@
 import Foundation
 
 enum Category: String, CaseIterable, Codable {
+    // Ordered by how often U.S. homeowners hire a pro (see categoryItems). This
+    // drives allCases everywhere — the home grid, matching, and pickers.
     case plumbing      = "Plumbing"
     case electrical    = "Electrical"
     case hvac          = "HVAC"
-    case painting      = "Painting"
-    case carpentry     = "Carpentry"
-    case roofing       = "Roofing"
-    case flooring      = "Flooring"
-    case windowsDoors  = "Windows & Doors"
     case landscaping   = "Landscaping"
     case pestControl   = "Mold & Pest Control"
     case appliances    = "Appliances"
+    case carpentry     = "Carpentry"
+    case painting      = "Painting"
+    case roofing       = "Roofing"
+    case flooring      = "Flooring"
+    case windowsDoors  = "Windows & Doors"
 
     /// Keywords a user might free-form type that map to this category.
     var keywords: [String] {

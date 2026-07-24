@@ -117,8 +117,12 @@ Per-vertical priorities:
 - Auto/moto: ask car-vs-motorcycle ONLY when neither the request nor the photo
   note reveals it — if the photo already names the vehicle, skip straight to
   matching. If the problem straddles services (e.g. "fix my bumper" could be
-  Body & Paint or a dealer), ask which. No price is produced — do not ask
-  price-only questions. Once the service and vehicle are known, finish.
+  Body & Paint or a dealer), ask which. For a WRAP, a DETAIL, a CERAMIC COATING
+  or a full/panel RESPRAY, the vehicle's SIZE swings the price, so ask "What
+  kind of vehicle — car, SUV, or truck?" unless the request or photo already
+  says; put the answer in details as one of "compact sedan", "SUV", or
+  "full-size vehicle". For mechanical repairs (brakes, alternator, oil) size
+  doesn't matter — don't ask. Once service and vehicle are known, finish.
 - Home: after the business type is clear, ask the cost driver that also sharpens
   the photo match — the item's material/type and (for per-area jobs) size.
   For size-driven work (windows, flooring, painting, roofing) ALWAYS pin the
@@ -277,6 +281,20 @@ async function retryQuickReplies(question: string): Promise<string[]> {
   return GENERIC_REPLIES;
 }
 
+/** Extract just a vehicle-size phrase from the model's auto details, dropping
+ *  everything else. Auto details are otherwise blank (the pricing engine reads
+ *  vehicle type from a structured field, not free text), but vehicle SIZE has
+ *  no structured field and is a real price lever for wraps, detailing and
+ *  paint. Whitelisted, not free-text, so nothing else rides into the auto path.
+ *  Kept in sync with vehicleSizeScale in inHouseEngine.ts. */
+function vehicleSizeToken(details: string): string {
+  const t = details.toLowerCase();
+  if (/\b(full[- ]?size|dually|lifted|3500|2500|f-?250|f-?350|sprinter|box truck|cargo van|suburban|expedition|tahoe)\b/.test(t)) return "full-size vehicle";
+  if (/\b(suv|truck|pickup|van|minivan|jeep|crossover|silverado|f-?150|ram|tacoma|4runner)\b/.test(t)) return "SUV";
+  if (/\b(compact|subcompact|sedan|coupe|hatchback|small car|two[- ]door|miata|civic|corolla)\b/.test(t)) return "compact sedan";
+  return "";
+}
+
 Deno.serve(async (req) => {
   if (req.method !== "POST") return json({ error: "method not allowed" }, 405);
   if (APP_TOKEN && req.headers.get("x-app-token") !== APP_TOKEN) {
@@ -398,7 +416,13 @@ Deno.serve(async (req) => {
     category,
     search_terms: parsed.search_terms ?? "",
     photo_terms: parsed.photo_terms ?? "",
-    details: vertical === "home" ? (parsed.details ?? "") : "",
+    // Home carries full canonical details. Auto used to carry none — but
+    // vehicle SIZE is a real price lever for wraps, detailing and paint (an
+    // F-250 wrap is not a Miata wrap), so a size phrase is now allowed through.
+    // Restricted to a size token so no free-text leaks into the auto path.
+    details: vertical === "home"
+      ? (parsed.details ?? "")
+      : vehicleSizeToken(parsed.details ?? ""),
     summary: parsed.summary ?? "",
     priceable: isPriceable(vertical, category),
   });

@@ -53,6 +53,8 @@ const CASES: Case[] = [
   // Recessed scope: a new-spot install costs ~2x a retrofit swap.
   { base: "install 6 recessed lights", detailed: "install 6 recessed lights, no existing light there", lever: "recessed new-install scope" },
   // Auto: the chat asks full / partial / removal, so that answer must land.
+  // Vehicle size is a real lever for wraps and detailing.
+  { base: "wrap car", detailed: "wrap car, full-size vehicle", lever: "vehicle size (wrap)" },
   { base: "wrap car", detailed: "wrap car, partial wrap", lever: "wrap coverage" },
   { base: "wrap car", detailed: "wrap car, removing an old wrap", lever: "wrap vs removal" },
   // Emergency premium: an after-hours signal must raise a real repair.
