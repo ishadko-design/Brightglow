@@ -494,6 +494,24 @@ export const COST_CATALOG: CostCatalogEntry[] = [
   // Small-job overhead baked into hours. sanity: patch repair $300–1,200
   { itemId: "roof-repair-patch", trade: "roofing", description: "Localized roof repair, per sq ft of patch", unit: "sq ft", soc: ROOFER, laborHours: b(0.033, 0.055, 0.088), materials: b(0.825, 1.65, 3.3), setup: { hours: b(1.35, 2.25, 3.6), materials: b(33.75, 67.5, 135) } },
   // sanity: seamless aluminum gutters $6–14 per LF
+  // ROOFING repairs and maintenance, added 2026-07-23. The category modelled
+  // whole-roof installs plus one per-sq-ft patch, so the routine calls priced
+  // absurdly: "gutter cleaning" quoted a full gutter INSTALL at $1,453 against
+  // a real ~$175, and "missing shingles" quoted a $8,598 reroof against ~$300.
+  // Bands: HomeGuide / Angi / Fixr 2026.
+  //
+  // All per-project: a roofer prices these as a visit with a ladder and a
+  // couple of hours, not by area.
+  // sanity: gutter cleaning $100–250
+  { itemId: "gutter-cleaning", trade: "roofing", description: "Gutter cleaning and downspout flush", unit: "project", soc: ROOFER, laborHours: b(1.1, 1.8, 2.9), materials: b(0, 8, 25) },
+  // sanity: gutter repair $200–600 (seams, sagging, downspouts)
+  { itemId: "gutter-repair", trade: "roofing", description: "Gutter repair — seams, sagging sections, downspouts", unit: "project", soc: ROOFER, laborHours: b(1.4, 2.6, 4.4), materials: b(35, 95, 230) },
+  // sanity: missing/damaged shingle replacement $150–450
+  { itemId: "shingle-repair", trade: "roofing", description: "Replace missing or damaged shingles", unit: "project", soc: ROOFER, laborHours: b(1.1, 2, 3.4), materials: b(25, 70, 175) },
+  // sanity: flashing repair $200–500 (minor; full replacement runs to $1,500+)
+  { itemId: "flashing-repair", trade: "roofing", description: "Roof flashing repair — chimney, wall or step flashing", unit: "project", soc: ROOFER, laborHours: b(1.5, 2.7, 4.2), materials: b(40, 105, 230) },
+  // sanity: roof inspection $100–400
+  { itemId: "roof-inspection", trade: "roofing", description: "Roof inspection / condition report", unit: "project", soc: ROOFER, laborHours: b(1, 1.7, 3), materials: b(0, 10, 30) },
   { itemId: "gutter-install-aluminum", trade: "roofing", description: "Seamless aluminum gutters", unit: "linear foot", soc: ROOFER, laborHours: b(0.04, 0.064, 0.096), materials: b(2.4, 4, 6.4), setup: { hours: b(1.5, 2.4, 3.6), materials: b(90, 150, 240) } },
 
   // --- flooring ---------------------------------------------------------
@@ -559,6 +577,21 @@ export const COST_CATALOG: CostCatalogEntry[] = [
   // sanity: paver patio $10–30 per sq ft
   { itemId: "paver-patio-installation", trade: "landscaping", description: "Paver patio, incl. base prep", unit: "sq ft", soc: LANDSCAPER, laborHours: b(0.117, 0.195, 0.312), materials: b(3.12, 5.46, 9.36), setup: { hours: b(6.6, 11, 17.6), materials: b(176, 308, 528) } },
   // sanity: mulch delivered + spread $45–130 per cu yd
+  // LANDSCAPING maintenance, added 2026-07-23. The category modelled
+  // installations only - sod, patios, irrigation systems - so the recurring
+  // work that is most of the trade priced as construction: "mow my lawn"
+  // quoted a SOD INSTALL, "trim my tree" quoted a removal, and "sprinkler head
+  // broken" quoted a whole new zone. Bands: Angi / HomeGuide / HomeAdvisor 2026.
+  // sanity: lawn mowing $50–200 per visit
+  { itemId: "lawn-mowing", trade: "landscaping", description: "Lawn mowing and edging, per visit", unit: "project", soc: LANDSCAPER, laborHours: b(1, 1.9, 3.4), materials: b(0, 5, 15) },
+  // sanity: yard cleanup $125–400 (fall runs $200–600, spring $100–300)
+  { itemId: "yard-cleanup", trade: "landscaping", description: "Yard cleanup — debris, leaves, weeding, cut-back", unit: "project", soc: LANDSCAPER, laborHours: b(2.4, 4.6, 8), materials: b(10, 40, 110) },
+  // sanity: hedge/shrub trimming $185–450 (or $25–60 per 10 ft of hedge)
+  { itemId: "hedge-trimming", trade: "landscaping", description: "Hedge and shrub trimming", unit: "project", soc: LANDSCAPER, laborHours: b(3.4, 6, 10), materials: b(5, 25, 70) },
+  // Distinct from removal: the tree stays. sanity: $400–900 per tree
+  { itemId: "tree-trimming", trade: "landscaping", description: "Tree trimming / pruning, per tree", unit: "each", soc: LANDSCAPER, laborHours: b(6, 10.5, 17), materials: b(20, 60, 150), setup: { hours: b(1.5, 2.6, 4.4), materials: b(25, 60, 140) } },
+  // sanity: sprinkler head / zone repair $130–410
+  { itemId: "sprinkler-repair", trade: "landscaping", description: "Sprinkler head or zone repair", unit: "project", soc: LANDSCAPER, laborHours: b(1.6, 3, 5.2), materials: b(20, 55, 140) },
   { itemId: "mulch-installation", trade: "landscaping", description: "Mulch, delivered + spread", unit: "cubic yard", soc: LANDSCAPER, laborHours: b(0.35, 0.525, 0.84), materials: b(17.5, 28, 45.5), setup: { hours: b(0.75, 1.125, 1.8), materials: b(37.5, 60, 97.5) } },
 
   // --- countertops (vanity JOB_COMPONENT) --------------------------------

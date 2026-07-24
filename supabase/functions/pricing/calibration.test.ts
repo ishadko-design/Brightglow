@@ -140,6 +140,12 @@ const REFERENCE: Record<string, Ref> = {
   "roof-replacement-total": { low: 6000, high: 18000 },
   "roof-repair-patch": { low: 6, high: 24 },
   "gutter-install-aluminum": { low: 6, high: 14 },
+  // Roofing repairs / maintenance — HomeGuide / Angi / Fixr 2026
+  "gutter-cleaning": { low: 100, high: 250 },
+  "gutter-repair": { low: 200, high: 600 },
+  "shingle-repair": { low: 150, high: 450 },
+  "flashing-repair": { low: 200, high: 500 },
+  "roof-inspection": { low: 100, high: 400 },
   // flooring
   "hardwood-installed": { low: 8, high: 17 },
   "laminate-installed": { low: 3, high: 8 },
@@ -167,6 +173,12 @@ const REFERENCE: Record<string, Ref> = {
   "irrigation-system-per-zone": { low: 600, high: 1700 },
   "paver-patio-installation": { low: 10, high: 30 },
   "mulch-installation": { low: 45, high: 130 },
+  // Landscaping maintenance — Angi / HomeGuide / HomeAdvisor 2026
+  "lawn-mowing": { low: 50, high: 200 },
+  "yard-cleanup": { low: 125, high: 400 },
+  "hedge-trimming": { low: 185, high: 450 },
+  "tree-trimming": { low: 400, high: 900 },
+  "sprinkler-repair": { low: 130, high: 410 },
   // countertops
   "laminate-countertop-installed": { low: 25, high: 70 },
 

@@ -92,6 +92,12 @@ const REPAIR_VS_REPLACE: Array<{ repair: string; replace: string }> = [
   { repair: "AC not cooling", replace: "install central air conditioning" },
   { repair: "furnace wont ignite", replace: "replace gas furnace" },
   { repair: "thermostat not working", replace: "install smart thermostat" },
+  // Roofing/landscaping maintenance must never exceed the install it maintains.
+  { repair: "gutter cleaning", replace: "install new gutters" },
+  { repair: "missing shingles", replace: "replace asphalt shingle roof 1700 sq ft" },
+  { repair: "mow my lawn", replace: "install sod 1000 sq ft" },
+  { repair: "trim my tree", replace: "remove a tree" },
+  { repair: "sprinkler head broken", replace: "install irrigation system" },
   // Painting: a patch is not a repaint.
   { repair: "hole in the wall", replace: "paint a 250 sq ft room" },
   { repair: "water stain on ceiling", replace: "paint a 250 sq ft room" },

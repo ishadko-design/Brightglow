@@ -786,12 +786,20 @@ export const JOB_TYPE_TAXONOMY: JobTypeEntry[] = [
   // entry. EPCI has no flat/membrane roofing item (verified 2026-07-06:
   // no TPO/EPDM/torch-down in any trade), so flat roofs classify to the
   // whole-project item — wide but real; revisit when a source covers it.
-  { job_type: "roofing.shingle", category: "Roofing", keywords: ["shingle", "asphalt", "architectural"], trade: "roofing", itemId: "architectural-installed", unit: "sq ft", defaultQuantity: 1700 },
+  { job_type: "roofing.shingle", category: "Roofing", keywords: ["shingle", "asphalt", "architectural"], trade: "roofing", itemId: "architectural-installed", unit: "sq ft", defaultQuantity: 1700, notIfContains: ["missing", "blown off", "came off", "damaged", "a few", "repair", "inspection", "flashing"] },
   { job_type: "roofing.metal", category: "Roofing", keywords: ["metal roof", "standing seam"], trade: "roofing", itemId: "metal-roofing-installed", unit: "sq ft", defaultQuantity: 1700, priority: 1 },
   { job_type: "roofing.flat", category: "Roofing", keywords: ["flat roof", "tpo", "epdm", "torch down", "membrane", "rolled roofing"], trade: "roofing", itemId: "roof-replacement-total", unit: "project", defaultQuantity: 1 },
   { job_type: "roofing.replacement", category: "Roofing", keywords: ["replace", "replacement", "new roof", "reroof"], trade: "roofing", itemId: "roof-replacement-total", unit: "project", defaultQuantity: 1 },
   { job_type: "roofing.repair", category: "Roofing", keywords: ["repair", "patch", "leak"], trade: "roofing", itemId: "roof-repair-patch", unit: "sq ft", defaultQuantity: 50 },
-  { job_type: "roofing.gutter", category: "Roofing", keywords: ["gutter"], trade: "roofing", itemId: "gutter-install-aluminum", unit: "linear foot", defaultQuantity: 150 },
+  { job_type: "roofing.gutter", category: "Roofing", keywords: ["gutter"], trade: "roofing", itemId: "gutter-install-aluminum", unit: "linear foot", defaultQuantity: 150, notIfContains: ["clean", "cleaning", "clogged", "overflowing", "repair", "sagging", "leaking seam", "downspout"] },
+  // Roofing maintenance. These outrank the install and whole-roof entries,
+  // which otherwise catch "gutter" and "shingle" and quote a reroof for a few
+  // missing tabs (2026-07-23).
+  { job_type: "roofing.gutter_cleaning", category: "Roofing", keywords: ["gutter cleaning", "clean gutters", "clean the gutters", "clogged gutter", "gutters overflowing", "gutters full"], trade: "roofing", itemId: "gutter-cleaning", unit: "project", defaultQuantity: 1, priority: 1 },
+  { job_type: "roofing.gutter_repair", category: "Roofing", keywords: ["gutter repair", "repair gutter", "sagging gutter", "gutter leaking", "downspout", "gutter seam"], trade: "roofing", itemId: "gutter-repair", unit: "project", defaultQuantity: 1, priority: 1 },
+  { job_type: "roofing.shingle_repair", category: "Roofing", keywords: ["missing shingle", "missing shingles", "blown off", "shingles came off", "damaged shingle", "damaged shingles", "shingle repair", "replace a few shingles", "lost shingles"], trade: "roofing", itemId: "shingle-repair", unit: "project", defaultQuantity: 1, priority: 1 },
+  { job_type: "roofing.flashing", category: "Roofing", keywords: ["flashing", "chimney leak", "step flashing", "pipe boot", "vent boot"], trade: "roofing", itemId: "flashing-repair", unit: "project", defaultQuantity: 1, priority: 1 },
+  { job_type: "roofing.inspection", category: "Roofing", keywords: ["roof inspection", "inspect the roof", "inspect my roof", "roof certification", "roof condition"], trade: "roofing", itemId: "roof-inspection", unit: "project", defaultQuantity: 1, priority: 1 },
 
   // Flooring
   { job_type: "flooring.hardwood", category: "Flooring", keywords: ["hardwood"], trade: "flooring", itemId: "hardwood-installed", unit: "sq ft", defaultQuantity: 200 },
@@ -813,9 +821,15 @@ export const JOB_TYPE_TAXONOMY: JobTypeEntry[] = [
   { job_type: "windows_doors.garage_door", category: "Windows & Doors", keywords: ["garage door"], trade: "doors", itemId: "garage-door-single", unit: "each", defaultQuantity: 1 },
 
   // Landscaping
-  { job_type: "landscaping.lawn", category: "Landscaping", keywords: ["lawn", "sod", "grass"], trade: "landscaping", itemId: "sod-installation", unit: "sq ft", defaultQuantity: 1000 },
-  { job_type: "landscaping.tree", category: "Landscaping", keywords: ["tree"], trade: "landscaping", itemId: "tree-removal", unit: "each", defaultQuantity: 1 },
-  { job_type: "landscaping.irrigation", category: "Landscaping", keywords: ["irrigation", "sprinkler"], trade: "landscaping", itemId: "irrigation-system-per-zone", unit: "each", defaultQuantity: 1 },
+  { job_type: "landscaping.lawn", category: "Landscaping", keywords: ["lawn", "sod", "grass"], trade: "landscaping", itemId: "sod-installation", unit: "sq ft", defaultQuantity: 1000, notIfContains: ["mow", "mowing", "cut the grass", "cleanup", "clean up", "leaves", "overgrown", "weeding"] },
+  // Landscaping maintenance — the recurring work that is most of the trade.
+  { job_type: "landscaping.mowing", category: "Landscaping", keywords: ["mow", "mowing", "mow the lawn", "cut the grass", "lawn service", "lawn maintenance"], trade: "landscaping", itemId: "lawn-mowing", unit: "project", defaultQuantity: 1, priority: 1 },
+  { job_type: "landscaping.cleanup", category: "Landscaping", keywords: ["yard cleanup", "clean up the yard", "overgrown", "leaf removal", "leaves", "yard waste", "debris removal", "spring cleanup", "fall cleanup"], trade: "landscaping", itemId: "yard-cleanup", unit: "project", defaultQuantity: 1, priority: 1 },
+  { job_type: "landscaping.hedge", category: "Landscaping", keywords: ["hedge", "hedges", "shrub", "shrubs", "bushes", "bush trimming", "prune shrubs"], trade: "landscaping", itemId: "hedge-trimming", unit: "project", defaultQuantity: 1, priority: 1 },
+  { job_type: "landscaping.tree_trim", category: "Landscaping", keywords: ["tree trimming", "trim tree", "trim my tree", "trim trees", "prune tree", "tree pruning", "cut back tree", "trim branches", "overhanging branches"], trade: "landscaping", itemId: "tree-trimming", unit: "each", defaultQuantity: 1, priority: 1 },
+  { job_type: "landscaping.sprinkler_repair", category: "Landscaping", keywords: ["sprinkler head", "sprinkler repair", "sprinkler broken", "sprinkler not working", "zone not working", "irrigation repair", "broken sprinkler"], trade: "landscaping", itemId: "sprinkler-repair", unit: "project", defaultQuantity: 1, priority: 1 },
+  { job_type: "landscaping.tree", category: "Landscaping", keywords: ["tree"], trade: "landscaping", itemId: "tree-removal", unit: "each", defaultQuantity: 1, notIfContains: ["trim", "trimming", "prune", "pruning", "cut back", "branches"] },
+  { job_type: "landscaping.irrigation", category: "Landscaping", keywords: ["irrigation", "sprinkler"], trade: "landscaping", itemId: "irrigation-system-per-zone", unit: "each", defaultQuantity: 1, notIfContains: ["repair", "broken", "not working", "head", "leaking"] },
   { job_type: "landscaping.patio", category: "Landscaping", keywords: ["patio", "hardscape", "paver"], trade: "landscaping", itemId: "paver-patio-installation", unit: "sq ft", defaultQuantity: 200 },
   { job_type: "landscaping.mulch", category: "Landscaping", keywords: ["mulch"], trade: "landscaping", itemId: "mulch-installation", unit: "cubic yard", defaultQuantity: 5 },
 
