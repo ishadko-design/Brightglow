@@ -250,6 +250,28 @@ export function qualityTier(description: string): { factor: number; tier: "premi
   return { factor: 1, tier: null };
 }
 
+/** After-hours / emergency premium. A burst pipe at 2am or a lockout is billed
+ *  1.5-2x the day rate across the trades — it is the single biggest lever on
+ *  the price of the jobs that carry it, and was invisible before (2026-07-23).
+ *
+ *  Applies to the whole range, not just labor: an emergency parts run and the
+ *  after-hours supply house both cost more, and the multiplier is how the trade
+ *  actually quotes it. Deliberately conservative at 1.6x typical — the true
+ *  spread is wide and situational, and the label tells the user it is an
+ *  after-hours figure so a daytime call doesn't read as us being high. */
+export function emergencyFactor(description: string): { factor: number; emergency: boolean } {
+  const t = ` ${description.toLowerCase()} `;
+  const signals = [
+    "emergency", "urgent", "asap", "right now", "middle of the night",
+    "after hours", "after-hours", "2am", "3am", "midnight", "weekend",
+    "same day", "same-day", "immediately", "gushing", "spraying everywhere",
+    "can't get in", "locked out", "flooded",
+  ];
+  return signals.some((w) => t.includes(w))
+    ? { factor: 1.6, emergency: true }
+    : { factor: 1, emergency: false };
+}
+
 function computeItem(
   entry: CostCatalogEntry,
   cbsa: string | null,

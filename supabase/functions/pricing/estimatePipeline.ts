@@ -22,6 +22,7 @@ import {
   applyServiceMinimum,
   combineSizeScope,
   computeInHouseItems,
+  emergencyFactor,
   laborOnlyEstimate,
   qualityTier,
   sizeScale,
@@ -167,7 +168,19 @@ export function estimateInHouse(input: EstimateInput): EstimateResult {
     : null;
   if (!composed) return { kind: "insufficient", reason: "no_items", entry };
 
-  const range = applyServiceMinimum(composed, entry.trade, entry.itemId);
+  const floored = applyServiceMinimum(composed, entry.trade, entry.itemId);
+
+  // Emergency premium applies AFTER the service minimum, so an after-hours call
+  // is a multiple of a real floored price, never floored back down.
+  const emergency = emergencyFactor(description);
+  const range = emergency.emergency
+    ? {
+      ...floored,
+      all_in_low: floored.all_in_low * emergency.factor,
+      all_in_typical: floored.all_in_typical * emergency.factor,
+      all_in_high: floored.all_in_high * emergency.factor,
+    }
+    : floored;
 
   let label = isGeneral ? `Regional avg for ${entry.category}` : "Regional avg";
   const includedLabels = [...addOns.map((a) => a.label), ...range.includedLabels];
@@ -176,6 +189,7 @@ export function estimateInHouse(input: EstimateInput): EstimateResult {
   if (tier.tier) {
     label += `${includedLabels.length > 0 || scope ? "," : " —"} ${tier.tier} materials`;
   }
+  if (emergency.emergency) label += `${includedLabels.length > 0 || scope || tier.tier ? "," : " —"} after-hours rate`;
 
   return {
     kind: "range",

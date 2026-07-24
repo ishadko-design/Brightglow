@@ -53,6 +53,9 @@ const CASES: Case[] = [
   // Auto: the chat asks full / partial / removal, so that answer must land.
   { base: "wrap car", detailed: "wrap car, partial wrap", lever: "wrap coverage" },
   { base: "wrap car", detailed: "wrap car, removing an old wrap", lever: "wrap vs removal" },
+  // Emergency premium: an after-hours signal must raise a real repair.
+  { base: "burst pipe", detailed: "emergency burst pipe, flooded", lever: "after-hours premium" },
+  { base: "clogged drain", detailed: "clogged drain asap this weekend", lever: "after-hours premium" },
   // Scope words, not sizes.
   { base: "replace windows", detailed: "replace windows, glass only", lever: "replacement scope" },
 ];
