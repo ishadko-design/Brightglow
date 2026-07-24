@@ -743,9 +743,23 @@ export const JOB_TYPE_TAXONOMY: JobTypeEntry[] = [
   { job_type: "hvac.tune_up", category: "HVAC", keywords: ["tune-up", "tune up", "maintenance", "seasonal service", "annual service", "hvac inspection"], trade: "hvac", itemId: "hvac-tune-up", unit: "project", defaultQuantity: 1, priority: 1 },
 
   // Painting
-  { job_type: "painting.interior", category: "Painting", keywords: ["interior", "room", "wall color", "repaint"], trade: "paint", itemId: "paint-interior-labor", unit: "sq ft", defaultQuantity: 250 },
-  { job_type: "painting.exterior", category: "Painting", keywords: ["exterior"], trade: "paint", itemId: "paint-exterior-labor", unit: "sq ft", defaultQuantity: 1500 },
+  { job_type: "painting.interior", category: "Painting", keywords: ["interior", "room", "wall color", "repaint"], trade: "paint", itemId: "paint-interior-labor", unit: "sq ft", defaultQuantity: 250, notIfContains: ["water stain", "ceiling stain", "hole in", "nail pop", "drywall patch", "patch", "popcorn", "wallpaper", "pressure wash", "power wash", "trim", "baseboard", "crown molding", "deck"] },
+  { job_type: "painting.exterior", category: "Painting", keywords: ["exterior"], trade: "paint", itemId: "paint-exterior-labor", unit: "sq ft", defaultQuantity: 1500, notIfContains: ["pressure wash", "power wash", "wash the house", "deck"] },
   { job_type: "painting.cabinet", category: "Painting", keywords: ["cabinet"], trade: "paint", itemId: "cabinet-painting-spray", unit: "linear foot", defaultQuantity: 20 },
+  // Painting repairs / prep. These outrank the whole-repaint entries, which
+  // otherwise catch "repaint" and "room" and quote a whole room for one patch.
+  { job_type: "painting.ceiling_stain", category: "Painting", keywords: ["water stain", "ceiling stain", "stain on ceiling", "water spot", "ceiling spot", "stained ceiling", "water damage ceiling"], trade: "paint", itemId: "ceiling-stain-repair", unit: "each", defaultQuantity: 1, priority: 1 },
+  { job_type: "painting.drywall_patch", category: "Painting", keywords: ["drywall patch", "patch drywall", "hole in wall", "hole in the wall", "nail pop", "nail pops", "crack in wall", "wall crack", "patch and paint", "sheetrock patch"], trade: "paint", itemId: "drywall-patch-paint", unit: "each", defaultQuantity: 1, priority: 1 },
+  { job_type: "painting.pressure_wash", category: "Painting", keywords: ["pressure wash", "pressure washing", "power wash", "power washing", "wash the house", "wash driveway"], trade: "paint", itemId: "pressure-washing", unit: "sq ft", defaultQuantity: 800, priority: 1 },
+  { job_type: "painting.popcorn_removal", category: "Painting", keywords: ["popcorn ceiling", "popcorn removal", "remove popcorn", "acoustic ceiling", "textured ceiling removal"], trade: "paint", itemId: "popcorn-ceiling-removal", unit: "sq ft", defaultQuantity: 400, priority: 1 },
+  { job_type: "painting.wallpaper_removal", category: "Painting", keywords: ["wallpaper", "remove wallpaper", "wallpaper removal", "strip wallpaper"], trade: "paint", itemId: "wallpaper-removal", unit: "sq ft", defaultQuantity: 400, priority: 1 },
+  { job_type: "painting.trim", category: "Painting", keywords: ["trim", "baseboard", "baseboards", "crown molding", "molding", "paint trim"], trade: "paint", itemId: "trim-painting", unit: "linear foot", defaultQuantity: 120, priority: 1 },
+  // Deck staining is the SAME job as carpentry.deck_refinish and shares its
+  // item — a deck contractor and a painter both do it at the same $2-5/sq ft.
+  // It needs its own Painting-category entry because classification is scoped
+  // by category: a user who tapped Painting never sees the Carpentry entries,
+  // and would otherwise fall through to a per-sq-ft interior repaint.
+  { job_type: "painting.deck_stain", category: "Painting", keywords: ["deck", "stain deck", "deck stain", "staining deck", "seal deck", "deck sealing", "restain deck"], trade: "deck", itemId: "deck-refinish", unit: "sq ft", defaultQuantity: 300, priority: 1 },
 
   // Carpentry
   // Build vs. repair. The bare "deck" entry means BUILD, so any repair word

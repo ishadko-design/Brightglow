@@ -425,6 +425,32 @@ export const COST_CATALOG: CostCatalogEntry[] = [
   { itemId: "paint-exterior-labor", trade: "paint", description: "Exterior painting, per sq ft of siding", unit: "sq ft", soc: PAINTER, laborHours: b(0.012, 0.02, 0.032), materials: b(0.32, 0.56, 0.96), setup: { hours: b(4.5, 7.5, 12), materials: b(120, 210, 360) } },
   // sanity: kitchen cabinet spray-refinish $1,500–4,000 (~25 LF)
   { itemId: "cabinet-painting-spray", trade: "paint", description: "Cabinet spray painting, per linear foot of cabinetry", unit: "linear foot", soc: PAINTER, laborHours: b(0.7, 1.05, 1.75), materials: b(5.6, 10.5, 17.5), setup: { hours: b(6, 9, 15), materials: b(48, 90, 150) } },
+  // Painting REPAIRS and prep work, added 2026-07-23. The category priced whole
+  // repaints only, so the small jobs people actually call a painter for — a
+  // ceiling stain after a leak, a patched hole, a wall to pressure wash —
+  // classified to a per-sq-ft repaint and quoted a room.
+  //
+  // Bands: the first three from docs/pricing-research/anchors-verified.json,
+  // the last three from Angi/HomeGuide/HomeAdvisor/Fixr 2026.
+  //
+  // Setup dominates the spot repairs: masking, drop cloths, mixing to match the
+  // existing colour and coming back for a second coat cost the same whether the
+  // patch is one hole or three.
+  // sanity: ceiling water stain repair + touch-up $150–600 per spot
+  { itemId: "ceiling-stain-repair", trade: "paint", description: "Water stain / ceiling spot repair, stain-blocking primer and blend", unit: "each", soc: PAINTER, laborHours: b(0.35, 0.6, 1), materials: b(12, 28, 60), setup: { hours: b(1.1, 2, 3.4), materials: b(28, 60, 130) } },
+  // sanity: drywall patch and paint $75–250 per patch
+  { itemId: "drywall-patch-paint", trade: "paint", description: "Drywall patch and paint (hole, nail pop, crack)", unit: "each", soc: PAINTER, laborHours: b(0.3, 0.5, 0.85), materials: b(8, 18, 40), setup: { hours: b(0.7, 1.2, 2), materials: b(15, 32, 70) } },
+  // Priced per sq ft of surface washed. sanity: $0.10–0.80/sq ft
+  { itemId: "pressure-washing", trade: "paint", description: "Pressure washing (house, deck, driveway)", unit: "sq ft", soc: PAINTER, laborHours: b(0.0018, 0.0038, 0.0075), materials: b(0.01, 0.02, 0.05), setup: { hours: b(0.8, 1.5, 2.6), materials: b(15, 35, 75) } },
+  // Removal only — a new texture or a skim coat is extra, and ASBESTOS testing
+  // is a separate trade entirely (pre-1980 ceilings run $5–20/sq ft more, which
+  // this deliberately does not model rather than guessing at it).
+  // sanity: popcorn ceiling removal $1–6 per sq ft
+  { itemId: "popcorn-ceiling-removal", trade: "paint", description: "Popcorn ceiling removal (no asbestos), scrape and finish", unit: "sq ft", soc: PAINTER, laborHours: b(0.012, 0.022, 0.04), materials: b(0.15, 0.35, 0.8), setup: { hours: b(1.5, 2.6, 4.4), materials: b(30, 65, 140) } },
+  // sanity: wallpaper removal ~$535 for a 12x12 room (~144 sq ft → $2–5/sq ft)
+  { itemId: "wallpaper-removal", trade: "paint", description: "Wallpaper removal and wall prep", unit: "sq ft", soc: PAINTER, laborHours: b(0.016, 0.028, 0.048), materials: b(0.09, 0.2, 0.45), setup: { hours: b(1.4, 2.5, 4.2), materials: b(25, 55, 120) } },
+  // sanity: trim / baseboard painting $0.50–3 per linear foot
+  { itemId: "trim-painting", trade: "paint", description: "Trim, baseboard and crown molding painting", unit: "linear foot", soc: PAINTER, laborHours: b(0.008, 0.016, 0.028), materials: b(0.08, 0.18, 0.35), setup: { hours: b(1, 1.8, 3), materials: b(20, 42, 90) } },
 
   // --- deck / framing / cabinetry (carpentry trades) ---------------------
   // sanity: pressure-treated deck $25–60 per sq ft built

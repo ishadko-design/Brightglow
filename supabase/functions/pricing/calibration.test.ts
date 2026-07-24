@@ -117,6 +117,13 @@ const REFERENCE: Record<string, Ref> = {
   "paint-interior-labor": { low: 1.2, high: 3.2 },
   "paint-exterior-labor": { low: 1.33, high: 3.33 },
   "cabinet-painting-spray": { low: 60, high: 160 },
+  // Painting repairs / prep — anchors-verified.json + Angi/HomeGuide 2026
+  "ceiling-stain-repair": { low: 150, high: 600 },
+  "drywall-patch-paint": { low: 75, high: 250 },
+  "pressure-washing": { low: 0.1, high: 0.8 },
+  "popcorn-ceiling-removal": { low: 1, high: 6 },
+  "wallpaper-removal": { low: 2, high: 5 },
+  "trim-painting": { low: 0.5, high: 3 },
   // carpentry trades
   "pressure-treated-installed": { low: 25, high: 60 },
   "deck-board-replacement": { low: 35, high: 110 },

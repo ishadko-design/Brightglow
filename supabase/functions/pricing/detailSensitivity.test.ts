@@ -45,6 +45,9 @@ const CASES: Case[] = [
   { base: "replace windows", detailed: "replace 6 windows", lever: "window count" },
   { base: "install solar panels", detailed: "install 32 solar panels", lever: "panel count" },
   { base: "install outlets", detailed: "install 5 outlets", lever: "outlet count" },
+  // Painting prep is area-priced: a stated area must move it.
+  { base: "remove popcorn ceiling", detailed: "remove popcorn ceiling, 900 sq ft", lever: "ceiling area" },
+  { base: "pressure wash my house", detailed: "pressure wash my house, 2200 sq ft", lever: "washed area" },
   // Count-priced electrical: a stated number of lights must move the price.
   { base: "install recessed lighting", detailed: "install 9 recessed lights", lever: "can light count" },
   // Auto: the chat asks full / partial / removal, so that answer must land.
@@ -89,6 +92,9 @@ const REPAIR_VS_REPLACE: Array<{ repair: string; replace: string }> = [
   { repair: "AC not cooling", replace: "install central air conditioning" },
   { repair: "furnace wont ignite", replace: "replace gas furnace" },
   { repair: "thermostat not working", replace: "install smart thermostat" },
+  // Painting: a patch is not a repaint.
+  { repair: "hole in the wall", replace: "paint a 250 sq ft room" },
+  { repair: "water stain on ceiling", replace: "paint a 250 sq ft room" },
 ];
 
 Deno.test("repairing a thing costs less than replacing it outright", () => {
