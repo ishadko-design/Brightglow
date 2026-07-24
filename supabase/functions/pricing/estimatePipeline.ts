@@ -161,7 +161,8 @@ export function estimateInHouse(input: EstimateInput): EstimateResult {
       entry,
       quantity,
       description,
-      addOns.map((a) => a.itemId),
+      addOns.filter((a) => !a.flat).map((a) => a.itemId),
+      addOns.filter((a) => a.flat).map((a) => a.itemId),
     )
     : null;
   if (!composed) return { kind: "insufficient", reason: "no_items", entry };

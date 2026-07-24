@@ -54,6 +54,12 @@ const SERVICE_MINIMUMS: Record<string, number> = {
   doors: 150,
   landscaping: 100,
   countertops: 150,
+  // Truck-roll trades added 2026-07-22. Appliance and pest both sell a minimum
+  // visit the market actually posts (a diagnostic call, an initial treatment);
+  // remediation sits higher because the crew arrives with equipment.
+  appliance: 90,
+  remediation: 250,
+  pest: 125,
   // Auto: the customer drives to the shop, so there's no truck roll to cover —
   // minimums are a shop-supplies/bay-time floor and sit well below the trades'.
   // Tires and detailing genuinely sell $20–30 tickets (a flat repair, a wash),

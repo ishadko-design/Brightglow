@@ -298,7 +298,9 @@ Deno.test("fetchMaterialFloorRaw sources tub/toilet/vanity/tile for bathroom.ful
 Deno.test("classifyJobType with a category keeps the original behavior", () => {
   assertEquals(classifyJobType("Flooring", "replaced hardwood floor 300 sq ft")?.job_type, "flooring.hardwood");
   assertEquals(classifyJobType("Plumbing", "something odd")?.job_type, "plumbing.general");
-  assertEquals(classifyJobType("Mold & Pest Control", "ants everywhere"), null);
+  // Covered since 2026-07-22 — this asserted `null` for as long as the
+  // category had no entries at all.
+  assertEquals(classifyJobType("Mold & Pest Control", "ants everywhere")?.job_type, "pest.treatment");
 });
 
 Deno.test("classifyJobType infers the category from a stem in the description", () => {
@@ -349,6 +351,23 @@ Deno.test("resolveQuantity counts each-unit items and halves pair-unit counts", 
   assertEquals(resolveQuantity(window, "replace a window"), { quantity: 1, isDefaulted: true });
   // dimension strings are not counts
   assertEquals(resolveQuantity(window, "window 72x88"), { quantity: 1, isDefaulted: true });
+});
+
+Deno.test("resolveQuantity reads a tire count instead of always billing a full set", () => {
+  // Tires are per-unit, so an unread count doubles the quote. "replace 2 tires"
+  // priced 4 until "tire" joined COUNTABLE_NOUNS (2026-07-22).
+  const two = classifyJobType("Tires", "replace 2 tires")!;
+  assertEquals(two.job_type, "auto.tire_replacement");
+  assertEquals(resolveQuantity(two, "replace 2 tires"), { quantity: 2, isDefaulted: false });
+  assertEquals(
+    resolveQuantity(two, "Replace 4 tires on Tesla model 3"),
+    { quantity: 4, isDefaulted: false },
+  );
+  // No count stated → the car default (4), flagged as defaulted.
+  assertEquals(resolveQuantity(two, "new tires please"), { quantity: 4, isDefaulted: true });
+  // "tire" sits inside "entire" — a count after it is not a tire count.
+  const roof = classifyJobType("", "redo the entire roof")!;
+  assertEquals(resolveQuantity(roof, "reshingle the entire 2 story roof").isDefaulted, true);
 });
 
 Deno.test("classifyJobType prices a vanity as a vanity, not a kitchen's worth of cabinets", () => {

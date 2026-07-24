@@ -71,6 +71,19 @@ export const TRADE_BURDEN: Record<string, number> = {
   // p25/p75 giving $89–$139.
   "moto-repair": 4.7,
   "moto-tires": 4.7,
+  // Mold remediation bills well above what its wage grade implies: the crew
+  // arrives with HEPA air scrubbers, negative-air machines and dehumidifiers,
+  // carries certification and pollution liability insurance, and pays to
+  // dispose of what it removes. 2.8 × the $23.84 proxy median lands at ~$67/hr,
+  // against a $75–110/hr market — the balance sits in the per-job setup, which
+  // is where the equipment and disposal actually live.
+  "remediation": 2.8,
+  // Appliance service is a truck-roll business like the auto trades, not a
+  // construction trade: a stocked parts van, a flat-rate repair book, and a
+  // diagnostic that gets billed whether or not the repair proceeds. 3.4 × the
+  // $23.84 national median lands at ~$81/hr, with p25/p75 giving $67–$102 —
+  // inside the $50–150/hr appliance-tech labor range published for 2026.
+  "appliance": 3.4,
 };
 
 /** The wage→billed-rate multiplier that applies to a trade. */
@@ -93,6 +106,24 @@ const FLOOR_SANDER = "47-2043";
 const TILE_SETTER = "47-2044";
 const LANDSCAPER = "37-3011";
 const MAINTENANCE = "49-9071";
+// Home Appliance Repairers are SOC 49-9031, which ingest-oews.py does not pull
+// — adding it means re-running the ingest against the BLS release, not editing
+// the generated tables. 49-9071 is the standing proxy: nationally $23.84
+// median against 49-9031's $22–24, and it is present in the state AND metro
+// tables, so appliance work still prices locally. Swap this one constant if
+// 49-9031 is ever ingested.
+const APPLIANCE_TECH = MAINTENANCE;
+// Same story for the two Mold & Pest trades. Hazardous Materials Removal
+// Workers (47-4041) and Pest Control Workers (37-2021) are both absent from the
+// ingested tables — national, state AND metro — so each takes the closest
+// ingested occupation as a documented proxy:
+//   remediation → 49-9071 at $23.84 median, against 47-4041's ~$24–25. A
+//     remediation crew is demo-and-cleanup labor, which is what 49-9071 is.
+//   pest        → 37-3011 at $18.82 median, against 37-2021's ~$19–20. Both are
+//     route-based outdoor service work at the same wage grade.
+// Swap either constant if ingest-oews.py is ever re-run with its real SOC.
+const REMEDIATION = MAINTENANCE;
+const PEST_TECH = LANDSCAPER;
 // Auto & moto
 const AUTO_TECH = "49-3023";
 const BODY_REPAIRER = "49-3021";
@@ -200,6 +231,99 @@ export const COST_CATALOG: CostCatalogEntry[] = [
   { itemId: "tv-cord-concealment", trade: "electrical", description: "Conceal TV cords in wall", unit: "each", soc: ELECTRICIAN, laborHours: b(1, 1.5, 3), materials: b(30, 60, 120) },
   // sanity: brick/stone/fireplace surcharge $75–300 over a drywall mount
   { itemId: "tv-mount-masonry", trade: "electrical", description: "Masonry/fireplace mounting surcharge", unit: "each", soc: MAINTENANCE, laborHours: b(0.75, 1.5, 2.5), materials: b(20, 40, 80) },
+
+  // --- appliances ------------------------------------------------------
+  // Added 2026-07-22. Appliance work had no home in the taxonomy at all, so
+  // "replace my dishwasher" classified into Plumbing, found no entry, fell to
+  // plumbing.general and was declined by the general-fallback guard — a
+  // top-of-funnel request answered with silence. It is not an electrician's
+  // trade or a plumber's; appliance repair companies are their own trade with
+  // their own businesses, hence its own category rather than more Electrical
+  // rows.
+  //
+  // Every item carries `setup`: an appliance call is mostly the truck roll and
+  // the diagnosis, so a second appliance on the same visit costs a fraction of
+  // the first. Same shape as the plumbing repairs, and the reason the flat
+  // "$75–125 diagnostic fee" the market quotes is not modelled as its own
+  // item — it is the setup band on every entry below.
+  //
+  // The install items EXCLUDE the appliance itself. A dishwasher is bought at
+  // retail, not from the installer, and folding a $400–1,500 unit into a labor
+  // quote would triple every number for a cost the user has usually already
+  // paid. Anchors are labor-and-connections only, which is what the trade
+  // actually quotes.
+  // sanity: dishwasher repair $115–400 (pump, inlet valve, door seal, board)
+  { itemId: "dishwasher-repair", trade: "appliance", description: "Dishwasher repair — pump, inlet valve, door seal or control board", unit: "each", soc: APPLIANCE_TECH, laborHours: b(0.5, 0.8, 1.2), materials: b(20, 75, 160), setup: { hours: b(0.5, 0.7, 1), materials: b(0, 0, 0) } },
+  // sanity: dishwasher swap $150–450, unit not included (existing hookup)
+  { itemId: "dishwasher-install", trade: "appliance", description: "Replace dishwasher in existing opening (unit not included)", unit: "each", soc: APPLIANCE_TECH, laborHours: b(0.8, 1.2, 1.8), materials: b(20, 45, 90), setup: { hours: b(0.5, 0.7, 1), materials: b(0, 10, 25) } },
+  // First-time install: no existing supply, drain tee or dedicated circuit.
+  // The real cost fork on a dishwasher job, and a scope add-on rather than its
+  // own job type — the customer asks for a dishwasher, not for a supply line.
+  // Band anchored to plumber-run new-hookup pricing; it prices on the
+  // appliance trade because add-ons must share the base job's trade.
+  // sanity: new dishwasher hookup (supply + drain + circuit) $150–600
+  { itemId: "dishwasher-new-hookup", trade: "appliance", description: "New dishwasher hookup — supply line, drain tee and circuit", unit: "each", soc: APPLIANCE_TECH, laborHours: b(1.5, 2.5, 4), materials: b(40, 90, 200) },
+  // sanity: refrigerator repair $200–650 (compressor jobs run to the top)
+  { itemId: "refrigerator-repair", trade: "appliance", description: "Refrigerator repair — compressor, evaporator fan, defrost or control board", unit: "each", soc: APPLIANCE_TECH, laborHours: b(0.8, 1.2, 2), materials: b(60, 190, 420), setup: { hours: b(0.5, 0.7, 1), materials: b(0, 0, 0) } },
+  // sanity: washing machine repair $120–500 (pump, belt, valve, lid switch)
+  { itemId: "washer-repair", trade: "appliance", description: "Washing machine repair — drain pump, belt, inlet valve or lid switch", unit: "each", soc: APPLIANCE_TECH, laborHours: b(0.6, 1, 1.6), materials: b(25, 85, 230), setup: { hours: b(0.5, 0.7, 1), materials: b(0, 0, 0) } },
+  // sanity: dryer repair $100–400 (element, thermal fuse, belt, rollers)
+  { itemId: "dryer-repair", trade: "appliance", description: "Dryer repair — heating element, thermal fuse, belt or rollers", unit: "each", soc: APPLIANCE_TECH, laborHours: b(0.5, 0.9, 1.4), materials: b(20, 60, 160), setup: { hours: b(0.5, 0.7, 1), materials: b(0, 0, 0) } },
+  // sanity: oven/range repair $100–450 (igniter, element, control board)
+  { itemId: "oven-range-repair", trade: "appliance", description: "Oven or range repair — igniter, heating element or control board", unit: "each", soc: APPLIANCE_TECH, laborHours: b(0.5, 0.9, 1.5), materials: b(25, 80, 200), setup: { hours: b(0.5, 0.7, 1), materials: b(0, 0, 0) } },
+  // sanity: washer/dryer hookup $100–300, units not included
+  { itemId: "washer-dryer-install", trade: "appliance", description: "Install and hook up washer/dryer (units not included)", unit: "each", soc: APPLIANCE_TECH, laborHours: b(0.5, 0.8, 1.2), materials: b(15, 35, 75), setup: { hours: b(0.4, 0.6, 0.9), materials: b(0, 0, 0) } },
+  // sanity: range/cooktop install $100–400 incl. gas connector or 240V cord
+  { itemId: "range-oven-install", trade: "appliance", description: "Install range, cooktop or wall oven (unit not included)", unit: "each", soc: APPLIANCE_TECH, laborHours: b(0.5, 0.9, 1.4), materials: b(20, 50, 120), setup: { hours: b(0.4, 0.6, 0.9), materials: b(0, 0, 0) } },
+  // sanity: over-the-range microwave install $150–400 incl. vent kit
+  { itemId: "otr-microwave-install", trade: "appliance", description: "Install over-the-range microwave, incl. venting (unit not included)", unit: "each", soc: APPLIANCE_TECH, laborHours: b(0.8, 1.2, 1.8), materials: b(15, 35, 80), setup: { hours: b(0.4, 0.6, 0.9), materials: b(0, 0, 0) } },
+  // The one appliance job that is a fire-safety call rather than a breakdown,
+  // and the one people search by name.
+  // sanity: dryer vent cleaning $100–200
+  { itemId: "dryer-vent-cleaning", trade: "appliance", description: "Dryer vent cleaning", unit: "each", soc: APPLIANCE_TECH, laborHours: b(0.6, 0.9, 1.3), materials: b(5, 10, 25), setup: { hours: b(0.3, 0.5, 0.7), materials: b(0, 0, 0) } },
+  // category-general fallback: one tech, small parts allowance
+  { itemId: "appliance-labor-hourly", trade: "appliance", description: "General appliance service labor", unit: "hour", soc: APPLIANCE_TECH, laborHours: b(1, 1, 1), materials: b(0, 10, 30) },
+
+  // --- mold & pest -----------------------------------------------------
+  // Added 2026-07-22, the last category with no cost data at all. Its
+  // CATEGORY_GENERAL was `null` on the grounds that EPCI had no trade for it —
+  // an EPCI-era judgment that stopped applying once the in-house catalog became
+  // the live path, and was never revisited. The cost of leaving it: the clarify
+  // model could not return a category that wasn't in the taxonomy, reached for
+  // the nearest available word — "Repair", which belongs to Auto & moto — and a
+  // request to remediate mold behind drywall was quoted $274 of car-shop door
+  // rate (reported live 2026-07-22).
+  //
+  // Remediation is priced per square foot of AFFECTED AREA, the unit the trade
+  // quotes and the one the clarify chat can actually ask for. Setup carries
+  // roughly half the job at the reference size on purpose: containment, the
+  // air scrubber, the disposal run and the post-clearance wipe-down are paid
+  // once whether the patch is 20 sq ft or 200.
+  // sanity: mold remediation $10–25 per sq ft of affected area
+  { itemId: "mold-remediation", trade: "remediation", description: "Mold remediation — demo, HEPA cleaning and antimicrobial treatment", unit: "sq ft", soc: REMEDIATION, laborHours: b(0.05, 0.075, 0.11), materials: b(1.2, 2.5, 5), setup: { hours: b(5, 8, 12), materials: b(120, 260, 550) } },
+  // Rebuild (new drywall, texture, paint) is deliberately NOT in that band —
+  // remediation quotes stop at the clean, dry cavity, and folding a rebuild in
+  // would double the number for work the customer often hires separately.
+  // sanity: mold inspection with lab sampling $300–1,000
+  { itemId: "mold-inspection", trade: "remediation", description: "Mold inspection, incl. air/surface sampling and lab analysis", unit: "each", soc: REMEDIATION, laborHours: b(1.8, 3, 4.8), materials: b(80, 190, 420) },
+  // Scope add-on: full containment for a job that would otherwise be a
+  // wipe-down. The single biggest fork in a remediation quote.
+  // sanity: containment barriers + negative air $400–1,500
+  { itemId: "mold-containment", trade: "remediation", description: "Full containment — sealed barriers, negative air, HEPA filtration", unit: "each", soc: REMEDIATION, laborHours: b(1.8, 3.5, 6), materials: b(230, 420, 850) },
+  // category-general fallback for the whole category. Hourly, like the other
+  // home trades: "Mold & Pest Control" spans a $250 ant treatment and a $2k
+  // remediation, so any specific job would be the wrong guess half the time.
+  { itemId: "remediation-hourly", trade: "remediation", description: "General mold/remediation labor", unit: "hour", soc: REMEDIATION, laborHours: b(1, 1, 1), materials: b(0, 10, 30) },
+  // sanity: one-off pest treatment (ants, roaches, spiders, wasps) $150–400
+  { itemId: "pest-treatment", trade: "pest", description: "Single pest treatment — interior and exterior", unit: "each", soc: PEST_TECH, laborHours: b(0.75, 1.2, 2), materials: b(35, 75, 160), setup: { hours: b(0.75, 1.2, 1.8), materials: b(10, 25, 55) } },
+  // sanity: termite treatment $500–2,500 (liquid barrier or bait system)
+  { itemId: "termite-treatment", trade: "pest", description: "Termite treatment — liquid barrier or bait system", unit: "project", soc: PEST_TECH, laborHours: b(3, 6, 12), materials: b(350, 900, 2100) },
+  // sanity: rodent removal + exclusion $200–800
+  { itemId: "rodent-exclusion", trade: "pest", description: "Rodent removal and entry-point exclusion", unit: "project", soc: PEST_TECH, laborHours: b(1.5, 3, 6), materials: b(80, 180, 420) },
+  // Priced per ROOM — bed bug work is quoted room by room, and a whole-home
+  // heat treatment is simply every room at once.
+  // sanity: bed bug treatment $250–900 per room
+  { itemId: "bed-bug-treatment", trade: "pest", description: "Bed bug treatment, per room", unit: "each", soc: PEST_TECH, laborHours: b(1.2, 2, 3.5), materials: b(70, 160, 350), setup: { hours: b(1, 1.5, 2.5), materials: b(20, 40, 90) } },
 
   // --- hvac ------------------------------------------------------------
   // sanity: gas furnace replacement $3,000–6,500 installed

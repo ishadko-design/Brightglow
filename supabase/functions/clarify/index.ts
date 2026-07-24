@@ -26,7 +26,12 @@
 //           skips the chat and goes straight to results)
 
 import Anthropic from "npm:@anthropic-ai/sdk";
-import { CATEGORY_GENERAL, COUNTABLE_NOUNS, JOB_TYPE_TAXONOMY } from "../pricing/pricingEngine.ts";
+import {
+  AUTO_CATEGORIES,
+  CATEGORY_GENERAL,
+  COUNTABLE_NOUNS,
+  JOB_TYPE_TAXONOMY,
+} from "../pricing/pricingEngine.ts";
 import { GENERIC_REPLIES, normalizeQuickReplies } from "./quickReplies.ts";
 
 const APP_TOKEN = Deno.env.get("APP_TOKEN") ?? "";
@@ -36,12 +41,15 @@ const ANTHROPIC_API_KEY = Deno.env.get("ANTHROPIC_API_KEY") ?? "";
 // match is confident; most requests finish in 1-3 questions.
 const HARD_CEILING = 7;
 
-// Home-trade categories the pricing engine knows (drives `priceable`).
-const HOME_CATEGORIES = [...new Set(JOB_TYPE_TAXONOMY.map((e) => e.category))];
+// Home-trade categories the pricing engine knows (drives `priceable`). The
+// taxonomy holds BOTH verticals, so the auto services have to be subtracted —
+// without that, this list offered the model "Repair" as a home category and
+// `isPriceable("home", "Repair")` answered true.
+const HOME_CATEGORIES = [...new Set(JOB_TYPE_TAXONOMY.map((e) => e.category))]
+  .filter((c) => !AUTO_CATEGORIES.has(c));
 
 // Auto & moto services — must mirror `autoCategoryItems` in Brightglow's
-// Vertical.swift. No pricing data source exists for vehicle work, so these are
-// never `priceable`; the chat's whole value here is match + photo terms.
+// Vertical.swift. Priced since 2026-07-20, same as the home trades.
 const AUTO_SERVICES = ["Repair", "Tires", "Cleaning & Detailing", "Body & Paint", "Glass"];
 
 const ALL_CATEGORIES = [...HOME_CATEGORIES, ...AUTO_SERVICES];
@@ -207,10 +215,20 @@ function json(payload: unknown, status = 200): Response {
   });
 }
 
-/// A price is only ever expected for a covered home trade. Auto/moto and any
-/// category the pricing engine doesn't know are match-only.
+/// Whether the results screen should attempt a price — it skips the pricing
+/// request entirely when this is false, so a wrong `false` here is silent.
+///
+/// Auto & moto used to be excluded on the grounds that no cost data existed for
+/// vehicle work. That stopped being true on 2026-07-20, when the catalog gained
+/// ~40 auto/moto items with published anchors and all five categories got a
+/// general entry — but this function was never updated, so every car job the
+/// engine could price came back match-only and the number was thrown away
+/// before it was ever requested (reported 2026-07-22: "no price for any of the
+/// car jobs", including wraps, which price at $2.2–7k).
 function isPriceable(vertical: string, category: string): boolean {
-  return vertical === "home" && HOME_CATEGORIES.includes(category);
+  return vertical === "auto_moto"
+    ? AUTO_CATEGORIES.has(category)
+    : HOME_CATEGORIES.includes(category);
 }
 
 /** Ask the model for options for a question it already produced without them.
@@ -355,7 +373,19 @@ Deno.serve(async (req) => {
   }
 
   const vertical = parsed.vertical === "auto_moto" ? "auto_moto" : "home";
-  const category = parsed.category ?? "";
+  // A category from the OTHER vertical is incoherent, and the client reads the
+  // vertical off the category name — so "home" + "Repair" opened a car-shop
+  // list for a fridge repair (2026-07-22). Drop the category rather than the
+  // vertical: the vertical is the model's explicit answer to a direct question,
+  // while the category is a best-fit pick from a list that may not contain the
+  // right slot. An empty category still searches on `search_terms`.
+  const claimed = parsed.category ?? "";
+  const coherent = claimed === "" ||
+    (vertical === "auto_moto") === AUTO_CATEGORIES.has(claimed);
+  if (!coherent) {
+    console.log("clarify: cross-vertical category dropped", JSON.stringify({ vertical, category: claimed }));
+  }
+  const category = coherent ? claimed : "";
   return json({
     action: "done",
     vertical,

@@ -71,6 +71,12 @@ struct MainScreen: View {
     @State private var chatCategory = ""
     @State private var chatSearchTerms = ""
     @State private var chatPhotoTerms = ""
+    /// The vertical the chat resolved ("home" / "auto_moto"), kept because the
+    /// results screen otherwise infers it from the CATEGORY NAME — and Auto &
+    /// moto owns the word "Repair". "Fix fridge" came back as category "Repair"
+    /// and opened a car-shop list with an Auto/Moto toggle (reported live
+    /// 2026-07-22). An explicit home vertical has to outrank that inference.
+    @State private var chatVertical = ""
     /// Whether a real price is expected (covered home trade). Auto/moto and
     /// uncovered categories are match-only, so the list shows no number.
     @State private var chatPriceable = true
@@ -97,6 +103,14 @@ struct MainScreen: View {
     private var categoryPriceable: Bool {
         photoDetails?.isEmpty == false || !attachedImages.isEmpty
     }
+    /// The same question for an Auto & moto card, where the answer is different.
+    /// The home category-general entries are rate proxies ("2 plumber hours",
+    /// "250 sq ft of paint") that say little about any actual job. The auto ones
+    /// were deliberately built as each category's MOST-REQUESTED JOB instead —
+    /// a set of four tires, a full detail, a windshield — because nobody buys
+    /// detailing or glass by the hour (see CATEGORY_GENERAL in pricingEngine.ts).
+    /// That is a real figure for a bare browse, so auto cards show it.
+    private var autoCategoryPriceable: Bool { true }
     /// The clarifying Q&A of the current search, carried to results and on to the
     /// quote-request screen so the message a business receives includes the
     /// AI-clarified details.
@@ -650,7 +664,7 @@ struct MainScreen: View {
                                          searchQuery: goAuto?.searchQuery ?? "",
                                          presetCoordinate: locationStore.coordinate,
                                          attachedImages: attachedImages,
-                                         priceable: categoryPriceable,
+                                         priceable: autoCategoryPriceable,
                                          initialVehicle: autoInitialVehicle)
                 }
                 // Returning from results: restore what the user came in with, so
@@ -876,6 +890,7 @@ struct MainScreen: View {
     /// gates price.
     private var searchResults: some View {
         ContractorListScreen(category: chatCategory,
+                             clarifyVertical: chatVertical,
                              searchQuery: submittedQuery,
                              presetCoordinate: locationStore.coordinate,
                              attachedImages: attachedImages.isEmpty ? pickedImages : attachedImages,
@@ -912,6 +927,7 @@ struct MainScreen: View {
         clarifyTranscript = .empty
         chatDetails = nil
         chatCategory = ""
+        chatVertical = ""
         chatSearchTerms = ""
         chatPhotoTerms = ""
         chatPriceable = true
@@ -1013,6 +1029,9 @@ struct MainScreen: View {
         // chat that never finished.
         let resolvedCategory = outcome?.category ?? ""
         chatCategory = resolvedCategory.isEmpty ? (clarifyDetectedAuto?.name ?? "") : resolvedCategory
+        // Only trust the chat's vertical when the chat actually resolved one; a
+        // photo that already identified a vehicle keeps its own verdict.
+        chatVertical = clarifyDetectedAuto != nil ? "auto_moto" : (outcome?.vertical ?? "")
         chatSearchTerms = outcome?.searchTerms ?? ""
         chatPhotoTerms = outcome?.photoTerms ?? ""
         chatPriceable = outcome?.priceable ?? true

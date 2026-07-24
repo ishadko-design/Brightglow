@@ -17,6 +17,13 @@ import CoreLocation
 
 struct ContractorListScreen: View {
     var category: String = ""
+    /// The vertical the clarifying chat resolved ("home" / "auto_moto"), empty
+    /// when no chat ran. Everything below infers the vertical from the category
+    /// NAME, and the Auto & moto vertical owns the generic word "Repair" — so a
+    /// home request the model labelled "Repair" opened a car-shop list, complete
+    /// with an Auto/Moto toggle ("fix fridge", reported live 2026-07-22). An
+    /// explicit "home" outranks the inference; empty leaves it untouched.
+    var clarifyVertical: String = ""
     var searchQuery: String = ""
     var aiResult: AIResult? = nil
     /// When set (manual ZIP/city or an already-resolved fix), used instead of GPS.
@@ -45,6 +52,7 @@ struct ContractorListScreen: View {
     var clarifyTranscript: ClarifyTranscript = .empty
 
     init(category: String = "",
+         clarifyVertical: String = "",
          searchQuery: String = "",
          aiResult: AIResult? = nil,
          presetCoordinate: CLLocationCoordinate2D? = nil,
@@ -56,6 +64,7 @@ struct ContractorListScreen: View {
          clarifyTranscript: ClarifyTranscript = .empty,
          initialVehicle: VehicleFilter? = nil) {
         self.category = category
+        self.clarifyVertical = clarifyVertical
         self.searchQuery = searchQuery
         self.aiResult = aiResult
         self.presetCoordinate = presetCoordinate
@@ -161,7 +170,21 @@ struct ContractorListScreen: View {
     }
 
     /// The Auto & moto category being viewed, if any (drives the vehicle filter).
-    private var autoCategory: AutoCategory? { autoCategoryItems.first { $0.name == category } }
+    /// A chat that resolved the request as a home trade vetoes the match: the
+    /// category names overlap across verticals, the vertical itself doesn't.
+    private var autoCategory: AutoCategory? {
+        guard clarifyVertical != "home" else { return nil }
+        return autoCategoryItems.first { $0.name == category }
+    }
+
+    /// Whether vehicle photos count as work photos for this search. Same veto as
+    /// `autoCategory`, and needed separately because `isAutoService` also matches
+    /// on the query text — "refrigerator repair service" hits the Repair
+    /// keywords, which would keep car photos on an appliance search.
+    private func allowsVehiclePhotos(_ query: String) -> Bool {
+        guard clarifyVertical != "home" else { return false }
+        return isAutoService(category: category, searchQuery: query)
+    }
 
     /// Query actually sent to Places — the moto variant when the filter is on
     /// Moto, else the chat's refined `search_terms` when present, else the raw
@@ -171,6 +194,26 @@ struct ContractorListScreen: View {
         if let auto = autoCategory { return auto.query(for: vehicle) }
         let override = businessSearchOverride.trimmingCharacters(in: .whitespacesAndNewlines)
         return override.isEmpty ? searchQuery : override
+    }
+
+    /// What the pricing engine classifies and sizes the job from.
+    ///
+    /// `effectiveSearchQuery` is the right phrase to find BUSINESSES with, but
+    /// for an auto category it is a synthetic Places query ("tire shop") that
+    /// carries nothing about the request — so "Replace 4 tires on a Model 3,
+    /// all-season" was being priced from the words "tire shop", losing both the
+    /// count and any grade signal (`resolveQuantity` and `qualityTier` both read
+    /// this string). Send the user's own words instead; an empty result means a
+    /// bare category browse, which the server answers with its typical-job
+    /// figure. Home is untouched — there `effectiveSearchQuery` is already
+    /// either the chat's refined phrase or the raw typed text.
+    private var pricingDescription: String {
+        guard let auto = autoCategory else { return effectiveSearchQuery }
+        let typed = searchQuery.trimmingCharacters(in: .whitespacesAndNewlines)
+        // A grid-card tap puts the synthetic phrase in `searchQuery`; a search
+        // puts the user's request there. Only the latter describes a job.
+        let synthetic = [auto.searchQuery.lowercased(), auto.motoSearchQuery.lowercased()]
+        return synthetic.contains(typed.lowercased()) ? "" : typed
     }
 
     /// What the user actually typed, if anything — auto categories carry a
@@ -638,7 +681,7 @@ struct ContractorListScreen: View {
             resolvedCoord = coord
             // Reuse verdicts from a previous launch so businesses screened before
             // show their photos immediately without re-downloading the pool.
-            let allowVehicles = isAutoService(category: category, searchQuery: query)
+            let allowVehicles = allowsVehiclePhotos(query)
             for c in contractors {
                 guard let v = ScreeningStore.shared.get(c.id, allowVehicles: allowVehicles) else { continue }
                 if !v.kept.isEmpty {
@@ -685,7 +728,7 @@ struct ContractorListScreen: View {
             if !contractors.isEmpty && priceable {
                 Task { @MainActor in
                     estimate = await ContractorLoader.estimate(
-                        category: category, searchQuery: query, near: coord,
+                        category: category, searchQuery: pricingDescription, near: coord,
                         photoDetails: photoDetails,
                         vehicle: allowVehicles ? vehicle : nil)
                 }
@@ -781,7 +824,7 @@ struct ContractorListScreen: View {
         // row shows placeholders (not a blank strip) while scanning. Scan deeper
         // into the pool if early photos are rejected, so a business whose first
         // shots are logos/people still surfaces its work photos.
-        let allowVehicles = isAutoService(category: category, searchQuery: effectiveSearchQuery)
+        let allowVehicles = allowsVehiclePhotos(effectiveSearchQuery)
         var kept: [ScreenedPhoto] = []
         var scanned = 0
         while kept.count < stripInitialFill && scanned < c.photos.count {
@@ -820,7 +863,7 @@ struct ContractorListScreen: View {
     private func enrichIfNeeded(_ c: Contractor) async {
         guard needsEnrich.remove(c.id) != nil,
               let kept = keptPhotos[c.id], !kept.isEmpty else { return }
-        let allowVehicles = isAutoService(category: category, searchQuery: effectiveSearchQuery)
+        let allowVehicles = allowsVehiclePhotos(effectiveSearchQuery)
         enrichInBackground(c.id, kept: kept, scanned: scannedCount[c.id] ?? kept.count,
                            allowVehicles: allowVehicles)
     }

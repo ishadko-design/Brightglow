@@ -671,6 +671,43 @@ export const JOB_TYPE_TAXONOMY: JobTypeEntry[] = [
   // Multi-word keywords only — a bare "tv" would substring-match unrelated text.
   { job_type: "electrical.tv_mount", category: "Electrical", keywords: ["tv mount", "mount tv", "mount a tv", "mount the tv", "mounting tv", "mounting a tv", "install tv", "install a tv", "install the tv", "tv install", "tv wall", "tv on wall", "tv on the wall", "wall mount tv", "hang tv", "hang a tv", "hang the tv", "tv bracket", "television", "flat screen", "flatscreen"], trade: "electrical", itemId: "tv-mount-install", unit: "each", defaultQuantity: 1 },
 
+  // Appliances (added 2026-07-22 — see the catalog block for why this is its
+  // own category and not more Electrical/Plumbing rows).
+  //
+  // Repair and install are separate entries for the same appliance because
+  // they are separate jobs at separate prices, and the word people type tells
+  // you which: symptoms ("not draining", "won't start") mean repair, the bare
+  // noun means the swap. Repair entries carry `priority: 1` so a symptom beats
+  // the plain-noun install entry even when the install keyword is longer.
+  //
+  // Where only one direction is a real job, there is only one entry: a
+  // refrigerator gets repaired (installing one is plugging it in), and a
+  // microwave gets installed (a broken one is replaced, not repaired).
+  { job_type: "appliances.dishwasher_repair", category: "Appliances", keywords: ["dishwasher repair", "repair dishwasher", "fix dishwasher", "fix my dishwasher", "dishwasher not draining", "dishwasher won't drain", "dishwasher wont drain", "dishwasher leaking", "dishwasher is leaking", "leaking dishwasher", "dishwasher not cleaning", "dishwasher not drying", "dishwasher won't start", "dishwasher wont start", "dishwasher broken", "broken dishwasher"], trade: "appliance", itemId: "dishwasher-repair", unit: "each", defaultQuantity: 1, priority: 1 },
+  { job_type: "appliances.dishwasher_install", category: "Appliances", keywords: ["dishwasher"], trade: "appliance", itemId: "dishwasher-install", unit: "each", defaultQuantity: 1 },
+  { job_type: "appliances.refrigerator_repair", category: "Appliances", keywords: ["refrigerator", "fridge", "freezer", "ice maker", "icemaker"], trade: "appliance", itemId: "refrigerator-repair", unit: "each", defaultQuantity: 1 },
+  { job_type: "appliances.washer_repair", category: "Appliances", keywords: ["washing machine", "washer repair", "repair washer", "fix washer", "fix my washer", "washer not draining", "washer not spinning", "washer won't spin", "washer wont spin", "washer leaking", "washer is leaking", "leaking washer", "washer won't start", "washer wont start"], trade: "appliance", itemId: "washer-repair", unit: "each", defaultQuantity: 1, priority: 1 },
+  { job_type: "appliances.dryer_repair", category: "Appliances", keywords: ["dryer repair", "repair dryer", "fix dryer", "fix my dryer", "dryer not heating", "dryer not drying", "dryer won't heat", "dryer wont heat", "dryer won't start", "dryer wont start", "dryer not spinning", "dryer takes forever"], trade: "appliance", itemId: "dryer-repair", unit: "each", defaultQuantity: 1, priority: 1 },
+  // "vent" alone belongs to HVAC — these are all multi-word for that reason.
+  { job_type: "appliances.dryer_vent", category: "Appliances", keywords: ["dryer vent", "vent cleaning", "lint buildup", "lint trap", "clean the vent"], trade: "appliance", itemId: "dryer-vent-cleaning", unit: "each", defaultQuantity: 1, priority: 1 },
+  { job_type: "appliances.oven_range_repair", category: "Appliances", keywords: ["oven repair", "repair oven", "fix oven", "fix my oven", "oven not heating", "oven won't heat", "oven wont heat", "stove repair", "fix stove", "stove not working", "range not heating", "burner not working", "burner won't light", "burner wont light", "cooktop repair", "oven won't turn on", "oven wont turn on"], trade: "appliance", itemId: "oven-range-repair", unit: "each", defaultQuantity: 1, priority: 1 },
+  { job_type: "appliances.range_install", category: "Appliances", keywords: ["install range", "install a range", "range install", "install stove", "install a stove", "stove install", "new stove", "install cooktop", "install a cooktop", "install oven", "install an oven", "install wall oven", "replace stove", "replace the stove"], trade: "appliance", itemId: "range-oven-install", unit: "each", defaultQuantity: 1 },
+  { job_type: "appliances.washer_dryer_install", category: "Appliances", keywords: ["install washer", "install a washer", "install dryer", "install a dryer", "install washing machine", "washer dryer hookup", "washer hookup", "dryer hookup", "hook up washer", "hook up dryer", "hook up the washer", "hook up the dryer"], trade: "appliance", itemId: "washer-dryer-install", unit: "each", defaultQuantity: 1, priority: 1 },
+  { job_type: "appliances.microwave_install", category: "Appliances", keywords: ["microwave"], trade: "appliance", itemId: "otr-microwave-install", unit: "each", defaultQuantity: 1 },
+
+  // Mold & Pest Control
+  // "mold" is word-boundary matched (see WORD_BOUNDARY_TERMS) — it sits inside
+  // "molding", and "replace the crown molding" stem-matched this category long
+  // before it had entries to land on.
+  // 100 sq ft is the reference job: at $10–25/sq ft that spans the published
+  // $1,100–3,400 average remediation, and the chat asks for the real area.
+  { job_type: "mold.remediation", category: "Mold & Pest Control", keywords: ["mold", "molds", "moldy", "black mold", "mold remediation", "mold removal", "remove mold", "mold behind", "mold in the wall", "mold on drywall", "mold cleanup", "mold remedy", "remediate", "mildew"], trade: "remediation", itemId: "mold-remediation", unit: "sq ft", defaultQuantity: 100 },
+  { job_type: "mold.inspection", category: "Mold & Pest Control", keywords: ["mold inspection", "mold test", "mold testing", "test for mold", "inspect for mold", "mold assessment", "air quality test", "spore count"], trade: "remediation", itemId: "mold-inspection", unit: "each", defaultQuantity: 1, priority: 1 },
+  { job_type: "pest.termite", category: "Mold & Pest Control", keywords: ["termite", "termites", "wood destroying", "tenting", "fumigation", "fumigate"], trade: "pest", itemId: "termite-treatment", unit: "project", defaultQuantity: 1, priority: 1 },
+  { job_type: "pest.rodent", category: "Mold & Pest Control", keywords: ["rodent", "rodents", "rat", "rats", "mice", "mouse", "squirrel", "raccoon", "opossum", "possum", "exclusion"], trade: "pest", itemId: "rodent-exclusion", unit: "project", defaultQuantity: 1, priority: 1 },
+  { job_type: "pest.bed_bugs", category: "Mold & Pest Control", keywords: ["bed bug", "bed bugs", "bedbug", "bedbugs"], trade: "pest", itemId: "bed-bug-treatment", unit: "each", defaultQuantity: 2, priority: 1 },
+  { job_type: "pest.treatment", category: "Mold & Pest Control", keywords: ["pest control", "exterminator", "extermination", "exterminate", "infestation", "ant", "ants", "roach", "roaches", "cockroach", "spider", "spiders", "wasp", "wasps", "hornet", "bee", "bees", "flea", "fleas", "silverfish", "earwig", "bug", "bugs", "insect", "insects"], trade: "pest", itemId: "pest-treatment", unit: "each", defaultQuantity: 1 },
+
   // HVAC
   { job_type: "hvac.furnace", category: "HVAC", keywords: ["furnace"], trade: "hvac", itemId: "gas-furnace-installed", unit: "project", defaultQuantity: 1 },
   { job_type: "hvac.ac", category: "HVAC", keywords: ["central air", "air condition", "a/c"], trade: "hvac", itemId: "central-ac-installed", unit: "project", defaultQuantity: 1 },
@@ -833,6 +870,7 @@ export const JOB_TYPE_TAXONOMY: JobTypeEntry[] = [
 export const CATEGORY_GENERAL: Record<string, JobTypeEntry | null> = {
   "Plumbing": { job_type: "plumbing.general", category: "Plumbing", keywords: [], trade: "plumbing", itemId: "plumber-hourly", unit: "hour", defaultQuantity: 2 },
   "Electrical": { job_type: "electrical.general", category: "Electrical", keywords: [], trade: "electrical", itemId: "electrician-hourly", unit: "hour", defaultQuantity: 2 },
+  "Appliances": { job_type: "appliances.general", category: "Appliances", keywords: [], trade: "appliance", itemId: "appliance-labor-hourly", unit: "hour", defaultQuantity: 2 },
   "HVAC": { job_type: "hvac.general", category: "HVAC", keywords: [], trade: "hvac", itemId: "hvac-labor-rate", unit: "hour", defaultQuantity: 2 },
   "Painting": { job_type: "painting.general", category: "Painting", keywords: [], trade: "paint", itemId: "paint-interior-labor", unit: "sq ft", defaultQuantity: 250 },
   "Carpentry": { job_type: "carpentry.general", category: "Carpentry", keywords: [], trade: "framing", itemId: "framing-labor-rate", unit: "sq ft", defaultQuantity: 200 },
@@ -840,7 +878,10 @@ export const CATEGORY_GENERAL: Record<string, JobTypeEntry | null> = {
   "Flooring": { job_type: "flooring.general", category: "Flooring", keywords: [], trade: "flooring", itemId: "laminate-installed", unit: "sq ft", defaultQuantity: 200 },
   "Windows & Doors": { job_type: "windows_doors.general", category: "Windows & Doors", keywords: [], trade: "windows", itemId: "vinyl-window-replacement", unit: "each", defaultQuantity: 1 },
   "Landscaping": { job_type: "landscaping.general", category: "Landscaping", keywords: [], trade: "landscaping", itemId: "mulch-installation", unit: "cubic yard", defaultQuantity: 3 },
-  "Mold & Pest Control": null,
+  // Was `null` ("no EPCI trade at all") until 2026-07-22. That reasoning came
+  // from the dormant EPCI branch; the in-house catalog needs only hours,
+  // materials and an anchor, all of which this trade has.
+  "Mold & Pest Control": { job_type: "mold_pest.general", category: "Mold & Pest Control", keywords: [], trade: "remediation", itemId: "remediation-hourly", unit: "hour", defaultQuantity: 2 },
   // Auto & moto. "Repair" falls back to the posted door rate x a typical visit,
   // the same honest shape plumbing/electrical use. The other four fall back to
   // their most-requested job rather than an hourly rate: nobody buys detailing
@@ -877,6 +918,9 @@ export const LEGACY_PERMIT_JOB_TYPES = new Set([
 const CATEGORY_STEMS: Record<string, string[]> = {
   "Plumbing": ["plumb"],
   "Electrical": ["electric"],
+  // Not "appliance" — the stem has to catch the singular and the plural, and
+  // people write both ("appliance repair", "my appliances").
+  "Appliances": ["applianc"],
   "HVAC": ["hvac"],
   "Painting": ["paint"],
   // "deck" is unambiguously carpentry and is the word people actually type —
@@ -887,7 +931,13 @@ const CATEGORY_STEMS: Record<string, string[]> = {
   "Flooring": ["floor"],
   "Windows & Doors": ["window", "door"],
   "Landscaping": ["landscap", "yard", "garden"],
-  "Mold & Pest Control": ["pest", "mold"],
+  // "termite" earns a stem because the pests live in the things other
+  // categories own: "we have termites in the deck" matched only Carpentry's
+  // "deck" stem and quoted a $14,561 deck rebuild (2026-07-22). With both
+  // stems hit, the pool spans both categories and "termite" (7) outranks
+  // "deck" (4) on length. "mold" is word-boundary matched — see
+  // WORD_BOUNDARY_TERMS — so it no longer hijacks "crown molding".
+  "Mold & Pest Control": ["pest", "mold", "termite"],
   // Auto stems are narrow on purpose. "Repair" and "Body & Paint" get NO stem:
   // their category words ("repair", "paint") are owned by the home taxonomy,
   // and a stem here would hijack "repair my roof" / "paint the kitchen". Those
@@ -1052,6 +1102,20 @@ export function classifyJobType(
 // "proofing" are all common in real requests, so this one has to be a word.
 const WORD_BOUNDARY_TERMS = new Set([
   "tire", "tires", "tyre", "tyres", "roof", "roofs",
+  // Mold & Pest, added with the category 2026-07-22. Every one of these is a
+  // short word that lives inside a common unrelated one, and this category is
+  // uniquely exposed to it: "mold" in "molding" (crown molding is CARPENTRY,
+  // and it stem-matched Mold & Pest even before the category could price),
+  // "ant" in "plant"/"want"/"basement", "rat" in "aerate"/"decorative",
+  // "bee" in "been", "bug" in "debug", "mice" in "mice" only but kept for
+  // symmetry with "mouse" in "mousehole".
+  "mold", "molds", "ant", "ants", "rat", "rats", "bee", "bees",
+  "bug", "bugs", "mice", "mouse", "flea", "fleas",
+  // Not mine, found while testing the above: auto.dent's "ding" sits inside
+  // "molding", "siding", "building", "sanding", "welding", "grinding". With no
+  // category stem to narrow the pool, "replace the crown molding" classified as
+  // paintless dent repair on a car (2026-07-22).
+  "ding", "dings",
 ]);
 
 /** Does `text` contain `term`, respecting word boundaries where required? */
@@ -1109,6 +1173,10 @@ function spellOutToDigits(text: string): string {
 export const COUNTABLE_NOUNS = [
   "window", "door", "outlet", "socket", "fan", "fixture", "light", "toilet",
   "faucet", "sink", "tree", "zone", "charger", "thermostat", "panel", "board",
+  // Tires are per-unit and the count is the whole price: without this every
+  // "replace 2 tires" fell back to the 4-tire default and quoted double
+  // (2026-07-22). The car/moto defaults still cover an unstated count.
+  "tire",
 ] as const;
 
 const COUNTABLE = COUNTABLE_NOUNS.join("|");
@@ -1120,8 +1188,10 @@ const NOT_A_MEASUREMENT =
 const COUNT_BEFORE_NOUN = new RegExp(
   `(?:^|[\\s,])(\\d{1,2})${NOT_A_MEASUREMENT}\\s+(?:[a-z/-]+\\s+){0,3}?(?:(?:${COUNTABLE})s?|vanit(?:y|ies))\\b`,
 );
+// The noun must start on a word boundary, or it matches the tail of a longer
+// word \u2014 "tire" sits in "entire", so "entire 3 rooms" read as 3 tires.
 const COUNT_AFTER_NOUN = new RegExp(
-  `(?:${COUNTABLE})s?\\s*(?:[,:;-]|\\bx\\b)?\\s*(\\d{1,2})(?!\\s*[x\u00d7]\\s*\\d)${NOT_A_MEASUREMENT}\\b`,
+  `\\b(?:${COUNTABLE})s?\\s*(?:[,:;-]|\\bx\\b)?\\s*(\\d{1,2})(?!\\s*[x\u00d7]\\s*\\d)${NOT_A_MEASUREMENT}\\b`,
 );
 
 // Explicit quantity beats the taxonomy default — the default is a real
@@ -1239,6 +1309,17 @@ export const SCOPE_ADD_ONS: Array<{
   keywords: string[];
   itemId: string;
   label: string;
+  /** True when the add-on is a FIXED cost for the job rather than a per-unit
+   *  rate — add it once, after the quantity multiply.
+   *
+   *  Add-ons are otherwise folded into the per-unit rate and scaled with the
+   *  base job, which is right for every per-sq-ft add-on here (removing 300 sq
+   *  ft of old floor costs 300× removing one). Containment is not that: the
+   *  barriers, the negative-air machine and the filters are bought once for the
+   *  job. Billed per unit it produced $31,427 for 40 sq ft of mold and $115,039
+   *  for 150 — MORE for a smaller job than the 100 sq ft reference, which is
+   *  how it was caught (2026-07-22). */
+  flat?: boolean;
 }> = [
   { categories: ["Flooring"], keywords: ["remov", "tear out", "tear-out", "rip out", "demo"], itemId: "flooring-removal-only", label: "old floor removal" },
   { categories: ["Flooring"], keywords: ["subfloor"], itemId: "subfloor-repair", label: "subfloor repair" },
@@ -1247,17 +1328,24 @@ export const SCOPE_ADD_ONS: Array<{
   // hidden cords prices the same as a bracket screwed into drywall.
   { categories: ["Electrical"], keywords: ["conceal", "hide the cord", "hide cord", "hide wire", "hide the wire", "in-wall", "in wall", "wires hidden", "hidden wire", "hide cable"], itemId: "tv-cord-concealment", label: "cord concealment" },
   { categories: ["Electrical"], keywords: ["fireplace", "brick", "stone", "masonry", "concrete"], itemId: "tv-mount-masonry", label: "masonry mounting" },
+  // The biggest fork in a remediation quote: a wipe-down versus a sealed,
+  // negative-air containment. Flat — see `flat` above.
+  { categories: ["Mold & Pest Control"], keywords: ["containment", "negative air", "seal off", "sealed off", "hepa", "spore", "cross-contamination", "black mold", "toxic"], itemId: "mold-containment", label: "full containment", flat: true },
+  // A dishwasher going where one has never been needs a supply line, a drain
+  // tee and a circuit — roughly the labor of the install again. Without this,
+  // a first-time install quotes the same as swapping one out.
+  { categories: ["Appliances"], keywords: ["never had", "no dishwasher", "new spot", "new location", "no hookup", "no existing", "first dishwasher", "where there isn't", "where there is no", "run a line", "new supply line"], itemId: "dishwasher-new-hookup", label: "new hookup (supply, drain, circuit)" },
 ];
 
 export function detectScopeAddOns(
   entry: JobTypeEntry,
   description: string,
-): Array<{ itemId: string; label: string }> {
+): Array<{ itemId: string; label: string; flat: boolean }> {
   const text = description.toLowerCase();
   return SCOPE_ADD_ONS
     .filter((a) => a.categories.includes(entry.category))
     .filter((a) => a.keywords.some((k) => text.includes(k)))
-    .map((a) => ({ itemId: a.itemId, label: a.label }));
+    .map((a) => ({ itemId: a.itemId, label: a.label, flat: a.flat === true }));
 }
 
 export function calculateEPCIRange(
@@ -1265,6 +1353,9 @@ export function calculateEPCIRange(
   entry: JobTypeEntry,
   quantity: number,
   addOnItemIds: string[] = [],
+  /** Add-ons that are a fixed cost for the job, not a per-unit rate — added
+   *  once alongside setup rather than scaled (see SCOPE_ADD_ONS.flat). */
+  flatAddOnItemIds: string[] = [],
 ): EPCIComputedRange | null {
   const item = items.find((i) => i.id === entry.itemId);
   if (!item) return null;
@@ -1280,12 +1371,21 @@ export function calculateEPCIRange(
     high += addOn.high;
     typical += typicalOf(addOn);
   }
+  let flatLow = 0, flatHigh = 0, flatTypical = 0;
+  for (const id of flatAddOnItemIds) {
+    const addOn = items.find((i) => i.id === id);
+    if (!addOn) continue;
+    // A flat add-on's own setup belongs in the flat total too.
+    flatLow += addOn.low + (addOn.setupLow ?? 0);
+    flatHigh += addOn.high + (addOn.setupHigh ?? 0);
+    flatTypical += typicalOf(addOn) + (addOn.setupTypical ?? 0);
+  }
   // Setup is added ONCE, outside the multiply — that is the whole point of
   // splitting it out of the per-unit rate.
   return {
-    all_in_low: low * quantity + (item.setupLow ?? 0),
-    all_in_high: high * quantity + (item.setupHigh ?? 0),
-    all_in_typical: typical * quantity + (item.setupTypical ?? 0),
+    all_in_low: low * quantity + (item.setupLow ?? 0) + flatLow,
+    all_in_high: high * quantity + (item.setupHigh ?? 0) + flatHigh,
+    all_in_typical: typical * quantity + (item.setupTypical ?? 0) + flatTypical,
   };
 }
 
@@ -1361,8 +1461,15 @@ export function calculateComposedRange(
   quantity: number,
   description: string,
   addOnItemIds: string[] = [],
+  flatAddOnItemIds: string[] = [],
 ): (EPCIComputedRange & { includedLabels: string[] }) | null {
-  const base = calculateEPCIRange(itemsByTrade[entry.trade] ?? [], entry, quantity, addOnItemIds);
+  const base = calculateEPCIRange(
+    itemsByTrade[entry.trade] ?? [],
+    entry,
+    quantity,
+    addOnItemIds,
+    flatAddOnItemIds,
+  );
   if (!base) return null;
 
   let { all_in_low, all_in_high, all_in_typical } = base;

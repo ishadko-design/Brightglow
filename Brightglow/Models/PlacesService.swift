@@ -307,6 +307,10 @@ enum PlacesService {
         "painter", "carpenter", "handyman", "hvac_contractor",
         "pest_control_service", "landscaping_service", "lawn_care_service",
         "locksmith", "moving_company",
+        // Appliance repair firms carry whichever of these Google has assigned;
+        // without them a legitimate appliance business with any specific type
+        // fails the positive gate and never reaches the list.
+        "appliance_repair_service", "small_appliance_repair_service",
         // Trade-adjacent retail (showrooms sell + install)
         "hardware_store", "home_improvement_store", "home_goods_store",
         "furniture_store", "appliance_store", "garden_center",

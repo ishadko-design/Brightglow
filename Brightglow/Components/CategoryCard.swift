@@ -9,6 +9,9 @@ struct CategoryItem: Identifiable {
 let categoryItems: [CategoryItem] = [
     CategoryItem(category: .plumbing,     assetName: "fig_plumbing"),
     CategoryItem(category: .electrical,   assetName: "fig_electrical"),
+    // No artwork yet — TaskCard falls back to a flat colour card until a
+    // `fig_appliances` image is added to the asset catalog.
+    CategoryItem(category: .appliances,   assetName: "fig_appliances"),
     CategoryItem(category: .painting,     assetName: "fig_painting"),
     CategoryItem(category: .hvac,         assetName: "fig_hvac"),
     CategoryItem(category: .carpentry,    assetName: "fig_carpentry"),

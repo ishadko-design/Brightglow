@@ -61,6 +61,30 @@ const REFERENCE: Record<string, Ref> = {
   "tv-mount-install": { low: 200, high: 600 },
   "tv-cord-concealment": { low: 100, high: 400 },
   "tv-mount-masonry": { low: 75, high: 300 },
+  // mold & pest — remediation is per sq ft of affected area and stops at the
+  // clean cavity (rebuild is a separate job, deliberately outside the band).
+  "mold-remediation": { low: 10, high: 25 },
+  "mold-inspection": { low: 300, high: 1000 },
+  "mold-containment": { low: 400, high: 1500 },
+  "remediation-hourly": { low: 75, high: 200, loose: true },
+  "pest-treatment": { low: 150, high: 400 },
+  "termite-treatment": { low: 500, high: 2500 },
+  "rodent-exclusion": { low: 200, high: 800 },
+  "bed-bug-treatment": { low: 250, high: 900 },
+  // appliances — labor and connections only; the appliance itself is bought at
+  // retail and is deliberately not in these bands (see the catalog block).
+  "dishwasher-repair": { low: 115, high: 400 },
+  "dishwasher-install": { low: 150, high: 450 },
+  "dishwasher-new-hookup": { low: 150, high: 600 },
+  "refrigerator-repair": { low: 200, high: 650 },
+  "washer-repair": { low: 120, high: 500 },
+  "dryer-repair": { low: 100, high: 400 },
+  "oven-range-repair": { low: 100, high: 450 },
+  "washer-dryer-install": { low: 100, high: 300 },
+  "range-oven-install": { low: 100, high: 400 },
+  "otr-microwave-install": { low: 150, high: 400 },
+  "dryer-vent-cleaning": { low: 100, high: 200 },
+  "appliance-labor-hourly": { low: 75, high: 200, loose: true },
   // hvac
   "gas-furnace-installed": { low: 3000, high: 6500 },
   "central-ac-installed": { low: 3800, high: 7500 },
