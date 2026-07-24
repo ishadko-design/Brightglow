@@ -659,7 +659,7 @@ export const JOB_TYPE_TAXONOMY: JobTypeEntry[] = [
 
   // Electrical
   { job_type: "electrical.panel", category: "Electrical", keywords: ["panel upgrade", "electrical panel", "breaker panel", "200 amp"], trade: "electrical", itemId: "panel-upgrade-200amp", unit: "project", defaultQuantity: 1 },
-  { job_type: "electrical.outlet", category: "Electrical", keywords: ["outlet", "socket"], trade: "electrical", itemId: "outlet-installation", unit: "each", defaultQuantity: 1 },
+  { job_type: "electrical.outlet", category: "Electrical", keywords: ["outlet", "socket"], trade: "electrical", itemId: "outlet-installation", unit: "each", defaultQuantity: 1, notIfContains: ["dead", "not working", "no power", "repair", "stopped working", "sparking", "burning smell", "gfci", "ground fault"] },
   { job_type: "electrical.ceiling_fan", category: "Electrical", keywords: ["ceiling fan"], trade: "electrical", itemId: "ceiling-fan-install", unit: "each", defaultQuantity: 1 },
   { job_type: "electrical.ev_charger", category: "Electrical", keywords: ["ev charger", "car charger"], trade: "electrical", itemId: "ev-charger-level2", unit: "each", defaultQuantity: 1 },
   { job_type: "electrical.rewire", category: "Electrical", keywords: ["rewire", "rewiring"], trade: "electrical", itemId: "whole-house-rewire", unit: "sq ft", defaultQuantity: 1500 },
@@ -667,7 +667,19 @@ export const JOB_TYPE_TAXONOMY: JobTypeEntry[] = [
   // request must never price as a breaker panel. Default 20 panels ≈ 8 kW, the
   // median US residential system.
   { job_type: "electrical.solar", category: "Electrical", keywords: ["solar", "solar panel", "solar panels", "pv system", "photovoltaic"], trade: "electrical", itemId: "solar-panel-install", unit: "each", defaultQuantity: 20, priority: 1, notIfContains: ["repair", "fix", "clean", "cleaning", "inspect", "inspection", "maintenance", "remove", "removal"] },
-  { job_type: "electrical.lighting", category: "Electrical", keywords: ["light", "lighting"], trade: "electrical", itemId: "light-fixture-install", unit: "each", defaultQuantity: 1 },
+  { job_type: "electrical.lighting", category: "Electrical", keywords: ["light", "lighting"], trade: "electrical", itemId: "light-fixture-install", unit: "each", defaultQuantity: 1, notIfContains: ["recessed", "can light", "can lights", "pot light", "downlight", "switch", "dimmer"] },
+  // Electrical repairs and small jobs. Symptoms first: "breaker keeps tripping"
+  // and "outlet not working" are how these arrive, and neither classified at all
+  // before (2026-07-23).
+  { job_type: "electrical.breaker", category: "Electrical", keywords: ["breaker", "breaker tripping", "keeps tripping", "circuit breaker", "fuse keeps blowing", "tripping"], trade: "electrical", itemId: "circuit-breaker-replacement", unit: "each", defaultQuantity: 1, priority: 1 },
+  { job_type: "electrical.switch", category: "Electrical", keywords: ["switch", "light switch", "dimmer", "switch not working", "replace switch"], trade: "electrical", itemId: "switch-dimmer-replacement", unit: "each", defaultQuantity: 1, priority: 1 },
+  { job_type: "electrical.gfci", category: "Electrical", keywords: ["gfci", "gfi", "ground fault", "bathroom outlet", "kitchen outlet"], trade: "electrical", itemId: "gfci-outlet", unit: "each", defaultQuantity: 1, priority: 1 },
+  { job_type: "electrical.recessed", category: "Electrical", keywords: ["recessed", "can light", "can lights", "pot light", "downlight", "recessed lighting"], trade: "electrical", itemId: "recessed-light-install", unit: "each", defaultQuantity: 4, priority: 1 },
+  { job_type: "electrical.detector", category: "Electrical", keywords: ["smoke detector", "smoke alarm", "carbon monoxide", "co detector", "chirping", "detector beeping"], trade: "electrical", itemId: "smoke-detector-install", unit: "each", defaultQuantity: 1, priority: 1 },
+  { job_type: "electrical.dedicated_circuit", category: "Electrical", keywords: ["dedicated circuit", "new circuit", "240v", "220v", "dryer outlet", "range outlet", "subpanel"], trade: "electrical", itemId: "dedicated-circuit", unit: "each", defaultQuantity: 1, priority: 1 },
+  { job_type: "electrical.doorbell", category: "Electrical", keywords: ["doorbell", "video doorbell", "ring doorbell", "nest doorbell"], trade: "electrical", itemId: "doorbell-install", unit: "each", defaultQuantity: 1, priority: 1 },
+  { job_type: "electrical.outlet_repair", category: "Electrical", keywords: ["outlet not working", "dead outlet", "outlet no power", "outlet sparking", "outlet repair", "plug not working"], trade: "electrical", itemId: "outlet-repair", unit: "each", defaultQuantity: 1, priority: 1 },
+  { job_type: "electrical.diagnostic", category: "Electrical", keywords: ["troubleshoot", "troubleshooting", "electrical problem", "no power", "power out", "lights flickering", "flickering", "electrician diagnose"], trade: "electrical", itemId: "electrical-diagnostic", unit: "hour", defaultQuantity: 2, priority: 1 },
   // Multi-word keywords only — a bare "tv" would substring-match unrelated text.
   { job_type: "electrical.tv_mount", category: "Electrical", keywords: ["tv mount", "mount tv", "mount a tv", "mount the tv", "mounting tv", "mounting a tv", "install tv", "install a tv", "install the tv", "tv install", "tv wall", "tv on wall", "tv on the wall", "wall mount tv", "hang tv", "hang a tv", "hang the tv", "tv bracket", "television", "flat screen", "flatscreen"], trade: "electrical", itemId: "tv-mount-install", unit: "each", defaultQuantity: 1 },
 
@@ -713,8 +725,22 @@ export const JOB_TYPE_TAXONOMY: JobTypeEntry[] = [
   { job_type: "hvac.ac", category: "HVAC", keywords: ["central air", "air condition", "a/c"], trade: "hvac", itemId: "central-ac-installed", unit: "project", defaultQuantity: 1 },
   { job_type: "hvac.heat_pump", category: "HVAC", keywords: ["heat pump"], trade: "hvac", itemId: "heat-pump-installed", unit: "project", defaultQuantity: 1 },
   { job_type: "hvac.mini_split", category: "HVAC", keywords: ["mini split", "mini-split", "ductless"], trade: "hvac", itemId: "mini-split-per-zone", unit: "each", defaultQuantity: 1, priority: 1 },
-  { job_type: "hvac.thermostat", category: "HVAC", keywords: ["thermostat"], trade: "hvac", itemId: "thermostat-installation-smart", unit: "each", defaultQuantity: 1 },
-  { job_type: "hvac.repair", category: "HVAC", keywords: ["repair", "tune-up", "tune up", "service"], trade: "hvac", itemId: "furnace-repair", unit: "project", defaultQuantity: 1 },
+  { job_type: "hvac.thermostat", category: "HVAC", keywords: ["thermostat"], trade: "hvac", itemId: "thermostat-installation-smart", unit: "each", defaultQuantity: 1, notIfContains: ["repair", "not working", "blank", "broken", "basic", "non-smart", "old thermostat"] },
+  { job_type: "hvac.thermostat_repair", category: "HVAC", keywords: ["thermostat not working", "thermostat blank", "thermostat repair", "thermostat broken", "basic thermostat", "non-smart thermostat"], trade: "hvac", itemId: "thermostat-repair-basic", unit: "each", defaultQuantity: 1, priority: 1 },
+  // The generic repair entry keeps ONLY the words that mean "something is wrong
+  // and I can't name the part". Every specific symptom below outranks it, so
+  // "AC not cooling" stops quoting a furnace job (reported 2026-07-23).
+  { job_type: "hvac.repair", category: "HVAC", keywords: ["repair", "service"], trade: "hvac", itemId: "furnace-repair", unit: "project", defaultQuantity: 1, notIfContains: ["not cooling", "no cold air", "blowing warm", "blowing hot", "capacitor", "contactor", "refrigerant", "freon", "recharge", "blower", "condensate", "leaking water", "ignitor", "igniter", "flame sensor", "thermostat", "evaporator", "coil", "tune-up", "tune up", "maintenance"] },
+  // HVAC symptom routing. People describe what the house is doing, not which
+  // part failed, so the keywords are symptoms first and part names second.
+  { job_type: "hvac.ac_repair", category: "HVAC", keywords: ["not cooling", "ac not cooling", "no cold air", "blowing warm", "blowing hot air", "ac broken", "ac not working", "air conditioner not working", "ac stopped"], trade: "hvac", itemId: "ac-repair-diagnostic", unit: "project", defaultQuantity: 1, priority: 1 },
+  { job_type: "hvac.capacitor", category: "HVAC", keywords: ["capacitor", "contactor", "ac wont start", "ac won't start", "humming but not starting"], trade: "hvac", itemId: "ac-capacitor-contactor", unit: "each", defaultQuantity: 1, priority: 1 },
+  { job_type: "hvac.refrigerant", category: "HVAC", keywords: ["refrigerant", "freon", "recharge", "low on refrigerant", "refrigerant leak"], trade: "hvac", itemId: "refrigerant-recharge", unit: "project", defaultQuantity: 1, priority: 1 },
+  { job_type: "hvac.blower_motor", category: "HVAC", keywords: ["blower motor", "blower", "fan not blowing", "no air coming out"], trade: "hvac", itemId: "blower-motor-replacement", unit: "each", defaultQuantity: 1, priority: 1 },
+  { job_type: "hvac.condensate", category: "HVAC", keywords: ["condensate", "ac leaking water", "water leaking from ac", "drain line clogged", "drip pan overflowing"], trade: "hvac", itemId: "condensate-drain-clearing", unit: "project", defaultQuantity: 1, priority: 1 },
+  { job_type: "hvac.ignitor", category: "HVAC", keywords: ["ignitor", "igniter", "flame sensor", "furnace wont ignite", "furnace won't ignite", "furnace not igniting", "furnace wont start", "no heat"], trade: "hvac", itemId: "furnace-ignitor-sensor", unit: "each", defaultQuantity: 1, priority: 1 },
+  { job_type: "hvac.evaporator_coil", category: "HVAC", keywords: ["evaporator coil", "evaporator", "coil replacement", "frozen coil", "iced up coil"], trade: "hvac", itemId: "evaporator-coil-replacement", unit: "each", defaultQuantity: 1, priority: 1 },
+  { job_type: "hvac.tune_up", category: "HVAC", keywords: ["tune-up", "tune up", "maintenance", "seasonal service", "annual service", "hvac inspection"], trade: "hvac", itemId: "hvac-tune-up", unit: "project", defaultQuantity: 1, priority: 1 },
 
   // Painting
   { job_type: "painting.interior", category: "Painting", keywords: ["interior", "room", "wall color", "repaint"], trade: "paint", itemId: "paint-interior-labor", unit: "sq ft", defaultQuantity: 250 },

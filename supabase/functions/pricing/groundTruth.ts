@@ -179,6 +179,37 @@ export const GROUND_TRUTH: GroundTruthCase[] = [
     vertical: "home",
   },
 
+  // HVAC + Electrical repairs, added 2026-07-23. Held out from the build
+  // sources (Fixr / HomeGuide / HomeAdvisor / Angi): these come from Bob Vila,
+  // Forbes, This Old House, Homewyse and Thumbtack.
+  {
+    // The top HVAC call, and one that used to quote a FURNACE repair because
+    // the generic "repair" keyword owned it.
+    query: "AC not cooling",
+    category: "HVAC",
+    expectJobType: "hvac.ac_repair",
+    low: 100,
+    high: 610,
+    source: "Bob Vila 2026 ($100-610, avg $369) / Forbes / This Old House",
+    vertical: "home",
+  },
+  {
+    // Sources genuinely disagree by ~2x on the same words, and the disagreement
+    // is systematic rather than noise: the consumer aggregators price a branch
+    // breaker swap ($100-200) while Homewyse prices a fuller service visit
+    // ($319-382) and Thumbtack quotes a MAIN breaker ($200-300), which is a
+    // bigger job. Banded to span all three rather than picking a camp; marked
+    // wide so only gross error counts.
+    query: "breaker keeps tripping",
+    category: "Electrical",
+    expectJobType: "electrical.breaker",
+    low: 100,
+    high: 400,
+    source: "Thumbtack $200-300 (main) / Homewyse $319-382 / aggregators $100-200, 2026",
+    vertical: "home",
+    wide: true,
+  },
+
   // === AUTO =============================================================
   {
     // Reported 2026-07-22: "Wrap car" showed results with no price line at all.

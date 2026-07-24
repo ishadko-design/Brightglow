@@ -219,6 +219,49 @@ export const COST_CATALOG: CostCatalogEntry[] = [
   // sanity: light fixture swap $75–250 (fixture customer-supplied)
   { itemId: "light-fixture-install", trade: "electrical", description: "Install light fixture (fixture not included)", unit: "each", soc: ELECTRICIAN, laborHours: b(0.4125, 0.825, 1.375), materials: b(2.75, 11, 33), setup: { hours: b(0.3375, 0.675, 1.125), materials: b(2.25, 9, 27) } },
   { itemId: "electrician-hourly", trade: "electrical", description: "General electrical labor", unit: "hour", soc: ELECTRICIAN, laborHours: b(1, 1, 1), materials: b(0, 10, 30) },
+  // ELECTRICAL REPAIRS + small jobs, added 2026-07-23 from
+  // docs/pricing-research/anchors-verified.json. Everything here is dominated by
+  // the trip and the diagnosis rather than the part — a breaker is $10 of
+  // hardware — which is why the setup shares run high. That is also what makes
+  // the second one on the same visit much cheaper, which the engine now models.
+  // sanity: breaker replacement / tripping-breaker repair $100–400 per breaker
+  { itemId: "circuit-breaker-replacement", trade: "electrical", description: "Circuit breaker replacement / tripping breaker repair", unit: "each", soc: ELECTRICIAN, laborHours: b(0.15, 0.25, 0.45), materials: b(12, 28, 70), setup: { hours: b(0.9, 1.5, 2.5), materials: b(20, 45, 100) } },
+  // sanity: light switch / dimmer replacement $75–300 (Fixr is a low outlier at
+  // the DIY-part level; the band follows the installed-by-a-pro cluster)
+  { itemId: "switch-dimmer-replacement", trade: "electrical", description: "Light switch or dimmer replacement", unit: "each", soc: ELECTRICIAN, laborHours: b(0.15, 0.28, 0.5), materials: b(8, 22, 55), setup: { hours: b(0.55, 1, 1.7), materials: b(14, 32, 70) } },
+  // sanity: GFCI outlet install/replace $90–300
+  { itemId: "gfci-outlet", trade: "electrical", description: "GFCI outlet installation or replacement", unit: "each", soc: ELECTRICIAN, laborHours: b(0.2, 0.35, 0.6), materials: b(18, 38, 85), setup: { hours: b(0.6, 1.1, 1.9), materials: b(16, 38, 85) } },
+  // Low setup share on purpose: these are installed several at a time in one
+  // visit, so the marginal can-light carries most of its own cost.
+  //
+  // UNRESOLVED SCOPE CONFLICT, checked 2026-07-23: this band is the RETROFIT
+  // job — a can into an existing ceiling with power already nearby, which is
+  // what the consumer aggregators price and what most requests mean. Homewyse
+  // quotes $380–529 per light for the same words, ~2.5x higher, because it
+  // prices a new install: new circuit, fishing wire, cutting and patching the
+  // ceiling. Both are right about different jobs. The engine cannot tell them
+  // apart from "install recessed lighting" alone, so it prices the common one
+  // and will read low for a from-scratch install. Splitting this needs a
+  // clarify question ("is there already a light there?"), not a wider band —
+  // averaging the two would be wrong for every request instead of some.
+  // sanity: recessed / can light installation $125–330 per light (retrofit)
+  { itemId: "recessed-light-install", trade: "electrical", description: "Recessed (can) light installation, retrofit", unit: "each", soc: ELECTRICIAN, laborHours: b(0.7, 1.1, 1.8), materials: b(35, 70, 150), setup: { hours: b(0.25, 0.45, 0.8), materials: b(10, 22, 50) } },
+  // sanity: smoke / CO detector install or chirp fix $70–250 per unit
+  { itemId: "smoke-detector-install", trade: "electrical", description: "Smoke / carbon monoxide detector install or chirp repair", unit: "each", soc: ELECTRICIAN, laborHours: b(0.2, 0.35, 0.6), materials: b(20, 45, 100), setup: { hours: b(0.45, 0.8, 1.4), materials: b(12, 28, 60) } },
+  // The wide band is scope, not geography: sources disagree on whether this is a
+  // short run off an existing panel or a long one with a subpanel.
+  // sanity: new dedicated circuit / 240V outlet $250–1,100
+  { itemId: "dedicated-circuit", trade: "electrical", description: "New dedicated circuit or 240V outlet", unit: "each", soc: ELECTRICIAN, laborHours: b(1.1, 2.2, 4), materials: b(55, 150, 380), setup: { hours: b(0.8, 1.5, 2.6), materials: b(30, 70, 160) } },
+  // sanity: doorbell / video doorbell installation $150–500
+  { itemId: "doorbell-install", trade: "electrical", description: "Doorbell or video doorbell installation", unit: "each", soc: ELECTRICIAN, laborHours: b(0.35, 0.6, 1), materials: b(25, 60, 140), setup: { hours: b(0.6, 1.1, 1.9), materials: b(18, 42, 95) } },
+  // Distinct from outlet-installation, which is a NEW outlet: this is a dead or
+  // damaged one, where the work is finding the fault.
+  // sanity: outlet repair or replacement $80–350
+  { itemId: "outlet-repair", trade: "electrical", description: "Outlet repair or replacement (dead outlet)", unit: "each", soc: ELECTRICIAN, laborHours: b(0.15, 0.28, 0.5), materials: b(8, 20, 50), setup: { hours: b(0.6, 1.15, 2), materials: b(15, 35, 80) } },
+  // Billed as its own visit — sources disagree on whether the fee covers the
+  // first hour, so the band spans both conventions.
+  // sanity: electrical troubleshooting / diagnostic call $75–160 per hour
+  { itemId: "electrical-diagnostic", trade: "electrical", description: "Electrical troubleshooting / diagnostic service call", unit: "hour", soc: ELECTRICIAN, laborHours: b(1, 1, 1), materials: b(0, 8, 25), setup: { hours: b(0.5, 0.85, 1.4), materials: b(10, 22, 50) } },
   // TV mounting — an installer/handyman job, not a licensed electrician, so it
   // prices on the general-maintenance wage. Added 2026-07-16: "install tv" had
   // no item at all and fell through to whichever category-general bucket the
@@ -339,6 +382,40 @@ export const COST_CATALOG: CostCatalogEntry[] = [
   // sanity: furnace/AC repair visit $150–800
   { itemId: "furnace-repair", trade: "hvac", description: "HVAC diagnostic + repair", unit: "project", soc: HVAC_TECH, laborHours: b(1, 2.5, 5), materials: b(50, 200, 600) },
   { itemId: "hvac-labor-rate", trade: "hvac", description: "General HVAC labor", unit: "hour", soc: HVAC_TECH, laborHours: b(1, 1, 1), materials: b(0, 10, 30) },
+  // HVAC REPAIRS, added 2026-07-23 from docs/pricing-research/anchors-verified.json.
+  // The category modelled installs plus one generic "furnace-repair", which the
+  // keyword "repair" routed EVERYTHING to — so "AC not cooling", the single most
+  // common call in the trade, quoted a furnace job. Same failure as the deck:
+  // a plausible number for the wrong job.
+  //
+  // These are per-project where the trade quotes a whole visit and per-each
+  // where a part is named, matching how the research found them published.
+  // sanity: AC not cooling, diagnostic + repair $150–700 (sources split on the
+  // low end: HomeGuide/This Old House at $150, others near $200)
+  { itemId: "ac-repair-diagnostic", trade: "hvac", description: "AC not cooling — diagnostic and repair", unit: "project", soc: HVAC_TECH, laborHours: b(1.2, 2.4, 4.6), materials: b(45, 155, 480) },
+  // Cheap part, but the diagnosis and the trip are the job — hence setup 0.8.
+  // sanity: capacitor/contactor replacement $110–400
+  { itemId: "ac-capacitor-contactor", trade: "hvac", description: "AC capacitor or contactor replacement", unit: "each", soc: HVAC_TECH, laborHours: b(0.15, 0.25, 0.4), materials: b(12, 28, 65), setup: { hours: b(0.9, 1.5, 2.6), materials: b(25, 55, 120) } },
+  // Two different jobs share this phrasing — a top-up vs. finding and fixing the
+  // leak — which is why the band is deliberately wide rather than averaged.
+  // sanity: refrigerant leak repair & recharge $200–1,600
+  { itemId: "refrigerant-recharge", trade: "hvac", description: "Refrigerant leak repair and recharge", unit: "project", soc: HVAC_TECH, laborHours: b(1.3, 3, 6.5), materials: b(90, 320, 1050) },
+  // sanity: blower motor replacement $300–1,500
+  { itemId: "blower-motor-replacement", trade: "hvac", description: "Furnace/air-handler blower motor replacement", unit: "each", soc: HVAC_TECH, laborHours: b(1.4, 2.4, 4), materials: b(150, 420, 1000), setup: { hours: b(0.6, 1, 1.8), materials: b(30, 70, 160) } },
+  // sanity: condensate drain clearing / AC water leak $75–250
+  { itemId: "condensate-drain-clearing", trade: "hvac", description: "Condensate drain clearing (AC leaking water)", unit: "project", soc: HVAC_TECH, laborHours: b(0.9, 1.5, 2.5), materials: b(15, 35, 80) },
+  // sanity: furnace ignitor / flame sensor replacement $100–425
+  { itemId: "furnace-ignitor-sensor", trade: "hvac", description: "Furnace ignitor or flame sensor replacement", unit: "each", soc: HVAC_TECH, laborHours: b(0.15, 0.3, 0.5), materials: b(12, 30, 75), setup: { hours: b(0.85, 1.6, 2.8), materials: b(22, 55, 130) } },
+  // The existing thermostat item is a SMART install incl. the unit; a repair or
+  // a plain non-smart swap is its own, cheaper job.
+  // sanity: thermostat repair / non-smart replacement $85–350
+  { itemId: "thermostat-repair-basic", trade: "hvac", description: "Thermostat repair or basic (non-smart) replacement", unit: "each", soc: HVAC_TECH, laborHours: b(0.25, 0.45, 0.75), materials: b(20, 50, 120), setup: { hours: b(0.6, 1.1, 1.9), materials: b(18, 40, 95) } },
+  // sanity: evaporator coil replacement $600–3,000
+  { itemId: "evaporator-coil-replacement", trade: "hvac", description: "Evaporator coil replacement", unit: "each", soc: HVAC_TECH, laborHours: b(2.4, 4.2, 7), materials: b(280, 780, 1900), setup: { hours: b(1.2, 2, 3.4), materials: b(60, 140, 320) } },
+  // Split out of the generic repair entry: a tune-up is a scheduled maintenance
+  // visit, not a fault call, and it is priced as one.
+  // sanity: HVAC tune-up / seasonal maintenance $75–300
+  { itemId: "hvac-tune-up", trade: "hvac", description: "HVAC tune-up / seasonal maintenance visit", unit: "project", soc: HVAC_TECH, laborHours: b(0.9, 1.6, 2.6), materials: b(10, 30, 75) },
 
   // --- paint -----------------------------------------------------------
   // Per sq ft of room FLOOR area (matches the taxonomy's 250 sq ft room
