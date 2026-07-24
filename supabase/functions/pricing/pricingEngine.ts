@@ -882,6 +882,28 @@ export const JOB_TYPE_TAXONOMY: JobTypeEntry[] = [
   { job_type: "auto.fuel_pump", category: "Repair", keywords: ["fuel pump", "fuel injector"], trade: "auto-repair", itemId: "fuel-pump-replacement", unit: "each", defaultQuantity: 1 },
   { job_type: "auto.clutch", category: "Repair", keywords: ["clutch"], trade: "auto-repair", itemId: "clutch-replacement", unit: "each", defaultQuantity: 1 },
   { job_type: "auto.diagnostic", category: "Repair", keywords: ["check engine", "diagnostic", "engine light", "scan tool", "obd"], trade: "auto-repair", itemId: "auto-diagnostic-fee", unit: "each", defaultQuantity: 1 },
+
+  // --- Repair, grouped by vehicle system -------------------------------
+  // The 22 entries above grew flat and undifferentiated. Everything below is
+  // added by SYSTEM so the gaps are visible at a glance: ENGINE, DRIVETRAIN,
+  // SUSPENSION, COOLING, INSPECTION. The app's five Auto categories map to
+  // BUSINESS types and deliberately do not change — this is organisation
+  // inside Repair, not a new taxonomy level.
+
+  // ENGINE
+  { job_type: "auto.head_gasket", category: "Repair", keywords: ["head gasket", "blown head gasket", "white smoke exhaust", "coolant in oil", "milky oil"], trade: "auto-repair", itemId: "head-gasket-replacement", unit: "each", defaultQuantity: 1, priority: 1 },
+  // DRIVETRAIN — the fluid change already exists; this is the actual repair.
+  { job_type: "auto.transmission_rebuild", category: "Repair", keywords: ["transmission rebuild", "rebuild transmission", "transmission repair", "transmission slipping", "slipping transmission", "wont shift", "won't shift", "transmission replacement", "new transmission"], trade: "auto-repair", itemId: "transmission-rebuild", unit: "each", defaultQuantity: 1, priority: 1 },
+  // SUSPENSION
+  { job_type: "auto.wheel_bearing", category: "Repair", keywords: ["wheel bearing", "humming noise", "growling noise", "hub bearing"], trade: "auto-repair", itemId: "wheel-bearing-replacement", unit: "each", defaultQuantity: 1, priority: 1 },
+  { job_type: "auto.control_arm", category: "Repair", keywords: ["control arm", "ball joint", "bushing", "clunking over bumps", "clunk over bumps"], trade: "auto-repair", itemId: "control-arm-replacement", unit: "each", defaultQuantity: 1, priority: 1 },
+  // COOLING — the ENGINE thermostat. Nothing to do with the HVAC one, and the
+  // vertical guard keeps a house thermostat from ever landing here.
+  { job_type: "auto.thermostat", category: "Repair", keywords: ["thermostat", "overheating", "engine overheating", "running hot", "temperature gauge"], trade: "auto-repair", itemId: "auto-thermostat-replacement", unit: "each", defaultQuantity: 1, priority: 1 },
+  // INSPECTION — high volume, and entirely absent before. Smog is mandatory
+  // biennially in California and on most private sales.
+  { job_type: "auto.smog_check", category: "Repair", keywords: ["smog", "smog check", "smog test", "emissions test", "emissions check", "star station"], trade: "auto-repair", itemId: "smog-check", unit: "each", defaultQuantity: 1, priority: 1 },
+  { job_type: "auto.pre_purchase_inspection", category: "Repair", keywords: ["pre purchase inspection", "pre-purchase inspection", "ppi", "inspect before buying", "buying a used car", "used car inspection"], trade: "auto-repair", itemId: "pre-purchase-inspection", unit: "each", defaultQuantity: 1, priority: 1 },
   // Moto-only job — no car equivalent, so it points straight at the moto item
   // rather than going through MOTO_VARIANTS. "timing chain" (12 chars) still
   // outranks "chain" (5), so a car timing job is unaffected.

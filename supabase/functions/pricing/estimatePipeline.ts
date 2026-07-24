@@ -167,7 +167,7 @@ export function estimateInHouse(input: EstimateInput): EstimateResult {
     : null;
   if (!composed) return { kind: "insufficient", reason: "no_items", entry };
 
-  const range = applyServiceMinimum(composed, entry.trade);
+  const range = applyServiceMinimum(composed, entry.trade, entry.itemId);
 
   let label = isGeneral ? `Regional avg for ${entry.category}` : "Regional avg";
   const includedLabels = [...addOns.map((a) => a.label), ...range.includedLabels];

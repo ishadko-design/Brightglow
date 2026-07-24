@@ -224,6 +224,13 @@ const REFERENCE: Record<string, Ref> = {
   "cv-axle-replacement": { low: 300, high: 800 },
   "fuel-pump-replacement": { low: 700, high: 1400 },
   "clutch-replacement": { low: 1000, high: 2000 },
+  "head-gasket-replacement": { low: 2543, high: 3337 },
+  "transmission-rebuild": { low: 1800, high: 5500 },
+  "wheel-bearing-replacement": { low: 349, high: 510 },
+  "control-arm-replacement": { low: 400, high: 900 },
+  "auto-thermostat-replacement": { low: 610, high: 708 },
+  "pre-purchase-inspection": { low: 183, high: 269 },
+  "smog-check": { low: 30, high: 80 },
   "auto-diagnostic-fee": { low: 75, high: 180 },
   "auto-labor-hourly": { low: 100, high: 200, loose: true },
   // tires

@@ -312,7 +312,23 @@ export function computeInHouseItems(
 
 /** Floor a composed job total at the trade's service-call minimum. Only for
  *  in-house ranges — EPCI's bands already embed minimum-charge reality. */
-export function applyServiceMinimum<T extends EPCIComputedRange>(range: T, trade: string): T {
+/** Items that are a POSTED-PRICE SERVICE rather than a job the shop takes on,
+ *  so the trade's service minimum does not apply to them.
+ *
+ *  A minimum exists because a shop will not occupy a bay, or roll a truck, for
+ *  less than some floor. But a smog check IS the product — stations advertise
+ *  $50-80 in California and compete on it — so flooring it at the auto-repair
+ *  minimum of $90 priced it 64% above the published band (caught by
+ *  accuracy.test.ts, 2026-07-23). Add an item here only when the market
+ *  genuinely posts a price below the trade's floor. */
+const MINIMUM_EXEMPT = new Set(["smog-check"]);
+
+export function applyServiceMinimum<T extends EPCIComputedRange>(
+  range: T,
+  trade: string,
+  itemId?: string,
+): T {
+  if (itemId && MINIMUM_EXEMPT.has(itemId)) return range;
   const minimum = SERVICE_MINIMUMS[trade];
   if (!minimum) return range;
   const low = Math.max(range.all_in_low, minimum);

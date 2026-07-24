@@ -696,6 +696,30 @@ export const COST_CATALOG: CostCatalogEntry[] = [
   { itemId: "clutch-replacement", trade: "auto-repair", description: "Clutch replacement", unit: "each", soc: AUTO_TECH, laborHours: b(4, 5.5, 8), materials: b(350, 660, 1200) },
   // Labor only — the scan and the diagnosis, credited against the repair by
   // most shops. sanity: diagnostic fee $75–180
+  // AUTO gaps, added 2026-07-23. The Repair category had 22 job types but no
+  // engine work, no transmission REPAIR (only a fluid change), no suspension
+  // beyond struts, and no inspections at all — smog is mandatory in California
+  // and one of the highest-volume things a shop sells.
+  // Bands: RepairPal estimator except where noted.
+  // sanity: head gasket replacement $2,543–3,337 (RepairPal)
+  { itemId: "head-gasket-replacement", trade: "auto-repair", description: "Head gasket replacement", unit: "each", soc: AUTO_TECH, laborHours: b(10, 14, 18), materials: b(420, 680, 1050) },
+  // Rebuild, not replacement. sanity: $1,800–5,500 nationally for a passenger
+  // vehicle (autopom / transmission-shop guides 2026); CA runs 15–25% above.
+  { itemId: "transmission-rebuild", trade: "auto-repair", description: "Transmission rebuild", unit: "each", soc: AUTO_TECH, laborHours: b(10, 16, 24), materials: b(1100, 2200, 3900) },
+  // sanity: wheel bearing replacement $349–510 (RepairPal)
+  { itemId: "wheel-bearing-replacement", trade: "auto-repair", description: "Wheel bearing replacement", unit: "each", soc: AUTO_TECH, laborHours: b(1.4, 1.9, 2.6), materials: b(110, 175, 260) },
+  // Per side, alignment included — the alignment is not optional after this.
+  // sanity: control arm replacement $400–900 per side (Detroit Axle / Car Talk)
+  { itemId: "control-arm-replacement", trade: "auto-repair", description: "Control arm replacement, per side (incl. alignment)", unit: "each", soc: AUTO_TECH, laborHours: b(1.6, 2.4, 3.4), materials: b(130, 250, 430) },
+  // The AUTO thermostat — engine cooling, nothing to do with the HVAC one.
+  // sanity: thermostat replacement $610–708 (RepairPal)
+  { itemId: "auto-thermostat-replacement", trade: "auto-repair", description: "Engine thermostat replacement", unit: "each", soc: AUTO_TECH, laborHours: b(1.8, 2.4, 3.2), materials: b(200, 300, 420) },
+  // sanity: pre-purchase inspection $183–269 (RepairPal / YourMechanic)
+  { itemId: "pre-purchase-inspection", trade: "auto-repair", description: "Pre-purchase vehicle inspection", unit: "each", soc: AUTO_TECH, laborHours: b(1, 1.4, 1.9), materials: b(0, 10, 30) },
+  // California-specific and high volume: mandatory biennially and on most
+  // sales. The $8.25 state certificate fee is included in the band.
+  // sanity: CA smog check $30–80, 2026 average $74 (SmogCheck.com / AAA)
+  { itemId: "smog-check", trade: "auto-repair", description: "Smog / emissions test (incl. state certificate fee)", unit: "each", soc: AUTO_TECH, laborHours: b(0.3, 0.45, 0.65), materials: b(8.25, 8.25, 8.25) },
   { itemId: "auto-diagnostic-fee", trade: "auto-repair", description: "Diagnostic scan and inspection", unit: "each", soc: AUTO_TECH, laborHours: b(0.7, 0.9, 1.2), materials: b(0, 0, 0) },
   // category-general fallback: posted door rate, small shop-supplies allowance
   { itemId: "auto-labor-hourly", trade: "auto-repair", description: "General automotive labor", unit: "hour", soc: AUTO_TECH, laborHours: b(1, 1, 1), materials: b(0, 5, 15) },

@@ -290,6 +290,28 @@ export const GROUND_TRUTH: GroundTruthCase[] = [
     vertical: "auto",
   },
 
+  {
+    // California-specific and high volume; was entirely unpriced before.
+    query: "smog check",
+    category: "Repair",
+    expectJobType: "auto.smog_check",
+    low: 30,
+    high: 80,
+    source: "SmogCheck.com / AAA 2026 (CA average $74 incl. $8.25 certificate)",
+    vertical: "auto",
+    vehicle: "auto",
+  },
+  {
+    query: "wheel bearing noise",
+    category: "Repair",
+    expectJobType: "auto.wheel_bearing",
+    low: 349,
+    high: 510,
+    source: "RepairPal 2026",
+    vertical: "auto",
+    vehicle: "auto",
+  },
+
   // === MOTO =============================================================
   // These exist because the vertical shipped priced-as-a-car: with the Moto
   // filter selected, "replace tires" quoted four car tires (~$890) for a job
