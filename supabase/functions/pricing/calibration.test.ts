@@ -130,6 +130,10 @@ const REFERENCE: Record<string, Ref> = {
   "deck-refinish": { low: 2, high: 5 },
   "deck-structural-repair": { low: 500, high: 3000 },
   "deck-railing": { low: 30, high: 100 },
+  // Carpentry repairs — Angi / HomeGuide / Fixr 2026
+  "fence-repair": { low: 15, high: 45 },
+  "wood-rot-repair": { low: 100, high: 500 },
+  "trim-carpentry": { low: 2, high: 8 },
   "bathroom-vanity-installation": { low: 150, high: 500 },
   "stock-cabinets-installed": { low: 200, high: 500 },
   "wall-framing": { low: 20, high: 60 },
@@ -154,6 +158,12 @@ const REFERENCE: Record<string, Ref> = {
   "tile-installed": { low: 10, high: 25 },
   "hardwood-refinishing": { low: 3, high: 8 },
   "flooring-removal-only": { low: 1, high: 3 },
+  // Flooring repairs — HomeGuide / Angi / Fixr 2026
+  "tile-repair": { low: 130, high: 500 },
+  "grout-repair": { low: 150, high: 700 },
+  "carpet-repair": { low: 130, high: 290 },
+  "squeaky-floor-repair": { low: 200, high: 1000 },
+  "hardwood-spot-repair": { low: 300, high: 1500 },
   "subfloor-repair": { low: 2, high: 6 },
   "floor-leveling": { low: 2, high: 5 },
   // windows
@@ -162,6 +172,11 @@ const REFERENCE: Record<string, Ref> = {
   "casement-window-replacement": { low: 500, high: 1400 },
   "egress-window-installation": { low: 2500, high: 6000 },
   // doors
+  // Window + door repairs — Angi / HomeGuide / Fixr 2026
+  "window-glass-repair": { low: 150, high: 650 },
+  "window-hardware-repair": { low: 100, high: 500 },
+  "door-adjustment": { low: 100, high: 500 },
+  "garage-door-spring": { low: 180, high: 350 },
   "french-door-installation": { low: 1500, high: 4500 },
   "sliding-patio-door": { low: 1200, high: 3500 },
   "exterior-door-steel": { low: 600, high: 1800 },

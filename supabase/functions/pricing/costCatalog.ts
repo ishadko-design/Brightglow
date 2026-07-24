@@ -475,6 +475,16 @@ export const COST_CATALOG: CostCatalogEntry[] = [
   { itemId: "deck-structural-repair", trade: "deck", description: "Deck structural repair — joists, posts, rails, rot", unit: "project", soc: CARPENTER, laborHours: b(6, 14, 30), materials: b(120, 380, 900) },
   // Labor + sundries only — top and faucet come in via JOB_COMPONENTS,
   // mirroring the EPCI item this id was scoped to. sanity: $150–500 set-only
+  // CARPENTRY repairs, added 2026-07-23. Bands: Angi / HomeGuide / Fixr /
+  // HomeAdvisor 2026. Cabinet door repair is deliberately ABSENT — no source
+  // published a band for it, and inventing one to fill the gap is exactly the
+  // failure mode this engine is built to avoid.
+  // sanity: fence repair $304–948 typical, ~$30 per linear foot
+  { itemId: "fence-repair", trade: "framing", description: "Fence repair — posts, pickets, rails, leaning sections", unit: "linear foot", soc: CARPENTER, laborHours: b(0.16, 0.28, 0.45), materials: b(6, 13, 26), setup: { hours: b(1.1, 2, 3.4), materials: b(25, 55, 120) } },
+  // sanity: exterior wood rot repair $100–500 localized (trim, sill, siding)
+  { itemId: "wood-rot-repair", trade: "framing", description: "Exterior wood rot repair — trim, sill, siding, fascia", unit: "project", soc: CARPENTER, laborHours: b(1.3, 2.8, 5.5), materials: b(30, 90, 240) },
+  // sanity: trim / baseboard replacement $0.50–6 per linear foot
+  { itemId: "trim-carpentry", trade: "framing", description: "Baseboard, casing and trim replacement (carpentry)", unit: "linear foot", soc: CARPENTER, laborHours: b(0.02, 0.04, 0.075), materials: b(1.1, 2.2, 4.2), setup: { hours: b(0.8, 1.5, 2.6), materials: b(18, 40, 90) } },
   { itemId: "bathroom-vanity-installation", trade: "cabinetry", description: "Set vanity cabinet, attach hardware (top/plumbing separate)", unit: "each", soc: CARPENTER, laborHours: b(2, 3, 5), materials: b(30, 60, 120) },
   // sanity: stock cabinets installed $200–500 per LF
   { itemId: "stock-cabinets-installed", trade: "cabinetry", description: "Stock cabinets, supplied + installed", unit: "linear foot", soc: CARPENTER, laborHours: b(0.8, 1.2, 2), materials: b(64, 120, 240), setup: { hours: b(3, 4.5, 7.5), materials: b(240, 450, 900) } },
@@ -536,6 +546,20 @@ export const COST_CATALOG: CostCatalogEntry[] = [
   { itemId: "hardwood-refinishing", trade: "flooring", description: "Hardwood sand + refinish", unit: "sq ft", soc: FLOOR_SANDER, laborHours: b(0.0195, 0.0292, 0.0455), materials: b(0.52, 0.975, 1.625), setup: { hours: b(2.1, 3.15, 4.9), materials: b(56, 105, 175) } },
   // SCOPE_ADD_ONS — priced per sq ft of the base job's area
   // sanity: flooring tear-out + disposal $1–3 per sq ft
+  // FLOORING repairs, added 2026-07-23. Flooring modelled whole-room installs
+  // and refinishing, so a single cracked tile or a squeak priced as a new
+  // floor. Bands: HomeGuide / Angi / Fixr / HomeAdvisor 2026.
+  // Per-project, because these are a visit and a small area, not a room.
+  // sanity: cracked/broken tile replacement $130–500
+  { itemId: "tile-repair", trade: "flooring", description: "Replace cracked or broken tiles", unit: "project", soc: TILE_SETTER, laborHours: b(1.2, 2.2, 3.8), materials: b(25, 70, 175) },
+  // sanity: grout repair/regrout $50–1,200, avg ~$350
+  { itemId: "grout-repair", trade: "flooring", description: "Grout repair, regrouting and sealing", unit: "project", soc: TILE_SETTER, laborHours: b(1, 2.6, 6), materials: b(15, 55, 170) },
+  // sanity: minor carpet repair / re-stretch $130–290
+  { itemId: "carpet-repair", trade: "flooring", description: "Carpet re-stretching, patching or seam repair", unit: "project", soc: CARPET_INSTALLER, laborHours: b(1.4, 2.4, 3.8), materials: b(10, 35, 90) },
+  // sanity: squeaky floor repair $200–1,000
+  { itemId: "squeaky-floor-repair", trade: "flooring", description: "Squeaky floor repair (fastening, shims, subfloor)", unit: "project", soc: FLOOR_LAYER, laborHours: b(1.8, 4, 9), materials: b(20, 65, 190) },
+  // sanity: hardwood spot repair $25–100 per scratch, $500–1,500 typical job
+  { itemId: "hardwood-spot-repair", trade: "flooring", description: "Hardwood spot repair — scratches, gouges, damaged boards", unit: "project", soc: FLOOR_SANDER, laborHours: b(1.6, 4.2, 9.5), materials: b(30, 110, 320) },
   { itemId: "flooring-removal-only", trade: "flooring", description: "Old flooring removal + disposal", unit: "sq ft", soc: FLOOR_LAYER, laborHours: b(0.015, 0.025, 0.04), materials: b(0.2, 0.4, 0.8) },
   // sanity: subfloor repair $2–6 per affected sq ft
   { itemId: "subfloor-repair", trade: "flooring", description: "Subfloor repair/replacement", unit: "sq ft", soc: FLOOR_LAYER, laborHours: b(0.03, 0.05, 0.08), materials: b(1, 2, 3.5) },
@@ -556,6 +580,19 @@ export const COST_CATALOG: CostCatalogEntry[] = [
 
   // --- doors -----------------------------------------------------------
   // sanity: french door pair $1,500–4,500 installed
+  // WINDOW + DOOR repairs, added 2026-07-23. Both trades modelled whole-unit
+  // replacements, so a stuck door or a cracked pane quoted a new window or a
+  // new door. Bands: Angi / HomeGuide / Fixr / HomeAdvisor 2026.
+  // Glass only — the sash and frame stay. Sources span single-pane ($300-650)
+  // and IGU/double-pane work, with Angi putting the average pane near $200.
+  // sanity: window glass / pane replacement $150–650
+  { itemId: "window-glass-repair", trade: "windows", description: "Window glass or insulated pane replacement (frame stays)", unit: "each", soc: CARPENTER, laborHours: b(0.8, 1.4, 2.4), materials: b(60, 150, 380), setup: { hours: b(0.5, 0.9, 1.6), materials: b(15, 35, 80) } },
+  // sanity: sticking / hard-to-operate window repair $100–500
+  { itemId: "window-hardware-repair", trade: "windows", description: "Window won't open or stay up — balance, sash cord, crank", unit: "each", soc: CARPENTER, laborHours: b(0.7, 1.3, 2.3), materials: b(20, 55, 140), setup: { hours: b(0.5, 0.9, 1.5), materials: b(12, 30, 65) } },
+  // sanity: door repair / adjustment $50–700, average ~$250
+  { itemId: "door-adjustment", trade: "doors", description: "Sticking or sagging door — plane, shim, rehang, hardware", unit: "each", soc: CARPENTER, laborHours: b(0.7, 1.5, 3), materials: b(10, 40, 120), setup: { hours: b(0.5, 0.9, 1.6), materials: b(12, 28, 60) } },
+  // sanity: garage door spring / cable repair $180–350
+  { itemId: "garage-door-spring", trade: "doors", description: "Garage door spring or cable repair", unit: "project", soc: CARPENTER, laborHours: b(1.1, 1.8, 2.8), materials: b(55, 110, 210) },
   { itemId: "french-door-installation", trade: "doors", description: "French doors, supplied + installed", unit: "pair", soc: CARPENTER, laborHours: b(4, 6.4, 9.6), materials: b(960, 1760, 3200), setup: { hours: b(1, 1.6, 2.4), materials: b(240, 440, 800) } },
   // sanity: sliding patio door $1,200–3,500 installed
   { itemId: "sliding-patio-door", trade: "doors", description: "Sliding patio door, supplied + installed", unit: "each", soc: CARPENTER, laborHours: b(3, 4.5, 6.75), materials: b(750, 1275, 2250), setup: { hours: b(1, 1.5, 2.25), materials: b(250, 425, 750) } },
