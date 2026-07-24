@@ -179,6 +179,19 @@ export const GROUND_TRUTH: GroundTruthCase[] = [
     vertical: "home",
   },
 
+  {
+    // Diagnose-then-repair: a symptom routes to find-AND-fix, not a bare
+    // diagnosis. Held out from the build source (that was HomeGuide pipe-leak).
+    query: "water bill suddenly doubled",
+    category: "Plumbing",
+    expectJobType: "plumbing.hidden_leak",
+    low: 350,
+    high: 2000,
+    source: "Angi / HomeAdvisor 2026 (hidden leak locate + repair, before major drywall)",
+    vertical: "home",
+    wide: true,
+  },
+
   // HVAC + Electrical repairs, added 2026-07-23. Held out from the build
   // sources (Fixr / HomeGuide / HomeAdvisor / Angi): these come from Bob Vila,
   // Forbes, This Old House, Homewyse and Thumbtack.

@@ -95,6 +95,8 @@ const REPAIR_VS_REPLACE: Array<{ repair: string; replace: string }> = [
   { repair: "AC not cooling", replace: "install central air conditioning" },
   { repair: "furnace wont ignite", replace: "replace gas furnace" },
   { repair: "thermostat not working", replace: "install smart thermostat" },
+  // Diagnose-then-repair: finding AND fixing must cost more than finding alone.
+  { repair: "find the leak", replace: "water bill doubled" },
   // Roofing/landscaping maintenance must never exceed the install it maintains.
   { repair: "gutter cleaning", replace: "install new gutters" },
   { repair: "missing shingles", replace: "replace asphalt shingle roof 1700 sq ft" },

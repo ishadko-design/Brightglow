@@ -48,6 +48,7 @@ const REFERENCE: Record<string, Ref> = {
   "garbage-disposal-service": { low: 150, high: 650 },
   "sump-pump-service": { low: 250, high: 1200 },
   "leak-detection": { low: 75, high: 200 },
+  "leak-find-and-fix": { low: 350, high: 2500 },
   "burst-pipe-repair": { low: 200, high: 1500 },
   // electrical
   "panel-upgrade-200amp": { low: 1800, high: 4000 },

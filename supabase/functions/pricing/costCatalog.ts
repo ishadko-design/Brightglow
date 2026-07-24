@@ -177,6 +177,18 @@ export const COST_CATALOG: CostCatalogEntry[] = [
   // — the engine has no two-stage output yet, so this prices the finding only.
   // sanity: leak detection $75–200 per hour
   { itemId: "leak-detection", trade: "plumbing", description: "Hidden leak detection — acoustic/thermal, diagnosis only", unit: "hour", soc: PLUMBER, laborHours: b(1, 1, 1), materials: b(0, 5, 15), setup: { hours: b(0.4, 0.7, 1.2), materials: b(15, 35, 80) } },
+  // Diagnose-then-repair, added 2026-07-23. A person whose water bill doubled
+  // wants the leak FOUND AND FIXED, not a $250 diagnosis quoted as the answer —
+  // that is the same "half the job priced as the whole job" trap the old
+  // labor-only figure fell into, in reverse. So a SYMPTOM routes here (detection
+  // + the localized repair it usually leads to, all-in) while a literal request
+  // to "find the leak" still gets the diagnosis-only item above.
+  //
+  // Setup carries the detection visit and wall access — the fixed cost paid
+  // before anyone knows how big the repair is. sanity: hidden-leak find-and-fix
+  // $350–2,500 (HomeGuide/Angi pipe-leak-repair avg $500, in-wall $500–5,000+;
+  // banded below the catastrophic tail, which is a repipe, not a leak repair).
+  { itemId: "leak-find-and-fix", trade: "plumbing", description: "Hidden leak — locate and repair (all-in)", unit: "project", soc: PLUMBER, laborHours: b(2, 3.5, 7), materials: b(50, 160, 520), setup: { hours: b(1.4, 2.4, 4), materials: b(60, 150, 380) } },
   // sanity: burst/frozen pipe repair $200–1,500 per section (before any
   // after-hours multiplier, which the engine cannot express yet)
   { itemId: "burst-pipe-repair", trade: "plumbing", description: "Burst or frozen pipe repair, per section", unit: "each", soc: PLUMBER, laborHours: b(1, 2, 4), materials: b(40, 110, 350), setup: { hours: b(1.5, 2.5, 4), materials: b(30, 70, 180) } },
