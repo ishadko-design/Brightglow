@@ -130,6 +130,7 @@ const REFERENCE: Record<string, Ref> = {
   "popcorn-ceiling-removal": { low: 1, high: 6 },
   "wallpaper-removal": { low: 2, high: 5 },
   "trim-painting": { low: 0.5, high: 3 },
+  "door-painting": { low: 75, high: 250 },
   // carpentry trades
   "pressure-treated-installed": { low: 25, high: 60 },
   "deck-board-replacement": { low: 35, high: 110 },
@@ -140,6 +141,7 @@ const REFERENCE: Record<string, Ref> = {
   "fence-repair": { low: 15, high: 45 },
   "wood-rot-repair": { low: 100, high: 500 },
   "trim-carpentry": { low: 2, high: 8 },
+  "shelving-install": { low: 150, high: 800 },
   "bathroom-vanity-installation": { low: 150, high: 500 },
   "stock-cabinets-installed": { low: 200, high: 500 },
   "wall-framing": { low: 20, high: 60 },
@@ -156,6 +158,8 @@ const REFERENCE: Record<string, Ref> = {
   "shingle-repair": { low: 150, high: 450 },
   "flashing-repair": { low: 200, high: 500 },
   "roof-inspection": { low: 100, high: 400 },
+  "roof-tarp": { low: 200, high: 800 },
+  "roof-cleaning": { low: 300, high: 800 },
   // flooring
   "hardwood-installed": { low: 8, high: 17 },
   "laminate-installed": { low: 3, high: 8 },
@@ -184,6 +188,8 @@ const REFERENCE: Record<string, Ref> = {
   "window-hardware-repair": { low: 100, high: 500 },
   "door-adjustment": { low: 100, high: 500 },
   "garage-door-spring": { low: 180, high: 350 },
+  "storm-door-install": { low: 270, high: 1000 },
+  "deadbolt-lock": { low: 100, high: 350 },
   "french-door-installation": { low: 1500, high: 4500 },
   "sliding-patio-door": { low: 1200, high: 3500 },
   "exterior-door-steel": { low: 600, high: 1800 },

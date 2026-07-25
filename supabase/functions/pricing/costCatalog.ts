@@ -481,6 +481,8 @@ export const COST_CATALOG: CostCatalogEntry[] = [
   { itemId: "wallpaper-removal", trade: "paint", description: "Wallpaper removal and wall prep", unit: "sq ft", soc: PAINTER, laborHours: b(0.016, 0.028, 0.048), materials: b(0.09, 0.2, 0.45), setup: { hours: b(1.4, 2.5, 4.2), materials: b(25, 55, 120) } },
   // sanity: trim / baseboard painting $0.50–3 per linear foot
   { itemId: "trim-painting", trade: "paint", description: "Trim, baseboard and crown molding painting", unit: "linear foot", soc: PAINTER, laborHours: b(0.008, 0.016, 0.028), materials: b(0.08, 0.18, 0.35), setup: { hours: b(1, 1.8, 3), materials: b(20, 42, 90) } },
+  // sanity: door painting $75-250 (HomeGuide interior $75-150, exterior more)
+  { itemId: "door-painting", trade: "paint", description: "Paint a door (interior or exterior)", unit: "each", soc: PAINTER, laborHours: b(0.6, 1.1, 2), materials: b(15, 35, 80), setup: { hours: b(0.5, 0.9, 1.5), materials: b(12, 28, 60) } },
 
   // --- deck / framing / cabinetry (carpentry trades) ---------------------
   // sanity: pressure-treated deck $25–60 per sq ft built
@@ -515,6 +517,9 @@ export const COST_CATALOG: CostCatalogEntry[] = [
   { itemId: "wood-rot-repair", trade: "framing", description: "Exterior wood rot repair — trim, sill, siding, fascia", unit: "project", soc: CARPENTER, laborHours: b(1.3, 2.8, 5.5), materials: b(30, 90, 240) },
   // sanity: trim / baseboard replacement $0.50–6 per linear foot
   { itemId: "trim-carpentry", trade: "framing", description: "Baseboard, casing and trim replacement (carpentry)", unit: "linear foot", soc: CARPENTER, laborHours: b(0.02, 0.04, 0.075), materials: b(1.1, 2.2, 4.2), setup: { hours: b(0.8, 1.5, 2.6), materials: b(18, 40, 90) } },
+  // sanity: closet / wall shelving install $150-800 labor (HomeGuide $200-1,600
+  // spans full custom systems; a basic shelf job is the low end)
+  { itemId: "shelving-install", trade: "framing", description: "Shelving / closet shelf installation", unit: "project", soc: CARPENTER, laborHours: b(1.3, 2.6, 5), materials: b(50, 160, 420) },
   { itemId: "bathroom-vanity-installation", trade: "cabinetry", description: "Set vanity cabinet, attach hardware (top/plumbing separate)", unit: "each", soc: CARPENTER, laborHours: b(2, 3, 5), materials: b(30, 60, 120) },
   // sanity: stock cabinets installed $200–500 per LF
   { itemId: "stock-cabinets-installed", trade: "cabinetry", description: "Stock cabinets, supplied + installed", unit: "linear foot", soc: CARPENTER, laborHours: b(0.8, 1.2, 2), materials: b(64, 120, 240), setup: { hours: b(3, 4.5, 7.5), materials: b(240, 450, 900) } },
@@ -552,6 +557,10 @@ export const COST_CATALOG: CostCatalogEntry[] = [
   { itemId: "flashing-repair", trade: "roofing", description: "Roof flashing repair — chimney, wall or step flashing", unit: "project", soc: ROOFER, laborHours: b(1.5, 2.7, 4.2), materials: b(40, 105, 230) },
   // sanity: roof inspection $100–400
   { itemId: "roof-inspection", trade: "roofing", description: "Roof inspection / condition report", unit: "project", soc: ROOFER, laborHours: b(1, 1.7, 3), materials: b(0, 10, 30) },
+  // sanity: emergency roof tarping $200-800 (HomeGuide roof-tarp-cost 2026)
+  { itemId: "roof-tarp", trade: "roofing", description: "Emergency roof tarping", unit: "project", soc: ROOFER, laborHours: b(1.2, 2.2, 3.8), materials: b(45, 130, 320) },
+  // sanity: roof cleaning / moss & algae removal $300-800 (HomeGuide 2026)
+  { itemId: "roof-cleaning", trade: "roofing", description: "Roof cleaning / moss and algae removal", unit: "project", soc: ROOFER, laborHours: b(2, 3.5, 6), materials: b(40, 110, 260) },
   { itemId: "gutter-install-aluminum", trade: "roofing", description: "Seamless aluminum gutters", unit: "linear foot", soc: ROOFER, laborHours: b(0.04, 0.064, 0.096), materials: b(2.4, 4, 6.4), setup: { hours: b(1.5, 2.4, 3.6), materials: b(90, 150, 240) } },
 
   // --- flooring ---------------------------------------------------------
@@ -633,6 +642,10 @@ export const COST_CATALOG: CostCatalogEntry[] = [
   { itemId: "door-adjustment", trade: "doors", description: "Sticking or sagging door — plane, shim, rehang, hardware", unit: "each", soc: CARPENTER, laborHours: b(0.7, 1.5, 3), materials: b(10, 40, 120), setup: { hours: b(0.5, 0.9, 1.6), materials: b(12, 28, 60) } },
   // sanity: garage door spring / cable repair $180–350
   { itemId: "garage-door-spring", trade: "doors", description: "Garage door spring or cable repair", unit: "project", soc: CARPENTER, laborHours: b(1.1, 1.8, 2.8), materials: b(55, 110, 210) },
+  // sanity: storm/screen door installation $270-1,000 (HomeGuide/Angi 2026)
+  { itemId: "storm-door-install", trade: "doors", description: "Storm / screen door installation", unit: "each", soc: CARPENTER, laborHours: b(1, 1.8, 3), materials: b(120, 260, 520), setup: { hours: b(0.4, 0.8, 1.4), materials: b(15, 35, 75) } },
+  // sanity: deadbolt / lock / handleset replacement $100-350 (HomeGuide/Angi 2026)
+  { itemId: "deadbolt-lock", trade: "doors", description: "Door lock / deadbolt / handleset replacement", unit: "each", soc: CARPENTER, laborHours: b(0.3, 0.55, 0.9), materials: b(35, 80, 190), setup: { hours: b(0.4, 0.7, 1.2), materials: b(10, 25, 55) } },
   { itemId: "french-door-installation", trade: "doors", description: "French doors, supplied + installed", unit: "pair", soc: CARPENTER, laborHours: b(4, 6.4, 9.6), materials: b(960, 1760, 3200), setup: { hours: b(1, 1.6, 2.4), materials: b(240, 440, 800) } },
   // sanity: sliding patio door $1,200–3,500 installed
   { itemId: "sliding-patio-door", trade: "doors", description: "Sliding patio door, supplied + installed", unit: "each", soc: CARPENTER, laborHours: b(3, 4.5, 6.75), materials: b(750, 1275, 2250), setup: { hours: b(1, 1.5, 2.25), materials: b(250, 425, 750) } },
