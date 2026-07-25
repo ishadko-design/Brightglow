@@ -395,3 +395,22 @@ body.landing::before {
 .footer .copyright {
   margin-left: auto;
 }
+
+/* Print / PDF: the site is a dark theme (white text on a dark background).
+   When printing, browsers drop the dark background but keep the near-white
+   text, so it washes out. Force black-on-white so Terms / Privacy /
+   Business-Terms export as legible PDFs (e.g. to send to a lawyer).
+   Screen appearance is unaffected. */
+@media print {
+  body,
+  body.landing { background: #fff !important; }
+  body.landing::before { display: none !important; }
+  .doc,
+  .doc h1, .doc h2, .doc h3,
+  .doc p, .doc li, .doc strong,
+  .doc .updated, .doc .notice, .doc a,
+  .wordmark, .footer, .footer a, .footer .copyright { color: #000 !important; }
+  .doc .notice { background: transparent !important; border-color: #000 !important; }
+  .doc a { text-decoration: underline; }
+  .doc hr, .footer { border-color: #999 !important; }
+}
