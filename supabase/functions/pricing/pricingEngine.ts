@@ -747,6 +747,8 @@ export const JOB_TYPE_TAXONOMY: JobTypeEntry[] = [
   { job_type: "hvac.tune_up", category: "HVAC", keywords: ["tune-up", "tune up", "maintenance", "seasonal service", "annual service", "hvac inspection"], trade: "hvac", itemId: "hvac-tune-up", unit: "project", defaultQuantity: 1, priority: 1 },
 
   // Painting
+  { job_type: "painting.ceiling", category: "Painting", keywords: ["paint ceiling", "paint the ceiling", "paint my ceiling", "ceiling paint", "paint ceilings"], trade: "paint", itemId: "paint-interior-labor", unit: "sq ft", defaultQuantity: 200, priority: 1 },
+  { job_type: "painting.accent_wall", category: "Painting", keywords: ["accent wall", "feature wall", "one wall", "single wall", "paint a wall"], trade: "paint", itemId: "paint-interior-labor", unit: "sq ft", defaultQuantity: 120, priority: 1 },
   { job_type: "painting.interior", category: "Painting", keywords: ["interior", "room", "wall color", "repaint"], trade: "paint", itemId: "paint-interior-labor", unit: "sq ft", defaultQuantity: 250, notIfContains: ["water stain", "ceiling stain", "hole in", "nail pop", "drywall patch", "patch", "popcorn", "wallpaper", "pressure wash", "power wash", "trim", "baseboard", "crown molding", "deck"] },
   { job_type: "painting.exterior", category: "Painting", keywords: ["exterior"], trade: "paint", itemId: "paint-exterior-labor", unit: "sq ft", defaultQuantity: 1500, notIfContains: ["pressure wash", "power wash", "wash the house", "deck"] },
   { job_type: "painting.cabinet", category: "Painting", keywords: ["cabinet"], trade: "paint", itemId: "cabinet-painting-spray", unit: "linear foot", defaultQuantity: 20 },
@@ -782,7 +784,9 @@ export const JOB_TYPE_TAXONOMY: JobTypeEntry[] = [
   // feet of kitchen cabinets.
   { job_type: "carpentry.vanity", category: "Carpentry", keywords: ["vanity cabinet", "vanity"], trade: "cabinetry", itemId: "bathroom-vanity-installation", unit: "each", defaultQuantity: 1 },
   { job_type: "carpentry.cabinet", category: "Carpentry", keywords: ["cabinet", "cabinetry"], trade: "cabinetry", itemId: "stock-cabinets-installed", unit: "linear foot", defaultQuantity: 15 },
-  { job_type: "carpentry.framing", category: "Carpentry", keywords: ["framing", "beam", "header", "load bearing", "load-bearing"], trade: "framing", itemId: "wall-framing", unit: "linear foot", defaultQuantity: 20 },
+  { job_type: "carpentry.squeaky_floor", category: "Carpentry", keywords: ["squeak", "squeaky floor", "creaky floor", "creaking floor", "floor squeaks", "squeaky stairs", "creaky stairs"], trade: "flooring", itemId: "squeaky-floor-repair", unit: "project", defaultQuantity: 1, priority: 1 },
+  { job_type: "carpentry.door_repair", category: "Carpentry", keywords: ["door wont close", "door won't close", "door sticking", "sticking door", "door stuck", "door wont latch", "door won't latch", "sagging door", "door rubs", "adjust the door", "door hinge", "gate wont close", "gate won't close", "gate repair", "sagging gate", "fix the gate"], trade: "doors", itemId: "door-adjustment", unit: "each", defaultQuantity: 1, priority: 1 },
+  { job_type: "carpentry.framing", category: "Carpentry", keywords: ["framing", "frame a wall", "frame wall", "build a wall", "new wall", "partition wall", "stud wall", "beam", "header", "load bearing", "load-bearing"], trade: "framing", itemId: "wall-framing", unit: "linear foot", defaultQuantity: 20 },
 
   // Roofing
   // Material-specific replacements come before the generic project entry:
@@ -822,6 +826,8 @@ export const JOB_TYPE_TAXONOMY: JobTypeEntry[] = [
   { job_type: "flooring.grout", category: "Flooring", keywords: ["grout", "regrout", "re-grout", "grout repair", "grout cracking", "grout sealing", "moldy grout"], trade: "flooring", itemId: "grout-repair", unit: "project", defaultQuantity: 1, priority: 1 },
   { job_type: "flooring.carpet_repair", category: "Flooring", keywords: ["carpet repair", "re-stretch", "restretch", "carpet wrinkle", "carpet ripple", "carpet patch", "carpet seam", "loose carpet"], trade: "flooring", itemId: "carpet-repair", unit: "project", defaultQuantity: 1, priority: 1 },
   { job_type: "flooring.squeak", category: "Flooring", keywords: ["squeak", "squeaky", "creaky floor", "creaking floor", "floor squeaks"], trade: "flooring", itemId: "squeaky-floor-repair", unit: "project", defaultQuantity: 1, priority: 1 },
+  { job_type: "flooring.subfloor", category: "Flooring", keywords: ["subfloor", "sub floor", "soft spot in floor", "spongy floor", "rotted subfloor"], trade: "flooring", itemId: "subfloor-repair", unit: "sq ft", defaultQuantity: 100, priority: 1 },
+  { job_type: "flooring.leveling", category: "Flooring", keywords: ["floor leveling", "level the floor", "uneven floor", "self-leveling", "self level"], trade: "flooring", itemId: "floor-leveling", unit: "sq ft", defaultQuantity: 200, priority: 1 },
   { job_type: "flooring.hardwood_repair", category: "Flooring", keywords: ["scratched floor", "scratched hardwood", "gouge", "damaged board", "damaged boards", "replace a few boards", "hardwood repair", "water damaged floor"], trade: "flooring", itemId: "hardwood-spot-repair", unit: "project", defaultQuantity: 1, priority: 1 },
 
   // Windows & Doors
@@ -1450,6 +1456,11 @@ export function detectScopeAddOns(
   return SCOPE_ADD_ONS
     .filter((a) => a.categories.includes(entry.category))
     .filter((a) => !a.jobTypes || a.jobTypes.includes(entry.job_type))
+    // Never add an item to itself: subfloor-repair and floor-leveling are both
+    // SCOPE_ADD_ONS (riding a flooring install) AND standalone jobs. When the
+    // standalone job IS that item, the add-on must not fire, or it double-counts
+    // (2026-07-23).
+    .filter((a) => a.itemId !== entry.itemId)
     .filter((a) => a.keywords.some((k) => text.includes(k)))
     .map((a) => ({ itemId: a.itemId, label: a.label, flat: a.flat === true }));
 }
