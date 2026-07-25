@@ -283,6 +283,8 @@ export const COST_CATALOG: CostCatalogEntry[] = [
   // first hour, so the band spans both conventions.
   // sanity: electrical troubleshooting / diagnostic call $75–160 per hour
   { itemId: "electrical-diagnostic", trade: "electrical", description: "Electrical troubleshooting / diagnostic service call", unit: "hour", soc: ELECTRICIAN, laborHours: b(1, 1, 1), materials: b(0, 8, 25), setup: { hours: b(0.5, 0.85, 1.4), materials: b(10, 22, 50) } },
+  // sanity: whole-house surge protector $200–800 installed (HomeGuide/Angi 2026)
+  { itemId: "surge-protector-install", trade: "electrical", description: "Whole-house surge protector installation", unit: "each", soc: ELECTRICIAN, laborHours: b(0.8, 1.4, 2.3), materials: b(90, 190, 400) },
   // TV mounting — an installer/handyman job, not a licensed electrician, so it
   // prices on the general-maintenance wage. Added 2026-07-16: "install tv" had
   // no item at all and fell through to whichever category-general bucket the
@@ -380,6 +382,9 @@ export const COST_CATALOG: CostCatalogEntry[] = [
   { itemId: "remediation-hourly", trade: "remediation", description: "General mold/remediation labor", unit: "hour", soc: REMEDIATION, laborHours: b(1, 1, 1), materials: b(0, 10, 30) },
   // sanity: one-off pest treatment (ants, roaches, spiders, wasps) $150–400
   { itemId: "pest-treatment", trade: "pest", description: "Single pest treatment — interior and exterior", unit: "each", soc: PEST_TECH, laborHours: b(0.75, 1.2, 2), materials: b(35, 75, 160), setup: { hours: b(0.75, 1.2, 1.8), materials: b(10, 25, 55) } },
+  // sanity: mosquito/tick yard treatment $80–500 per treatment (Angi 2026, avg
+  // $350 with seasonal packages; a single visit is the low end).
+  { itemId: "mosquito-treatment", trade: "pest", description: "Mosquito / tick yard treatment, per visit", unit: "project", soc: PEST_TECH, laborHours: b(0.6, 1.1, 2), materials: b(35, 95, 230) },
   // sanity: termite treatment $500–2,500 (liquid barrier or bait system)
   { itemId: "termite-treatment", trade: "pest", description: "Termite treatment — liquid barrier or bait system", unit: "project", soc: PEST_TECH, laborHours: b(3, 6, 12), materials: b(350, 900, 2100) },
   // sanity: rodent removal + exclusion $200–800
@@ -437,6 +442,10 @@ export const COST_CATALOG: CostCatalogEntry[] = [
   // visit, not a fault call, and it is priced as one.
   // sanity: HVAC tune-up / seasonal maintenance $75–300
   { itemId: "hvac-tune-up", trade: "hvac", description: "HVAC tune-up / seasonal maintenance visit", unit: "project", soc: HVAC_TECH, laborHours: b(0.9, 1.6, 2.6), materials: b(10, 30, 75) },
+  // sanity: AC compressor replacement $1,800–2,800 (HomeAdvisor/Angi 2026)
+  { itemId: "ac-compressor-replacement", trade: "hvac", description: "AC compressor replacement", unit: "each", soc: HVAC_TECH, laborHours: b(3, 4.5, 7), materials: b(950, 1500, 2200) },
+  // sanity: air duct cleaning $450–1,000 (Angi/HomeGuide 2026)
+  { itemId: "air-duct-cleaning", trade: "hvac", description: "Air duct cleaning, whole home", unit: "project", soc: HVAC_TECH, laborHours: b(4.5, 6.5, 9.5), materials: b(30, 75, 170) },
 
   // --- paint -----------------------------------------------------------
   // Per sq ft of room FLOOR area (matches the taxonomy's 250 sq ft room
@@ -660,6 +669,14 @@ export const COST_CATALOG: CostCatalogEntry[] = [
   { itemId: "tree-trimming", trade: "landscaping", description: "Tree trimming / pruning, per tree", unit: "each", soc: LANDSCAPER, laborHours: b(6, 10.5, 17), materials: b(20, 60, 150), setup: { hours: b(1.5, 2.6, 4.4), materials: b(25, 60, 140) } },
   // sanity: sprinkler head / zone repair $130–410
   { itemId: "sprinkler-repair", trade: "landscaping", description: "Sprinkler head or zone repair", unit: "project", soc: LANDSCAPER, laborHours: b(1.6, 3, 5.2), materials: b(20, 55, 140) },
+  // sanity: stump grinding $120–400 per stump (HomeGuide 2026). Machine wear /
+  // haul-away sits in materials.
+  { itemId: "stump-grinding", trade: "landscaping", description: "Stump grinding, per stump", unit: "each", soc: LANDSCAPER, laborHours: b(1.5, 3, 5.5), materials: b(40, 110, 240) },
+  // Exterior French / yard drain. Per project because "standing water in my
+  // yard" carries no length. sanity: $1,000–5,000 (Angi/HomeAdvisor 2026).
+  { itemId: "yard-drainage", trade: "landscaping", description: "Yard drainage / French drain, exterior", unit: "project", soc: LANDSCAPER, laborHours: b(10, 20, 38), materials: b(320, 950, 2300) },
+  // sanity: retaining wall repair $400–3,000 (Angi 2026).
+  { itemId: "retaining-wall-repair", trade: "landscaping", description: "Retaining wall repair — re-level, drainage, failed section", unit: "project", soc: LANDSCAPER, laborHours: b(4, 9, 18), materials: b(160, 520, 1500) },
   { itemId: "mulch-installation", trade: "landscaping", description: "Mulch, delivered + spread", unit: "cubic yard", soc: LANDSCAPER, laborHours: b(0.35, 0.525, 0.84), materials: b(17.5, 28, 45.5), setup: { hours: b(0.75, 1.125, 1.8), materials: b(37.5, 60, 97.5) } },
 
   // --- countertops (vanity JOB_COMPONENT) --------------------------------

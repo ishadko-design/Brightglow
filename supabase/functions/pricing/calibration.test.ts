@@ -70,6 +70,7 @@ const REFERENCE: Record<string, Ref> = {
   "doorbell-install": { low: 150, high: 500 },
   "outlet-repair": { low: 80, high: 350 },
   "electrical-diagnostic": { low: 75, high: 160, loose: true },
+  "surge-protector-install": { low: 200, high: 800 },
   "tv-mount-install": { low: 200, high: 600 },
   "tv-cord-concealment": { low: 100, high: 400 },
   "tv-mount-masonry": { low: 75, high: 300 },
@@ -80,6 +81,7 @@ const REFERENCE: Record<string, Ref> = {
   "mold-containment": { low: 400, high: 1500 },
   "remediation-hourly": { low: 75, high: 200, loose: true },
   "pest-treatment": { low: 150, high: 400 },
+  "mosquito-treatment": { low: 80, high: 500 },
   "termite-treatment": { low: 500, high: 2500 },
   "rodent-exclusion": { low: 200, high: 800 },
   "bed-bug-treatment": { low: 250, high: 900 },
@@ -115,6 +117,8 @@ const REFERENCE: Record<string, Ref> = {
   "thermostat-repair-basic": { low: 85, high: 350 },
   "evaporator-coil-replacement": { low: 600, high: 3000 },
   "hvac-tune-up": { low: 75, high: 300 },
+  "ac-compressor-replacement": { low: 1800, high: 2800 },
+  "air-duct-cleaning": { low: 450, high: 1000 },
   // paint
   "paint-interior-labor": { low: 1.2, high: 3.2 },
   "paint-exterior-labor": { low: 1.33, high: 3.33 },
@@ -197,6 +201,9 @@ const REFERENCE: Record<string, Ref> = {
   "hedge-trimming": { low: 185, high: 450 },
   "tree-trimming": { low: 400, high: 900 },
   "sprinkler-repair": { low: 130, high: 410 },
+  "stump-grinding": { low: 120, high: 400 },
+  "yard-drainage": { low: 1000, high: 5000 },
+  "retaining-wall-repair": { low: 400, high: 3000 },
   // countertops
   "laminate-countertop-installed": { low: 25, high: 70 },
 
