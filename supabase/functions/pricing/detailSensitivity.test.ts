@@ -48,6 +48,7 @@ const CASES: Case[] = [
   // Painting prep is area-priced: a stated area must move it.
   { base: "remove popcorn ceiling", detailed: "remove popcorn ceiling, 900 sq ft", lever: "ceiling area" },
   { base: "pressure wash my house", detailed: "pressure wash my house, 2200 sq ft", lever: "washed area" },
+  { base: "epoxy garage floor", detailed: "epoxy garage floor, 700 sq ft", lever: "garage area" },
   // Count-priced electrical: a stated number of lights must move the price.
   { base: "install recessed lighting", detailed: "install 9 recessed lights", lever: "can light count" },
   // Recessed scope: a new-spot install costs ~2x a retrofit swap.

@@ -586,6 +586,16 @@ export const COST_CATALOG: CostCatalogEntry[] = [
   { itemId: "subfloor-repair", trade: "flooring", description: "Subfloor repair/replacement", unit: "sq ft", soc: FLOOR_LAYER, laborHours: b(0.03, 0.05, 0.08), materials: b(1, 2, 3.5) },
   // sanity: self-leveling underlayment $2–5 per sq ft
   { itemId: "floor-leveling", trade: "flooring", description: "Floor leveling compound", unit: "sq ft", soc: FLOOR_LAYER, laborHours: b(0.02, 0.035, 0.06), materials: b(1, 2, 3.5) },
+  // Epoxy / garage floor coating, added 2026-07-23. "epoxy" routes to Flooring
+  // on the client but had no engine item, so a garage floor coating - a common,
+  // well-documented job - fell to flooring.general and declined ("no estimate",
+  // reported live). Covers epoxy, polyaspartic and flake systems under one band.
+  //
+  // Setup carries the concrete PREP - grinding or acid-etching, patching cracks,
+  // masking - which is the fixed front-end cost and the reason a small 1-car
+  // floor costs more per sq ft than a big shop floor. sanity: $4-10/sq ft
+  // installed (HomeGuide/Angi epoxy $4-10, polyaspartic $5-12, 2026).
+  { itemId: "epoxy-floor-coating", trade: "flooring", description: "Epoxy / polyaspartic garage floor coating", unit: "sq ft", soc: FLOOR_LAYER, laborHours: b(0.018, 0.03, 0.05), materials: b(1.5, 2.7, 4.4), setup: { hours: b(4, 6.5, 10), materials: b(140, 320, 650) } },
 
   // --- windows ---------------------------------------------------------
   // Band is for a full-unit INSERT (frame stays). Glass-only and full-frame

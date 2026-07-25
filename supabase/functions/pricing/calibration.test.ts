@@ -168,6 +168,7 @@ const REFERENCE: Record<string, Ref> = {
   "hardwood-spot-repair": { low: 300, high: 1500 },
   "subfloor-repair": { low: 2, high: 6 },
   "floor-leveling": { low: 2, high: 5 },
+  "epoxy-floor-coating": { low: 4, high: 10 },
   // windows
   "vinyl-window-replacement": { low: 450, high: 1200 },
   "bay-bow-window-replacement": { low: 2000, high: 6000 },
