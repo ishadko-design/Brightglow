@@ -84,9 +84,10 @@ struct LoginView: View {
                         appleButton
                         googleButton
 
-                        Text("By continuing you agree to our **Terms & Privacy Policy**")
+                        Text("By continuing you agree to our [Terms](https://brightglow.co/terms) & [Privacy Policy](https://brightglow.co/privacy)")
                             .font(.bodySmall)
                             .foregroundStyle(.white.opacity(0.5))
+                            .tint(.white.opacity(0.9))
                             .multilineTextAlignment(.center)
                             .padding(.top, 4)
                     }
