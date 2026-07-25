@@ -33,6 +33,7 @@ import {
   JOB_TYPE_TAXONOMY,
 } from "../pricing/pricingEngine.ts";
 import { GENERIC_REPLIES, normalizeQuickReplies } from "./quickReplies.ts";
+import { repeatsPriorQuestion } from "./repeatsPriorQuestion.ts";
 
 const APP_TOKEN = Deno.env.get("APP_TOKEN") ?? "";
 const ANTHROPIC_API_KEY = Deno.env.get("ANTHROPIC_API_KEY") ?? "";
@@ -81,6 +82,14 @@ Stop the moment you can confidently name the business type and the matching
 photo — that may be after a single question. Keep asking (up to the limit) only
 while the request still straddles clearly different businesses or services.
 Never pad to the limit with low-value questions.
+
+NEVER re-ask something already answered. Before asking, read the whole
+conversation above: if the user has already given a size, a material, a count,
+a vehicle type, or any fact — even approximately ("200-300 sq ft", "a sedan") —
+treat it as SETTLED and move on. Re-asking the same question the user just
+answered (e.g. asking garage-floor size twice) is a bug users notice
+immediately. If their answer was a range or was vague, that is still an answer —
+accept it, do not ask again for a sharper number.
 
 Question style: one per turn, plain non-technical language, under 20 words.
 Never ask for contact info, address, or timing.
@@ -345,23 +354,28 @@ Deno.serve(async (req) => {
     details?: string;
     summary?: string;
   };
-  try {
+  // Sonnet is markedly faster than Opus for this lightweight per-turn routing
+  // task and just as accurate against the fixed schema. `mustFinish` forces the
+  // "you MUST finish now" prompt, used to recover a proper `done` (with all the
+  // match/detail fields) when the model tries to re-ask an answered question.
+  const runModel = async (mustFinish: boolean) => {
     const client = new Anthropic({ apiKey: ANTHROPIC_API_KEY, timeout: 20_000, maxRetries: 1 });
     const response = await client.messages.create({
-      // Sonnet is markedly faster than Opus for this lightweight per-turn routing
-      // task and just as accurate against the fixed schema — the chat felt slow.
       model: "claude-sonnet-5",
       max_tokens: 600,
-      // Sonnet 5 runs adaptive thinking when `thinking` is omitted — we don't
-      // want it here: this is a quick schema-bound routing call, and thinking
-      // only adds latency and output-token cost. Keep it off for speed.
+      // Sonnet 5 runs adaptive thinking when `thinking` is omitted — off here:
+      // a quick schema-bound routing call, thinking only adds latency and cost.
       thinking: { type: "disabled" },
-      system: systemPrompt(remaining),
+      system: systemPrompt(mustFinish ? 0 : remaining),
       output_config: { format: { type: "json_schema", schema: SCHEMA } },
       messages,
     });
     const text = response.content.find((b) => b.type === "text")?.text ?? "";
-    parsed = JSON.parse(text);
+    return JSON.parse(text);
+  };
+
+  try {
+    parsed = await runModel(false);
   } catch (err) {
     console.error("clarify: model call failed", err);
     return json({ error: "clarify failed" }, 502);
@@ -371,6 +385,29 @@ Deno.serve(async (req) => {
   // keep whatever match fields it produced so results still get search terms.
   if (parsed.action !== "done" && remaining === 0) {
     parsed.action = "done";
+  }
+
+  // Duplicate-question guard. The prompt tells the model never to re-ask an
+  // answered question, but it does so inconsistently — "About how big is the
+  // garage floor?" asked twice after the user answered "200-300 sq ft"
+  // (reported 2026-07-23). A range answer seems to trip it: the model wants a
+  // sharper number and asks again. Prompt alone can't be trusted here, so this
+  // is the deterministic backstop: if the new question substantially repeats one
+  // already asked, the user has answered everything this model knows to ask —
+  // finish rather than loop.
+  if (parsed.action === "ask" && parsed.question && repeatsPriorQuestion(parsed.question, messages)) {
+    console.log("clarify: duplicate question suppressed", JSON.stringify({ question: parsed.question }));
+    // Re-run forcing a finish, so `done` comes back with the match and detail
+    // fields populated — coercing the re-ask to done here would drop the size
+    // the user just gave, and the price would lose it. If the retry also fails
+    // or somehow re-asks, fall back to a bare done rather than looping.
+    try {
+      const finished = await runModel(true);
+      parsed = finished?.action === "done" ? finished : { ...parsed, action: "done" };
+    } catch (err) {
+      console.error("clarify: finish retry failed", err);
+      parsed.action = "done";
+    }
   }
 
   if (parsed.action === "ask" && parsed.question) {
