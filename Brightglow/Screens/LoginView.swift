@@ -69,12 +69,17 @@ struct LoginView: View {
                                 .font(.bodySmall)
                                 .foregroundStyle(.white.opacity(0.6))
                                 .multilineTextAlignment(.center)
-                            Button("Use a different email") {
+                            Button {
                                 emailSent = false
                                 email = ""
+                            } label: {
+                                Text("Use a different email")
+                                    .font(.bodySmall)
+                                    .foregroundStyle(.white.opacity(0.9))
+                                    .padding(.horizontal, 20)
+                                    .frame(height: 40)
+                                    .secondaryButtonBackground()
                             }
-                            .font(.bodySmall)
-                            .foregroundStyle(.white.opacity(0.4))
                             .buttonStyle(.textAction)
                             .padding(.top, 8)
                         }

@@ -5,6 +5,7 @@ import GoogleSignIn
 
 @main
 struct BrightglowApp: App {
+    @StateObject private var auth = AuthService()
     @StateObject private var chatRouter = ChatRouter()
     @StateObject private var businessStore = BusinessStore()
 
@@ -15,19 +16,19 @@ struct BrightglowApp: App {
     var body: some Scene {
         WindowGroup {
             RootNavigator()
+                .environmentObject(auth)
                 .environmentObject(chatRouter)
                 .environmentObject(businessStore)
                 .onOpenURL { url in
                     #if DEBUG
                     print("🔗 onOpenURL: \(url.absoluteString)")
                     #endif
-                    // A chat deep link (brightglow://chat) opens the inbox; only
-                    // if it wasn't one do we treat the url as an auth callback.
+                    // A chat deep link (brightglow://chat) opens the inbox; a
+                    // Google OAuth callback is the SDK's own. Anything else is the
+                    // email magic-link callback, which AuthService completes.
                     if chatRouter.handle(url) { return }
-                    GIDSignIn.sharedInstance.handle(url)
-                    Task {
-                        try? await supabase.auth.session(from: url)
-                    }
+                    if GIDSignIn.sharedInstance.handle(url) { return }
+                    Task { await auth.handleOpenURL(url) }
                 }
                 // Universal Links (https://brightglow.co/chat…) arrive as a web
                 // browsing activity rather than an openURL — route them to chat too.

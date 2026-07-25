@@ -77,6 +77,64 @@ final class AuthService: ObservableObject {
         }
     }
 
+    // MARK: - Magic-link callback
+
+    /// Completes a sign-in from a `brightglow://login` callback — the link tapped
+    /// in the email. Supabase can hand the credentials back two different ways
+    /// depending on how the project's flow is configured:
+    ///
+    ///   • PKCE:     `brightglow://login?code=…`         → exchange the code
+    ///   • Implicit: `brightglow://login#access_token=…` → set the tokens directly
+    ///
+    /// We handle both so the link works regardless, and — unlike the old
+    /// `try?` — we surface failures instead of swallowing them, so an expired or
+    /// already-used link explains itself rather than silently leaving the user on
+    /// the login screen.
+    func handleOpenURL(_ url: URL) async {
+        let fragment = fragmentParameters(url)
+
+        // Supabase reports rejected/expired links via an `error_description`.
+        if let error = fragment["error_description"] ?? fragment["error"] {
+            message = error.replacingOccurrences(of: "+", with: " ")
+            return
+        }
+
+        do {
+            if let accessToken = fragment["access_token"],
+               let refreshToken = fragment["refresh_token"] {
+                let session = try await supabase.auth.setSession(
+                    accessToken: accessToken, refreshToken: refreshToken)
+                user = session.user
+            } else {
+                // PKCE (`?code=…`) — the SDK exchanges it using the verifier it
+                // stashed when the link was requested.
+                let session = try await supabase.auth.session(from: url)
+                user = session.user
+            }
+        } catch {
+            #if DEBUG
+            print("🔗 sign-in link failed for \(url.absoluteString) — \(error)")
+            #endif
+            message = "That sign-in link didn't work. It may have expired — request a new one."
+        }
+    }
+
+    /// Parse a URL fragment (`#a=b&c=d`) into a dictionary. The implicit flow
+    /// returns the session tokens here rather than in the query string, so
+    /// `URLComponents.queryItems` never sees them.
+    private func fragmentParameters(_ url: URL) -> [String: String] {
+        guard let fragment = URLComponents(url: url, resolvingAgainstBaseURL: false)?.fragment else {
+            return [:]
+        }
+        var result: [String: String] = [:]
+        for pair in fragment.split(separator: "&") {
+            let kv = pair.split(separator: "=", maxSplits: 1).map(String.init)
+            guard kv.count == 2 else { continue }
+            result[kv[0]] = kv[1].removingPercentEncoding ?? kv[1]
+        }
+        return result
+    }
+
     // MARK: - Sign in with Apple
 
     func configureAppleRequest(_ request: ASAuthorizationAppleIDRequest) {

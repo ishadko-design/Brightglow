@@ -18,7 +18,7 @@
 			<key>CFBundleTypeRole</key>
 			<string>Editor</string>
 			<key>CFBundleURLName</key>
-			<string>com.fixr.FIXR</string>
+			<string>co.brightglow.app</string>
 			<key>CFBundleURLSchemes</key>
 			<array>
 				<string>brightglow</string>
