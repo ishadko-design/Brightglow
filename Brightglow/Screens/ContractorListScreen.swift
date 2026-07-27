@@ -186,6 +186,13 @@ struct ContractorListScreen: View {
         return autoCategoryItems.first { $0.name == category }
     }
 
+    /// Vehicle label sent to the business on an Auto & moto quote, so a shop
+    /// that services both cars and bikes knows which this is. Empty for home.
+    private var quoteVehicleNote: String {
+        guard autoCategory != nil else { return "" }
+        return vehicle == .moto ? "Motorcycle" : "Car"
+    }
+
     /// Whether vehicle photos count as work photos for this search. Same veto as
     /// `autoCategory`, and needed separately because `isAutoService` also matches
     /// on the query text — "refrigerator repair service" hits the Repair
@@ -355,7 +362,8 @@ struct ContractorListScreen: View {
                 startReviewsExpanded: startReviewsExpanded,
                 photoMatchTerms: photoMatchTerms,
                 pinnedReviewID: pinnedReviewID,
-                clarifyTranscript: clarifyTranscript
+                clarifyTranscript: clarifyTranscript,
+                vehicleNote: quoteVehicleNote
             )
         }
         .navigationDestination(item: $quoteContractorID) { id in
@@ -365,7 +373,8 @@ struct ContractorListScreen: View {
                 contractor: contractors.first { $0.id == id },
                 requestSummary: typedQuery,
                 initialImages: attachedImages,
-                clarifyTranscript: clarifyTranscript
+                clarifyTranscript: clarifyTranscript,
+                vehicleNote: quoteVehicleNote
             )
         }
         // Custom bottom overlay (same as the gallery) so the card is a flush,

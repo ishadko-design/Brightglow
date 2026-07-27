@@ -25,6 +25,11 @@ struct QuoteRequestScreen: View {
     /// description sent to the business (an AI-augmented summary), and shown here
     /// read-only so the user sees exactly what's added on top of their own words.
     var clarifyTranscript: ClarifyTranscript = .empty
+    /// "Motorcycle" or "Car" for an Auto & moto request, empty for home. The
+    /// pricing engine already separates the two, but the business only learns
+    /// which vehicle from the message text — a shop that services both would
+    /// otherwise prep for the wrong one. Prepended to the description sent.
+    var vehicleNote: String = ""
 
     @Environment(\.dismiss) private var dismiss
     @EnvironmentObject private var auth: AuthService
@@ -528,8 +533,10 @@ struct QuoteRequestScreen: View {
         editingEmail = false
         sendError = nil
 
-        // The user's own words plus the AI-clarified details from the Q&A.
-        let description = clarifyTranscript.augmentedDescription(base: editableRequest)
+        // The user's own words plus the AI-clarified details from the Q&A, with
+        // the vehicle named up front for auto/moto so the shop knows which it is.
+        let base = clarifyTranscript.augmentedDescription(base: editableRequest)
+        let description = vehicleNote.isEmpty ? base : "Vehicle: \(vehicleNote)\n\n\(base)"
 
         if let phone = contractor.phone, MFMessageComposeViewController.canSendText() {
             // Primary: person-to-person text with the photo, composed in the

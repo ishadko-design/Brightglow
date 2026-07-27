@@ -68,6 +68,9 @@ struct ContractorGalleryScreen: View {
     /// The landing clarifying Q&A, carried through to the quote-request screen so
     /// the message a business receives includes the AI-clarified details.
     var clarifyTranscript: ClarifyTranscript = .empty
+    /// "Motorcycle"/"Car" for an auto search, empty for home — passed to the
+    /// quote so the business is told which vehicle.
+    var vehicleNote: String = ""
 
     /// True when a business owner is previewing their OWN page (from the Settings
     /// editor's "View profile"). It's the same consumer gallery, minus the parts
@@ -245,7 +248,7 @@ struct ContractorGalleryScreen: View {
             }
         }
         .navigationDestination(isPresented: $showQuote) {
-            QuoteRequestScreen(contractor: selectedContractor, requestSummary: typedQuery, initialImages: attachedImages, clarifyTranscript: clarifyTranscript)
+            QuoteRequestScreen(contractor: selectedContractor, requestSummary: typedQuery, initialImages: attachedImages, clarifyTranscript: clarifyTranscript, vehicleNote: vehicleNote)
         }
         // Custom bottom overlay (not a system `.sheet`) so the card is a flush,
         // full-width bottom sheet rather than iOS 26's inset floating card.
