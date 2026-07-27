@@ -1,9 +1,9 @@
 import SwiftUI
 
-// Semantic layer over the 11-color palette in design/tokens.json (Figma source
-// of truth): white, gray50, gray20, gray10, gray05, bg, bgSecondary, accent,
-// orange, green, magenta. Every value below resolves to one of those eleven
-// tokens. Run `npm run tokens` to refresh DesignTokens from the source.
+// Semantic layer over the palette in design/tokens.json (Figma source of truth):
+// white, gray60, gray50, gray20, gray10, gray05, bg, bgSecondary, accent, orange,
+// green, magenta. Every value below resolves to one of those tokens. Run
+// `npm run tokens` to refresh DesignTokens from the source.
 struct AppColors {
     // ── Backgrounds ──────────────────────────────────────────────────────────
     static let bg              = DesignTokens.colorBg
@@ -19,7 +19,8 @@ struct AppColors {
 
     // ── Text ─────────────────────────────────────────────────────────────────
     static let textPrimary     = DesignTokens.colorWhite
-    static let textSecondary   = DesignTokens.colorGray50
+    // Bumped from gray50 → gray60 for readability (secondary text was too dim).
+    static let textSecondary   = DesignTokens.colorGray60
 
     // ── Accent / primary button (flat solid blue) ────────────────────────────
     static let accentStart     = DesignTokens.colorAccent

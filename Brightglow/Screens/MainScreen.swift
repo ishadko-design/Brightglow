@@ -1,6 +1,7 @@
 import SwiftUI
 import CoreLocation
 import PhotosUI
+import UIKit
 
 /// A contractor destination awaiting a resolved location before it can open.
 private enum PendingDestination {
@@ -13,6 +14,9 @@ private struct ChatMessage: Identifiable, Equatable {
     let id = UUID()
     let role: String   // "user" | "assistant"
     let content: String
+    /// Sent to the assistant but not rendered — used by the silent "Skip" so the
+    /// model advances past a question without leaving a visible bubble.
+    var hidden: Bool = false
 }
 
 struct MainScreen: View {
@@ -122,6 +126,10 @@ struct MainScreen: View {
     /// Destination the user tapped before a location was available; navigates once
     /// a location resolves. Contractors are never shown without a location.
     @State private var pendingDestination: PendingDestination? = nil
+    /// Drives the "location needed" prompt shown when a category is tapped but
+    /// location access has already been declined (the system prompt can't reappear,
+    /// so we route the user to Settings or manual ZIP entry).
+    @State private var showLocationNeeded = false
     @State private var drawnPaths: [DrawnPath] = []
     /// The captured photo (with any drawn strokes baked in) carried forward to
     /// the quote-request screen once the user reaches a contractor.
@@ -704,6 +712,21 @@ struct MainScreen: View {
                 .onChange(of: locationStore.label) { _, newLabel in
                     if let newLabel { locationQuery = newLabel }
                 }
+                // Category tapped without location, after access was declined: the
+                // OS prompt can't reappear, so ask here and route to Settings / ZIP.
+                .alert("Location needed", isPresented: $showLocationNeeded) {
+                    Button("Open Settings") {
+                        pendingDestination = nil
+                        openAppSettings()
+                    }
+                    Button("Enter ZIP code") {
+                        pendingDestination = nil
+                        beginEditingLocation()
+                    }
+                    Button("Cancel", role: .cancel) { pendingDestination = nil }
+                } message: {
+                    Text("Brightglow needs your location to find contractors near you. Turn it on in Settings, or enter a ZIP code.")
+                }
                 // Show the coaching hint each time the camera is fully exposed,
                 // then fade it out after 3s.
                 .onChange(of: sheetDetent) { _, newDetent in
@@ -983,6 +1006,16 @@ struct MainScreen: View {
         }
     }
 
+    /// Move past the current question without showing a bubble. The hidden turn
+    /// still goes to the assistant so it advances (asks the next one or finishes)
+    /// rather than re-asking.
+    private func skipChatQuestion() {
+        guard !chatLoading else { return }
+        chatMessages.append(ChatMessage(role: "user", content: "Skip", hidden: true))
+        chatCompleted = false
+        advanceChat()
+    }
+
     private func sendChatReply(_ text: String) {
         let reply = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !reply.isEmpty, !chatLoading else { return }
@@ -1075,7 +1108,7 @@ struct MainScreen: View {
             ScrollViewReader { proxy in
                 ScrollView {
                     VStack(spacing: 8) {
-                        ForEach(chatMessages) { message in
+                        ForEach(chatMessages.filter { !$0.hidden }) { message in
                             chatBubble(message)
                         }
                         if chatLoading {
@@ -1109,23 +1142,33 @@ struct MainScreen: View {
             if !chatCompleted && !chatLoading {
                 ScrollView(.horizontal, showsIndicators: false) {
                     HStack(spacing: 8) {
-                        ForEach(chatQuickReplies, id: \.self) { option in
-                            Button(action: { sendChatReply(option) }) {
-                                Text(option)
-                                    .font(.h4)
-                                    .foregroundStyle(.white)
-                                    .padding(.horizontal, 16)
-                                    .frame(height: 32)
-                                    .background(Capsule().fill(AppColors.bgOverlay.opacity(0.5)))
-                                    .overlay(Capsule().stroke(Color.white.opacity(0.2), lineWidth: 1))
-                            }
-                            .buttonStyle(.plain)
+                        // API-suggested answers, minus any "Skip" it returned — we
+                        // always append our own so every question has one.
+                        ForEach(chatQuickReplies.filter { $0.caseInsensitiveCompare("Skip") != .orderedSame }, id: \.self) { option in
+                            quickReplyPill(option) { sendChatReply(option) }
                         }
+                        // Per-question escape hatch: moves the assistant past this
+                        // question instead of ending the whole chat.
+                        quickReplyPill("Skip") { skipChatQuestion() }
                     }
                 }
             }
         }
         .padding(.top, 6)
+    }
+
+    /// One quick-reply capsule in the clarify chat's suggestion row.
+    private func quickReplyPill(_ title: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Text(title)
+                .font(.h4)
+                .foregroundStyle(.white)
+                .padding(.horizontal, 16)
+                .frame(height: 32)
+                .background(Capsule().fill(AppColors.bgOverlay.opacity(0.5)))
+                .overlay(Capsule().stroke(Color.white.opacity(0.2), lineWidth: 1))
+        }
+        .buttonStyle(.plain)
     }
 
     @ViewBuilder
@@ -1169,9 +1212,22 @@ struct MainScreen: View {
     }
 
     private func fetchCurrentLocation() {
+        // Tapping "Current location" after access was declined would silently do
+        // nothing (the OS prompt can't reappear) — surface the same prompt instead.
+        if locationStore.isDenied {
+            showLocationNeeded = true
+            return
+        }
         editingLocation = false
         locationFocused = false
         locationStore.useCurrentLocation()
+    }
+
+    /// Deep-link to this app's page in the system Settings, where location access
+    /// can be re-enabled after it was denied.
+    private func openAppSettings() {
+        guard let url = URL(string: UIApplication.openSettingsURLString) else { return }
+        UIApplication.shared.open(url)
     }
 
     /// Auto-capture the user's location on open / when permission is granted, so a
@@ -1200,7 +1256,10 @@ struct MainScreen: View {
         case .authorizedWhenInUse, .authorizedAlways, .notDetermined:
             locationStore.useCurrentLocation()             // GPS (prompts if undetermined)
         default:                                           // .denied / .restricted
-            locationFocused = true                         // can't use GPS → type a ZIP
+            // The OS won't show its permission prompt again once declined, so a
+            // silent ZIP-field focus left the tap looking like it did nothing.
+            // Surface an explicit prompt to re-enable location or enter a ZIP.
+            showLocationNeeded = true
         }
     }
 
@@ -1321,7 +1380,12 @@ struct MainScreen: View {
         match: TradeMatch?, vehicle: VehicleFilter?, details: String?
     ) -> String? {
         var parts: [String] = []
-        if let vehicle { parts.append(vehicle == .moto ? "a motorcycle" : "a car or truck") }
+        // Only name a vehicle when the resolved trade isn't a home job. The vehicle
+        // read is already subject-gated upstream, but a home match plus a vehicle
+        // note is contradictory — and "a car or truck" in the note makes clarify
+        // trust the photo and ask vehicle questions about a house (2026-07-26).
+        let matchIsHome: Bool = { if case .home = match { return true } else { return false } }()
+        if let vehicle, !matchIsHome { parts.append(vehicle == .moto ? "a motorcycle" : "a car or truck") }
         if let match { parts.append(match.label.lowercased()) }
         if let details = details?.trimmingCharacters(in: .whitespacesAndNewlines), !details.isEmpty {
             parts.append(details)

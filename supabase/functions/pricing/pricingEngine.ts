@@ -624,6 +624,9 @@ export interface JobTypeEntry {
    *  a full 20-panel array (~$25k) for what is a service call. Declining beats
    *  answering with another job's price. */
   notIfContains?: string[];
+  /** Only a candidate for a motorcycle — see classifyJobType. Keeps a car
+   *  request off the bike service items (a car "tune up" is not a moto one). */
+  motoOnly?: boolean;
 }
 
 // One flagship job per category that EPCI prices well, plus a per-category
@@ -935,6 +938,17 @@ export const JOB_TYPE_TAXONOMY: JobTypeEntry[] = [
   // Moto-only job — no car equivalent, so it points straight at the moto item
   // rather than going through MOTO_VARIANTS. "timing chain" (12 chars) still
   // outranks "chain" (5), so a car timing job is unaffected.
+  // Motorcycle-only services. These terms are moto-context in this app (a car
+  // owner does not type "fork seals" or "valve clearance"), and the entries use
+  // the moto-repair trade so they never carry car labor.
+  { job_type: "moto.valve_adjustment", category: "Repair", keywords: ["valve adjustment", "valve clearance", "valve adjust", "adjust valves", "valve check", "shim"], trade: "moto-repair", itemId: "moto-valve-adjustment", unit: "each", defaultQuantity: 1, priority: 1, motoOnly: true },
+  { job_type: "moto.carburetor", category: "Repair", keywords: ["carburetor", "carburettor", "carb clean", "carb cleaning", "carb sync", "carbs"], trade: "moto-repair", itemId: "moto-carburetor-service", unit: "each", defaultQuantity: 1, priority: 1, motoOnly: true },
+  { job_type: "moto.fork_seals", category: "Repair", keywords: ["fork seals", "fork seal", "fork oil", "leaking fork", "fork rebuild"], trade: "moto-repair", itemId: "moto-fork-seals", unit: "each", defaultQuantity: 1, priority: 1, motoOnly: true },
+  { job_type: "moto.coolant", category: "Repair", keywords: ["coolant flush", "coolant change", "coolant service", "cooling system flush"], trade: "moto-repair", itemId: "moto-coolant-flush", unit: "each", defaultQuantity: 1, priority: 1, motoOnly: true },
+  { job_type: "moto.tune_up", category: "Repair", keywords: ["tune up", "tune-up", "major service", "minor service", "scheduled service", "annual service", "full service"], trade: "moto-repair", itemId: "moto-tune-up", unit: "each", defaultQuantity: 1, priority: 1, motoOnly: true },
+  { job_type: "moto.fuel_service", category: "Repair", keywords: ["fuel injection service", "fuel injector", "fuel filter", "throttle body clean", "injector clean"], trade: "moto-repair", itemId: "moto-fuel-service", unit: "each", defaultQuantity: 1, priority: 1, motoOnly: true },
+  { job_type: "moto.top_end", category: "Repair", keywords: ["top end rebuild", "top-end rebuild", "top end", "engine rebuild", "piston rings", "rebore", "cylinder rebuild"], trade: "moto-repair", itemId: "moto-top-end-rebuild", unit: "each", defaultQuantity: 1, priority: 1, motoOnly: true },
+  { job_type: "moto.stator", category: "Repair", keywords: ["stator", "charging system", "rectifier", "regulator rectifier", "not charging", "alternator not charging"], trade: "moto-repair", itemId: "moto-stator", unit: "each", defaultQuantity: 1, priority: 1, motoOnly: true },
   { job_type: "auto.chain_sprocket", category: "Repair", keywords: ["chain and sprocket", "chain & sprocket", "sprocket", "drive chain", "chain replacement"], trade: "moto-repair", itemId: "moto-chain-sprocket", unit: "each", defaultQuantity: 1 },
 
   // Tires
@@ -1145,6 +1159,12 @@ export const MOTO_VARIANTS: Record<
   "oil-change-synthetic": { itemId: "moto-oil-change", trade: "moto-repair", defaultQuantity: 1 },
   "brake-pads-per-axle": { itemId: "moto-brake-pads-per-wheel", trade: "moto-repair", defaultQuantity: 1 },
   "brake-pads-rotors-per-axle": { itemId: "moto-brake-pads-per-wheel", trade: "moto-repair", defaultQuantity: 1 },
+  // Shared terms whose CAR item is wildly wrong for a bike: a car clutch job is
+  // $1,815, a bike's clutch cable/plates far less; a car battery and plugs cost
+  // more than a bike's. Remap so a motorcycle never inherits the car price.
+  "clutch-replacement": { itemId: "moto-clutch-service", trade: "moto-repair", defaultQuantity: 1 },
+  "battery-replacement": { itemId: "moto-battery", trade: "moto-repair", defaultQuantity: 1 },
+  "spark-plug-replacement": { itemId: "moto-spark-plugs", trade: "moto-repair", defaultQuantity: 1 },
 };
 
 /** The entry to price for a motorcycle request — the moto variant when one
@@ -1172,10 +1192,21 @@ export function classifyJobType(
    *  job, the wrong trade entirely — so when the vertical is known, enforce
    *  it rather than hoping longest-match lands right. */
   vertical: Vertical | null = null,
+  /** The vehicle, when known. Gates `motoOnly` entries: a car "tune up" or
+   *  "coolant flush" must NOT land on the motorcycle service items, whose
+   *  labor and parts are a bike's. Absent (null) means "not a motorcycle" for
+   *  this purpose — moto-only entries are only offered when we know it's a bike. */
+  vehicle: Vehicle | null = null,
 ): JobTypeEntry | null {
   const text = [description, ...photoAttributes].join(", ").toLowerCase();
+  // Moto-only jobs are candidates only for a motorcycle. Everywhere else they
+  // are removed from the pool before matching, so a car never inherits a bike
+  // price (and vice versa the car item stays the honest default).
+  const TAXONOMY = vehicle === "moto"
+    ? JOB_TYPE_TAXONOMY
+    : JOB_TYPE_TAXONOMY.filter((e) => !e.motoOnly);
   if (vertical && !category) {
-    const scoped = JOB_TYPE_TAXONOMY.filter((e) => verticalForEntry(e) === vertical);
+    const scoped = TAXONOMY.filter((e) => verticalForEntry(e) === vertical);
     const hit = longestKeywordMatch(scoped, text, true);
     if (hit) return hit;
     // No specific match inside the right vertical. Fall through to the normal
@@ -1187,7 +1218,7 @@ export function classifyJobType(
     // Longest keyword wins, not first-declared: "replace 2 french door
     // windows" must land on french_door via "french door", not on the
     // generic window entry via "window".
-    const candidates = JOB_TYPE_TAXONOMY.filter((entry) => entry.category === category);
+    const candidates = TAXONOMY.filter((entry) => entry.category === category);
     const specific = longestKeywordMatch(candidates, text);
     if (specific) return specific;
     return CATEGORY_GENERAL[category] ?? null;
@@ -1199,15 +1230,15 @@ export function classifyJobType(
   // entry even when no job keyword matches.
   const stemmed = Object.keys(CATEGORY_STEMS)
     .filter((cat) => CATEGORY_STEMS[cat].some((s) => termMatches(text, s)));
-  if (stemmed.length === 1) return classifyJobType(stemmed[0], description, photoAttributes);
+  if (stemmed.length === 1) return classifyJobType(stemmed[0], description, photoAttributes, null, vehicle);
 
   // No stem (or several) — scan job keywords, longest match wins as the
   // most specific ("water heater" beats "heater"-less generics). With no
   // category signal at all, within-category-only keywords are skipped;
   // when stems narrowed the pool they're safe to use again.
   const pool = stemmed.length > 0
-    ? JOB_TYPE_TAXONOMY.filter((entry) => stemmed.includes(entry.category))
-    : JOB_TYPE_TAXONOMY;
+    ? TAXONOMY.filter((entry) => stemmed.includes(entry.category))
+    : TAXONOMY;
   return longestKeywordMatch(pool, text, stemmed.length === 0);
 }
 

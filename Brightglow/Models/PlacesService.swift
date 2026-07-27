@@ -91,6 +91,69 @@ enum PlacesService {
         return page
     }
 
+    /// Full details for ONE place by its id (Google Places **Details**). Used to
+    /// rebuild a business's own consumer-facing card for the owner "View profile"
+    /// preview, so it deliberately skips the trade-type gate and the
+    /// "must have a photo" guard that `search` applies — the owner is looking at
+    /// their own listing, and their uploaded/website photos fill in when Google
+    /// has none. Direct Google call: there is no backend `details` proxy yet (only
+    /// `search` has one), so the in-binary key is used like the rest of this
+    /// prototype service. nil when unconfigured or the place can't be fetched.
+    static func fetchDetails(placeId: String, category: Category = .plumbing) async -> Contractor? {
+        guard !placeId.isEmpty,
+              let data = await detailsJSON(placeId: placeId),
+              let place = try? JSONDecoder().decode(Place.self, from: data),
+              let name = place.displayName?.text
+        else { return nil }
+        let allPhotos = place.photos ?? []
+        var usable = allPhotos.filter { min($0.widthPx ?? 0, $0.heightPx ?? 0) >= 800 }
+        if usable.isEmpty { usable = allPhotos }
+        let photos = usable.prefix(10).map { photoURL(for: $0.name) }
+        return Contractor(
+            id: place.id,
+            name: name,
+            category: [category],
+            city: city(from: place.formattedAddress ?? ""),
+            rating: place.rating ?? 0,
+            reviewCount: place.userRatingCount ?? 0,
+            responseTime: .normal,
+            yearsActive: 0,
+            photos: photos,
+            priceTiers: category.priceTiers,
+            phone: place.nationalPhoneNumber,
+            website: place.websiteUri,
+            contactEmail: place.contactEmail,
+            licenseNumber: nil,
+            isVerified: (place.businessStatus ?? "OPERATIONAL") == "OPERATIONAL",
+            reviews: reviews(from: place.reviews)
+        )
+    }
+
+    /// Raw Places Details JSON for one place id. Direct Google GET (no backend
+    /// proxy for details yet); nil when unconfigured or the response isn't 200.
+    private static func detailsJSON(placeId: String) async -> Data? {
+        // A place resource name is "places/<id>"; we store the bare id.
+        let resource = placeId.hasPrefix("places/") ? placeId : "places/\(placeId)"
+        guard !apiKey.isEmpty,
+              let url = URL(string: "https://places.googleapis.com/v1/\(resource)")
+        else { return nil }
+        var req = URLRequest(url: url, timeoutInterval: 10)
+        req.httpMethod = "GET"
+        req.setValue(apiKey, forHTTPHeaderField: "X-Goog-Api-Key")
+        // The key is restricted to this app's bundle id (see googleSearchJSON).
+        if let bundleID = Bundle.main.bundleIdentifier {
+            req.setValue(bundleID, forHTTPHeaderField: "X-Ios-Bundle-Identifier")
+        }
+        // Details fields use the same names as Text Search, minus the `places.` prefix.
+        req.setValue(
+            "id,displayName,rating,userRatingCount,formattedAddress,nationalPhoneNumber,"
+            + "websiteUri,photos,businessStatus,reviews,location,types",
+            forHTTPHeaderField: "X-Goog-FieldMask")
+        guard let (data, resp) = try? await URLSession.shared.data(for: req),
+              (resp as? HTTPURLResponse)?.statusCode == 200 else { return nil }
+        return data
+    }
+
     // MARK: - Core request
 
     private static func search(textQuery: String, category: Category,
@@ -382,6 +445,7 @@ enum PlacesService {
             priceTiers: category.priceTiers,
             phone: place.nationalPhoneNumber,
             website: place.websiteUri,
+            contactEmail: place.contactEmail,
             licenseNumber: nil,
             isVerified: (place.businessStatus ?? "OPERATIONAL") == "OPERATIONAL",
             reviews: reviews(from: place.reviews)
@@ -435,6 +499,24 @@ enum PlacesService {
     private static func photoURL(for photoName: String) -> String {
         // Stored at full width; the list re-renders smaller via `photoURL(_:width:)`.
         "https://places.googleapis.com/v1/\(photoName)/media?maxWidthPx=\(fullPhotoWidth)&key=\(apiKey)"
+    }
+
+    /// Public builder for a Places media URL from a stored photo resource name
+    /// (e.g. "places/<id>/photos/<id>"). Used to rebuild curated Google photos: we
+    /// persist only the name, so the API key is re-attached here at render time
+    /// rather than stored in the DB.
+    static func googlePhotoMediaURL(name: String) -> String { photoURL(for: name) }
+
+    /// Pull the stable photo resource name back out of a Places media URL, or nil
+    /// if it isn't one (e.g. an uploaded or website URL). Lets the photo manager
+    /// store the name — not the key-bearing URL — when a Google photo is curated.
+    static func googlePhotoName(fromMediaURL url: String) -> String? {
+        guard let host = URL(string: url)?.host, host.contains("googleapis.com"),
+              let start = url.range(of: "/v1/"),
+              let end = url.range(of: "/media", range: start.upperBound..<url.endIndex)
+        else { return nil }
+        let name = String(url[start.upperBound..<end.lowerBound])
+        return name.isEmpty ? nil : name
     }
 
     /// Re-render an existing photo URL at a different width. Works on Places media
@@ -543,6 +625,10 @@ private struct Place: Decodable {
     let reviews: [PlaceReview]?
     let location: LatLng?
     let types: [String]?
+    /// Injected by our `search` Edge function from the `business_places` cache —
+    /// not a Google Places field. Present when we've resolved an email for this
+    /// business; drives the "Request quote" vs "Call" CTA.
+    let contactEmail: String?
 }
 
 private struct LatLng: Decodable {

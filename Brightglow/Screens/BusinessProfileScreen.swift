@@ -1,6 +1,7 @@
 import SwiftUI
 import PhotosUI
 import Supabase
+import UniformTypeIdentifiers
 
 /// The business's "Settings" — the page customers see, pared down to the essentials
 /// (Figma 1096:5699): logo + name + description, the work photos, and the services
@@ -33,6 +34,18 @@ struct BusinessProfileScreen: View {
     @State private var uploading = false
     @State private var uploadMsg: String?
 
+    /// The unified, ordered photo set shown in the manager (uploads + Google +
+    /// website). Mirrors `working.curatedPhotos` once the owner touches it; before
+    /// that it's seeded from the live sources so the manager opens populated.
+    @State private var curated: [BusinessService.CuratedPhoto] = []
+    @State private var curatedLoaded = false
+    @State private var loadingCurated = false
+    /// The photo currently under a drag, so its tile can show a drop-target box.
+    @State private var dropTargetID: String?
+
+    /// Drives the full-screen "View profile" preview — the same page customers see.
+    @State private var showPreview = false
+
     @State private var saving = false
     /// Set only when a write actually failed. With no Save button left, this is
     /// the sole signal that something didn't persist — so it must never be silent.
@@ -62,7 +75,7 @@ struct BusinessProfileScreen: View {
         .toolbar(.hidden, for: .navigationBar)
         .enableSwipeBack(!embedded)
         .preferredColorScheme(.dark)
-        .task { await load() }
+        .task { await load(); await loadCuratedPhotos() }
         .onChange(of: working) { _, _ in scheduleAutosave() }
         .onDisappear { flushPendingSave() }
         .onChange(of: logoItem) { _, item in Task { await uploadLogo(item) } }
@@ -96,6 +109,7 @@ struct BusinessProfileScreen: View {
                 if let errorMessage { errorBanner(errorMessage) }
                 profileSection
                 servicesSection
+                viewProfileButton
                 AccountFooter()
             }
             .padding(.top, 12)
@@ -121,7 +135,7 @@ struct BusinessProfileScreen: View {
                                     .secondaryButtonBackground()
                             }
                             Text("Square works best. PNG or JPG.")
-                                .font(.bodySmall).foregroundStyle(.white.opacity(0.5))
+                                .font(.bodySmall).foregroundStyle(.white.opacity(0.6))
                         }
                         Spacer(minLength: 0)
                     }
@@ -140,20 +154,51 @@ struct BusinessProfileScreen: View {
                         checkbox("Insured", isOn: boolBinding(\.insured))
                     }
 
-                    // Pictures
+                    // Pictures — the curated set the customer sees: uploaded photos
+                    // plus the ones pulled from Google and the business's website,
+                    // all reorderable and removable.
                     VStack(alignment: .leading, spacing: 12) {
                         VStack(alignment: .leading, spacing: 4) {
                             Text("Pictures").font(.h4).foregroundStyle(.white)
-                            Text("Show your best relevant work.")
+                            Text("Drag to reorder. Remove any you don't want — including ones we pulled from Google and your website.")
                                 .font(.bodySmall).foregroundStyle(.white.opacity(0.6))
+                                .fixedSize(horizontal: false, vertical: true)
                         }
-                        photoStrip
+                        curatedStrip
                         if let uploadMsg {
                             Text(uploadMsg).font(.bodySmall).foregroundStyle(.white.opacity(0.6))
                         }
                     }
                 }
             }
+        }
+    }
+
+    /// Opens the customer-facing page — logo, name, description, and the photos a
+    /// customer would see (the uploaded ones, plus the business's Google/website
+    /// work photos) — so the owner can check how their listing reads before a lead
+    /// ever sees it. Any unsaved edit is flushed first so the preview is current.
+    private var viewProfileButton: some View {
+        Button {
+            Task {
+                if dirty { await save() }
+                showPreview = true
+            }
+        } label: {
+            HStack(spacing: 8) {
+                Image(systemName: "eye")
+                    .font(.system(size: 15, weight: .semibold))
+                Text("View profile")
+                    .font(.h4)
+            }
+            .foregroundStyle(.white)
+            .frame(maxWidth: .infinity)
+            .frame(height: 52)
+        }
+        .buttonStyle(.secondary)
+        .padding(.horizontal, 16)
+        .fullScreenCover(isPresented: $showPreview) {
+            ProfilePreviewScreen(profile: working)
         }
     }
 
@@ -176,48 +221,142 @@ struct BusinessProfileScreen: View {
                 }
             }
             .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+            // ✕ remove — only when a logo is set. Clears logoPath, which the
+            // encoder writes as null on the next autosave, restoring the
+            // placeholder. Mirrors the photo tiles' remove control.
+            .overlay(alignment: .topTrailing) {
+                if !(working.logoPath ?? "").isEmpty {
+                    Button(action: removeLogo) {
+                        Image(systemName: "xmark")
+                            .font(.system(size: 12, weight: .bold))
+                            .foregroundStyle(.white)
+                            .frame(width: 28, height: 28)
+                            .background(.ultraThinMaterial, in: Circle())
+                            .contentShape(Circle())
+                    }
+                    .buttonStyle(.plain)
+                    .padding(6)
+                }
+            }
     }
 
-    /// Horizontal strip of work photos, each removable, ending in an add tile.
-    private var photoStrip: some View {
+    /// Horizontal strip of the curated photos — each draggable to reorder and
+    /// removable — ending in an add tile. Scraped photos (Google / website) carry a
+    /// small source tag so the owner knows where each came from.
+    private var curatedStrip: some View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 8) {
-                ForEach(Array(working.photos.enumerated()), id: \.element) { index, path in
-                    photoCell(index: index, path: path)
+                if loadingCurated && curated.isEmpty {
+                    RoundedRectangle(cornerRadius: 16, style: .continuous)
+                        .fill(AppColors.fillSubtle)
+                        .frame(width: 112, height: 136)
+                        .overlay { ProgressView().tint(.white) }
+                }
+                ForEach(curated) { photo in
+                    // The light-gray drop slot opens as a real gap BEFORE the tile a
+                    // drag is hovering, so the photo visibly slots between two others.
+                    if dropTargetID == photo.id {
+                        dropPlaceholder
+                    }
+                    curatedCell(photo)
                 }
                 addPhotoTile
             }
             .padding(.vertical, 2)
+            .animation(.easeInOut(duration: 0.18), value: curated)
+            .animation(.easeInOut(duration: 0.18), value: dropTargetID)
         }
     }
 
-    private func photoCell(index: Int, path: String) -> some View {
+    /// The gray "drop here" slot — a same-shape, same-size gap that appears between
+    /// tiles while a drag hovers, showing where the photo will land.
+    private var dropPlaceholder: some View {
+        RoundedRectangle(cornerRadius: 16, style: .continuous)
+            .fill(Color.white.opacity(0.14))
+            .frame(width: 112, height: 136)
+    }
+
+    // A photo tile. The drag catcher (`.onDrag`) covers only the LOWER part of the
+    // tile, leaving a drag-free band at the top where the ✕ lives — that's the only
+    // reliable way to keep whole-ish-tile drag while the ✕ still taps, since the
+    // UIKit drag interaction swallows every touch inside its own bounds. The whole
+    // tile is still a drop TARGET (that's passive, it doesn't eat taps).
+    private func curatedCell(_ photo: BusinessService.CuratedPhoto) -> some View {
         ZStack(alignment: .topTrailing) {
-            RoundedRectangle(cornerRadius: 16, style: .continuous)
-                .fill(AppColors.fillSubtle)
-                .overlay {
-                    if let url = BusinessService.publicURL(path) {
-                        AsyncImage(url: url) { phase in
-                            if case .success(let img) = phase {
-                                img.resizable().scaledToFill()
-                            } else {
-                                Color.clear
-                            }
-                        }
-                    }
-                }
+            curatedThumb(photo)
                 .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
 
-            Button(action: { removePhoto(index) }) {
+            // Drag source — bottom region only (top 44pt left free for the ✕).
+            VStack(spacing: 0) {
+                Color.clear.frame(height: 44).allowsHitTesting(false)
+                Color.clear
+                    .contentShape(Rectangle())
+                    .onDrag {
+                        NSItemProvider(object: photo.id as NSString)
+                    } preview: {
+                        curatedThumb(photo)
+                            .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+                            .opacity(0.9)
+                    }
+            }
+
+            // ✕ delete — a normal Button, sitting in the drag-free top band, so its
+            // tap is never contested by the drag interaction.
+            Button(action: { removeCurated(photo) }) {
                 Image(systemName: "xmark")
                     .font(.system(size: 14, weight: .bold))
                     .foregroundStyle(.white)
-                    .frame(width: 30, height: 30)
+                    .frame(width: 32, height: 32)
                     .background(.ultraThinMaterial, in: Circle())
+                    .contentShape(Circle())
             }
+            .buttonStyle(.plain)
             .padding(6)
+
+            // Where the photo came from — only for scraped ones; uploads need none.
+            if photo.source != .upload {
+                Text(photo.source == .google ? "Google" : "Web")
+                    .font(.system(size: 10, weight: .semibold))
+                    .foregroundStyle(.white)
+                    .padding(.horizontal, 8).frame(height: 20)
+                    .background(.ultraThinMaterial, in: Capsule())
+                    .padding(6)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomLeading)
+                    .allowsHitTesting(false)
+            }
         }
         .frame(width: 112, height: 136)
+        .onDrop(of: [.text], isTargeted: Binding(
+            get: { dropTargetID == photo.id },
+            set: { dropTargetID = $0 ? photo.id : (dropTargetID == photo.id ? nil : dropTargetID) }
+        )) { providers in
+            dropTargetID = nil
+            guard let provider = providers.first else { return false }
+            _ = provider.loadObject(ofClass: NSString.self) { obj, _ in
+                guard let draggedID = obj as? String else { return }
+                Task { @MainActor in moveCurated(fromID: draggedID, beforeID: photo.id) }
+            }
+            return true
+        }
+    }
+
+    private func curatedThumb(_ photo: BusinessService.CuratedPhoto) -> some View {
+        RoundedRectangle(cornerRadius: 16, style: .continuous)
+            .fill(AppColors.fillSubtle)
+            .frame(width: 112, height: 136)
+            .overlay {
+                if let s = BusinessService.resolvedPhotoURL(photo), let url = URL(string: s) {
+                    AsyncImage(url: url) { phase in
+                        if case .success(let img) = phase {
+                            img.resizable().scaledToFill()
+                        } else {
+                            Color.clear
+                        }
+                    }
+                }
+            }
+            .frame(width: 112, height: 136)
+            .clipped()
     }
 
     private var addPhotoTile: some View {
@@ -388,6 +527,14 @@ struct BusinessProfileScreen: View {
         logoItem = nil
     }
 
+    /// Clears the logo. Storage object is left in place (same as photo removal),
+    /// since the record of uploaded objects lives in `photos`/storage and the
+    /// gallery keys off `logoPath` being null.
+    private func removeLogo() {
+        working.logoPath = nil
+        logoItem = nil
+    }
+
     private func uploadPhotos(_ items: [PhotosPickerItem]) async {
         guard !items.isEmpty, let placeId else { return }
         uploading = true; uploadMsg = nil
@@ -397,7 +544,8 @@ struct BusinessProfileScreen: View {
             do {
                 let path = try await BusinessService.uploadImage(
                     data, contentType: contentType(for: data), placeId: placeId)
-                working.photos.append(path)
+                // New uploads lead the strip — the owner's freshest work first.
+                curated.insert(.init(source: .upload, ref: path), at: 0)
                 added += 1
             } catch {
                 #if DEBUG
@@ -405,9 +553,76 @@ struct BusinessProfileScreen: View {
                 #endif
             }
         }
+        if added > 0 { commitCurated() }
         uploading = false
         photoItems = []
-        uploadMsg = added > 0 ? "Added \(added) photo\(added == 1 ? "" : "s"). Remember to Save." : "Upload failed."
+        uploadMsg = added > 0 ? nil : "Upload failed."
+    }
+
+    // MARK: - Curated photos
+
+    /// Populate the manager. If the business already curated its photos, that saved
+    /// order is authoritative. Otherwise seed from the live sources the gallery
+    /// would auto-merge — uploads (trusted) plus the business's Google and website
+    /// photos, screened the same way — so the manager opens showing everything the
+    /// customer currently sees, ready to reorder or prune. Nothing is persisted
+    /// until the owner actually changes something (see `commitCurated`).
+    private func loadCuratedPhotos() async {
+        guard let placeId, !curatedLoaded else { return }
+        curatedLoaded = true
+        if let saved = working.curatedPhotos {
+            curated = saved
+            return
+        }
+        loadingCurated = true
+        defer { loadingCurated = false }
+
+        var list: [BusinessService.CuratedPhoto] =
+            working.photos.map { .init(source: .upload, ref: $0) }
+
+        // The business's own Google + website photos, screened like the gallery so
+        // logos / storefronts / junk don't seed the strip.
+        async let websiteURLs = BusinessPhotoService.fetch(placeId: placeId, website: working.website)
+        async let details = PlacesService.fetchDetails(placeId: placeId)
+        let scraped = (await websiteURLs) + ((await details)?.photos ?? [])
+        if !scraped.isEmpty {
+            let screened = await PhotoFilter.screen(scraped, limit: 30, scanLimit: scraped.count)
+            for p in screened {
+                // A Places media URL → store its stable name as a google ref; any
+                // other URL is a website photo, stored verbatim.
+                if let name = PlacesService.googlePhotoName(fromMediaURL: p.url) {
+                    list.append(.init(source: .google, ref: name))
+                } else {
+                    list.append(.init(source: .website, ref: p.url))
+                }
+            }
+        }
+        // The view may have changed selection while we fetched.
+        guard placeId == self.placeId else { return }
+        curated = list
+    }
+
+    /// Persist the current curated set. Writing `curatedPhotos` makes it
+    /// authoritative for the gallery; keeping `photos` in step preserves the record
+    /// of which uploaded Storage objects the page still references.
+    private func commitCurated() {
+        working.curatedPhotos = curated
+        working.photos = curated.filter { $0.source == .upload }.map(\.ref)
+    }
+
+    private func removeCurated(_ photo: BusinessService.CuratedPhoto) {
+        curated.removeAll { $0.id == photo.id }
+        commitCurated()
+    }
+
+    /// Reorder by dropping the dragged tile immediately before the target tile.
+    private func moveCurated(fromID: String, beforeID: String) {
+        guard fromID != beforeID,
+              let from = curated.firstIndex(where: { $0.id == fromID }) else { return }
+        let item = curated.remove(at: from)
+        let insertAt = curated.firstIndex(where: { $0.id == beforeID }) ?? curated.count
+        curated.insert(item, at: insertAt)
+        commitCurated()
     }
 
     private func contentType(for data: Data) -> String {
@@ -423,11 +638,6 @@ struct BusinessProfileScreen: View {
         if working.services.isEmpty {
             working.services.append(BusinessService.Service())
         }
-    }
-
-    private func removePhoto(_ index: Int) {
-        guard working.photos.indices.contains(index) else { return }
-        working.photos.remove(at: index)
     }
 
     // MARK: - Field bindings
@@ -526,6 +736,91 @@ private extension View {
     }
 }
 
+/// The owner-facing preview of the customer page. Reuses the exact consumer
+/// gallery (`ContractorGalleryScreen`) in `previewMode`, so what the owner sees
+/// is what a customer sees — the uploaded photos leading, then the business's
+/// Google/website work photos and reviews — minus the Call / Request-quote
+/// footer and view tracking.
+///
+/// It resolves the live Google details for the place (photos, rating, reviews);
+/// if that's unavailable (offline, or the key isn't configured), it falls back
+/// to a card built from the saved profile so the uploaded photos still preview.
+private struct ProfilePreviewScreen: View {
+    let profile: BusinessService.BusinessProfile
+
+    @Environment(\.dismiss) private var dismiss
+    @State private var contractor: Contractor?
+    @State private var resolved = false
+
+    var body: some View {
+        ZStack {
+            AppColors.bg.ignoresSafeArea()
+            if let contractor {
+                ContractorGalleryScreen(
+                    // No search context — order photos as-is; the uploaded ones lead.
+                    preloadedContractors: [contractor],
+                    // Open with the info sheet expanded so the owner immediately sees
+                    // their description, services, and credentials — not just a peek.
+                    startReviewsExpanded: true,
+                    previewMode: true,
+                    previewProfile: profile
+                )
+            } else if resolved {
+                unavailable
+            } else {
+                ProgressView().tint(.white)
+            }
+        }
+        .preferredColorScheme(.dark)
+        .task {
+            // Live Google details give the real photo pool + reviews; fall back to
+            // the saved profile so the preview still works offline / unconfigured.
+            contractor = await PlacesService.fetchDetails(placeId: profile.placeId)
+                ?? fallbackContractor()
+            resolved = true
+        }
+    }
+
+    // Shown only if we can't build any card at all (no place id) — the preview has
+    // nothing to render, so offer a way back rather than a blank screen.
+    private var unavailable: some View {
+        VStack(spacing: 12) {
+            Image(systemName: "eye.slash")
+                .font(.system(size: 48, weight: .light))
+                .foregroundStyle(.white.opacity(0.6))
+            Text("Preview unavailable")
+                .font(.h3).foregroundStyle(.white)
+            Button("Close") { dismiss() }
+                .font(.h4).foregroundStyle(.white)
+                .padding(.top, 4)
+        }
+    }
+
+    /// A card from the saved profile alone. Photos are left empty here — the
+    /// gallery merges the uploaded photos itself (from `business_profiles`), so
+    /// they lead whether or not Google details resolved.
+    private func fallbackContractor() -> Contractor {
+        let name = (profile.displayName?.isEmpty == false) ? profile.displayName! : "Your business"
+        return Contractor(
+            id: profile.placeId,
+            name: name,
+            category: [],
+            city: "",
+            rating: 0,
+            reviewCount: 0,
+            responseTime: .normal,
+            yearsActive: 0,
+            photos: [],
+            priceTiers: [],
+            phone: profile.phone,
+            website: profile.website,
+            licenseNumber: profile.licenseNumber,
+            isVerified: true,
+            reviews: []
+        )
+    }
+}
+
 /// One editable service line, in its own card: name, then a min/max price row and
 /// a Delete button — the Figma "Typical services" item.
 private struct ServiceRowEditor: View {
@@ -545,13 +840,18 @@ private struct ServiceRowEditor: View {
                     priceField("$", value: $service.priceMax)
                 }
             }
-            Button(action: onRemove) {
-                Text("Delete")
-                    .font(.h4).foregroundStyle(.white)
-                    .padding(.horizontal, 16).frame(height: 32)
-                    .secondaryButtonBackground()
+            // Per-hour toggle and Delete share a row, vertically centered (Figma
+            // 1096:5699): the checkbox on the left, Delete pinned to the right.
+            HStack(alignment: .center, spacing: 12) {
+                perHourCheckbox
+                Button(action: onRemove) {
+                    Text("Delete")
+                        .font(.h4).foregroundStyle(.white)
+                        .padding(.horizontal, 16).frame(height: 32)
+                        .secondaryButtonBackground()
+                }
+                .buttonStyle(.plain)
             }
-            .buttonStyle(.plain)
         }
     }
 
@@ -560,6 +860,37 @@ private struct ServiceRowEditor: View {
             Text(label).font(.h4).foregroundStyle(.white)
             content()
         }
+    }
+
+    /// Whether this service is priced per hour — stored in `unit` ("hour" vs empty).
+    /// On the consumer page this becomes the "/h" suffix; unchecked shows no unit.
+    private var isPerHour: Bool {
+        service.unit.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() == "hour"
+    }
+
+    private var perHourCheckbox: some View {
+        Button(action: { service.unit = isPerHour ? "" : "hour" }) {
+            HStack(spacing: 10) {
+                RoundedRectangle(cornerRadius: 6, style: .continuous)
+                    .fill(isPerHour ? AppColors.ctaPrimary : Color.clear)
+                    .frame(width: 24, height: 24)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 6, style: .continuous)
+                            .strokeBorder(isPerHour ? Color.clear : Color.white.opacity(0.3), lineWidth: 1.5)
+                    )
+                    .overlay {
+                        if isPerHour {
+                            Image(systemName: "checkmark")
+                                .font(.system(size: 13, weight: .bold))
+                                .foregroundStyle(.white)
+                        }
+                    }
+                Text("Per hour").font(.bodyLight).foregroundStyle(.white)
+                Spacer(minLength: 0)
+            }
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
     }
 
     private func input(_ placeholder: String, text: Binding<String>) -> some View {

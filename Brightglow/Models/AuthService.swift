@@ -246,28 +246,12 @@ final class AuthService: ObservableObject {
 
     // MARK: - Profile
 
-    // The consumer profile (Figma 1150:3839) edits three things. Email is the
-    // identity itself — OTP-verified possession — so it's shown but not editable
-    // here; the name parts and the avatar path live in the auth user's metadata,
-    // which avoids a `profiles` table for what is only ever read back by its owner.
+    // We deliberately collect the minimum: a first name and the email. Email is
+    // the identity itself — OTP-verified possession — so it's shown but not
+    // editable here; the first name lives in the auth user's metadata, which
+    // avoids a `profiles` table for what is only ever read back by its owner.
 
     var firstName: String { metadataString("first_name") ?? "" }
-    var lastName: String { metadataString("last_name") ?? "" }
-    /// Object path in the `avatars` bucket, e.g. `<uid>/<uuid>.jpg`.
-    var avatarPath: String? { metadataString("avatar_path") }
-
-    /// Share of the profile the user has filled in, as the whole percent the
-    /// header subtitle shows ("71 % complete" in the mock). Email always counts
-    /// — you can't be signed in without it — so the floor is 25%.
-    var profileCompletion: Int {
-        let filled = [
-            !(user?.email ?? "").isEmpty,
-            !firstName.isEmpty,
-            !lastName.isEmpty,
-            avatarPath != nil,
-        ].filter { $0 }.count
-        return Int((Double(filled) / 4.0 * 100).rounded())
-    }
 
     private func metadataString(_ key: String) -> String? {
         guard let value = user?.userMetadata[key]?.stringValue, !value.isEmpty else { return nil }
@@ -275,15 +259,11 @@ final class AuthService: ObservableObject {
     }
 
     /// Persist the editable profile fields onto the auth user. Only the keys
-    /// passed are touched, so saving a name can't clear the avatar.
+    /// passed are touched.
     @discardableResult
-    func updateProfile(firstName: String? = nil,
-                       lastName: String? = nil,
-                       avatarPath: String? = nil) async -> Bool {
+    func updateProfile(firstName: String? = nil) async -> Bool {
         var data: [String: AnyJSON] = [:]
         if let firstName { data["first_name"] = .string(firstName) }
-        if let lastName { data["last_name"] = .string(lastName) }
-        if let avatarPath { data["avatar_path"] = .string(avatarPath) }
         guard !data.isEmpty else { return true }
         do {
             user = try await supabase.auth.update(user: UserAttributes(data: data))
@@ -294,36 +274,6 @@ final class AuthService: ObservableObject {
             #endif
             return false
         }
-    }
-
-    // MARK: - Avatar
-
-    private static let avatarBucket = "avatars"
-
-    /// Upload avatar bytes to `<uid>/<uuid>.<ext>` and record the path on the
-    /// user. Storage RLS gates writes on that first path segment, so the folder
-    /// name isn't cosmetic — it's the authorization key.
-    func uploadAvatar(_ data: Data) async -> Bool {
-        guard let uid = user?.id.uuidString.lowercased() else { return false }
-        let contentType = BusinessService.imageContentType(for: data)
-        let path = "\(uid)/\(UUID().uuidString).\(BusinessService.fileExtension(for: contentType))"
-        do {
-            try await supabase.storage.from(Self.avatarBucket).upload(
-                path,
-                data: data,
-                options: FileOptions(cacheControl: "31536000", contentType: contentType, upsert: false)
-            )
-        } catch {
-            #if DEBUG
-            print("👤 avatar upload failed — \(error)")
-            #endif
-            return false
-        }
-        return await updateProfile(avatarPath: path)
-    }
-
-    static func avatarURL(_ path: String) -> URL? {
-        try? supabase.storage.from(avatarBucket).getPublicURL(path: path)
     }
 
     // MARK: - Delete account

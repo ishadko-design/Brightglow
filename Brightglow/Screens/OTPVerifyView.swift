@@ -39,7 +39,7 @@ struct OTPVerifyView: View {
 
                     Text("We sent a 6-digit code to")
                         .font(.bodyLight)
-                        .foregroundStyle(.white.opacity(0.5))
+                        .foregroundStyle(.white.opacity(0.6))
 
                     Text(email)
                         .font(.bodySmall)

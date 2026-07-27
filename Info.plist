@@ -2,14 +2,6 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
-	<key>HF_TOKEN</key>
-	<string>$(HF_TOKEN)</string>
-	<key>PLACES_API_KEY</key>
-	<string>$(PLACES_API_KEY)</string>
-	<key>SUPABASE_REF</key>
-	<string>$(SUPABASE_REF)</string>
-	<key>SUPABASE_ANON_KEY</key>
-	<string>$(SUPABASE_ANON_KEY)</string>
 	<key>APP_TOKEN</key>
 	<string>$(APP_TOKEN)</string>
 	<key>CFBundleURLTypes</key>
@@ -35,6 +27,14 @@
 			</array>
 		</dict>
 	</array>
+	<key>HF_TOKEN</key>
+	<string>$(HF_TOKEN)</string>
+	<key>PLACES_API_KEY</key>
+	<string>$(PLACES_API_KEY)</string>
+	<key>SUPABASE_ANON_KEY</key>
+	<string>$(SUPABASE_ANON_KEY)</string>
+	<key>SUPABASE_REF</key>
+	<string>$(SUPABASE_REF)</string>
 	<key>UILaunchScreen</key>
 	<dict>
 		<key>UIColorName</key>

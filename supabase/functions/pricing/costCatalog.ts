@@ -878,6 +878,34 @@ export const COST_CATALOG: CostCatalogEntry[] = [
   { itemId: "moto-brake-pads-per-wheel", trade: "moto-repair", description: "Motorcycle brake pads, one wheel", unit: "each", soc: MOTO_MECH, laborHours: b(1, 1.4, 2), materials: b(35, 50, 85) },
   // sanity: chain + sprockets, parts and labor $150–450
   { itemId: "moto-chain-sprocket", trade: "moto-repair", description: "Motorcycle chain and sprocket set", unit: "each", soc: MOTO_MECH, laborHours: b(1, 1.5, 2.5), materials: b(90, 120, 200) },
+  // MOTORCYCLE service, added 2026-07-23. Before this, a moto request for
+  // anything outside tires/oil/brakes/chain either fell to a flat $274
+  // labor-only figure (a $2,500 top-end and a $120 coolant flush priced the
+  // same) or inherited the CAR item — "clutch cable" quoted a $1,815 car clutch
+  // job. Bands from shop service menus + JD Power / gearriderhub 2026, priced at
+  // the moto-repair burden (~$110/hr).
+  // sanity: valve adjustment / clearance $150-500 (labor-heavy, varies by engine)
+  { itemId: "moto-valve-adjustment", trade: "moto-repair", description: "Motorcycle valve clearance adjustment", unit: "each", soc: MOTO_MECH, laborHours: b(1.2, 2.6, 4.5), materials: b(10, 25, 60) },
+  // sanity: carburetor clean / sync $85-250
+  { itemId: "moto-carburetor-service", trade: "moto-repair", description: "Motorcycle carburetor clean / sync", unit: "each", soc: MOTO_MECH, laborHours: b(0.7, 1.3, 2.2), materials: b(10, 20, 45) },
+  // sanity: fork seal replacement $150-400 (per pair)
+  { itemId: "moto-fork-seals", trade: "moto-repair", description: "Motorcycle fork seal replacement", unit: "each", soc: MOTO_MECH, laborHours: b(1, 2, 3.2), materials: b(25, 50, 100) },
+  // A bike battery is small: sanity $80-250 installed.
+  { itemId: "moto-battery", trade: "moto-repair", description: "Motorcycle battery replacement", unit: "each", soc: MOTO_MECH, laborHours: b(0.2, 0.4, 0.7), materials: b(60, 110, 190) },
+  // sanity: motorcycle spark plugs $40-150
+  { itemId: "moto-spark-plugs", trade: "moto-repair", description: "Motorcycle spark plug replacement", unit: "each", soc: MOTO_MECH, laborHours: b(0.15, 0.35, 0.7), materials: b(20, 45, 90) },
+  // sanity: coolant flush $60-200 (liquid-cooled bikes)
+  { itemId: "moto-coolant-flush", trade: "moto-repair", description: "Motorcycle coolant flush", unit: "each", soc: MOTO_MECH, laborHours: b(0.4, 0.8, 1.4), materials: b(15, 35, 70) },
+  // Minor / major service. sanity: $150-500
+  { itemId: "moto-tune-up", trade: "moto-repair", description: "Motorcycle tune-up / scheduled service", unit: "each", soc: MOTO_MECH, laborHours: b(1.2, 2.5, 4.3), materials: b(20, 45, 110) },
+  // Cable at the low end, plates/basket at the high. sanity: $60-600
+  { itemId: "moto-clutch-service", trade: "moto-repair", description: "Motorcycle clutch cable or plate service", unit: "each", soc: MOTO_MECH, laborHours: b(0.5, 1.5, 4), materials: b(20, 60, 300) },
+  // sanity: fuel injection / filter service $100-300
+  { itemId: "moto-fuel-service", trade: "moto-repair", description: "Motorcycle fuel injection / filter service", unit: "each", soc: MOTO_MECH, laborHours: b(0.8, 1.5, 2.6), materials: b(15, 40, 90) },
+  // sanity: top-end rebuild $800-3,000 (wide by displacement)
+  { itemId: "moto-top-end-rebuild", trade: "moto-repair", description: "Motorcycle top-end rebuild", unit: "each", soc: MOTO_MECH, laborHours: b(6, 12, 22), materials: b(200, 450, 1100) },
+  // sanity: stator / charging system $300-800
+  { itemId: "moto-stator", trade: "moto-repair", description: "Motorcycle stator / charging system repair", unit: "each", soc: MOTO_MECH, laborHours: b(1.8, 3.2, 5.2), materials: b(110, 250, 520) },
 ];
 
 export const CATALOG_BY_ID: Map<string, CostCatalogEntry> = new Map(

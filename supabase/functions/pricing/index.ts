@@ -219,7 +219,7 @@ Deno.serve(async (req) => {
   // filter first, then the model, then this word list as a last resort.
   const keywordVehicle = vehicle ?? detectVehicle(description);
   const classifyText = keywordVehicle === "moto" ? stripVehicleWords(description) : description;
-  let entry = classifyJobType(category, classifyText);
+  let entry = classifyJobType(category, classifyText, [], null, keywordVehicle);
 
   // LLM classification for every real typed description — primary, not just
   // a fallback for keyword misses. Keywords alone are confidently wrong on

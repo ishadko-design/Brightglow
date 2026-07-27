@@ -285,6 +285,18 @@ const REFERENCE: Record<string, Ref> = {
   "moto-oil-change": { low: 40, high: 100 },
   "moto-brake-pads-per-wheel": { low: 130, high: 300 },
   "moto-chain-sprocket": { low: 150, high: 450 },
+  // Motorcycle service — shop menus / JD Power / gearriderhub 2026
+  "moto-valve-adjustment": { low: 150, high: 500 },
+  "moto-carburetor-service": { low: 85, high: 250 },
+  "moto-fork-seals": { low: 150, high: 400 },
+  "moto-battery": { low: 80, high: 250 },
+  "moto-spark-plugs": { low: 40, high: 150 },
+  "moto-coolant-flush": { low: 60, high: 200 },
+  "moto-tune-up": { low: 150, high: 500 },
+  "moto-clutch-service": { low: 60, high: 600 },
+  "moto-fuel-service": { low: 100, high: 300 },
+  "moto-top-end-rebuild": { low: 800, high: 3000 },
+  "moto-stator": { low: 300, high: 800 },
 };
 
 /** Every catalog item priced at national wages, by id, as an ALL-IN PER-UNIT

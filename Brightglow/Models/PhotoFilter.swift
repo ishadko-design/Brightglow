@@ -281,7 +281,13 @@ enum PhotoFilter {
                 if allowVehicles && decision.isVehicle { vehicle.append(photo) }
                 else { other.append(photo) }
             } else {
-                other.append(ScreenedPhoto(url: displayURL, labels: []))   // couldn't fetch to judge → keep
+                // Couldn't fetch to judge. Keep Places photos — their bundle-
+                // restricted key can 403 transiently and Google's pool is trusted —
+                // but DROP an unreachable non-Places (website) URL: keeping it would
+                // lead the gallery with a black tile it can never display either.
+                if url.host?.contains("googleapis.com") == true {
+                    other.append(ScreenedPhoto(url: displayURL, labels: []))
+                }
             }
         }
         return Array((vehicle + other).prefix(limit))   // display full-size, work shots first

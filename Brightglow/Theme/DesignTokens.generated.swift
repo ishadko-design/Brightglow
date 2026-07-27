@@ -6,6 +6,7 @@ enum DesignTokens {
 
     // MARK: - Colors
     static let colorWhite = Color(hex: "#FFFFFF")
+    static let colorGray60 = Color(.sRGB, red: 1.0000, green: 1.0000, blue: 1.0000, opacity: 0.6)
     static let colorGray50 = Color(.sRGB, red: 1.0000, green: 1.0000, blue: 1.0000, opacity: 0.5)
     static let colorGray20 = Color(.sRGB, red: 1.0000, green: 1.0000, blue: 1.0000, opacity: 0.2)
     static let colorGray10 = Color(.sRGB, red: 1.0000, green: 1.0000, blue: 1.0000, opacity: 0.1)

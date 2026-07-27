@@ -18,6 +18,20 @@ enum LeadBridgeService {
     /// the lead's public_id on success. businessName personalizes the email
     /// greeting when known (e.g. from Places via the browsed Contractor) —
     /// LeadBridge has no other source for a contractor's name.
+    /// An unguessable lead id matching the server's `lead_<base36>` shape. The
+    /// P2P text path mints this BEFORE opening the SMS composer so the `/l/<id>`
+    /// reply link can go in the message body; the lead is only created (with this
+    /// id) if the user actually sends. 16 chars of base36 ≈ 82 bits of entropy.
+    static func newPublicID() -> String {
+        let alphabet = Array("abcdefghijklmnopqrstuvwxyz0123456789")
+        let suffix = (0..<16).map { _ in alphabet[Int.random(in: 0..<alphabet.count)] }
+        return "lead_" + String(suffix)
+    }
+
+    /// Public web page (no login) where the business sees this request + photo
+    /// and replies into the customer's chat. Built from `publicId`.
+    static func replyURL(publicId: String) -> String { "\(baseURL)/l/\(publicId)" }
+
     static func submitLead(
         userEmail: String,
         userId: UUID? = nil,
@@ -27,7 +41,9 @@ enum LeadBridgeService {
         website: String? = nil,
         description: String,
         city: String,
-        photo: UIImage? = nil
+        photo: UIImage? = nil,
+        publicId: String? = nil,
+        notify: Bool = true
     ) async throws -> String {
         // Photo is optional; when there is one, failing to encode it is still
         // an error rather than a silent text-only send.
@@ -59,6 +75,11 @@ enum LeadBridgeService {
         if let website, !website.isEmpty { appendField("website", website) }
         appendField("description", description)
         appendField("city", city)
+        // P2P text path: the app-minted id (so the SMS link is known up front) and
+        // `notify=false` so LeadBridge records the lead for the /l/<id> reply page
+        // but sends no email — the customer's own text is the delivery.
+        if let publicId, !publicId.isEmpty { appendField("public_id", publicId) }
+        if !notify { appendField("notify", "false") }
 
         if let jpegData {
             body.append("--\(boundary)\r\n".data(using: .utf8)!)

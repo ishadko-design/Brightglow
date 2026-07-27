@@ -89,12 +89,7 @@ struct LoginView: View {
                         appleButton
                         googleButton
 
-                        Text("By continuing you agree to our [Terms](https://brightglow.co/terms) & [Privacy Policy](https://brightglow.co/privacy)")
-                            .font(.bodySmall)
-                            .foregroundStyle(.white.opacity(0.5))
-                            .tint(.white.opacity(0.9))
-                            .multilineTextAlignment(.center)
-                            .padding(.top, 4)
+                        consentText
                     }
                 }
                 .padding(.horizontal, 32)
@@ -105,12 +100,39 @@ struct LoginView: View {
         .onTapGesture { emailFocused = false }
     }
 
+    // Consent notice sits directly beneath the sign-in buttons so the assent is
+    // coupled to the action (the Meyer/Berman "sign-in wrap" pattern): the links
+    // are set apart by being full-white and bold against 60%-white body copy,
+    // which keeps the notice conspicuous — what makes the arbitration clause and
+    // class-action waiver in the linked Terms enforceable — without underlines.
+    private var consentText: some View {
+        var text = AttributedString("By continuing, you agree to Brightglow's ")
+        var terms = AttributedString("Terms of Service")
+        terms.link = URL(string: "https://brightglow.co/terms")
+        terms.foregroundColor = .white
+        terms.inlinePresentationIntent = .stronglyEmphasized
+        var privacy = AttributedString("Privacy Policy")
+        privacy.link = URL(string: "https://brightglow.co/privacy")
+        privacy.foregroundColor = .white
+        privacy.inlinePresentationIntent = .stronglyEmphasized
+        text.append(terms)
+        text.append(AttributedString(" and "))
+        text.append(privacy)
+        text.append(AttributedString("."))
+        return Text(text)
+            .font(.bodySmall)
+            .foregroundStyle(.white.opacity(0.6))
+            .tint(.white)
+            .multilineTextAlignment(.center)
+            .padding(.top, 4)
+    }
+
     // MARK: - Email field
 
     private var emailField: some View {
         HStack(spacing: 8) {
             TextField("", text: $email, prompt:
-                Text("Email").foregroundStyle(.white.opacity(0.5))
+                Text("Email").foregroundStyle(.white.opacity(0.6))
             )
             .font(.bodyLight)
             .foregroundStyle(.white)

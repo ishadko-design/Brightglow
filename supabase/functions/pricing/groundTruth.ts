@@ -331,6 +331,30 @@ export const GROUND_TRUTH: GroundTruthCase[] = [
   // that is two moto tires (~$440). The filter now reaches the server, and
   // these cases keep it reaching it.
   {
+    // The worst case (2026-07-23): "clutch cable" on a bike quoted a $1,815 CAR
+    // clutch. The MOTO_VARIANT remap now prices the bike job.
+    query: "clutch cable",
+    category: "Repair",
+    vehicle: "moto",
+    expectJobType: "auto.clutch",
+    low: 60,
+    high: 600,
+    source: "Motorcycle shop service menus 2026 (cable to plate range)",
+    vertical: "auto",
+    wide: true,
+  },
+  {
+    // A moto-only job that used to fall to a flat $274 labor guess.
+    query: "valve adjustment",
+    category: "Repair",
+    vehicle: "moto",
+    expectJobType: "moto.valve_adjustment",
+    low: 150,
+    high: 500,
+    source: "JD Power / gearriderhub / shop menus 2026",
+    vertical: "auto",
+  },
+  {
     // The exact failing case: bare phrasing, Moto filter selected. Two tires
     // at the $160–300 fitted rate.
     query: "replace tires",

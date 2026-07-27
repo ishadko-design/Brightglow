@@ -118,7 +118,7 @@ struct SwipeScreen: View {
                     if !contractors.isEmpty {
                         Text("\(totalCount) Businesses")
                             .font(.bodySmall)
-                            .foregroundStyle(.white.opacity(0.5))
+                            .foregroundStyle(.white.opacity(0.6))
                     }
                 }
 
@@ -332,12 +332,12 @@ struct ContractorCardView: View {
                                 if let comingSoonText {
                                     Text(comingSoonText)
                                         .font(.bodyLight)
-                                        .foregroundStyle(.white.opacity(0.5))
+                                        .foregroundStyle(.white.opacity(0.6))
                                 } else if let tier = estimate {
                                     let range = "$\(tier.min >= 1000 ? "\(tier.min/1000)k" : "\(tier.min)")–\(tier.max >= 1000 ? "\(tier.max/1000)k" : "\(tier.max)")"
                                     Text("\(tier.label): \(range)")
                                         .font(.bodyLight)
-                                        .foregroundStyle(.white.opacity(0.5))
+                                        .foregroundStyle(.white.opacity(0.6))
                                 }
 
                                 HStack(spacing: 4) {
@@ -352,7 +352,7 @@ struct ContractorCardView: View {
                                     if contractor.reviewCount > 0 {
                                         Text("\(contractor.rating, specifier: "%.1f") · \(contractor.reviewCount) reviews")
                                             .font(.bodySmall)
-                                            .foregroundStyle(.white.opacity(0.5))
+                                            .foregroundStyle(.white.opacity(0.6))
                                             .padding(.leading, 4)
                                     }
                                 }

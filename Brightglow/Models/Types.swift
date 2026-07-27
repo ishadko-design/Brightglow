@@ -168,6 +168,10 @@ struct Contractor: Codable, Identifiable {
     /// Business website from Google Places (`websiteUri`), used only to resolve a
     /// hosted logo (see [[LogoService]]); nil when Places has no site on file.
     var website: String? = nil
+    /// Business email resolved server-side (search fn, from `business_places`);
+    /// nil when none is known. Gates the "Request quote" CTA — the async photo
+    /// thread needs an email, so businesses we can't email show "Call" only.
+    var contactEmail: String? = nil
     let licenseNumber: String?
     let isVerified: Bool
     /// Real Google reviews (populated on the live path; empty for the snapshot).

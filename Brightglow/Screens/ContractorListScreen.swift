@@ -90,6 +90,11 @@ struct ContractorListScreen: View {
     }
 
     @Environment(\.dismiss) var dismiss
+    @Environment(\.openURL) private var openURL
+    /// The business whose row "Call" was tapped — drives the shared "Before you
+    /// call" reminder sheet before we hand off to the dialer. Same pop-up the
+    /// gallery shows, so the mention-Brightglow nudge appears wherever Call lives.
+    @State private var callContractor: Contractor? = nil
     @StateObject private var location = LocationProvider()
 
     @State private var contractors: [Contractor] = []
@@ -143,6 +148,10 @@ struct ContractorListScreen: View {
     /// Kept work photos + their scene labels per contractor (the source of truth);
     /// `screenedByID` is this list ordered by the current query for display.
     @State private var keptPhotos: [String: [ScreenedPhoto]] = [:]
+    /// A business's OWN uploaded photos (from the app's Settings editor), by id.
+    /// Owner-curated, so they lead the strip un-screened and keep a claimed
+    /// business visible even when Google returns no usable work photos for it.
+    @State private var ownerPhotosByID: [String: [String]] = [:]
     /// Active contractor licences (CSLB), by contractor id. Absence means
     /// "unknown" — CSLB is California-only — never "unlicensed", so a missing
     /// entry shows no badge rather than a negative one.
@@ -359,11 +368,33 @@ struct ContractorListScreen: View {
                 clarifyTranscript: clarifyTranscript
             )
         }
+        // Custom bottom overlay (same as the gallery) so the card is a flush,
+        // full-width bottom sheet rather than iOS 26's inset floating card.
+        .overlay {
+            if let contractor = callContractor {
+                CallReminderSheet(contractor: contractor) {
+                    callContractor = nil
+                    dial(contractor)
+                } onDismiss: {
+                    callContractor = nil
+                }
+            }
+        }
+        .animation(.interpolatingSpring(stiffness: 320, damping: 32), value: callContractor?.id)
         .alert("How we estimate", isPresented: $showEstimateInfo) {
             Button("OK", role: .cancel) {}
         } message: {
             Text(estimateInfoText)
         }
+    }
+
+    /// Hands off to the system dialer with the business's number pre-filled (the
+    /// OS shows its own call confirmation — we never place the call ourselves).
+    private func dial(_ contractor: Contractor) {
+        guard let phone = contractor.phone else { return }
+        let dialable = phone.filter { $0.isNumber || $0 == "+" }
+        guard !dialable.isEmpty, let url = URL(string: "tel:\(dialable)") else { return }
+        openURL(url)
     }
 
     // ── Scrollable list of contractor rows ────────────────────────────────────
@@ -392,7 +423,8 @@ struct ContractorListScreen: View {
                             logoURL: logoByID[contractor.id],
                             onOpen: { photoIndex in open(contractor, photoIndex: photoIndex) },
                             onReviews: { openReviews(for: contractor) },
-                            onQuote: { quoteContractorID = contractor.id }
+                            onQuote: { quoteContractorID = contractor.id },
+                            onCall: { callContractor = contractor }
                         )
                         .id(contractor.id)
                         // Strictly lazy: reveal (and screen) a row's photos only when
@@ -716,10 +748,18 @@ struct ContractorListScreen: View {
                                            kept: v.kept, scanned: v.scanned, enriched: v.enriched)
             }
 
+            // Lead each business with its OWN uploaded photos (cheap: one query,
+            // and only claimed businesses come back). Done before the drop below so
+            // a business that uploaded photos stays even when Google gives us none.
+            await loadOwnerPhotos(for: contractors)
+
             // Drop businesses confirmed to have no work photos in their whole pool,
-            // so they don't reappear as blank rows on a later visit.
+            // so they don't reappear as blank rows on a later visit. A business with
+            // its own uploaded photos is exempt — it has something real to show.
             contractors.removeAll { c in
-                (scannedCount[c.id] ?? 0) >= c.photos.count && (screenedByID[c.id]?.isEmpty ?? true)
+                ownerPhotosByID[c.id] == nil
+                    && (scannedCount[c.id] ?? 0) >= c.photos.count
+                    && (screenedByID[c.id]?.isEmpty ?? true)
             }
             // Uncovered categories stay match-only — the price line shows the
             // "coming soon" state (with a real business count) instead. Auto &
@@ -775,6 +815,34 @@ struct ContractorListScreen: View {
         logoByID.merge(found) { _, new in new }
     }
 
+    /// Fetch each business's OWN uploaded photos and lead its strip with them.
+    /// One batched query; most place_ids have no `business_profiles` row, so only
+    /// the claimed few return. Owner photos are trusted verbatim (no screening) and
+    /// prepended ahead of the Google/website shots, and the business is revealed
+    /// immediately so its curated work shows on the first render.
+    @MainActor
+    private func loadOwnerPhotos(for batch: [Contractor]) async {
+        let ids = batch.map(\.id).filter { ownerPhotosByID[$0] == nil }
+        guard !ids.isEmpty else { return }
+        let map = await BusinessService.uploadedPhotoURLs(placeIds: ids)
+        guard !map.isEmpty else { return }
+        for (id, urls) in map {
+            ownerPhotosByID[id] = urls
+            revealedIDs.insert(id)
+            screenedByID[id] = withOwnerLead(id, screenedByID[id] ?? [])
+        }
+    }
+
+    /// Prepend a business's owner-uploaded photos ahead of `list`, de-duped. The
+    /// choke point every `screenedByID` write for a claimed business flows through,
+    /// so screening/enrichment can re-order the Google photos without ever dropping
+    /// the owner's curated ones from the lead.
+    private func withOwnerLead(_ id: String, _ list: [String]) -> [String] {
+        guard let owner = ownerPhotosByID[id], !owner.isEmpty else { return list }
+        let have = Set(owner)
+        return owner + list.filter { !have.contains($0) }
+    }
+
     /// Look up active contractor licences for businesses we haven't checked yet.
     /// One batched call; best-effort, so a failure simply leaves the badges off.
     @MainActor
@@ -791,6 +859,7 @@ struct ContractorListScreen: View {
         contractors = []
         screenedByID = [:]
         keptPhotos = [:]
+        ownerPhotosByID = [:]
         scannedCount = [:]
         revealedIDs = []
         needsEnrich = []
@@ -842,14 +911,22 @@ struct ContractorListScreen: View {
         VerdictService.upload(id: c.id, allowVehicles: allowVehicles, kept: kept, scanned: scanned)
 
         if kept.isEmpty {
-            // Whole pool was non-work imagery → drop the business rather than show
-            // a blank strip (mirrors the gallery).
-            contractors.removeAll { $0.id == c.id }
+            if ownerPhotosByID[c.id] != nil {
+                // No Google work photos, but the business uploaded its own — show
+                // those instead of dropping the claimed business.
+                screenedByID[c.id] = withOwnerLead(c.id, [])
+                revealedIDs.insert(c.id)
+            } else {
+                // Whole pool was non-work imagery → drop the business rather than
+                // show a blank strip (mirrors the gallery).
+                contractors.removeAll { $0.id == c.id }
+            }
         } else {
             keptPhotos[c.id] = kept
-            // Reveal once, ordered so query-matching photos (e.g. the kitchen) lead.
-            screenedByID[c.id] = PhotoFilter.order(kept, query: orderQuery,
-                                                   capPremises: stripMaxPremises)
+            // Reveal once, ordered so query-matching photos (e.g. the kitchen) lead;
+            // any owner-uploaded photos stay pinned ahead of them.
+            screenedByID[c.id] = withOwnerLead(c.id, PhotoFilter.order(kept, query: orderQuery,
+                                                   capPremises: stripMaxPremises))
             // Then sharpen the order with rich vision tags in the background.
             enrichInBackground(c.id, kept: kept, scanned: scanned, allowVehicles: allowVehicles)
         }
@@ -887,8 +964,8 @@ struct ContractorListScreen: View {
             // either way mark the verdict enriched so we don't re-tag every visit.
             if enriched != kept {
                 keptPhotos[id] = enriched
-                screenedByID[id] = PhotoFilter.order(enriched, query: orderQuery,
-                                                     capPremises: stripMaxPremises)
+                screenedByID[id] = withOwnerLead(id, PhotoFilter.order(enriched, query: orderQuery,
+                                                     capPremises: stripMaxPremises))
             }
             ScreeningStore.shared.save(id, allowVehicles: allowVehicles, kept: enriched,
                                        scanned: scanned, enriched: true)
@@ -961,6 +1038,10 @@ private struct ContractorListRow: View {
     let onReviews: () -> Void
     /// Fired by the row's "Get quote" capsule — requests a quote from this business.
     let onQuote: () -> Void
+    /// Fired by the row's "Call" capsule — the parent shows the shared reminder
+    /// pop-up, then dials. (Not dialed here, so the mention-Brightglow nudge shows
+    /// from the list exactly as it does from the gallery.)
+    let onCall: () -> Void
 
     // Exact Figma values (793:1779).
     private let sideInset: CGFloat = 16      // content left/right margin
@@ -991,16 +1072,50 @@ private struct ContractorListRow: View {
                     }
                     .buttonStyle(.plain)
 
-                    // Secondary capsule, 32pt tall (Figma "Button Secondary").
-                    Button(action: onQuote) {
-                        Text("Get quote")
-                            .font(.h4)                      // Lato 700 / 14
-                            .foregroundStyle(.white)
-                            .padding(.horizontal, 16)
-                            .frame(height: 32)
-                            .background(AppColors.btnPrimary, in: Capsule())
+                    // Two icon buttons (Figma 1049:4441): 44x32 pills, 8pt apart.
+                    // Call (secondary/dark) whenever there's a phone; Get quote
+                    // (primary/blue, chat glyph) whenever we can DELIVER a quote —
+                    // a phone (it now sends as a P2P text) OR an email. That's
+                    // effectively every business, so the quote CTA is back on the
+                    // row rather than gated to email-only businesses.
+                    HStack(spacing: 8) {
+                        if contractor.phone != nil {
+                            Button(action: onCall) {
+                                // Exact phone icon from Figma (1049:4441), white
+                                // template on the pill.
+                                Image("PhoneIcon")
+                                    .renderingMode(.template)
+                                    .resizable()
+                                    .scaledToFit()
+                                    .frame(width: 20, height: 20)
+                                    .foregroundStyle(.white)
+                                    .frame(width: 44, height: 32)
+                                    .background {
+                                        ZStack {
+                                            Rectangle().fill(.ultraThinMaterial)
+                                            AppColors.btnSecondary
+                                        }
+                                    }
+                                    .clipShape(Capsule())
+                            }
+                            .buttonStyle(.plain)
+                        }
+                        if contractor.phone != nil || contractor.contactEmail != nil {
+                            Button(action: onQuote) {
+                                // Chat glyph from Figma (1049:4441) — "message this
+                                // business for a quote", white template on the blue pill.
+                                Image("ic_chat")
+                                    .renderingMode(.template)
+                                    .resizable()
+                                    .scaledToFit()
+                                    .frame(width: 20, height: 20)
+                                    .foregroundStyle(.white)
+                                    .frame(width: 44, height: 32)
+                                    .background(AppColors.btnPrimary, in: Capsule())
+                            }
+                            .buttonStyle(.plain)
+                        }
                     }
-                    .buttonStyle(.plain)
                 }
                 .frame(height: 32)
 
@@ -1036,7 +1151,7 @@ private struct ContractorListRow: View {
                         }
                     }
                     .font(.bodySmall)
-                    .foregroundStyle(.white.opacity(0.5))
+                    .foregroundStyle(.white.opacity(0.6))
                     .lineLimit(1)
 
                     Spacer(minLength: 0)

@@ -74,6 +74,10 @@ enum BusinessService {
         var acceptingWork: Bool
         var photos: [String]
         var logoPath: String?
+        /// The owner-curated, ordered photo set (uploads + Google + website). `nil`
+        /// means the business hasn't opened the photo manager yet, so the app falls
+        /// back to auto-merging the sources. Non-nil (even empty) is authoritative.
+        var curatedPhotos: [CuratedPhoto]?
 
         enum CodingKeys: String, CodingKey {
             case placeId = "place_id"
@@ -84,6 +88,7 @@ enum BusinessService {
             case yearsInBusiness = "years_in_business"
             case acceptingWork = "accepting_work"
             case logoPath = "logo_path"
+            case curatedPhotos = "curated_photos"
         }
 
         init(from decoder: Decoder) throws {
@@ -103,6 +108,9 @@ enum BusinessService {
             acceptingWork = (try? c.decodeIfPresent(Bool.self, forKey: .acceptingWork)) ?? true
             photos = (try? c.decodeIfPresent([String].self, forKey: .photos)) ?? []
             logoPath = try c.decodeIfPresent(String.self, forKey: .logoPath)
+            // Absent key → nil (never curated). A present `null` or `[]` both decode
+            // to a definite value, which the gallery treats as authoritative.
+            curatedPhotos = (try? c.decodeIfPresent([CuratedPhoto].self, forKey: .curatedPhotos)) ?? nil
         }
 
         /// Encode EVERY owner-writable column, writing explicit `null` for cleared
@@ -126,6 +134,7 @@ enum BusinessService {
             try c.encode(acceptingWork, forKey: .acceptingWork)
             try c.encode(photos, forKey: .photos)
             try c.encode(logoPath, forKey: .logoPath)
+            try c.encode(curatedPhotos, forKey: .curatedPhotos)
         }
 
         /// A blank page seeded from the lead — used before the business has saved
@@ -138,7 +147,7 @@ enum BusinessService {
             services = []
             serviceArea = nil; licenseNumber = nil
             licensed = false; insured = false; yearsInBusiness = nil; acceptingWork = true
-            photos = []; logoPath = nil
+            photos = []; logoPath = nil; curatedPhotos = nil
         }
 
         /// A fully empty page for a place — the editor's initial state before load.
@@ -148,7 +157,7 @@ enum BusinessService {
             services = []
             serviceArea = nil; licenseNumber = nil
             licensed = false; insured = false; yearsInBusiness = nil; acceptingWork = true
-            photos = []; logoPath = nil
+            photos = []; logoPath = nil; curatedPhotos = nil
         }
 
         /// Tidy the page for persistence: trim text, turn blanks into nulls (so a
@@ -165,6 +174,28 @@ enum BusinessService {
             services = services
                 .map { var s = $0; s.name = s.name.trimmingCharacters(in: .whitespacesAndNewlines); return s }
                 .filter { !$0.name.isEmpty }
+        }
+    }
+
+    /// One entry in a business's curated photo list. `ref` is interpreted per
+    /// `source` — see the migration (20260726000000_business_curated_photos.sql).
+    /// `id` is stable across reorders so SwiftUI's ForEach / drag tracks each tile.
+    struct CuratedPhoto: Codable, Equatable, Identifiable, Hashable {
+        enum Source: String, Codable { case upload, google, website }
+        var source: Source
+        var ref: String
+        var id: String { "\(source.rawValue):\(ref)" }
+    }
+
+    /// Resolve a curated entry to a loadable image URL string, or nil if it can't
+    /// be formed. Uploads become a public Storage URL; Google refs are rebuilt into
+    /// a Places media URL (re-attaching the API key at render time); website refs
+    /// are already absolute URLs.
+    static func resolvedPhotoURL(_ photo: CuratedPhoto) -> String? {
+        switch photo.source {
+        case .upload:  return publicURL(photo.ref)?.absoluteString
+        case .website: return photo.ref
+        case .google:  return PlacesService.googlePhotoMediaURL(name: photo.ref)
         }
     }
 
@@ -285,6 +316,42 @@ enum BusinessService {
             .execute()
             .value
         return rows.first
+    }
+
+    /// Owner-uploaded work-photo URLs for a set of businesses, keyed by place_id —
+    /// only places that have saved photos appear. One `.in` query: most place_ids
+    /// have no `business_profiles` row, so the result is just the claimed few. Used
+    /// to lead the consumer list/gallery with a business's OWN curated photos ahead
+    /// of Google's. Best-effort — any failure returns [:] and the caller falls back
+    /// to Google/website photos.
+    static func uploadedPhotoURLs(placeIds: [String]) async -> [String: [String]] {
+        let ids = placeIds.filter { !$0.isEmpty }
+        guard !ids.isEmpty else { return [:] }
+        struct Row: Decodable { let place_id: String; let photos: [String]? }
+        do {
+            let rows: [Row] = try await supabase
+                .from("business_profiles")
+                .select("place_id, photos")
+                .in("place_id", values: ids)
+                .execute()
+                .value
+            var out: [String: [String]] = [:]
+            for row in rows {
+                let urls = (row.photos ?? []).compactMap { publicURL($0)?.absoluteString }
+                if !urls.isEmpty { out[row.place_id] = urls }
+            }
+            return out
+        } catch {
+            #if DEBUG
+            print("🏢 uploadedPhotoURLs failed: \(error)")
+            #endif
+            return [:]
+        }
+    }
+
+    /// Single-business convenience (the gallery / preview path).
+    static func uploadedPhotoURLs(placeId: String) async -> [String] {
+        await uploadedPhotoURLs(placeIds: [placeId])[placeId] ?? []
     }
 
     /// Upsert the owner-writable columns. RLS (`owns_business`) rejects a write to

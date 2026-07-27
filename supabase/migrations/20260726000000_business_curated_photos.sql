@@ -1,0 +1,26 @@
+-- Owner-curated photo set for the consumer gallery.
+--
+-- Until now a business could only ADD its own uploaded photos (business_profiles.
+-- photos); the Google-Places and website-scraped photos were merged in at gallery
+-- render time and the business had no way to reorder or remove them. This adds one
+-- ordered list the owner fully controls.
+--
+-- `curated_photos` is a JSON array of {source, ref} in display order:
+--   • source "upload"  → ref is a storage object path (business_profiles bucket)
+--   • source "google"  → ref is the Places photo resource name (e.g.
+--                        "places/<id>/photos/<id>"); the media URL is rebuilt
+--                        client-side so the API key is never persisted here
+--   • source "website" → ref is the absolute image URL from the business's site
+--
+-- Semantics:
+--   • NULL  → the business has never opened the photo manager; the app keeps its
+--             existing auto-merge (uploaded + screened website + screened Google).
+--   • non-NULL (including an empty []) → the business has curated; the gallery
+--             renders exactly this list, in order, with no re-scraping or
+--             screening. This also removes the per-open Places/website calls for
+--             curated businesses.
+--
+-- `photos` is retained as the source of truth for which uploaded objects exist
+-- (upload/delete still writes it); curated_photos references those paths by value.
+alter table public.business_profiles
+  add column if not exists curated_photos jsonb;

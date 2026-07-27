@@ -38,7 +38,17 @@ enum BusinessPhotoService {
               (resp as? HTTPURLResponse)?.statusCode == 200,
               let decoded = try? JSONDecoder().decode(Response.self, from: data)
         else { return [] }
-        return decoded.photos.map(\.url)
+        // The scraper returns whatever scheme the site links, which is very often
+        // plain http://. iOS App Transport Security blocks cleartext image loads
+        // outright (it won't even follow the site's http→https 301), so an http://
+        // photo can be neither screened nor displayed — it survives screening
+        // fail-open and then renders as a black tile at the top of the gallery.
+        // Upgrade to https up front: essentially every site that links http serves
+        // the same asset over https, and this keeps the URL consistent across the
+        // cache key, screening, and display.
+        return decoded.photos.map { $0.url.hasPrefix("http://")
+            ? "https://" + $0.url.dropFirst("http://".count)
+            : $0.url }
     }
 
     private struct Response: Decodable { let photos: [Photo] }

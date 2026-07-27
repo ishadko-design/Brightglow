@@ -99,7 +99,7 @@ export function estimateInHouse(input: EstimateInput): EstimateResult {
   const classifyText = vehicle === "moto" ? stripVehicleWords(description) : description;
 
   let entry = input.entryOverride ??
-    classifyJobType(category, classifyText, [], input.vertical ?? null);
+    classifyJobType(category, classifyText, [], input.vertical ?? null, vehicle);
   if (!entry) return { kind: "insufficient", reason: "unclassified", entry: null };
   if (vehicle === "moto") entry = applyMotoVariant(entry);
 
