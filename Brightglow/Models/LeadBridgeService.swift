@@ -39,6 +39,7 @@ enum LeadBridgeService {
         businessName: String? = nil,
         placeId: String? = nil,
         website: String? = nil,
+        contractorPhone: String? = nil,
         description: String,
         city: String,
         photo: UIImage? = nil,
@@ -73,6 +74,9 @@ enum LeadBridgeService {
         // Business identity for the chat logo avatar — best-effort, safe to omit.
         if let placeId, !placeId.isEmpty { appendField("place_id", placeId) }
         if let website, !website.isEmpty { appendField("website", website) }
+        // The business phone we're texting — stored so the business can later claim
+        // its leads by verifying this number via OTP (the /biz phone-first identity).
+        if let contractorPhone, !contractorPhone.isEmpty { appendField("contractor_phone", contractorPhone) }
         appendField("description", description)
         appendField("city", city)
         // P2P text path: the app-minted id (so the SMS link is known up front) and
@@ -110,6 +114,26 @@ enum LeadBridgeService {
         struct LeadResponse: Decodable { let public_id: String }
         let decoded = try JSONDecoder().decode(LeadResponse.self, from: data)
         return decoded.public_id
+    }
+
+    /// Records a phone-tap engagement so a call meters toward the business's free
+    /// allowance, same as a text or an email lead. Fire-and-forget — never blocks
+    /// (or delays) handing off to the dialer.
+    static func recordCall(placeId: String, businessName: String?, website: String?,
+                           city: String?, contractorEmail: String, contractorPhone: String? = nil) {
+        guard !placeId.isEmpty, let url = URL(string: "\(baseURL)/api/leads/engagement") else { return }
+        var req = URLRequest(url: url)
+        req.httpMethod = "POST"
+        req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        var payload: [String: String] = ["place_id": placeId, "contractor_email": contractorEmail]
+        if let businessName, !businessName.isEmpty { payload["business_name"] = businessName }
+        if let website, !website.isEmpty { payload["website"] = website }
+        if let city, !city.isEmpty { payload["city"] = city }
+        // Same claim anchor as the lead path: a call is often the only touch, so
+        // record the number here too or an email-less business could never be claimed.
+        if let contractorPhone, !contractorPhone.isEmpty { payload["contractor_phone"] = contractorPhone }
+        req.httpBody = try? JSONSerialization.data(withJSONObject: payload)
+        URLSession.shared.dataTask(with: req).resume()
     }
 
     // MARK: - Chat

@@ -3,8 +3,9 @@ import SwiftUI
 // ─────────────────────────────────────────────────────────────────────────────
 // MARK: - CallReminderSheet
 // Bottom sheet shown before dialing a business, from anywhere a "Call" action
-// lives (the gallery footer and each list row). A nudge to say the request came
-// from Brightglow, with a single primary Call action. The actual call is never
+// lives (the gallery footer and each list row). A "Help us grow" nudge to name-
+// drop Brightglow when the business picks up, with a single primary Call action.
+// The actual call is never
 // placed here — Call hands off to the system dialer, which shows its own
 // confirmation with the number pre-filled.
 //
@@ -62,7 +63,7 @@ struct CallReminderSheet: View {
                 .padding(.top, 12)
                 .padding(.bottom, 4)
 
-            Text("Before you call")
+            Text("Help us grow")
                 .font(.h2)
                 .foregroundStyle(.white)
                 .multilineTextAlignment(.center)
@@ -74,8 +75,8 @@ struct CallReminderSheet: View {
                 .frame(height: 210)
                 .padding(.top, 16)
 
-            Text("When you pick up, mention you found them on Brightglow so the business knows your request came from the app.")
-                .font(.bodySmall)
+            Text("Thank you for choosing Brightglow! When they pick up, mention you found them on Brightglow.")
+                .font(.bodyLight)
                 .foregroundStyle(.white)
                 .multilineTextAlignment(.center)
                 .lineSpacing(4)

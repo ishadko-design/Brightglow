@@ -180,14 +180,16 @@ Auto: one of ${AUTO_SERVICES.join(", ")}. Use "" only if nothing fits.
   top end. If the user answered with a range, record its midpoint ("200 sq ft").
   Only facts the user explicitly stated or confirmed — never guess.
   Use "" for auto/moto, or if no cost fact was pinned down.
-- summary: a plain-English overview of the job for the BUSINESS to read at a
-  glance — 1-2 short sentences that fold the user's request together with the
-  facts they confirmed in the chat, in natural prose. Write it as a human intake
-  note, not a transcript: no "Q:"/"A:", no bullets, no "the customer said". Fold
-  in only what was actually established (from the request, the photo note, or the
-  answers). Example: "Exterior repaint of a backyard fence, plus planting new
-  shrubs along the yard." Never invent scope, timing, or budget. Use "" if the
-  request was too vague to describe.
+- summary: a plain-English overview of the job written in the FIRST PERSON, as
+  the customer themselves. The message is sent from the customer's own phone, so
+  it must read in their voice — "I need…", "my…" — never "the homeowner", "the
+  customer", or any third-person phrasing. 1-2 short sentences that fold the
+  user's request together with the facts they confirmed in the chat, in natural
+  prose — a human note in the customer's own words, not a transcript: no "Q:"/"A:",
+  no bullets. Fold in only what was actually established (from the request, the
+  photo note, or the answers). Example: "I need my backyard fence repainted, plus
+  new shrubs planted along the yard." Never invent scope, timing, or budget. Use
+  "" if the request was too vague to describe.
 
 When asking (action "ask"): also return your best-so-far vertical and category
 (use "" if not yet known); leave search_terms, photo_terms, details, summary as "".

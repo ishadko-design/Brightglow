@@ -648,7 +648,10 @@ struct MainScreen: View {
                 )) {
                     ContractorListScreen(category: goSwipe?.rawValue ?? "",
                                          presetCoordinate: locationStore.coordinate,
-                                         attachedImages: attachedImages,
+                                         // Camera capture + any library picks, so a
+                                         // photo added before tapping a category is
+                                         // carried through (see searchResults).
+                                         attachedImages: attachedImages + pickedImages,
                                          photoDetails: photoDetails,
                                          priceable: categoryPriceable)
                 }
@@ -671,7 +674,9 @@ struct MainScreen: View {
                     ContractorListScreen(category: goAuto?.name ?? "",
                                          searchQuery: goAuto?.searchQuery ?? "",
                                          presetCoordinate: locationStore.coordinate,
-                                         attachedImages: attachedImages,
+                                         // Camera capture + any library picks (see
+                                         // searchResults) so neither source is lost.
+                                         attachedImages: attachedImages + pickedImages,
                                          priceable: autoCategoryPriceable,
                                          initialVehicle: autoInitialVehicle)
                 }
@@ -916,7 +921,13 @@ struct MainScreen: View {
                              clarifyVertical: chatVertical,
                              searchQuery: submittedQuery,
                              presetCoordinate: locationStore.coordinate,
-                             attachedImages: attachedImages.isEmpty ? pickedImages : attachedImages,
+                             // BOTH sources — a camera capture (attachedImages) AND
+                             // any library picks added mid-chat (pickedImages). The
+                             // input bar shows both, so the review screen must carry
+                             // both; picking one dropped the other (e.g. photos added
+                             // during the clarify chat vanished from the pre-send
+                             // screen when a snapped photo was already attached).
+                             attachedImages: attachedImages + pickedImages,
                              photoDetails: mergedDetails,
                              businessSearchOverride: chatSearchTerms,
                              photoMatchTerms: chatPhotoTerms,

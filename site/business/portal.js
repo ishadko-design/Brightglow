@@ -50,38 +50,95 @@ const markDirty = () => {
   else enterAuth();
 })();
 
+// Which channel the pending code went over — drives verifyOtp's `type` and which
+// step "Start over" returns to. Phone is the primary path (it reaches the ~70% of
+// businesses we have no email for); `pendingPhone` holds the E.164 for verify.
+let authMethod = "sms";
+let pendingPhone = "";
+
 function enterAuth() {
   show($("bootView"), false);
   show($("dashView"), false);
   show($("signOutBtn"), false);
-  showEmailStep();
+  showPhoneStep();
   show($("authView"), true);
 }
 
-// The two sign-in steps swap in place — only ever one is on screen.
-function showEmailStep() {
-  show($("emailStep"), true);
-  show($("codeStep"), false);
+// The sign-in steps swap in place — only ever one is on screen.
+function clearAuthMsg() {
   $("authMsg").className = "form-msg";
   $("authMsg").textContent = "";
   $("code").value = "";
 }
 
-function showCodeStep(email) {
-  $("codeEmail").textContent = email;
+function showPhoneStep() {
+  authMethod = "sms";
+  show($("phoneStep"), true);
+  show($("emailStep"), false);
+  show($("codeStep"), false);
+  clearAuthMsg();
+}
+
+function showEmailStep() {
+  authMethod = "email";
+  show($("phoneStep"), false);
+  show($("emailStep"), true);
+  show($("codeStep"), false);
+  clearAuthMsg();
+}
+
+function showCodeStep(target) {
+  $("codeTarget").textContent = target;
+  show($("phoneStep"), false);
   show($("emailStep"), false);
   show($("codeStep"), true);
-  $("authMsg").className = "form-msg";
-  $("authMsg").textContent = "";
-  $("code").value = "";
+  clearAuthMsg();
   $("code").focus();
 }
 
-// Restart: back to the email field so a typo'd address can be corrected and a
+// US phone → E.164 for Supabase (it wants the country code). null if not a
+// plausible 10-digit US number. Mirrors normalizePhone in the app/LeadBridge.
+function toE164US(v) {
+  const d = String(v || "").replace(/\D/g, "");
+  const ten = d.length === 11 && d[0] === "1" ? d.slice(1) : d;
+  return ten.length === 10 ? `+1${ten}` : null;
+}
+
+// Restart: back to whichever method was in use so a typo can be corrected and a
 // fresh code requested. The previous code is abandoned (it simply expires).
 $("restartBtn").addEventListener("click", () => {
-  showEmailStep();
-  $("email").focus();
+  if (authMethod === "email") { showEmailStep(); $("email").focus(); }
+  else { showPhoneStep(); $("phone").focus(); }
+});
+
+// Swap between the phone (primary) and email (alternate) sign-in methods.
+$("useEmailBtn").addEventListener("click", () => { showEmailStep(); $("email").focus(); });
+$("usePhoneBtn").addEventListener("click", () => { showPhoneStep(); $("phone").focus(); });
+
+// ── auth: phone one-time code (primary) ─────────────────────
+$("phoneForm").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const msg = $("authMsg");
+  const phone = toE164US($("phone").value);
+  if (!phone) {
+    msg.className = "form-msg err";
+    msg.textContent = "Enter a 10-digit US phone number.";
+    return;
+  }
+  const btn = $("sendSmsBtn");
+  btn.disabled = true; btn.textContent = "Sending…";
+  msg.className = "form-msg"; msg.textContent = "";
+  const { error } = await sb.auth.signInWithOtp({ phone });
+  btn.disabled = false; btn.textContent = "Text me a code";
+  if (error) {
+    console.error("signInWithOtp(phone) failed:", error);
+    msg.className = "form-msg err";
+    msg.textContent = authErrorText(error);
+  } else {
+    authMethod = "sms";
+    pendingPhone = phone;
+    showCodeStep($("phone").value.trim());   // show what they typed
+  }
 });
 
 // ── auth: email one-time link ───────────────────────────────
@@ -105,6 +162,7 @@ $("authForm").addEventListener("submit", async (e) => {
     msg.className = "form-msg err";
     msg.textContent = authErrorText(error);
   } else {
+    authMethod = "email";
     showCodeStep(email);   // step 2 replaces step 1; its copy names the address
   }
 });
@@ -115,13 +173,17 @@ $("authForm").addEventListener("submit", async (e) => {
 // establishes the session directly, so we can enter the dashboard.
 $("codeForm").addEventListener("submit", async (e) => {
   e.preventDefault();
-  const email = $("email").value.trim().toLowerCase();
   const token = $("code").value.trim();
   const msg = $("authMsg");
-  if (!email || !token) return;
+  if (!token) return;
   const btn = $("verifyCodeBtn");
   btn.disabled = true; btn.textContent = "Verifying…";
-  const { error } = await sb.auth.verifyOtp({ email, token, type: "email" });
+  // Verify against whichever channel sent the code. SMS uses the stashed E.164;
+  // email reads the field back (unchanged since it was entered).
+  const params = authMethod === "sms"
+    ? { phone: pendingPhone, token, type: "sms" }
+    : { email: $("email").value.trim().toLowerCase(), token, type: "email" };
+  const { error } = await sb.auth.verifyOtp(params);
   btn.disabled = false; btn.textContent = "Verify & sign in";
   if (error) {
     console.error("verifyOtp failed:", error);
@@ -165,6 +227,14 @@ async function enterDashboard() {
   const { data: { session } } = await sb.auth.getSession();
   signedInEmail = (session && session.user && session.user.email) || "";
 
+  // Phone-verified business: persist ownership (owner_user_id) for every place this
+  // number was texted. Best-effort and not awaited-for-visibility — RLS already
+  // returns their leads by phone match below; this just makes ownership durable and
+  // gives billing an anchor for a business we have no email for.
+  if (session && session.user && session.user.phone) {
+    authedFetch("/api/claim/phone", { method: "POST" }).catch(() => {});
+  }
+
   // Leads addressed to this business (RLS returns only mine). place_id is the
   // claim/join key; business_name/city seed the default display. Old leads with
   // a null place_id can't be claim-checked, so they're skipped for management.
@@ -192,7 +262,7 @@ async function enterDashboard() {
   businesses = [...byPlace.values()];
 
   if (businesses.length === 0) {
-    fail("We couldn't match a claimable business to this email yet. If you received a Brightglow request at this address, reply to it or contact hello@brightglow.co.");
+    fail("We couldn't match a claimable business to this number or email yet. Make sure you're using the phone or email a customer reached you through — or contact hello@brightglow.co.");
     return;
   }
 
@@ -257,9 +327,27 @@ async function loadBilling() {
   show($("billingBtn"), true);
   renderBilling();
 
+  const params = new URLSearchParams(location.search);
+
+  // A paywall email's "Subscribe" CTA lands here with ?subscribe=1. Once the
+  // owner is signed in, take them straight into Stripe Checkout instead of
+  // making them find the Billing tab and click Subscribe again — that's what
+  // "one tap to subscribe" from the email promises. Only when there's actually
+  // something to buy; an already-subscribed business just lands on Billing.
+  if (params.get("subscribe") && !billing.subscribed) {
+    // Drop the trigger so a reload or back-navigation doesn't bounce them into
+    // Checkout a second time.
+    params.delete("subscribe");
+    const qs = params.toString();
+    history.replaceState({}, "", location.pathname + (qs ? "?" + qs : ""));
+    showView("billing");
+    startCheckout();   // renderBilling() just drew #subscribeBtn (unsubscribed)
+    return;
+  }
+
   // Coming back from Stripe (?billing=success|cancelled) — land on Billing so
   // the outcome is the first thing seen, rather than the profile editor.
-  if (new URLSearchParams(location.search).get("billing")) showView("billing");
+  if (params.get("billing")) showView("billing");
 }
 
 function renderBilling() {

@@ -232,11 +232,19 @@ struct ContractorListScreen: View {
         return synthetic.contains(typed.lowercased()) ? "" : typed
     }
 
-    /// What the user actually typed, if anything — auto categories carry a
-    /// synthetic Places query in `searchQuery`, which must never pre-fill the
-    /// quote-request text.
+    /// What the user actually typed, if anything — pre-fills the quote-request text.
+    ///
+    /// An auto GRID-CARD tap carries a synthetic Places query ("tire shop") in
+    /// `searchQuery`; that's routing input, not the user's words, so it must never
+    /// pre-fill the quote. But a typed/clarified auto request ("I need to replace
+    /// tires on the motorcycle") puts the user's ACTUAL words there — those SHOULD
+    /// carry through. So suppress ONLY the synthetic query, not every auto category
+    /// (the same distinction `pricingDescription` makes). Home is untouched.
     private var typedQuery: String {
-        autoCategory == nil ? searchQuery.trimmingCharacters(in: .whitespacesAndNewlines) : ""
+        let typed = searchQuery.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard let auto = autoCategory else { return typed }
+        let synthetic = [auto.searchQuery.lowercased(), auto.motoSearchQuery.lowercased()]
+        return synthetic.contains(typed.lowercased()) ? "" : typed
     }
 
     /// Term source for photo ordering — the chat's `photo_terms` when present (a
@@ -350,6 +358,10 @@ struct ContractorListScreen: View {
                 // The effective (auto/moto) query so the gallery paginates the same
                 // search the user is viewing.
                 searchQuery: effectiveSearchQuery,
+                // The user's real words (synthetic auto query already stripped), so
+                // the gallery's own "Request quote" pre-fills the description — it
+                // can't re-derive this from the effective query above.
+                requestSummary: typedQuery,
                 aiResult: aiResult,
                 presetCoordinate: resolvedCoord ?? presetCoordinate,
                 preloadedContractors: contractors,
@@ -401,6 +413,11 @@ struct ContractorListScreen: View {
     /// OS shows its own call confirmation — we never place the call ourselves).
     private func dial(_ contractor: Contractor) {
         guard let phone = contractor.phone else { return }
+        // Meter the call toward the business's free allowance (fire-and-forget).
+        LeadBridgeService.recordCall(placeId: contractor.id, businessName: contractor.name,
+                                     website: contractor.website, city: contractor.city,
+                                     contractorEmail: contractor.contactEmail ?? "hello@brightglow.co",
+                                     contractorPhone: phone)
         let dialable = phone.filter { $0.isNumber || $0 == "+" }
         guard !dialable.isEmpty, let url = URL(string: "tel:\(dialable)") else { return }
         openURL(url)
@@ -1096,7 +1113,7 @@ private struct ContractorListRow: View {
                                     .renderingMode(.template)
                                     .resizable()
                                     .scaledToFit()
-                                    .frame(width: 20, height: 20)
+                                    .frame(width: 24, height: 24)
                                     .foregroundStyle(.white)
                                     .frame(width: 44, height: 32)
                                     .background {
@@ -1113,11 +1130,14 @@ private struct ContractorListRow: View {
                             Button(action: onQuote) {
                                 // Chat glyph from Figma (1049:4441) — "message this
                                 // business for a quote", white template on the blue pill.
-                                Image("ic_chat")
+                                // Its own asset (not the shared header ic_chat) so the
+                                // CTA can carry Figma's exact 24pt icon size without
+                                // resizing the larger MainScreen header bubble.
+                                Image("ic_message")
                                     .renderingMode(.template)
                                     .resizable()
                                     .scaledToFit()
-                                    .frame(width: 20, height: 20)
+                                    .frame(width: 24, height: 24)
                                     .foregroundStyle(.white)
                                     .frame(width: 44, height: 32)
                                     .background(AppColors.btnPrimary, in: Capsule())

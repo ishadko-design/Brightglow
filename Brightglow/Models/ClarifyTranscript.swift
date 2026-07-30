@@ -56,8 +56,22 @@ struct ClarifyTranscript: Equatable {
     func augmentedDescription(base: String) -> String {
         let trimmedBase = base.trimmingCharacters(in: .whitespacesAndNewlines)
         let overview = summary.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !overview.isEmpty else { return trimmedBase }
-        let block = "Additional details (AI-generated):\n\(overview)"
+        let block: String
+        // "More details:" (not "AI-generated") — the customer sends this message
+        // on their own behalf, and these are the details THEY gave via the quick
+        // clarifying questions, so labelling it as the customer's own extra detail
+        // is both cleaner and accurate.
+        if !overview.isEmpty {
+            block = "Details:\n\(overview)"
+        } else if !pairs.isEmpty {
+            // No overview paragraph was produced — fall back to the raw Q&A the
+            // user actually saw on the review screen, so the message never drops
+            // the clarifying details.
+            let qa = pairs.map { "• \($0.question)\n  \($0.answer)" }.joined(separator: "\n")
+            block = "Details:\n\(qa)"
+        } else {
+            return trimmedBase
+        }
         return trimmedBase.isEmpty ? block : "\(trimmedBase)\n\n\(block)"
     }
 }

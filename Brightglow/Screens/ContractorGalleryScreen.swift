@@ -29,6 +29,12 @@ private struct SheetScrollKey: PreferenceKey {
 struct ContractorGalleryScreen: View {
     var category: String = ""
     var searchQuery: String = ""
+    /// The user's actual request words, resolved by the list (which knows to strip
+    /// a synthetic auto grid-card query). Passed straight to the quote screen so it
+    /// pre-fills the description — `searchQuery` here is the effective/auto query
+    /// used for pagination, which for an auto category is synthetic and must not
+    /// pre-fill the quote text. Empty falls back to deriving from `searchQuery`.
+    var requestSummary: String = ""
     var aiResult: AIResult? = nil
     /// When set (manual ZIP/city or an already-resolved fix), used instead of GPS.
     var presetCoordinate: CLLocationCoordinate2D? = nil
@@ -143,6 +149,15 @@ struct ContractorGalleryScreen: View {
         return q
     }
 
+    /// Request text to pre-fill the quote screen: the list's already-resolved
+    /// `requestSummary` (the user's real words, synthetic query stripped) when it
+    /// gave us one, else derived from `searchQuery`. The list feeds the gallery the
+    /// effective/auto query for pagination, so re-deriving here alone would drop the
+    /// user's words on an auto request.
+    private var quoteRequestText: String {
+        requestSummary.isEmpty ? typedQuery : requestSummary
+    }
+
     /// Term source for photo ordering — the typed query, else the category, so a
     /// plain category browse still leads with its best-matching photos.
     private var orderQuery: String {
@@ -248,7 +263,7 @@ struct ContractorGalleryScreen: View {
             }
         }
         .navigationDestination(isPresented: $showQuote) {
-            QuoteRequestScreen(contractor: selectedContractor, requestSummary: typedQuery, initialImages: attachedImages, clarifyTranscript: clarifyTranscript, vehicleNote: vehicleNote)
+            QuoteRequestScreen(contractor: selectedContractor, requestSummary: quoteRequestText, initialImages: attachedImages, clarifyTranscript: clarifyTranscript, vehicleNote: vehicleNote)
         }
         // Custom bottom overlay (not a system `.sheet`) so the card is a flush,
         // full-width bottom sheet rather than iOS 26's inset floating card.
@@ -533,11 +548,15 @@ struct ContractorGalleryScreen: View {
         // parent's width proposal (which has overflowed past the screen edges).
         let pairWidth = max(0, (width - 32 - 8) / 2)
         let hasPhone = topContractor?.phone != nil
-        // Only offer "Request quote" when we can actually email this business —
-        // the async photo/quote thread needs an email. With no email on file,
-        // Call is the only channel, so it takes the full width.
+        // Offer "Request quote" whenever we can DELIVER one — a phone (it sends as
+        // a P2P text now) OR an email. This mirrors the list row, which shows the
+        // same CTA for phone-or-email; gating it on email alone hid the button for
+        // phone-only businesses (e.g. plain Google listings with no email on file),
+        // leaving Call as the only action beside it. With neither channel, Call
+        // takes the full width.
         let hasEmail = topContractor?.contactEmail != nil
-        let callWidth = hasEmail ? pairWidth : max(0, width - 32)
+        let canQuote = hasPhone || hasEmail
+        let callWidth = canQuote ? pairWidth : max(0, width - 32)
         return HStack(spacing: 8) {
             // Call replaces the old "Next": tapping shows a reminder to mention
             // the app, then hands off to the dialer. Dimmed when Places returned
@@ -559,7 +578,7 @@ struct ContractorGalleryScreen: View {
             .buttonStyle(.plain)
             .disabled(!hasPhone)
 
-            if hasEmail {
+            if canQuote {
                 Button(action: quoteTop) {
                     Text("Request quote")
                         .font(.h3)
@@ -651,6 +670,12 @@ struct ContractorGalleryScreen: View {
     /// OS shows its own call confirmation — we never place the call ourselves).
     private func call(_ contractor: Contractor) {
         guard let phone = contractor.phone else { return }
+        // Meter the call toward the business's free allowance (fire-and-forget,
+        // never delays the dialer).
+        LeadBridgeService.recordCall(placeId: contractor.id, businessName: contractor.name,
+                                     website: contractor.website, city: contractor.city,
+                                     contractorEmail: contractor.contactEmail ?? "hello@brightglow.co",
+                                     contractorPhone: contractor.phone)
         // Places returns a display-formatted number ("(415) 555-0132"); tel: URLs
         // only accept digits and a leading +.
         let dialable = phone.filter { $0.isNumber || $0 == "+" }
