@@ -39,11 +39,31 @@
       <div class="spinner" aria-label="Loading"></div>
     </section>
 
-    <!-- Signed-out: claim / sign in. Two steps that swap in place — email first,
-         then the 6-digit code (which replaces the email step, not stacks under it). -->
+    <!-- Signed-out: claim / sign in. Steps swap in place — phone (primary, the
+         number we texted the request to) or email, then the 6-digit code. -->
     <section id="authView" class="card auth" hidden>
-      <!-- Step 1: request the code -->
-      <div id="emailStep">
+      <!-- Step 1a: phone (primary). The number customers were texted is the number
+           the business proves possession of, so this reaches the ~70% of businesses
+           we have no email for. -->
+      <div id="phoneStep">
+        <h1>Claim your business page</h1>
+        <p class="muted">
+          Enter your business phone — the number customers call or text you on.
+          We'll text you a 6-digit code, no password. Only that number can manage
+          the page, so your listing stays yours.
+        </p>
+        <form id="phoneForm" novalidate>
+          <label for="phone">Business phone</label>
+          <input id="phone" name="phone" type="tel" autocomplete="tel"
+                 inputmode="tel" placeholder="(415) 555-0132" required>
+          <button type="submit" class="primary-btn" id="sendSmsBtn">Text me a code</button>
+        </form>
+        <button type="button" class="linklike" id="useEmailBtn">Use email instead</button>
+      </div>
+
+      <!-- Step 1b: email (alternate) — for a business that would rather use the
+           inbox we matched, or whose phone we never recorded. -->
+      <div id="emailStep" hidden>
         <h1>Claim your business page</h1>
         <p class="muted">
           Enter the email where you received your Brightglow request. We'll email
@@ -56,13 +76,14 @@
                  inputmode="email" placeholder="you@yourbusiness.com" required>
           <button type="submit" class="primary-btn" id="sendLinkBtn">Send sign-in code</button>
         </form>
+        <button type="button" class="linklike" id="usePhoneBtn">Use phone instead</button>
       </div>
 
-      <!-- Step 2: enter the code. Replaces step 1 once the email is sent. -->
+      <!-- Step 2: enter the code. Replaces step 1 once the code is sent. -->
       <div id="codeStep" hidden>
         <h1>Enter your code</h1>
         <p class="muted">
-          We sent a 6-digit code to <strong id="codeEmail"></strong>. Enter it
+          We sent a 6-digit code to <strong id="codeTarget"></strong>. Enter it
           below to sign in. It can take a minute to arrive.
         </p>
         <form id="codeForm" novalidate>
@@ -72,7 +93,7 @@
                  placeholder="123456" required>
           <button type="submit" class="primary-btn" id="verifyCodeBtn">Verify &amp; sign in</button>
         </form>
-        <button type="button" class="linklike" id="restartBtn">Use a different email</button>
+        <button type="button" class="linklike" id="restartBtn">Start over</button>
       </div>
 
       <p id="authMsg" class="form-msg" role="status" aria-live="polite"></p>
