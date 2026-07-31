@@ -366,13 +366,13 @@ struct MainScreen: View {
                             }
                             .padding(.bottom, shutterPad)
                         }
-                        .transition(.opacity.combined(with: .scale(scale: 0.8)))
-                        .animation(.interpolatingSpring(stiffness: 320, damping: 32), value: selectedVertical)
-                        .animation(.interpolatingSpring(stiffness: 320, damping: 32), value: sheetDetent)
-                        .animation(.easeOut(duration: 0.25), value: searchFocused)
-                        // The keyboard's height now feeds the shutter's clearance, so
-                        // it slides with the keyboard instead of jumping on show/hide.
-                        .animation(.easeOut(duration: 0.25), value: keyboardHeight)
+                        // Fade only — a scale transition read as a sideways/curved motion.
+                        .transition(.opacity)
+                        // The shutter's ONLY vertical driver is shutterPad; animate on that
+                        // single scalar so every move is pure up/down with no overshoot.
+                        // (The old underdamped interpolatingSpring + scale transition + the
+                        // several stacked value-animations produced the left/right bounce.)
+                        .animation(.easeInOut(duration: 0.25), value: shutterPad)
                         .animation(.easeInOut(duration: 0.25), value: camera.isAuthorized)
                         .allowsHitTesting(!searchFocused && !chatActive)
                     }
@@ -579,7 +579,7 @@ struct MainScreen: View {
                     .clipShape(RoundedRectangle(cornerRadius: 32))
                     .overlay(RoundedRectangle(cornerRadius: 32).stroke(AppColors.searchBorder, lineWidth: 1.5))
                     .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { inputBarHeight = $0 }
-                    .padding(.horizontal, 16)
+                    .padding(.horizontal, 14)
                     .padding(.bottom, keyboardActive ? 16 : 34)
                     .animation(.easeOut(duration: 0.25), value: searchFocused)
                     .animation(.easeOut(duration: 0.25), value: locationFocused)

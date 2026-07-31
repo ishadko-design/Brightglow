@@ -137,8 +137,16 @@ final class AuthService: ObservableObject {
 
     // MARK: - Sign in with Apple
 
+    // Raw nonce generated for the in-flight Apple request; Apple hashes the one
+    // we put on the request, and Supabase needs the *raw* value to verify the
+    // returned identity token. Held between configure and completion.
+    private var appleRawNonce: String?
+
     func configureAppleRequest(_ request: ASAuthorizationAppleIDRequest) {
+        let rawNonce = randomNonce()
+        appleRawNonce = rawNonce
         request.requestedScopes = [.fullName, .email]
+        request.nonce = sha256(rawNonce)
     }
 
     func handleApple(_ result: Result<ASAuthorization, Error>) {
@@ -158,7 +166,7 @@ final class AuthService: ObservableObject {
             defer { isLoading = false }
             do {
                 let session = try await supabase.auth.signInWithIdToken(
-                    credentials: .init(provider: .apple, idToken: token)
+                    credentials: .init(provider: .apple, idToken: token, nonce: appleRawNonce)
                 )
                 user = session.user
             } catch {

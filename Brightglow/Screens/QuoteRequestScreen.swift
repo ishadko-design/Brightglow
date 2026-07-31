@@ -182,24 +182,33 @@ struct QuoteRequestScreen: View {
                 .padding(.bottom, 24)
             }
 
-            // Send
-            Button(action: sendRequest) {
-                if sending {
-                    ProgressView().tint(.white)
-                        .frame(maxWidth: .infinity)
-                        .frame(height: 48)
-                } else {
-                    Text("Send request")
-                        .font(.h3)
-                        .foregroundStyle(.white)
-                        .frame(maxWidth: .infinity)
-                        .frame(height: 48)
+            // Send. Tapping this hands off to the user's own Messages app —
+            // the helper sets that expectation so the send arrow there isn't a
+            // surprise, and discloses that an MMS (photos) may incur carrier fees.
+            VStack(spacing: 16) {
+                Text("We'll open your Messages app, just tap send there to finish. Msg & data rates may apply")
+                    .font(.bodySmall)
+                    .foregroundStyle(.white.opacity(0.5))
+                    .multilineTextAlignment(.center)
+
+                Button(action: sendRequest) {
+                    if sending {
+                        ProgressView().tint(.white)
+                            .frame(maxWidth: .infinity)
+                            .frame(height: 48)
+                    } else {
+                        Text("Continue")
+                            .font(.h3)
+                            .foregroundStyle(.white)
+                            .frame(maxWidth: .infinity)
+                            .frame(height: 48)
+                    }
                 }
+                .buttonStyle(.gradient)
+                .disabled(!canSend)
             }
-            .buttonStyle(.gradient)
-            .disabled(!canSend)
-            .padding(.horizontal, 16)
-            .padding(.bottom, 16)
+            .padding(.horizontal, 24)
+            .padding(.bottom, 32)
         }
         .onChange(of: pickedItems) { _, items in
             guard !items.isEmpty else { return }

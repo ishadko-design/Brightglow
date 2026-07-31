@@ -97,7 +97,15 @@ struct LoginView: View {
             }
         }
         .preferredColorScheme(.dark)
-        .onTapGesture { emailFocused = false }
+        .background {
+            // Tap empty space to dismiss the keyboard — scoped to a background
+            // layer so it does NOT intercept taps meant for the buttons. A
+            // container-level .onTapGesture steals taps from the UIKit-backed
+            // Sign in with Apple button (SwiftUI Buttons like Google survive it).
+            Color.clear
+                .contentShape(Rectangle())
+                .onTapGesture { emailFocused = false }
+        }
     }
 
     // Consent notice sits directly beneath the sign-in buttons so the assent is
@@ -185,24 +193,18 @@ struct LoginView: View {
 
     // MARK: - Social buttons
 
+    // Apple's native button, used directly. A SignInWithAppleButton can't be
+    // hidden behind a custom overlay — iOS won't deliver touches to a near-
+    // transparent UIKit control — and Apple's guidelines require its own button
+    // design anyway. Styled to match the other buttons' pill shape/height.
     private var appleButton: some View {
-        ZStack {
-            SignInWithAppleButton(.continue,
-                onRequest: auth.configureAppleRequest,
-                onCompletion: auth.handleApple)
-                .signInWithAppleButtonStyle(.black)
-                .frame(height: 56)
-                .clipShape(RoundedRectangle(cornerRadius: 32))
-                .opacity(0.011)
-
-            secondaryButton(icon: {
-                Image(systemName: "apple.logo")
-                    .font(.system(size: 18, weight: .semibold))
-                    .foregroundStyle(.white)
-            }, label: "Continue with Apple")
-            .allowsHitTesting(false)
-        }
-        .frame(height: 56)
+        SignInWithAppleButton(.continue,
+            onRequest: auth.configureAppleRequest,
+            onCompletion: auth.handleApple)
+            .signInWithAppleButtonStyle(.black)
+            .frame(maxWidth: .infinity)
+            .frame(height: 56)
+            .clipShape(RoundedRectangle(cornerRadius: 32))
     }
 
     private var googleButton: some View {
