@@ -34,11 +34,23 @@ enum EstimateService {
     /// US-only, so the US ZIP shape is the only one that matters here.)
     static func geocode(for coord: CLLocationCoordinate2D) async -> (locality: String, zip: String?) {
         let loc = CLLocation(latitude: coord.latitude, longitude: coord.longitude)
-        guard let request = MKReverseGeocodingRequest(location: loc),
-              let item = try? await request.mapItems.first else { return ("", nil) }
-        // "Cupertino, CA" — same shape the old locality + admin-area pair made.
-        let locality = item.addressRepresentations?.cityWithContext ?? ""
-        let zip = item.address?.fullAddress.matches(of: /\b\d{5}\b/).last.map { String($0.0) }
-        return (locality, zip)
+        if #available(iOS 26.0, *) {
+            guard let request = MKReverseGeocodingRequest(location: loc),
+                  let item = try? await request.mapItems.first else { return ("", nil) }
+            // "Cupertino, CA" — same shape the old locality + admin-area pair made.
+            let locality = item.addressRepresentations?.cityWithContext ?? ""
+            let zip = item.address?.fullAddress.matches(of: /\b\d{5}\b/).last.map { String($0.0) }
+            return (locality, zip)
+        } else {
+            // iOS 18–25: CLGeocoder exposes a structured postal code directly.
+            guard let placemark = try? await CLGeocoder().reverseGeocodeLocation(loc).first else { return ("", nil) }
+            let locality: String
+            if let city = placemark.locality, let state = placemark.administrativeArea {
+                locality = "\(city), \(state)"
+            } else {
+                locality = placemark.locality ?? placemark.administrativeArea ?? ""
+            }
+            return (locality, placemark.postalCode)
+        }
     }
 }
