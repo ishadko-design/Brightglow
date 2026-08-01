@@ -1,6 +1,7 @@
 import SwiftUI
 import CoreLocation
 import PhotosUI
+import UIKit
 
 /// A contractor destination awaiting a resolved location before it can open.
 private enum PendingDestination {
@@ -13,6 +14,9 @@ private struct ChatMessage: Identifiable, Equatable {
     let id = UUID()
     let role: String   // "user" | "assistant"
     let content: String
+    /// Sent to the assistant but not rendered — used by the silent "Skip" so the
+    /// model advances past a question without leaving a visible bubble.
+    var hidden: Bool = false
 }
 
 struct MainScreen: View {
@@ -34,6 +38,11 @@ struct MainScreen: View {
     /// only when the captured photo shows a motorcycle, so results flip to the
     /// Moto toggle. Nil (grid taps) lets the list default to cars.
     @State private var autoInitialVehicle: VehicleFilter? = nil
+    /// The Auto & moto category the capture's classifier recognised, held for the
+    /// duration of a clarifying chat. The photo establishes the vertical before a
+    /// single question is asked, so abandoning the chat must fall back to it — not
+    /// to an empty category, which reads downstream as a home search.
+    @State private var clarifyDetectedAuto: AutoCategory? = nil
     @State private var submittedQuery = ""
     /// Photo-derived cost-relevant attributes (size, capacity, material) from
     /// the most recent capture, carried to the contractor list to narrow the
@@ -66,6 +75,12 @@ struct MainScreen: View {
     @State private var chatCategory = ""
     @State private var chatSearchTerms = ""
     @State private var chatPhotoTerms = ""
+    /// The vertical the chat resolved ("home" / "auto_moto"), kept because the
+    /// results screen otherwise infers it from the CATEGORY NAME — and Auto &
+    /// moto owns the word "Repair". "Fix fridge" came back as category "Repair"
+    /// and opened a car-shop list with an Auto/Moto toggle (reported live
+    /// 2026-07-22). An explicit home vertical has to outrank that inference.
+    @State private var chatVertical = ""
     /// Whether a real price is expected (covered home trade). Auto/moto and
     /// uncovered categories are match-only, so the list shows no number.
     @State private var chatPriceable = true
@@ -92,6 +107,14 @@ struct MainScreen: View {
     private var categoryPriceable: Bool {
         photoDetails?.isEmpty == false || !attachedImages.isEmpty
     }
+    /// The same question for an Auto & moto card, where the answer is different.
+    /// The home category-general entries are rate proxies ("2 plumber hours",
+    /// "250 sq ft of paint") that say little about any actual job. The auto ones
+    /// were deliberately built as each category's MOST-REQUESTED JOB instead —
+    /// a set of four tires, a full detail, a windshield — because nobody buys
+    /// detailing or glass by the hour (see CATEGORY_GENERAL in pricingEngine.ts).
+    /// That is a real figure for a bare browse, so auto cards show it.
+    private var autoCategoryPriceable: Bool { true }
     /// The clarifying Q&A of the current search, carried to results and on to the
     /// quote-request screen so the message a business receives includes the
     /// AI-clarified details.
@@ -103,6 +126,10 @@ struct MainScreen: View {
     /// Destination the user tapped before a location was available; navigates once
     /// a location resolves. Contractors are never shown without a location.
     @State private var pendingDestination: PendingDestination? = nil
+    /// Drives the "location needed" prompt shown when a category is tapped but
+    /// location access has already been declined (the system prompt can't reappear,
+    /// so we route the user to Settings or manual ZIP entry).
+    @State private var showLocationNeeded = false
     @State private var drawnPaths: [DrawnPath] = []
     /// The captured photo (with any drawn strokes baked in) carried forward to
     /// the quote-request screen once the user reaches a contractor.
@@ -339,13 +366,13 @@ struct MainScreen: View {
                             }
                             .padding(.bottom, shutterPad)
                         }
-                        .transition(.opacity.combined(with: .scale(scale: 0.8)))
-                        .animation(.interpolatingSpring(stiffness: 320, damping: 32), value: selectedVertical)
-                        .animation(.interpolatingSpring(stiffness: 320, damping: 32), value: sheetDetent)
-                        .animation(.easeOut(duration: 0.25), value: searchFocused)
-                        // The keyboard's height now feeds the shutter's clearance, so
-                        // it slides with the keyboard instead of jumping on show/hide.
-                        .animation(.easeOut(duration: 0.25), value: keyboardHeight)
+                        // Fade only — a scale transition read as a sideways/curved motion.
+                        .transition(.opacity)
+                        // The shutter's ONLY vertical driver is shutterPad; animate on that
+                        // single scalar so every move is pure up/down with no overshoot.
+                        // (The old underdamped interpolatingSpring + scale transition + the
+                        // several stacked value-animations produced the left/right bounce.)
+                        .animation(.easeInOut(duration: 0.25), value: shutterPad)
                         .animation(.easeInOut(duration: 0.25), value: camera.isAuthorized)
                         .allowsHitTesting(!searchFocused && !chatActive)
                     }
@@ -552,7 +579,7 @@ struct MainScreen: View {
                     .clipShape(RoundedRectangle(cornerRadius: 32))
                     .overlay(RoundedRectangle(cornerRadius: 32).stroke(AppColors.searchBorder, lineWidth: 1.5))
                     .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { inputBarHeight = $0 }
-                    .padding(.horizontal, 16)
+                    .padding(.horizontal, 14)
                     .padding(.bottom, keyboardActive ? 16 : 34)
                     .animation(.easeOut(duration: 0.25), value: searchFocused)
                     .animation(.easeOut(duration: 0.25), value: locationFocused)
@@ -621,7 +648,10 @@ struct MainScreen: View {
                 )) {
                     ContractorListScreen(category: goSwipe?.rawValue ?? "",
                                          presetCoordinate: locationStore.coordinate,
-                                         attachedImages: attachedImages,
+                                         // Camera capture + any library picks, so a
+                                         // photo added before tapping a category is
+                                         // carried through (see searchResults).
+                                         attachedImages: attachedImages + pickedImages,
                                          photoDetails: photoDetails,
                                          priceable: categoryPriceable)
                 }
@@ -631,22 +661,12 @@ struct MainScreen: View {
                 .navigationDestination(isPresented: $showBusiness) {
                     BusinessDashboardScreen()
                 }
-                .navigationDestination(isPresented: $goSearch) {
-                    // goSearch is reached either from the camera flow (attachedImages
-                    // set) or the search bar's own + picker (pickedImages, up to 5).
-                    // The clarifying chat's outcome drives the match: search_terms
-                    // refines the business query (with a fallback to the raw text),
-                    // photo_terms rank each business's photos, priceable gates price.
-                    ContractorListScreen(category: chatCategory,
-                                         searchQuery: submittedQuery,
-                                         presetCoordinate: locationStore.coordinate,
-                                         attachedImages: attachedImages.isEmpty ? pickedImages : attachedImages,
-                                         photoDetails: mergedDetails,
-                                         businessSearchOverride: chatSearchTerms,
-                                         photoMatchTerms: chatPhotoTerms,
-                                         priceable: chatPriceable,
-                                         clarifyTranscript: clarifyTranscript)
+                // Pushed, not presented: the profile is the same slide-in screen
+                // as the business Settings it mirrors (Figma 1150:3839).
+                .navigationDestination(isPresented: $showProfile) {
+                    ProfileScreen()
                 }
+                .navigationDestination(isPresented: $goSearch) { searchResults }
                 .navigationDestination(isPresented: Binding(
                     get: { goAuto != nil },
                     set: { if !$0 { goAuto = nil } }
@@ -654,8 +674,10 @@ struct MainScreen: View {
                     ContractorListScreen(category: goAuto?.name ?? "",
                                          searchQuery: goAuto?.searchQuery ?? "",
                                          presetCoordinate: locationStore.coordinate,
-                                         attachedImages: attachedImages,
-                                         priceable: categoryPriceable,
+                                         // Camera capture + any library picks (see
+                                         // searchResults) so neither source is lost.
+                                         attachedImages: attachedImages + pickedImages,
+                                         priceable: autoCategoryPriceable,
                                          initialVehicle: autoInitialVehicle)
                 }
                 // Returning from results: restore what the user came in with, so
@@ -695,6 +717,21 @@ struct MainScreen: View {
                 .onChange(of: locationStore.label) { _, newLabel in
                     if let newLabel { locationQuery = newLabel }
                 }
+                // Category tapped without location, after access was declined: the
+                // OS prompt can't reappear, so ask here and route to Settings / ZIP.
+                .alert("Location needed", isPresented: $showLocationNeeded) {
+                    Button("Open Settings") {
+                        pendingDestination = nil
+                        openAppSettings()
+                    }
+                    Button("Enter ZIP code") {
+                        pendingDestination = nil
+                        beginEditingLocation()
+                    }
+                    Button("Cancel", role: .cancel) { pendingDestination = nil }
+                } message: {
+                    Text("Brightglow needs your location to find contractors near you. Turn it on in Settings, or enter a ZIP code.")
+                }
                 // Show the coaching hint each time the camera is fully exposed,
                 // then fade it out after 3s.
                 .onChange(of: sheetDetent) { _, newDetent in
@@ -710,22 +747,6 @@ struct MainScreen: View {
             }
         }
         .preferredColorScheme(.dark)
-        .sheet(isPresented: $showProfile) {
-            ProfileScreen(onSelectSearch: { query in
-                showProfile = false
-                // Let the sheet dismiss before the clarifying chat opens over the
-                // landing, so the transition doesn't fight the sheet animation.
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
-                    startClarify(query: query)
-                }
-            }, onOpenBusiness: {
-                showProfile = false
-                // Same beat as above: dismiss the sheet, then push the dashboard.
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
-                    showBusiness = true
-                }
-            })
-        }
         // ── Draw mode — proper full-screen cover with its own layout + keyboard handling
         .fullScreenCover(isPresented: $camera.showDrawingCanvas) {
             if let img = camera.capturedImage {
@@ -763,7 +784,15 @@ struct MainScreen: View {
                                 // search — the photo's extracted details ride
                                 // along as chat context (see advanceChat), and
                                 // the photo itself stays on screen behind it.
-                                startClarify(query: q, backdrop: resultImage)
+                                //
+                                // The typed word only wins the *query*; it does not
+                                // overrule the vertical the photo established. Hand
+                                // the detected auto category and vehicle to the chat
+                                // so cancelling it falls back to Auto & moto rather
+                                // than dropping into home results.
+                                startClarify(query: q, backdrop: resultImage,
+                                             detectedAuto: Self.autoCategory(from: detected),
+                                             detectedVehicle: detectedVehicle)
                             } else {
                                 switch detected {
                                 case .home(let cat): goSwipe = cat
@@ -878,14 +907,61 @@ struct MainScreen: View {
     /// `backdrop` is the capture the chat is about, shown behind it. Always
     /// assigned (nil for a typed search), so a photo from an earlier capture can
     /// never linger behind an unrelated conversation.
-    private func startClarify(query: String? = nil, backdrop: UIImage? = nil) {
+    /// Results for a searched/clarified request. Extracted from `body` because the
+    /// destination's argument list pushed that expression past the type-checker's
+    /// budget.
+    ///
+    /// `goSearch` is reached either from the camera flow (attachedImages set) or the
+    /// search bar's own + picker (pickedImages, up to 5). The clarifying chat's
+    /// outcome drives the match: search_terms refines the business query (with a
+    /// fallback to the raw text), photo_terms rank each business's photos, priceable
+    /// gates price.
+    private var searchResults: some View {
+        ContractorListScreen(category: chatCategory,
+                             clarifyVertical: chatVertical,
+                             searchQuery: submittedQuery,
+                             presetCoordinate: locationStore.coordinate,
+                             // BOTH sources — a camera capture (attachedImages) AND
+                             // any library picks added mid-chat (pickedImages). The
+                             // input bar shows both, so the review screen must carry
+                             // both; picking one dropped the other (e.g. photos added
+                             // during the clarify chat vanished from the pre-send
+                             // screen when a snapped photo was already attached).
+                             attachedImages: attachedImages + pickedImages,
+                             photoDetails: mergedDetails,
+                             businessSearchOverride: chatSearchTerms,
+                             photoMatchTerms: chatPhotoTerms,
+                             priceable: chatPriceable,
+                             clarifyTranscript: clarifyTranscript,
+                             // Nil unless a capture identified the vehicle, so a
+                             // motorcycle photo opens on Moto, not the car default.
+                             initialVehicle: autoInitialVehicle)
+    }
+
+    /// The Auto & moto category a capture resolved to, if it resolved to that
+    /// vertical at all. A free function rather than an inline `if case` at the call
+    /// site: the capture closure is already at the compiler's type-check limit.
+    private static func autoCategory(from match: TradeMatch?) -> AutoCategory? {
+        if case .auto(let auto)? = match { return auto }
+        return nil
+    }
+
+    /// `detectedAuto` / `detectedVehicle` carry what the capture's classifier
+    /// already established about the vertical. They're assigned here (rather than
+    /// at the call site) so a plain typed search resets them and can't inherit the
+    /// vertical from an earlier photo.
+    private func startClarify(query: String? = nil, backdrop: UIImage? = nil,
+                              detectedAuto: AutoCategory? = nil,
+                              detectedVehicle: VehicleFilter? = nil) {
         let q = (query ?? searchText).trimmingCharacters(in: .whitespacesAndNewlines)
         guard !q.isEmpty else { return }
         submittedQuery = q
-        SearchHistoryStore.record(q)   // profile's search history
+        clarifyDetectedAuto = detectedAuto
+        autoInitialVehicle = detectedVehicle
         clarifyTranscript = .empty
         chatDetails = nil
         chatCategory = ""
+        chatVertical = ""
         chatSearchTerms = ""
         chatPhotoTerms = ""
         chatPriceable = true
@@ -941,6 +1017,16 @@ struct MainScreen: View {
         }
     }
 
+    /// Move past the current question without showing a bubble. The hidden turn
+    /// still goes to the assistant so it advances (asks the next one or finishes)
+    /// rather than re-asking.
+    private func skipChatQuestion() {
+        guard !chatLoading else { return }
+        chatMessages.append(ChatMessage(role: "user", content: "Skip", hidden: true))
+        chatCompleted = false
+        advanceChat()
+    }
+
     private func sendChatReply(_ text: String) {
         let reply = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !reply.isEmpty, !chatLoading else { return }
@@ -964,6 +1050,10 @@ struct MainScreen: View {
         clarifyTranscript = .empty
         searchText = ""
         submittedQuery = ""
+        // The abandoned request's vertical goes with it — the next search starts
+        // from nothing rather than inheriting this photo's verdict.
+        clarifyDetectedAuto = nil
+        autoInitialVehicle = nil
         // Closing the clarify chat abandons the request, so the photo(s) that
         // seeded it shouldn't linger in the input bar — clear both the camera
         // capture and library picks.
@@ -976,7 +1066,16 @@ struct MainScreen: View {
     /// results are shown exactly as if the chat hadn't run.
     private func finishChat(_ outcome: ClarifyService.ClarifyOutcome?) {
         chatDetails = outcome?.details.isEmpty == false ? outcome?.details : nil
-        chatCategory = outcome?.category ?? ""
+        // A nil/blank category means the chat ended without resolving one — Skip,
+        // the ✕, or an API failure. Falling through to "" routes the search as a
+        // home trade, which is how photographing a motorcycle and abandoning the
+        // questions returned house painters. The photo's own verdict outranks a
+        // chat that never finished.
+        let resolvedCategory = outcome?.category ?? ""
+        chatCategory = resolvedCategory.isEmpty ? (clarifyDetectedAuto?.name ?? "") : resolvedCategory
+        // Only trust the chat's vertical when the chat actually resolved one; a
+        // photo that already identified a vehicle keeps its own verdict.
+        chatVertical = clarifyDetectedAuto != nil ? "auto_moto" : (outcome?.vertical ?? "")
         chatSearchTerms = outcome?.searchTerms ?? ""
         chatPhotoTerms = outcome?.photoTerms ?? ""
         chatPriceable = outcome?.priceable ?? true
@@ -1020,7 +1119,7 @@ struct MainScreen: View {
             ScrollViewReader { proxy in
                 ScrollView {
                     VStack(spacing: 8) {
-                        ForEach(chatMessages) { message in
+                        ForEach(chatMessages.filter { !$0.hidden }) { message in
                             chatBubble(message)
                         }
                         if chatLoading {
@@ -1054,23 +1153,33 @@ struct MainScreen: View {
             if !chatCompleted && !chatLoading {
                 ScrollView(.horizontal, showsIndicators: false) {
                     HStack(spacing: 8) {
-                        ForEach(chatQuickReplies, id: \.self) { option in
-                            Button(action: { sendChatReply(option) }) {
-                                Text(option)
-                                    .font(.h4)
-                                    .foregroundStyle(.white)
-                                    .padding(.horizontal, 16)
-                                    .frame(height: 32)
-                                    .background(Capsule().fill(AppColors.bgOverlay.opacity(0.5)))
-                                    .overlay(Capsule().stroke(Color.white.opacity(0.2), lineWidth: 1))
-                            }
-                            .buttonStyle(.plain)
+                        // API-suggested answers, minus any "Skip" it returned — we
+                        // always append our own so every question has one.
+                        ForEach(chatQuickReplies.filter { $0.caseInsensitiveCompare("Skip") != .orderedSame }, id: \.self) { option in
+                            quickReplyPill(option) { sendChatReply(option) }
                         }
+                        // Per-question escape hatch: moves the assistant past this
+                        // question instead of ending the whole chat.
+                        quickReplyPill("Skip") { skipChatQuestion() }
                     }
                 }
             }
         }
         .padding(.top, 6)
+    }
+
+    /// One quick-reply capsule in the clarify chat's suggestion row.
+    private func quickReplyPill(_ title: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Text(title)
+                .font(.h4)
+                .foregroundStyle(.white)
+                .padding(.horizontal, 16)
+                .frame(height: 32)
+                .background(Capsule().fill(AppColors.bgOverlay.opacity(0.5)))
+                .overlay(Capsule().stroke(Color.white.opacity(0.2), lineWidth: 1))
+        }
+        .buttonStyle(.plain)
     }
 
     @ViewBuilder
@@ -1114,9 +1223,22 @@ struct MainScreen: View {
     }
 
     private func fetchCurrentLocation() {
+        // Tapping "Current location" after access was declined would silently do
+        // nothing (the OS prompt can't reappear) — surface the same prompt instead.
+        if locationStore.isDenied {
+            showLocationNeeded = true
+            return
+        }
         editingLocation = false
         locationFocused = false
         locationStore.useCurrentLocation()
+    }
+
+    /// Deep-link to this app's page in the system Settings, where location access
+    /// can be re-enabled after it was denied.
+    private func openAppSettings() {
+        guard let url = URL(string: UIApplication.openSettingsURLString) else { return }
+        UIApplication.shared.open(url)
     }
 
     /// Auto-capture the user's location on open / when permission is granted, so a
@@ -1145,7 +1267,10 @@ struct MainScreen: View {
         case .authorizedWhenInUse, .authorizedAlways, .notDetermined:
             locationStore.useCurrentLocation()             // GPS (prompts if undetermined)
         default:                                           // .denied / .restricted
-            locationFocused = true                         // can't use GPS → type a ZIP
+            // The OS won't show its permission prompt again once declined, so a
+            // silent ZIP-field focus left the tap looking like it did nothing.
+            // Surface an explicit prompt to re-enable location or enter a ZIP.
+            showLocationNeeded = true
         }
     }
 
@@ -1266,7 +1391,12 @@ struct MainScreen: View {
         match: TradeMatch?, vehicle: VehicleFilter?, details: String?
     ) -> String? {
         var parts: [String] = []
-        if let vehicle { parts.append(vehicle == .moto ? "a motorcycle" : "a car or truck") }
+        // Only name a vehicle when the resolved trade isn't a home job. The vehicle
+        // read is already subject-gated upstream, but a home match plus a vehicle
+        // note is contradictory — and "a car or truck" in the note makes clarify
+        // trust the photo and ask vehicle questions about a house (2026-07-26).
+        let matchIsHome: Bool = { if case .home = match { return true } else { return false } }()
+        if let vehicle, !matchIsHome { parts.append(vehicle == .moto ? "a motorcycle" : "a car or truck") }
         if let match { parts.append(match.label.lowercased()) }
         if let details = details?.trimmingCharacters(in: .whitespacesAndNewlines), !details.isEmpty {
             parts.append(details)

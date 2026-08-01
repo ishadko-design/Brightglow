@@ -77,10 +77,76 @@ final class AuthService: ObservableObject {
         }
     }
 
+    // MARK: - Magic-link callback
+
+    /// Completes a sign-in from a `brightglow://login` callback — the link tapped
+    /// in the email. Supabase can hand the credentials back two different ways
+    /// depending on how the project's flow is configured:
+    ///
+    ///   • PKCE:     `brightglow://login?code=…`         → exchange the code
+    ///   • Implicit: `brightglow://login#access_token=…` → set the tokens directly
+    ///
+    /// We handle both so the link works regardless, and — unlike the old
+    /// `try?` — we surface failures instead of swallowing them, so an expired or
+    /// already-used link explains itself rather than silently leaving the user on
+    /// the login screen.
+    func handleOpenURL(_ url: URL) async {
+        let fragment = fragmentParameters(url)
+
+        // Supabase reports rejected/expired links via an `error_description`.
+        if let error = fragment["error_description"] ?? fragment["error"] {
+            message = error.replacingOccurrences(of: "+", with: " ")
+            return
+        }
+
+        do {
+            if let accessToken = fragment["access_token"],
+               let refreshToken = fragment["refresh_token"] {
+                let session = try await supabase.auth.setSession(
+                    accessToken: accessToken, refreshToken: refreshToken)
+                user = session.user
+            } else {
+                // PKCE (`?code=…`) — the SDK exchanges it using the verifier it
+                // stashed when the link was requested.
+                let session = try await supabase.auth.session(from: url)
+                user = session.user
+            }
+        } catch {
+            #if DEBUG
+            print("🔗 sign-in link failed for \(url.absoluteString) — \(error)")
+            #endif
+            message = "That sign-in link didn't work. It may have expired — request a new one."
+        }
+    }
+
+    /// Parse a URL fragment (`#a=b&c=d`) into a dictionary. The implicit flow
+    /// returns the session tokens here rather than in the query string, so
+    /// `URLComponents.queryItems` never sees them.
+    private func fragmentParameters(_ url: URL) -> [String: String] {
+        guard let fragment = URLComponents(url: url, resolvingAgainstBaseURL: false)?.fragment else {
+            return [:]
+        }
+        var result: [String: String] = [:]
+        for pair in fragment.split(separator: "&") {
+            let kv = pair.split(separator: "=", maxSplits: 1).map(String.init)
+            guard kv.count == 2 else { continue }
+            result[kv[0]] = kv[1].removingPercentEncoding ?? kv[1]
+        }
+        return result
+    }
+
     // MARK: - Sign in with Apple
 
+    // Raw nonce generated for the in-flight Apple request; Apple hashes the one
+    // we put on the request, and Supabase needs the *raw* value to verify the
+    // returned identity token. Held between configure and completion.
+    private var appleRawNonce: String?
+
     func configureAppleRequest(_ request: ASAuthorizationAppleIDRequest) {
+        let rawNonce = randomNonce()
+        appleRawNonce = rawNonce
         request.requestedScopes = [.fullName, .email]
+        request.nonce = sha256(rawNonce)
     }
 
     func handleApple(_ result: Result<ASAuthorization, Error>) {
@@ -100,7 +166,7 @@ final class AuthService: ObservableObject {
             defer { isLoading = false }
             do {
                 let session = try await supabase.auth.signInWithIdToken(
-                    credentials: .init(provider: .apple, idToken: token)
+                    credentials: .init(provider: .apple, idToken: token, nonce: appleRawNonce)
                 )
                 user = session.user
             } catch {
@@ -183,6 +249,38 @@ final class AuthService: ObservableObject {
         Task {
             try? await supabase.auth.signOut()
             user = nil
+        }
+    }
+
+    // MARK: - Profile
+
+    // We deliberately collect the minimum: a first name and the email. Email is
+    // the identity itself — OTP-verified possession — so it's shown but not
+    // editable here; the first name lives in the auth user's metadata, which
+    // avoids a `profiles` table for what is only ever read back by its owner.
+
+    var firstName: String { metadataString("first_name") ?? "" }
+
+    private func metadataString(_ key: String) -> String? {
+        guard let value = user?.userMetadata[key]?.stringValue, !value.isEmpty else { return nil }
+        return value
+    }
+
+    /// Persist the editable profile fields onto the auth user. Only the keys
+    /// passed are touched.
+    @discardableResult
+    func updateProfile(firstName: String? = nil) async -> Bool {
+        var data: [String: AnyJSON] = [:]
+        if let firstName { data["first_name"] = .string(firstName) }
+        guard !data.isEmpty else { return true }
+        do {
+            user = try await supabase.auth.update(user: UserAttributes(data: data))
+            return true
+        } catch {
+            #if DEBUG
+            print("👤 profile save failed — \(error)")
+            #endif
+            return false
         }
     }
 

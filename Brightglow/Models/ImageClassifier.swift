@@ -129,7 +129,16 @@ enum ImageClassifier {
            !matches.contains(device) {
             matches.append(device)
         }
-        return Suggestions(matches: matches, confident: confident, details: details, vehicle: vehicle)
+        // Vehicle type is meaningful ONLY when the subject really is a vehicle.
+        // If the cloud named a car/moto it already set `vehicle`; otherwise fall
+        // back to the on-device vehicle classifier — but gated on an AUTO subject,
+        // so a car parked in the background of a home photo can never set a vehicle
+        // type. Without this gate a 10%-of-frame car in a house photo flipped the
+        // request to the auto path and clarify asked "car, SUV, or truck?" for a
+        // house repaint (reported 2026-07-26).
+        let subjectIsAuto = matches.contains { if case .auto = $0 { return true } else { return false } }
+        if vehicle == nil, subjectIsAuto { vehicle = detectVehicleType(subject) }
+        return Suggestions(matches: matches, confident: confident, details: details, vehicle: subjectIsAuto ? vehicle : nil)
     }
 
     /// Fraction of the frame a single salient object must exceed to be treated as

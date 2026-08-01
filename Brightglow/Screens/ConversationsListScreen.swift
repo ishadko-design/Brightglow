@@ -122,7 +122,7 @@ struct ConversationsListScreen: View {
                         .foregroundStyle(.white)
                     Text("When you send a request, your conversation with the business shows up here.")
                         .font(.bodySmall)
-                        .foregroundStyle(.white.opacity(0.5))
+                        .foregroundStyle(.white.opacity(0.6))
                         .multilineTextAlignment(.center)
                         .padding(.horizontal, 40)
                 }

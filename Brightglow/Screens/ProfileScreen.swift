@@ -1,196 +1,195 @@
 import SwiftUI
 import Supabase
 
+/// The consumer's profile (Figma 1150:3839) — deliberately the same page as the
+/// business Settings screen with different fields: same pushed slide-in, same
+/// back-arrow header, same card, same `AccountFooter`. It used to be a bottom
+/// sheet showing a read-only identity block; the design collapsed the two into
+/// one shape, so this is now a real editor.
+///
+/// By design we ask for as little as possible: only a first name and the email.
+/// The name saves on a pause the way the business editor does — there is no Save
+/// button in either mock. Email is shown but not editable: possession of it is
+/// the identity (OTP-verified), so changing it is an auth flow, not a text field.
 struct ProfileScreen: View {
-    /// Tapping a past search re-runs it on the landing. Optional so previews /
-    /// other callers can present the profile without wiring search.
-    var onSelectSearch: ((String) -> Void)? = nil
-    /// Opens the business dashboard. Shown only to owners; the host dismisses this
-    /// sheet then pushes the dashboard.
-    var onOpenBusiness: (() -> Void)? = nil
-
     @EnvironmentObject private var auth: AuthService
-    @EnvironmentObject private var businessStore: BusinessStore
-    @State private var showDeleteConfirm = false
-    @State private var history: [SearchHistoryStore.Entry] = []
+    @Environment(\.dismiss) private var dismiss
+
+    @State private var firstName = ""
+    @State private var loaded = false
+
+    @State private var errorMessage: String?
+    @State private var autosaveTask: Task<Void, Never>?
 
     var body: some View {
         ZStack {
-            AppColors.bgSurface.ignoresSafeArea()
-
+            AppColors.bg.ignoresSafeArea()
             VStack(spacing: 0) {
-                // Title — the grab handle (drag indicator) is the dismiss affordance,
-                // matching the app's other bottom sheets.
-                HStack {
-                    Text("Profile")
-                        .font(.h2)
-                        .foregroundStyle(.white)
-                    Spacer()
-                }
-                .padding(.horizontal, 16)
-                .padding(.top, 8)
-
-                // Identity
-                VStack(spacing: 12) {
-                    Image(systemName: "person.circle.fill")
-                        .font(.system(size: 72))
-                        .foregroundStyle(.white.opacity(0.8))
-                    if let name = auth.user?.userMetadata["full_name"]?.stringValue, !name.isEmpty {
-                        Text(name)
-                            .font(.h3)
-                            .foregroundStyle(.white)
-                    }
-                    if let email = auth.user?.email, !email.isEmpty {
-                        Text(email)
-                            .font(.bodyLight)
-                            .foregroundStyle(.white.opacity(0.6))
-                    }
-                    if let provider = auth.user?.appMetadata["provider"]?.stringValue {
-                        Text("Signed in with \(provider.capitalized)")
-                            .font(.bodySmall)
-                            .foregroundStyle(.white.opacity(0.4))
-                    }
-                }
-                .padding(.top, 40)
-
-                // Recent searches — tap to run again. Takes the middle of the sheet
-                // when there's history; otherwise a Spacer keeps the buttons pinned.
-                if history.isEmpty {
-                    Spacer()
-                } else {
-                    searchHistorySection
-                }
-
-                // For business — only for owners (an email matched to a lead).
-                // Opens the lead dashboard + page editor.
-                if businessStore.isOwner {
-                    Button(action: { onOpenBusiness?() }) {
-                        HStack(spacing: 12) {
-                            Image(systemName: "briefcase.fill")
-                                .font(.system(size: 16))
-                                .foregroundStyle(.white.opacity(0.8))
-                            VStack(alignment: .leading, spacing: 1) {
-                                Text("For business")
-                                    .font(.h4).foregroundStyle(.white)
-                                Text("Manage your requests and page")
-                                    .font(.bodySmall).foregroundStyle(.white.opacity(0.5))
-                            }
-                            Spacer()
-                            Image(systemName: "chevron.right")
-                                .font(.system(size: 13, weight: .semibold))
-                                .foregroundStyle(.white.opacity(0.35))
-                        }
-                        .padding(.horizontal, 16).frame(height: 56)
-                        .background(Color.white.opacity(0.05),
-                                    in: RoundedRectangle(cornerRadius: 16, style: .continuous))
-                        .contentShape(Rectangle())
-                    }
-                    .buttonStyle(.plain)
-                    .padding(.horizontal, 16)
-                    .padding(.bottom, 12)
-                }
-
-                // Sign out
-                Button(action: { auth.signOut() }) {
-                    Text("Sign out")
-                        .font(.h3)
-                        .foregroundStyle(.white)
-                        .frame(maxWidth: .infinity)
-                        .frame(height: 56)
-                }
-                .buttonStyle(.frosted)
-                .padding(.horizontal, 16)
-                .padding(.bottom, 12)
-
-                // Delete account — App Store Guideline 5.1.1(v) requires an
-                // in-app way to delete the account. Confirmed before running,
-                // since it's irreversible.
-                Button(role: .destructive, action: { showDeleteConfirm = true }) {
-                    Text("Delete account")
-                        .font(.bodyLight)
-                        .foregroundStyle(Color.red.opacity(0.9))
-                        .frame(maxWidth: .infinity)
-                        .frame(height: 44)
-                }
-                .disabled(auth.isLoading)
-                .padding(.horizontal, 16)
-                .padding(.bottom, 24)
+                header
+                form
             }
         }
-        .confirmationDialog(
-            "Delete your account?",
-            isPresented: $showDeleteConfirm,
-            titleVisibility: .visible
-        ) {
-            Button("Delete account", role: .destructive) {
-                Task { await auth.deleteAccount() }
-            }
-            Button("Cancel", role: .cancel) {}
-        } message: {
-            Text("This permanently deletes your account and all your requests, messages, and photos. This can't be undone.")
-        }
+        .navigationBarBackButtonHidden(true)
+        .toolbar(.hidden, for: .navigationBar)
+        .enableSwipeBack()
         .preferredColorScheme(.dark)
-        .onAppear { history = SearchHistoryStore.all() }
-        // Match the app's bottom-sheet affordance: grab handle, rounded surface.
-        .presentationDetents([.large])
-        .presentationDragIndicator(.visible)
-        .presentationCornerRadius(32)
-        .presentationBackground(AppColors.bgSurface)
-    }
-
-    // MARK: - Recent searches
-
-    private var searchHistorySection: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            HStack {
-                Text("Recent searches")
-                    .font(.h4)
-                    .foregroundStyle(.white.opacity(0.6))
-                Spacer()
-                Button("Clear") {
-                    SearchHistoryStore.clear()
-                    withAnimation(.easeInOut(duration: 0.15)) { history = [] }
-                }
-                .font(.bodySmall)
-                .foregroundStyle(AppColors.accentStart)
-                .buttonStyle(.plain)
-            }
-            .padding(.horizontal, 16)
-            .padding(.bottom, 8)
-
-            ScrollView {
-                LazyVStack(spacing: 0) {
-                    ForEach(history) { entry in
-                        historyRow(entry)
-                    }
-                }
-            }
+        .onAppear {
+            guard !loaded else { return }
+            firstName = auth.firstName
+            loaded = true
         }
-        .frame(maxHeight: .infinity)
-        .padding(.top, 32)
+        .onChange(of: firstName) { _, _ in scheduleAutosave() }
+        .onDisappear { flushPendingSave() }
     }
 
-    private func historyRow(_ entry: SearchHistoryStore.Entry) -> some View {
-        Button(action: { onSelectSearch?(entry.query) }) {
-            HStack(spacing: 12) {
-                Image(systemName: "magnifyingglass")
-                    .font(.system(size: 15))
-                    .foregroundStyle(.white.opacity(0.4))
-                Text(entry.query)
-                    .font(.bodyLight)
+    // MARK: - Header
+
+    /// Back arrow and title. No buttons beyond the arrow — the only account
+    /// actions live in the footer.
+    private var header: some View {
+        HStack(alignment: .top, spacing: 8) {
+            Button(action: { dismiss() }) {
+                Image(systemName: "arrow.left")
+                    .font(.system(size: 18, weight: .semibold))
                     .foregroundStyle(.white)
-                    .lineLimit(1)
-                Spacer(minLength: 8)
-                Text(entry.date, format: .relative(presentation: .named))
-                    .font(.bodySmall)
-                    .foregroundStyle(.white.opacity(0.35))
-                    .lineLimit(1)
+                    .frame(width: 44, height: 44)
+                    .contentShape(Rectangle())
             }
-            .padding(.vertical, 14)
-            .padding(.horizontal, 16)
-            .contentShape(Rectangle())
+            Text("Profile")
+                .font(.h2).foregroundStyle(.white)
+                .padding(.top, 4)
+            Spacer()
         }
-        .buttonStyle(.plain)
-        .disabled(onSelectSearch == nil)
+        .padding(.leading, 8)
+        .padding(.top, 8)
+    }
+
+    // MARK: - Form
+
+    private var form: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 32) {
+                if let errorMessage { errorBanner(errorMessage) }
+                profileSection
+                AccountFooter()
+            }
+            .padding(.top, 12)
+            .padding(.bottom, 24)
+        }
+    }
+
+    private var profileSection: some View {
+        card {
+            VStack(alignment: .leading, spacing: 24) {
+                field("Name") {
+                    fieldInput("First name", text: $firstName)
+                }
+                field("Email") {
+                    // Read-only: the address is the account, not a preference.
+                    Text(auth.user?.email ?? "")
+                        .font(.bodyLight).foregroundStyle(AppColors.textSecondary)
+                        .padding(.horizontal, 20)
+                        .frame(maxWidth: .infinity, minHeight: 60, alignment: .leading)
+                        .inputFieldSurface()
+                }
+            }
+        }
+    }
+
+    // MARK: - Autosave
+
+    /// Same contract as the business editor: no Save button, so a change schedules
+    /// a write and resets the timer, and only the pause at the end hits the network.
+    private func scheduleAutosave() {
+        guard loaded, dirty else { return }
+        autosaveTask?.cancel()
+        autosaveTask = Task {
+            try? await Task.sleep(for: .seconds(1.2))
+            guard !Task.isCancelled else { return }
+            await save()
+        }
+    }
+
+    private var dirty: Bool {
+        loaded && firstName != auth.firstName
+    }
+
+    /// Leaving inside the debounce window must not lose the edit. Deliberately
+    /// does not touch `@State` — the view is going away.
+    private func flushPendingSave() {
+        guard loaded, dirty else { return }
+        autosaveTask?.cancel()
+        let auth = self.auth
+        let first = firstName
+        Task { await auth.updateProfile(firstName: first) }
+    }
+
+    private func save() async {
+        let ok = await auth.updateProfile(firstName: firstName)
+        // A successful autosave says nothing; a failed one has to, since there's
+        // no Save button left to retry from.
+        errorMessage = ok ? nil : "Couldn't save your changes."
+    }
+
+    private func errorBanner(_ message: String) -> some View {
+        HStack(spacing: 12) {
+            Image(systemName: "exclamationmark.triangle.fill")
+                .foregroundStyle(AppColors.starFilled)
+            Text(message)
+                .font(.bodySmall).foregroundStyle(.white)
+            Spacer()
+            Button(action: { Task { await save() } }) {
+                Text("Retry")
+                    .font(.h4).foregroundStyle(.white)
+                    .padding(.horizontal, 16).frame(height: 32)
+                    .secondaryButtonBackground()
+            }
+            .buttonStyle(.plain)
+        }
+        .padding(16)
+        .background(AppColors.cardSurface,
+                    in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+        .padding(.horizontal, 16)
+    }
+
+    // MARK: - Small view helpers
+
+    private func card<C: View>(@ViewBuilder _ content: () -> C) -> some View {
+        content()
+            .padding(16)
+            .padding(.bottom, 8)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(AppColors.cardSurface,
+                        in: RoundedRectangle(cornerRadius: 32, style: .continuous))
+            .padding(.horizontal, 16)
+    }
+
+    private func field<C: View>(_ label: String, @ViewBuilder _ content: () -> C) -> some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text(label).font(.h4).foregroundStyle(.white)
+            content()
+        }
+    }
+
+    private func fieldInput(_ placeholder: String, text: Binding<String>) -> some View {
+        TextField("", text: text,
+                  prompt: Text(placeholder).foregroundColor(.white.opacity(0.3)))
+            .font(.bodyLight).foregroundStyle(.white)
+            .tint(AppColors.accentStart)
+            .lineLimit(1)
+            .padding(.horizontal, 20)
+            .frame(maxWidth: .infinity, minHeight: 60, alignment: .leading)
+            .inputFieldSurface()
+    }
+}
+
+/// Matches the business editor's field treatment so the two profiles read as the
+/// same page (same `bgOverlay` fill, 1.5pt border, 32pt radius).
+private extension View {
+    func inputFieldSurface() -> some View {
+        let shape = RoundedRectangle(cornerRadius: 32, style: .continuous)
+        return self
+            .background(AppColors.bgOverlay, in: shape)
+            .overlay(shape.stroke(AppColors.searchBorder, lineWidth: 1.5))
     }
 }

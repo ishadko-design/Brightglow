@@ -54,6 +54,67 @@ function cacheKey(textQuery: string, lat: number, lng: number, pageSize: number)
   return `${textQuery}|${bucket(lat)}|${bucket(lng)}|${pageSize}|${day}`;
 }
 
+// LeadBridge (the Node relay) owns email resolution — its resolver lives there.
+// The search fn only reads the cache and kicks off resolution for misses.
+const LEADBRIDGE_URL = (Deno.env.get("LEADBRIDGE_URL") ?? "").replace(/\/+$/, "");
+const LEADBRIDGE_ADMIN_TOKEN = Deno.env.get("LEADBRIDGE_ADMIN_TOKEN") ?? "";
+
+// Attaches `contactEmail` to each place from the business_places cache — the
+// signal the app uses to show "Request quote" (email thread) vs "Call". Places
+// we haven't checked yet are sent to LeadBridge to resolve in the background,
+// so the search latency is unaffected and the next search for them is warm.
+// Best-effort throughout: any failure just leaves contactEmail null (Call only).
+async function enrichContacts(responseObj: unknown): Promise<unknown> {
+  const obj = responseObj as { places?: Array<Record<string, unknown>> };
+  const places = Array.isArray(obj?.places) ? obj.places : [];
+  if (!places.length || !db) return responseObj;
+  const ids = places.map((p) => p.id).filter(Boolean) as string[];
+  if (!ids.length) return responseObj;
+
+  const emailById = new Map<string, string | null>();
+  const checked = new Set<string>();
+  const hidden = new Set<string>();
+  try {
+    const { data } = await db
+      .from("business_places")
+      .select("place_id, contact_email, contact_checked_at, hidden_at")
+      .in("place_id", ids);
+    for (const row of data ?? []) {
+      emailById.set(row.place_id, row.contact_email ?? null);
+      if (row.contact_checked_at) checked.add(row.place_id);
+      if (row.hidden_at) hidden.add(row.place_id);
+    }
+  } catch (_) { /* best-effort */ }
+
+  // Drop paywalled-and-lapsed businesses entirely — they're hidden from search
+  // until they subscribe (see the LeadBridge paywall sweep). Demand re-routes to
+  // businesses that are actually reachable/paying.
+  const visible = places.filter((p) => !hidden.has(p.id as string));
+  (obj as { places?: unknown }).places = visible;
+
+  for (const p of visible) p.contactEmail = emailById.get(p.id as string) ?? null;
+
+  const toResolve = visible
+    .filter((p) => p.id && p.websiteUri && !checked.has(p.id as string))
+    .slice(0, 25)
+    .map((p) => ({
+      place_id: p.id,
+      website: p.websiteUri,
+      business_name: (p.displayName as { text?: string } | undefined)?.text ?? null,
+    }));
+  if (toResolve.length && LEADBRIDGE_URL && LEADBRIDGE_ADMIN_TOKEN) {
+    const task = fetch(`${LEADBRIDGE_URL}/internal/resolve-contacts`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "x-admin-token": LEADBRIDGE_ADMIN_TOKEN },
+      body: JSON.stringify({ places: toResolve }),
+    }).catch(() => {});
+    // Run after the response is flushed so it adds no latency to the search.
+    (globalThis as { EdgeRuntime?: { waitUntil?: (p: Promise<unknown>) => void } })
+      .EdgeRuntime?.waitUntil?.(task);
+  }
+  return responseObj;
+}
+
 Deno.serve(async (req) => {
   if (req.method !== "POST") return json({ error: "method not allowed" }, 405);
   if (APP_TOKEN && req.headers.get("x-app-token") !== APP_TOKEN) {
@@ -90,7 +151,7 @@ Deno.serve(async (req) => {
       const { data } = await db.from("search_cache")
         .select("response, created_at").eq("cache_key", key).maybeSingle();
       if (data && Date.now() - new Date(data.created_at as string).getTime() < TTL_MS) {
-        return json(data.response, 200, "hit");
+        return json(await enrichContacts(data.response), 200, "hit");
       }
     } catch (_) { /* ignore, fall through to Google */ }
   }
@@ -120,19 +181,28 @@ Deno.serve(async (req) => {
     });
   }
 
-  // 3. Cache write (best-effort, first page only).
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(text);
+  } catch (_) {
+    // Non-JSON 200 (shouldn't happen from Google) — return raw, unenriched.
+    return new Response(text, {
+      status: 200,
+      headers: { "Content-Type": "application/json", "x-cache": "bypass" },
+    });
+  }
+
+  // 3. Cache write (best-effort, first page only). Cache the RAW Google response;
+  // emails are enriched per-request so a cached search never serves stale contacts.
   if (key && db) {
     try {
       await db.from("search_cache").upsert({
         cache_key: key,
-        response: JSON.parse(text),
+        response: parsed,
         created_at: new Date().toISOString(),
       });
     } catch (_) { /* ignore */ }
   }
 
-  return new Response(text, {
-    status: 200,
-    headers: { "Content-Type": "application/json", "x-cache": key ? "miss" : "bypass" },
-  });
+  return json(await enrichContacts(parsed), 200, key ? "miss" : "bypass");
 });

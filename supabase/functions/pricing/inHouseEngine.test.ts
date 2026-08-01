@@ -14,6 +14,7 @@ import {
   stateCostFactor,
   windowScopeScale,
 } from "./inHouseEngine.ts";
+import { estimateInHouse } from "./estimatePipeline.ts";
 import { CATALOG_BY_ID, COST_CATALOG } from "./costCatalog.ts";
 import { STATE_WAGES } from "./wageTable.generated.ts";
 import {
@@ -281,6 +282,69 @@ Deno.test("end-to-end: vanity job composes top + faucet across trades", () => {
   // not the $236-708 labor-only trap the EPCI item had before composition.
   assert(range!.all_in_typical > 700, `typical ${range!.all_in_typical} too low for a full vanity swap`);
   assert(range!.all_in_high < 4000, `high ${range!.all_in_high} implausible`);
+});
+
+Deno.test("a flat scope add-on is charged once, not per square foot", () => {
+  // Add-ons fold into the PER-UNIT rate and scale with the job, which is right
+  // for per-sq-ft add-ons and catastrophic for a fixed cost. Containment billed
+  // per unit produced $31,427 for 40 sq ft of mold and $115,039 for 150 — and
+  // more for a small job than the 100 sq ft reference, which is the tell.
+  const priceAt = (description: string) => {
+    const entry = classifyJobType("Mold & Pest Control", description)!;
+    const r = estimateInHouse({
+      category: "Mold & Pest Control",
+      description,
+      zip: "94102",
+      vehicle: null,
+      vertical: "home",
+      entryOverride: entry,
+    });
+    assert(r.kind === "range", `expected a range, got ${r.kind}`);
+    return r.typical;
+  };
+  const bare40 = priceAt("mold remediation 40 sq ft");
+  const contained40 = priceAt("mold remediation 40 sq ft with full containment");
+  const contained150 = priceAt("mold remediation 150 sq ft with full containment");
+
+  // Containment costs something, but a bounded something — not 40x something.
+  assert(contained40 > bare40, "containment should add cost");
+  assert(
+    contained40 - bare40 < 1500,
+    `containment added ${Math.round(contained40 - bare40)} to a 40 sq ft job — it is being scaled per unit`,
+  );
+  // And the same add-on must cost the same on a bigger job.
+  const bare150 = priceAt("mold remediation 150 sq ft");
+  const delta40 = contained40 - bare40;
+  const delta150 = contained150 - bare150;
+  assert(
+    Math.abs(delta40 - delta150) < 1,
+    `containment cost ${Math.round(delta40)} at 40 sq ft but ${Math.round(delta150)} at 150`,
+  );
+});
+
+Deno.test("short pest/mold keywords do not fire inside longer words", () => {
+  // Each of these is a word that CONTAINS a Mold & Pest keyword. None of them
+  // is a mold or pest job, and before the word-boundary guard "replace the
+  // crown molding" priced as paintless dent repair on a car.
+  for (const text of [
+    "replace the crown molding",
+    "install baseboard molding",
+    "plant new shrubs along the fence",
+    "aerate and reseed the lawn",
+    "the deck has been rotting",
+  ]) {
+    const entry = classifyJobType("", text);
+    assert(
+      entry?.category !== "Mold & Pest Control",
+      `"${text}" classified as ${entry?.job_type}`,
+    );
+    assert(entry?.job_type !== "auto.dent", `"${text}" classified as a car dent`);
+  }
+  // The real words still work.
+  assertEquals(classifyJobType("", "ants in the kitchen")?.job_type, "pest.treatment");
+  assertEquals(classifyJobType("", "moldy drywall")?.job_type, "mold.remediation");
+  // A pest in something another category owns still routes to the pest.
+  assertEquals(classifyJobType("", "we have termites in the deck")?.job_type, "pest.termite");
 });
 
 Deno.test("dimensions are never counts: regression for '36 inch vanity' = 36 vanities", () => {

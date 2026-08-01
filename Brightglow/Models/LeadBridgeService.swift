@@ -18,6 +18,20 @@ enum LeadBridgeService {
     /// the lead's public_id on success. businessName personalizes the email
     /// greeting when known (e.g. from Places via the browsed Contractor) —
     /// LeadBridge has no other source for a contractor's name.
+    /// An unguessable lead id matching the server's `lead_<base36>` shape. The
+    /// P2P text path mints this BEFORE opening the SMS composer so the `/l/<id>`
+    /// reply link can go in the message body; the lead is only created (with this
+    /// id) if the user actually sends. 16 chars of base36 ≈ 82 bits of entropy.
+    static func newPublicID() -> String {
+        let alphabet = Array("abcdefghijklmnopqrstuvwxyz0123456789")
+        let suffix = (0..<16).map { _ in alphabet[Int.random(in: 0..<alphabet.count)] }
+        return "lead_" + String(suffix)
+    }
+
+    /// Public web page (no login) where the business sees this request + photo
+    /// and replies into the customer's chat. Built from `publicId`.
+    static func replyURL(publicId: String) -> String { "\(baseURL)/l/\(publicId)" }
+
     static func submitLead(
         userEmail: String,
         userId: UUID? = nil,
@@ -25,9 +39,12 @@ enum LeadBridgeService {
         businessName: String? = nil,
         placeId: String? = nil,
         website: String? = nil,
+        contractorPhone: String? = nil,
         description: String,
         city: String,
-        photo: UIImage? = nil
+        photo: UIImage? = nil,
+        publicId: String? = nil,
+        notify: Bool = true
     ) async throws -> String {
         // Photo is optional; when there is one, failing to encode it is still
         // an error rather than a silent text-only send.
@@ -57,8 +74,16 @@ enum LeadBridgeService {
         // Business identity for the chat logo avatar — best-effort, safe to omit.
         if let placeId, !placeId.isEmpty { appendField("place_id", placeId) }
         if let website, !website.isEmpty { appendField("website", website) }
+        // The business phone we're texting — stored so the business can later claim
+        // its leads by verifying this number via OTP (the /biz phone-first identity).
+        if let contractorPhone, !contractorPhone.isEmpty { appendField("contractor_phone", contractorPhone) }
         appendField("description", description)
         appendField("city", city)
+        // P2P text path: the app-minted id (so the SMS link is known up front) and
+        // `notify=false` so LeadBridge records the lead for the /l/<id> reply page
+        // but sends no email — the customer's own text is the delivery.
+        if let publicId, !publicId.isEmpty { appendField("public_id", publicId) }
+        if !notify { appendField("notify", "false") }
 
         if let jpegData {
             body.append("--\(boundary)\r\n".data(using: .utf8)!)
@@ -89,6 +114,26 @@ enum LeadBridgeService {
         struct LeadResponse: Decodable { let public_id: String }
         let decoded = try JSONDecoder().decode(LeadResponse.self, from: data)
         return decoded.public_id
+    }
+
+    /// Records a phone-tap engagement so a call meters toward the business's free
+    /// allowance, same as a text or an email lead. Fire-and-forget — never blocks
+    /// (or delays) handing off to the dialer.
+    static func recordCall(placeId: String, businessName: String?, website: String?,
+                           city: String?, contractorEmail: String, contractorPhone: String? = nil) {
+        guard !placeId.isEmpty, let url = URL(string: "\(baseURL)/api/leads/engagement") else { return }
+        var req = URLRequest(url: url)
+        req.httpMethod = "POST"
+        req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        var payload: [String: String] = ["place_id": placeId, "contractor_email": contractorEmail]
+        if let businessName, !businessName.isEmpty { payload["business_name"] = businessName }
+        if let website, !website.isEmpty { payload["website"] = website }
+        if let city, !city.isEmpty { payload["city"] = city }
+        // Same claim anchor as the lead path: a call is often the only touch, so
+        // record the number here too or an email-less business could never be claimed.
+        if let contractorPhone, !contractorPhone.isEmpty { payload["contractor_phone"] = contractorPhone }
+        req.httpBody = try? JSONSerialization.data(withJSONObject: payload)
+        URLSession.shared.dataTask(with: req).resume()
     }
 
     // MARK: - Chat

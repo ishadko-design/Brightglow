@@ -54,6 +54,12 @@ const SERVICE_MINIMUMS: Record<string, number> = {
   doors: 150,
   landscaping: 100,
   countertops: 150,
+  // Truck-roll trades added 2026-07-22. Appliance and pest both sell a minimum
+  // visit the market actually posts (a diagnostic call, an initial treatment);
+  // remediation sits higher because the crew arrives with equipment.
+  appliance: 90,
+  remediation: 250,
+  pest: 125,
   // Auto: the customer drives to the shop, so there's no truck roll to cover —
   // minimums are a shop-supplies/bay-time floor and sit well below the trades'.
   // Tires and detailing genuinely sell $20–30 tickets (a flat repair, a wash),
@@ -182,7 +188,7 @@ export interface ScopeScale {
   materials: number;
   labor: number;
   /** Canonical label surfaced to the user, e.g. "glass only". */
-  scope: "glass only" | "full-frame replacement";
+  scope: "glass only" | "full-frame replacement" | "new install" | "full-size vehicle" | "SUV/truck" | "compact car";
 }
 
 /** Which replacement scope the words assert, as multipliers off the item's
@@ -206,19 +212,80 @@ export function windowScopeScale(itemId: string, description: string): ScopeScal
   return null;
 }
 
+/** Recessed lighting is priced as a RETROFIT — a can into an existing ceiling
+ *  with power nearby — because that is what most requests mean and what the
+ *  consumer aggregators publish ($125-330/light). A from-scratch install runs
+ *  ~2.5x that (Homewyse $380-529) for the new circuit, wire fishing, and
+ *  cutting and patching the ceiling. The engine cannot tell them apart from
+ *  "install recessed lighting" alone, so the clarify chat asks and writes the
+ *  answer into the description; this reads it. Absent signal → retrofit, the
+ *  common case. New-install cost is mostly labor, hence the split factors.
+ *  NB: the signals deliberately avoid "new circuit" — that phrase is a keyword
+ *  of the dedicated-circuit job and would steal the routing. The clarify chat
+ *  is told to write "no existing light there" instead. */
+export function recessedInstallScale(itemId: string, description: string): ScopeScale | null {
+  if (itemId !== "recessed-light-install") return null;
+  const t = ` ${description.toLowerCase()} `;
+  const newInstall =
+    /\b(no light there|no existing (light|fixture)|no existing|from scratch|brand[- ]new spot|add lights|adding lights|never had a light|no power there)\b/;
+  if (newInstall.test(t)) return { materials: 1.5, labor: 2.6, scope: "new install" };
+  return null;
+}
+
+/** Auto jobs whose cost scales with the VEHICLE'S SIZE — wrap film and detail
+ *  hours and respray area all grow with the body. A bumper, a windshield or an
+ *  alternator does not, so those are deliberately excluded: an F-250's
+ *  alternator is the same part as a Miata's. */
+const VEHICLE_SIZE_SENSITIVE = new Set([
+  "vehicle-wrap-full",
+  "vehicle-wrap-partial",
+  "vehicle-wrap-removal",
+  "full-detail",
+  "interior-detail",
+  "exterior-detail-wax",
+  "ceramic-coating",
+  "paint-correction",
+  "full-respray",
+  "panel-respray",
+]);
+
+/** Coarse vehicle-size multiplier. An F-250 and a Miata used to price the same
+ *  wrap; this reads the size the clarify chat pins down ("SUV", "full-size
+ *  truck") and scales the size-sensitive auto items. Deliberately COARSE —
+ *  four tiers, not per-model — because the app has no vehicle database, and a
+ *  tier captures most of the spread honestly where a made-up exact figure
+ *  would not. Both sides scale: more body is more film AND more hours. Default
+ *  (no size stated) is 1.0, the mid-size the catalog bands already assume. */
+export function vehicleSizeScale(itemId: string, description: string): ScopeScale | null {
+  if (!VEHICLE_SIZE_SENSITIVE.has(itemId)) return null;
+  const t = ` ${description.toLowerCase()} `;
+  // Order matters: check the big tier before the plain "truck"/"suv" tier.
+  if (/\b(full[- ]size|full size|dually|lifted|3500|2500|f-?250|f-?350|sprinter|box truck|cargo van|suburban|expedition|tahoe)\b/.test(t)) {
+    return { materials: 1.55, labor: 1.55, scope: "full-size vehicle" };
+  }
+  if (/\b(suv|truck|pickup|van|minivan|jeep|crossover|4runner|tacoma|silverado|f-?150|ram)\b/.test(t)) {
+    return { materials: 1.3, labor: 1.3, scope: "SUV/truck" };
+  }
+  if (/\b(compact|subcompact|sedan|coupe|hatchback|small car|two[- ]door|2[- ]door|miata|civic|corolla|smart car)\b/.test(t)) {
+    return { materials: 0.85, labor: 0.85, scope: "compact car" };
+  }
+  return null;
+}
+
 /** Fold a stated size and a stated scope into the single SizeScale the item
  *  computation consumes — both are plain multipliers on materials and labor,
  *  so they compose. Null when neither was stated (the catalog band stands). */
 export function combineSizeScope(
   itemId: string,
   size: SizeScale | null,
-  scope: ScopeScale | null,
+  ...scopes: (ScopeScale | null)[]
 ): SizeScale | null {
-  if (!size && !scope) return null;
+  const present = scopes.filter((s): s is ScopeScale => s != null);
+  if (!size && present.length === 0) return null;
   return {
     itemId,
-    materials: (size?.materials ?? 1) * (scope?.materials ?? 1),
-    labor: (size?.labor ?? 1) * (scope?.labor ?? 1),
+    materials: (size?.materials ?? 1) * present.reduce((m, s) => m * s.materials, 1),
+    labor: (size?.labor ?? 1) * present.reduce((l, s) => l * s.labor, 1),
   };
 }
 
@@ -244,6 +311,28 @@ export function qualityTier(description: string): { factor: number; tier: "premi
   return { factor: 1, tier: null };
 }
 
+/** After-hours / emergency premium. A burst pipe at 2am or a lockout is billed
+ *  1.5-2x the day rate across the trades — it is the single biggest lever on
+ *  the price of the jobs that carry it, and was invisible before (2026-07-23).
+ *
+ *  Applies to the whole range, not just labor: an emergency parts run and the
+ *  after-hours supply house both cost more, and the multiplier is how the trade
+ *  actually quotes it. Deliberately conservative at 1.6x typical — the true
+ *  spread is wide and situational, and the label tells the user it is an
+ *  after-hours figure so a daytime call doesn't read as us being high. */
+export function emergencyFactor(description: string): { factor: number; emergency: boolean } {
+  const t = ` ${description.toLowerCase()} `;
+  const signals = [
+    "emergency", "urgent", "asap", "right now", "middle of the night",
+    "after hours", "after-hours", "2am", "3am", "midnight", "weekend",
+    "same day", "same-day", "immediately", "gushing", "spraying everywhere",
+    "can't get in", "locked out", "flooded",
+  ];
+  return signals.some((w) => t.includes(w))
+    ? { factor: 1.6, emergency: true }
+    : { factor: 1, emergency: false };
+}
+
 function computeItem(
   entry: CostCatalogEntry,
   cbsa: string | null,
@@ -263,6 +352,10 @@ function computeItem(
   // quantity downstream, so rounding $1.19/sq ft to $1 is a 16% error
   // across a lawn. Display rounding is the client's job.
   const cents = (n: number) => Math.round(n * 100) / 100;
+  // Setup takes the local wage and cost level like everything else, but NOT the
+  // size scale — a bigger unit doesn't lengthen the mobilization — and not the
+  // grade factor, since demo and disposal cost the same whatever goes back in.
+  const setup = entry.setup;
   return {
     id: entry.itemId,
     description: entry.description,
@@ -271,6 +364,13 @@ function computeItem(
     typical: cents(entry.laborHours.typical * hours * rate(wage.median) + entry.materials.typical * matFactor),
     high: cents(entry.laborHours.high * hours * rate(wage.p75) + entry.materials.high * matFactor),
     regionallyAdjusted: regional,
+    ...(setup
+      ? {
+        setupLow: cents(setup.hours.low * rate(wage.p25) + setup.materials.low * areaCostFactor(cbsa, state)),
+        setupTypical: cents(setup.hours.typical * rate(wage.median) + setup.materials.typical * areaCostFactor(cbsa, state)),
+        setupHigh: cents(setup.hours.high * rate(wage.p75) + setup.materials.high * areaCostFactor(cbsa, state)),
+      }
+      : {}),
   };
 }
 
@@ -295,7 +395,23 @@ export function computeInHouseItems(
 
 /** Floor a composed job total at the trade's service-call minimum. Only for
  *  in-house ranges — EPCI's bands already embed minimum-charge reality. */
-export function applyServiceMinimum<T extends EPCIComputedRange>(range: T, trade: string): T {
+/** Items that are a POSTED-PRICE SERVICE rather than a job the shop takes on,
+ *  so the trade's service minimum does not apply to them.
+ *
+ *  A minimum exists because a shop will not occupy a bay, or roll a truck, for
+ *  less than some floor. But a smog check IS the product — stations advertise
+ *  $50-80 in California and compete on it — so flooring it at the auto-repair
+ *  minimum of $90 priced it 64% above the published band (caught by
+ *  accuracy.test.ts, 2026-07-23). Add an item here only when the market
+ *  genuinely posts a price below the trade's floor. */
+const MINIMUM_EXEMPT = new Set(["smog-check"]);
+
+export function applyServiceMinimum<T extends EPCIComputedRange>(
+  range: T,
+  trade: string,
+  itemId?: string,
+): T {
+  if (itemId && MINIMUM_EXEMPT.has(itemId)) return range;
   const minimum = SERVICE_MINIMUMS[trade];
   if (!minimum) return range;
   const low = Math.max(range.all_in_low, minimum);

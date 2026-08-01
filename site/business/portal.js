@@ -281,6 +281,7 @@ async function enterDashboard() {
   }
 
   show($("bootView"), false);
+  show($("signOutBtn"), true);   // signed in — the topbar is the only way out
   // Chats is the landing tab. A `?lead=` deep link has already opened the thread
   // above, and the thread lives inside this view — so this lands on it either way.
   showView("chats");
@@ -969,8 +970,10 @@ async function deletePage() {
   btn.disabled = false; btn.textContent = "Delete profile";
   if (error) { alert("Delete failed: " + (error.message || "unknown error")); return; }
   dirty = false;
+  showView("dash");               // leave the editor immediately — never strand the
+                                  // owner on the just-deleted profile if the re-seed throws
   await selectBusiness(current);   // re-seed from the lead, as the app does
-  showView("dash");
+
 }
 
 function wireStaticHandlers() {

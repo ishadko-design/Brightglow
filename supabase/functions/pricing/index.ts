@@ -40,7 +40,6 @@ import {
   applyServiceMinimum,
   combineSizeScope,
   computeInHouseItems,
-  laborOnlyEstimate,
   qualityTier,
   sizeScale,
   windowScopeScale,
@@ -220,7 +219,7 @@ Deno.serve(async (req) => {
   // filter first, then the model, then this word list as a last resort.
   const keywordVehicle = vehicle ?? detectVehicle(description);
   const classifyText = keywordVehicle === "moto" ? stripVehicleWords(description) : description;
-  let entry = classifyJobType(category, classifyText);
+  let entry = classifyJobType(category, classifyText, [], null, keywordVehicle);
 
   // LLM classification for every real typed description — primary, not just
   // a fallback for keyword misses. Keywords alone are confidently wrong on
@@ -242,8 +241,17 @@ Deno.serve(async (req) => {
     if (llm.jobType) {
       const generalEntries = Object.values(CATEGORY_GENERAL)
         .filter((e): e is NonNullable<typeof e> => e !== null);
-      entry = [...JOB_TYPE_TAXONOMY, ...generalEntries]
-        .find((e) => e.job_type === llm.jobType) ?? entry;
+      const picked = [...JOB_TYPE_TAXONOMY, ...generalEntries]
+        .find((e) => e.job_type === llm.jobType);
+      // notIfContains is a hard veto on the entry, not a keyword-matcher
+      // tiebreak — the model picks "install solar" for "solar panel repair"
+      // just as readily as the keywords did, and that entry prices a whole
+      // 20-panel array. Fall back to the keyword result (usually the
+      // category-general bucket, which then declines).
+      const vetoed = picked?.notIfContains?.some((w) =>
+        trimmedDesc.toLowerCase().includes(w)
+      );
+      entry = (picked && !vetoed ? picked : null) ?? entry;
     }
     llmVehicle = llm.vehicle;
     llmVertical = llm.vertical;
@@ -288,6 +296,20 @@ Deno.serve(async (req) => {
       const result: InsufficientDataResult = { error: "Insufficient data", fallback: "Get 3 bids" };
       return json({ range: result, display: `${result.error}. ${result.fallback}.` });
     }
+    if (r.kind === "labor") {
+      console.log("pricing: labor-only", JSON.stringify({ category, description, trade: r.entry.trade, typical: r.typical }));
+      return json({
+        range: {
+          all_in_low: r.low,
+          all_in_high: r.high,
+          all_in_typical: r.typical,
+          confidence: "low",
+          label: r.label,
+          labor_only: true,
+          data_points: 0,
+        },
+      }, 200, "inhouse");
+    }
     return json({
       range: {
         all_in_low: r.low,
@@ -312,24 +334,9 @@ Deno.serve(async (req) => {
   // send these to quotes. A bare category browse (no description) still gets
   // its general figure, which is a fair "typical visit for this trade".
   if (isGeneral && trimmedDesc.length >= 3) {
-    // PILOT (2026-07-16): rather than nothing, show the half we can compute
-    // rigorously — local billed labor — explicitly labelled so it's never
-    // mistaken for an all-in price. Parts/materials are excluded, not guessed.
-    const labor = EPCI_ENABLED ? null : laborOnlyEstimate(entry.trade, zip);
-    if (labor) {
-      console.log("pricing: labor-only", JSON.stringify({ category, description, trade: entry.trade, typical: labor.typical }));
-      return json({
-        range: {
-          all_in_low: labor.low,
-          all_in_high: labor.high,
-          all_in_typical: labor.typical,
-          confidence: "low",
-          label: `Typical labor only — ~${labor.hoursLow}–${labor.hoursHigh} hrs at ~$${Math.round(labor.hourlyTypical)}/hr locally. Parts extra.`,
-          labor_only: true,
-          data_points: 0,
-        },
-      }, 200, "inhouse");
-    }
+    // The labor-only pilot that used to live here moved into estimatePipeline,
+    // where it is gated to Auto & moto. EPCI is a home-cost dataset, so an
+    // unmodelled job on this branch has no labor fallback at all.
     console.log("pricing: general-fallback suppressed", JSON.stringify({ category, description, job_type: entry.job_type }));
     const result: InsufficientDataResult = { error: "Insufficient data", fallback: "Get 3 bids" };
     return json({ range: result, display: `${result.error}. ${result.fallback}.` });

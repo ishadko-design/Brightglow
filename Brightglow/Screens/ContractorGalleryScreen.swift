@@ -29,6 +29,12 @@ private struct SheetScrollKey: PreferenceKey {
 struct ContractorGalleryScreen: View {
     var category: String = ""
     var searchQuery: String = ""
+    /// The user's actual request words, resolved by the list (which knows to strip
+    /// a synthetic auto grid-card query). Passed straight to the quote screen so it
+    /// pre-fills the description — `searchQuery` here is the effective/auto query
+    /// used for pagination, which for an auto category is synthetic and must not
+    /// pre-fill the quote text. Empty falls back to deriving from `searchQuery`.
+    var requestSummary: String = ""
     var aiResult: AIResult? = nil
     /// When set (manual ZIP/city or an already-resolved fix), used instead of GPS.
     var presetCoordinate: CLLocationCoordinate2D? = nil
@@ -59,9 +65,30 @@ struct ContractorGalleryScreen: View {
     /// the list so review ordering here matches the list's — the review quoted on
     /// the list card must lead the reviews sheet, not a different one.
     var photoMatchTerms: String = ""
+    /// Identity of the review the list card quoted, when the user arrived by
+    /// tapping that quote. Pinned to the top of the reviews sheet so the comment
+    /// they tapped is the first one they see — the card shows a single sentence
+    /// lifted from mid-review, so without this the source review reads as a
+    /// different comment entirely and the quote appears to have vanished.
+    var pinnedReviewID: String? = nil
     /// The landing clarifying Q&A, carried through to the quote-request screen so
     /// the message a business receives includes the AI-clarified details.
     var clarifyTranscript: ClarifyTranscript = .empty
+    /// "Motorcycle"/"Car" for an auto search, empty for home — passed to the
+    /// quote so the business is told which vehicle.
+    var vehicleNote: String = ""
+
+    /// True when a business owner is previewing their OWN page (from the Settings
+    /// editor's "View profile"). It's the same consumer gallery, minus the parts
+    /// that only make sense for a customer: no Call / Request-quote footer, and no
+    /// view-count recording (a self-view mustn't inflate the business's stats).
+    /// The single previewed business is also never dropped for lacking Google work
+    /// photos — their uploaded/website photos stand in.
+    var previewMode: Bool = false
+    /// The owner's saved profile, passed only from the "View profile" preview so
+    /// the logo, description, credentials, and uploaded photos render from the
+    /// exact current editor state instead of a (possibly-stale) DB read.
+    var previewProfile: BusinessService.BusinessProfile? = nil
 
     @Environment(\.dismiss) var dismiss
     @Environment(\.openURL) private var openURL
@@ -84,6 +111,13 @@ struct ContractorGalleryScreen: View {
     @State private var nextPageToken: String? = nil
     @State private var pagingCoord: CLLocationCoordinate2D? = nil
     @State private var isLoadingMore = false
+    /// Businesses whose OWN saved profile (Settings-editor) has already been
+    /// fetched this session, so a re-surface doesn't re-query `business_profiles`.
+    @State private var ownerFetched: Set<String> = []
+    /// The business's own saved profile, by id — supplies the uploaded photos plus
+    /// the self-authored logo, description, and licensed/insured credentials the
+    /// gallery shows above the reviews. Absent until fetched (or if none exists).
+    @State private var ownerInfoByID: [String: BusinessService.BusinessProfile] = [:]
     /// Businesses whose own-website photos have already been fetched this session,
     /// so a re-surface doesn't call the enrichment function again.
     @State private var websiteFetched: Set<String> = []
@@ -102,11 +136,6 @@ struct ContractorGalleryScreen: View {
         Task { await BusinessService.recordView(placeId: placeId) }
     }
 
-    private var headerTitle: String {
-        let q = searchQuery.trimmingCharacters(in: .whitespacesAndNewlines)
-        return q.isEmpty ? category : q
-    }
-
     /// What the user actually typed, if anything. Auto categories arrive with a
     /// synthetic Places query ("auto repair and maintenance shop") in
     /// `searchQuery` — that's routing input, not the user's words, so it never
@@ -118,6 +147,15 @@ struct ContractorGalleryScreen: View {
                 || $0.motoSearchQuery.caseInsensitiveCompare(q) == .orderedSame
         }) { return "" }
         return q
+    }
+
+    /// Request text to pre-fill the quote screen: the list's already-resolved
+    /// `requestSummary` (the user's real words, synthetic query stripped) when it
+    /// gave us one, else derived from `searchQuery`. The list feeds the gallery the
+    /// effective/auto query for pagination, so re-deriving here alone would drop the
+    /// user's words on an auto request.
+    private var quoteRequestText: String {
+        requestSummary.isEmpty ? typedQuery : requestSummary
     }
 
     /// Term source for photo ordering — the typed query, else the category, so a
@@ -178,22 +216,25 @@ struct ContractorGalleryScreen: View {
                     }
 
                     // ── Pinned Call / Request quote — equal sizes ─────────────
-                    VStack(spacing: 0) {
-                        Spacer(minLength: 0)
-                        ctaFooter(width: proxy.size.width, bottomInset: bottomInset)
+                    // Hidden in the owner's own-page preview: those actions target
+                    // the customer, not the business looking at its listing.
+                    if !previewMode {
+                        VStack(spacing: 0) {
+                            Spacer(minLength: 0)
+                            ctaFooter(width: proxy.size.width, bottomInset: bottomInset)
+                        }
+                        .zIndex(50)
+                        // The bar is always pinned at the bottom at a fixed width, so
+                        // it must never inherit the skip/quote spring or the sheet's
+                        // drag animation — otherwise it slides around horizontally.
+                        .transaction { $0.animation = nil }
                     }
-                    .zIndex(50)
-                    // The bar is always pinned at the bottom at a fixed width, so
-                    // it must never inherit the skip/quote spring or the sheet's
-                    // drag animation — otherwise it slides around horizontally.
-                    .transaction { $0.animation = nil }
                 }
 
                 // ── Header — matches the main screen's top bar ────────────────
-                GalleryHeader(
-                    title: topContractor?.name ?? headerTitle,
-                    onBack: { dismiss() }
-                )
+                // Just the back button: the business name is at the top of the sheet
+                // and the category title here only repeated what the user just tapped.
+                GalleryHeader(onBack: { dismiss() })
                 .frame(maxHeight: .infinity, alignment: .top)
                 .zIndex(100)
             }
@@ -217,26 +258,35 @@ struct ContractorGalleryScreen: View {
         .onChange(of: topContractor?.id, initial: true) { _, id in
             if let id {
                 lastViewedID?.wrappedValue = id
-                recordView(placeId: id)
+                // A business previewing its own page must not count as a view.
+                if !previewMode { recordView(placeId: id) }
             }
         }
         .navigationDestination(isPresented: $showQuote) {
-            QuoteRequestScreen(contractor: selectedContractor, requestSummary: typedQuery, initialImages: attachedImages, clarifyTranscript: clarifyTranscript)
+            QuoteRequestScreen(contractor: selectedContractor, requestSummary: quoteRequestText, initialImages: attachedImages, clarifyTranscript: clarifyTranscript, vehicleNote: vehicleNote)
         }
-        .sheet(isPresented: $showCallReminder) {
-            if let contractor = topContractor {
+        // Custom bottom overlay (not a system `.sheet`) so the card is a flush,
+        // full-width bottom sheet rather than iOS 26's inset floating card.
+        .overlay {
+            if showCallReminder, let contractor = topContractor {
                 CallReminderSheet(contractor: contractor) {
                     showCallReminder = false
                     call(contractor)
+                } onDismiss: {
+                    showCallReminder = false
                 }
             }
         }
+        .animation(.interpolatingSpring(stiffness: 320, damping: 32), value: showCallReminder)
     }
 
     // ── Sheet content — reviews only (handle is supplied by BottomSheet) ───────
     private func sheetBody(for contractor: Contractor, bottomInset: CGFloat) -> some View {
         ScrollView(.vertical, showsIndicators: false) {
             VStack(alignment: .leading, spacing: 16) {
+                nameHeader(for: contractor)
+                aboutSection(for: contractor)
+                servicesSection(for: contractor)
                 reviewsHeader(for: contractor)
                 if contractor.reviews.isEmpty {
                     Text("No reviews yet")
@@ -269,14 +319,178 @@ struct ContractorGalleryScreen: View {
         }
     }
 
+    /// The business's headline at the top of the sheet (Figma node 1270-3193):
+    /// its logo (when it has uploaded one), the name — moved here from the header —
+    /// and a single rating line. Always shown, so plain Google listings still get a
+    /// name + rating; the logo and the "• Licensed • Insured" suffix appear only
+    /// when the business filled them in.
+    private func nameHeader(for contractor: Contractor) -> some View {
+        let info = ownerInfoByID[contractor.id]
+        return HStack(alignment: .center, spacing: 12) {
+            if let logoPath = info?.logoPath, !logoPath.isEmpty,
+               let url = BusinessService.publicURL(logoPath) {
+                AsyncImage(url: url) { phase in
+                    if case .success(let img) = phase {
+                        img.resizable().scaledToFill()
+                    } else {
+                        Color.white.opacity(0.06)
+                    }
+                }
+                .frame(width: 44, height: 44)
+                .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+            }
+            VStack(alignment: .leading, spacing: 2) {
+                Text(contractor.name)
+                    .font(.h2)
+                    .foregroundStyle(.white)
+                    .lineLimit(2)
+                    .fixedSize(horizontal: false, vertical: true)
+                ratingLine(for: contractor, info: info)
+            }
+            Spacer(minLength: 0)
+        }
+    }
+
+    /// "⭐ 4.7 • 31 reviews • Licensed • Insured" — the rating and review count,
+    /// with the business's self-declared trust signals appended inline (fixed order,
+    /// so they don't reshuffle between businesses). The star shows only when there
+    /// are reviews; the whole line is omitted when there's nothing to say.
+    @ViewBuilder
+    private func ratingLine(for contractor: Contractor, info: BusinessService.BusinessProfile?) -> some View {
+        let hasReviews = contractor.reviewCount > 0
+        let text = ratingLineText(for: contractor, info: info)
+        if !text.isEmpty {
+            HStack(spacing: 8) {
+                if hasReviews {
+                    Image(systemName: "star.fill")
+                        .resizable()
+                        .frame(width: 13, height: 12)
+                        .foregroundStyle(AppColors.starFilled)
+                }
+                Text(text)
+                    .font(.bodySmall)
+                    .foregroundStyle(.white.opacity(0.6))
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+    }
+
+    /// Builds the "4.7 • 31 reviews • Licensed • Insured" string — the rating/count
+    /// (only when there are reviews) followed by the business's declared credentials.
+    private func ratingLineText(for contractor: Contractor, info: BusinessService.BusinessProfile?) -> String {
+        var parts: [String] = []
+        if contractor.reviewCount > 0 {
+            parts.append("\(String(format: "%.1f", contractor.rating)) • \(contractor.reviewCount) reviews")
+        }
+        if let info {
+            if info.licensed { parts.append("Licensed") }
+            if info.insured { parts.append("Insured") }
+        }
+        return parts.joined(separator: " • ")
+    }
+
+    /// The business's own "about" blurb, shown below the name when it wrote one.
+    /// Renders nothing for a plain Google listing.
+    @ViewBuilder
+    private func aboutSection(for contractor: Contractor) -> some View {
+        if let info = ownerInfoByID[contractor.id] {
+            let about = (info.about ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+            if !about.isEmpty {
+                Text(about)
+                    .font(.bodySmall)
+                    .foregroundStyle(.white.opacity(0.6))
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+    }
+
+    /// The business's own "Typical services" with indicative price ranges, shown
+    /// below the info block when the business listed any (unnamed rows are skipped —
+    /// they're the editor's empty placeholder). Nothing renders for a business with
+    /// no priced services, so plain Google listings are unaffected.
+    @ViewBuilder
+    private func servicesSection(for contractor: Contractor) -> some View {
+        if let info = ownerInfoByID[contractor.id] {
+            let services = info.services.filter {
+                !$0.name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            }
+            if !services.isEmpty {
+                VStack(alignment: .leading, spacing: 12) {
+                    Text("Common services")
+                        .font(.h3)
+                        .foregroundStyle(.white)
+                    VStack(alignment: .leading, spacing: 8) {
+                        ForEach(services) { serviceRow($0) }
+                    }
+                }
+            }
+        }
+    }
+
+    // A service line (Figma node 1270-3193): the name dimmed on the left, the price
+    // in full white on the right. No dividers — the spacing carries the separation.
+    private func serviceRow(_ service: BusinessService.Service) -> some View {
+        HStack(alignment: .firstTextBaseline, spacing: 12) {
+            Text(service.name)
+                .font(.bodySmall)
+                .foregroundStyle(.white.opacity(0.6))
+                .fixedSize(horizontal: false, vertical: true)
+            Spacer(minLength: 12)
+            if let price = priceText(for: service) {
+                Text(price)
+                    .font(.bodySmall)
+                    .foregroundStyle(.white)
+                    .layoutPriority(1)
+            }
+        }
+    }
+
+    /// "$150 – $400", "From $150", "Up to $400", or nil when no price was set.
+    /// A trailing unit ("/ hour") is appended only when the business set one.
+    private func priceText(for service: BusinessService.Service) -> String? {
+        func money(_ v: Double) -> String {
+            "$" + (Self.priceFormatter.string(from: NSNumber(value: v)) ?? String(Int(v)))
+        }
+        // Per-hour pricing shows a compact "/h"; everything else (per-job, the
+        // default) shows no unit at all — a bare "$200 – $800".
+        let perHour = service.unit.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() == "hour"
+        let suffix = perHour ? "/h" : ""
+        switch (service.priceMin, service.priceMax) {
+        case let (lo?, hi?) where hi > lo: return "\(money(lo)) – \(money(hi))\(suffix)"
+        case let (lo?, _?):                return "\(money(lo))\(suffix)"   // equal min/max
+        case let (lo?, nil):               return "From \(money(lo))\(suffix)"
+        case let (nil, hi?):               return "Up to \(money(hi))\(suffix)"
+        default:                           return nil
+        }
+    }
+
+    private static let priceFormatter: NumberFormatter = {
+        let f = NumberFormatter()
+        f.numberStyle = .decimal
+        f.maximumFractionDigits = 0
+        return f
+    }()
+
     /// Reviews ordered so the one describing the searched job leads — e.g.
-    /// searching "vanity cabinet" surfaces reviews about that first. Uses the
-    /// exact same `PhotoFilter` subject-term ordering the list card uses, so the
-    /// review quoted on the card is the one pinned to the top here. Falls back to
+    /// searching "vanity cabinet" surfaces reviews about that first. Falls back to
     /// original order when the query has no subject term (a plain category browse).
+    ///
+    /// `pinnedReviewID` then overrides that ordering. Both screens used to derive
+    /// their own query string and rely on the two agreeing; they don't in every
+    /// case (this screen falls back to `searchQuery`/`category`, the list card
+    /// deliberately does not), so the quoted review could sort first on the card
+    /// and mid-list here. Carrying the identity makes the match exact instead of
+    /// coincidental. `firstIndex` is scoped to this contractor's own reviews, so a
+    /// pin from the list can't disturb any other business in the stack.
     private func orderedReviews(for contractor: Contractor) -> [Review] {
-        PhotoFilter.orderReviewsByJob(contractor.reviews, query: reviewMatchQuery,
-                                      text: { $0.text })
+        let ordered = PhotoFilter.orderReviewsByJob(contractor.reviews, query: reviewMatchQuery,
+                                                    text: { $0.text })
+        guard let pinnedReviewID,
+              let idx = ordered.firstIndex(where: { $0.id == pinnedReviewID })
+        else { return ordered }
+        var rest = ordered
+        let lead = rest.remove(at: idx)
+        return [lead] + rest
     }
 
     /// The query that decides review relevance — the chat's `photo_terms` when
@@ -289,29 +503,14 @@ struct ContractorGalleryScreen: View {
         return q.isEmpty ? category : q
     }
 
-    // "Reviews" section title (enlarged) with the rating summary on the right —
-    // the summary opens the contractor's Google reviews.
+    // "Reviews" section title. The rating summary that used to sit on the right is
+    // gone — it now lives in the name header at the top of the sheet, so repeating
+    // it here was redundant. The link to Google's full review set is at the END of
+    // the sheet (see `allReviewsLink`).
     private func reviewsHeader(for contractor: Contractor) -> some View {
-        HStack(alignment: .center, spacing: 12) {
-            Text("Reviews")
-                .font(.h2)
-                .foregroundStyle(.white)
-            Spacer(minLength: 0)
-            if contractor.reviewCount > 0 {
-                // A single star icon + the aggregate rating and count — the full
-                // five-star row was redundant here; the link out to Google's full
-                // review set lives at the END of the sheet (see `allReviewsLink`).
-                HStack(spacing: 6) {
-                    Image(systemName: "star.fill")
-                        .resizable()
-                        .frame(width: 14, height: 14)
-                        .foregroundStyle(AppColors.starFilled)
-                    Text("\(contractor.rating, specifier: "%.1f") • \(contractor.reviewCount) reviews")
-                        .font(.bodySmall)
-                        .foregroundStyle(.white.opacity(0.5))
-                }
-            }
-        }
+        Text("Reviews")
+            .font(.h3)
+            .foregroundStyle(.white)
     }
 
     // "All reviews" — the link to the contractor's full Google review set, shown
@@ -347,8 +546,17 @@ struct ContractorGalleryScreen: View {
     private func ctaFooter(width: CGFloat, bottomInset: CGFloat) -> some View {
         // Exact equal widths from the known screen width — no reliance on the
         // parent's width proposal (which has overflowed past the screen edges).
-        let buttonWidth = max(0, (width - 32 - 8) / 2)
+        let pairWidth = max(0, (width - 32 - 8) / 2)
         let hasPhone = topContractor?.phone != nil
+        // Offer "Request quote" whenever we can DELIVER one — a phone (it sends as
+        // a P2P text now) OR an email. This mirrors the list row, which shows the
+        // same CTA for phone-or-email; gating it on email alone hid the button for
+        // phone-only businesses (e.g. plain Google listings with no email on file),
+        // leaving Call as the only action beside it. With neither channel, Call
+        // takes the full width.
+        let hasEmail = topContractor?.contactEmail != nil
+        let canQuote = hasPhone || hasEmail
+        let callWidth = canQuote ? pairWidth : max(0, width - 32)
         return HStack(spacing: 8) {
             // Call replaces the old "Next": tapping shows a reminder to mention
             // the app, then hands off to the dialer. Dimmed when Places returned
@@ -357,7 +565,7 @@ struct ContractorGalleryScreen: View {
                 Text("Call")
                     .font(.h3)
                     .foregroundStyle(.white)
-                    .frame(width: buttonWidth, height: 48)
+                    .frame(width: callWidth, height: 48)
                     .background {
                         ZStack {
                             Rectangle().fill(.ultraThinMaterial)
@@ -370,28 +578,36 @@ struct ContractorGalleryScreen: View {
             .buttonStyle(.plain)
             .disabled(!hasPhone)
 
-            Button(action: quoteTop) {
-                Text("Request quote")
-                    .font(.h3)
-                    .foregroundStyle(.white)
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.8)
-                    .frame(width: buttonWidth, height: 48)
-                    .background(AppColors.btnPrimary, in: RoundedRectangle(cornerRadius: 32, style: .continuous))
+            if canQuote {
+                Button(action: quoteTop) {
+                    Text("Request quote")
+                        .font(.h3)
+                        .foregroundStyle(.white)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.8)
+                        .frame(width: pairWidth, height: 48)
+                        .background(AppColors.btnPrimary, in: RoundedRectangle(cornerRadius: 32, style: .continuous))
+                }
+                .buttonStyle(.plain)
             }
-            .buttonStyle(.plain)
         }
-        .padding(.top, 16)
+        // Taller top padding so the fade region extends well above the buttons —
+        // the buttons stay bottom-anchored (bottom padding is unchanged), this just
+        // grows the gradient upward into a long, soft fade instead of a hard edge.
+        .padding(.top, 88)
         .padding(.bottom, 16 + bottomInset)
         .frame(width: width)
-        // Opaque floor (matches the sheet color) that fades in at the top, so the
-        // reviews behind never show through around the buttons.
+        // Opaque floor (matches the sheet color) that fades in gradually from the
+        // top, so the reviews behind melt out softly rather than cutting off right
+        // at the buttons. Solid well before the buttons; the long transparent-to-
+        // opaque ramp above them is what reads as "soft".
         .background(
             LinearGradient(
                 stops: [
-                    .init(color: AppColors.bg.opacity(0), location: 0.0),
-                    .init(color: AppColors.bg,            location: 0.45),
-                    .init(color: AppColors.bg,            location: 1.0)
+                    .init(color: AppColors.bg.opacity(0),    location: 0.0),
+                    .init(color: AppColors.bg.opacity(0.6),  location: 0.32),
+                    .init(color: AppColors.bg,               location: 0.58),
+                    .init(color: AppColors.bg,               location: 1.0)
                 ],
                 startPoint: .top, endPoint: .bottom
             )
@@ -454,6 +670,12 @@ struct ContractorGalleryScreen: View {
     /// OS shows its own call confirmation — we never place the call ourselves).
     private func call(_ contractor: Contractor) {
         guard let phone = contractor.phone else { return }
+        // Meter the call toward the business's free allowance (fire-and-forget,
+        // never delays the dialer).
+        LeadBridgeService.recordCall(placeId: contractor.id, businessName: contractor.name,
+                                     website: contractor.website, city: contractor.city,
+                                     contractorEmail: contractor.contactEmail ?? "hello@brightglow.co",
+                                     contractorPhone: contractor.phone)
         // Places returns a display-formatted number ("(415) 555-0132"); tel: URLs
         // only accept digits and a leading +.
         let dialable = phone.filter { $0.isNumber || $0 == "+" }
@@ -524,7 +746,7 @@ struct ContractorGalleryScreen: View {
             if let v = ScreeningStore.shared.get(contractor.id, allowVehicles: allowVehicles) {
                 let ordered = PhotoFilter.order(v.kept, query: orderQuery, capPremises: galleryPremisesCap)
                 screenedByID[contractor.id] = ordered
-                if ordered.isEmpty {
+                if ordered.isEmpty && !previewMode {
                     contractors.removeAll { $0.id == contractor.id }
                     if totalCount > 0 { totalCount -= 1 }
                 } else if let first = ordered.first, let u = URL(string: first) {
@@ -543,7 +765,7 @@ struct ContractorGalleryScreen: View {
                                            kept: v.kept, scanned: v.scanned, enriched: v.enriched)
                 let ordered = PhotoFilter.order(v.kept, query: orderQuery, capPremises: galleryPremisesCap)
                 screenedByID[contractor.id] = ordered
-                if ordered.isEmpty {
+                if ordered.isEmpty && !previewMode {
                     contractors.removeAll { $0.id == contractor.id }
                     if totalCount > 0 { totalCount -= 1 }
                 } else if let first = ordered.first, let u = URL(string: first) {
@@ -563,10 +785,11 @@ struct ContractorGalleryScreen: View {
             ScreeningStore.shared.save(contractor.id, allowVehicles: allowVehicles, kept: kept, scanned: scanned)
             VerdictService.upload(id: contractor.id, allowVehicles: allowVehicles, kept: kept, scanned: scanned)
             let ordered = PhotoFilter.order(kept, query: orderQuery, capPremises: galleryPremisesCap)
-            guard !ordered.isEmpty else {
+            guard !ordered.isEmpty || previewMode else {
                 // No usable work photos → drop the business entirely rather than
                 // showing an empty placeholder. Keep totalCount in step so the
-                // "x/y businesses" counter stays correct.
+                // "x/y businesses" counter stays correct. In preview the business
+                // stays — its uploaded/website photos merge in just below.
                 screenedByID[contractor.id] = []
                 contractors.removeAll { $0.id == contractor.id }
                 if totalCount > 0 { totalCount -= 1 }
@@ -584,14 +807,90 @@ struct ContractorGalleryScreen: View {
             // fresh here); the photo is already showing on the on-device ordering.
             enrichInBackground(contractor.id, kept: kept, scanned: scanned, allowVehicles: allowVehicles)
         }
-        // Surface a fuller set of work photos for the business now on top:
-        // deepen the Places pool, then lead with the business's own website photos.
+        // Surface work photos for the business now on top. If it has CURATED its
+        // photos in the app (reordered / removed Google/website shots), that list is
+        // authoritative — render it verbatim and skip all scraping/screening.
+        // Otherwise fall back to the auto pipeline: deepen the Places pool, add its
+        // own website photos, then lead with the photos it uploaded in the app.
         if let top = topContractor {
-            await deepenPhotos(for: top)
-            await mergeWebsitePhotos(for: top)
+            let info = await fetchOwnerInfo(for: top)
+            if let curated = info?.curatedPhotos {
+                applyCuratedPhotos(curated, to: top.id)
+            } else {
+                await deepenPhotos(for: top)
+                await mergeWebsitePhotos(for: top)
+                await loadOwnerProfile(for: top)
+            }
         }
         // Dropping no-photo businesses can thin the stack — top up if we can.
         loadMoreIfNeeded()
+    }
+
+    /// Fetch (once) and cache the business's own saved profile, returning it. The
+    /// info (logo / about / licensed / insured / curated photos) drives both the
+    /// sheet header and the photo pipeline. `ownerFetched` marks that the DB has
+    /// been tried, so a business without a profile isn't re-queried every re-surface.
+    @MainActor
+    private func fetchOwnerInfo(for contractor: Contractor) async -> BusinessService.BusinessProfile? {
+        let id = contractor.id
+        if ownerInfoByID[id] == nil, !ownerFetched.contains(id) {
+            ownerFetched.insert(id)
+            if let fetched = try? await BusinessService.profile(placeId: id) {
+                ownerInfoByID[id] = fetched
+            }
+        }
+        return ownerInfoByID[id]
+    }
+
+    /// Render a business's owner-curated photo list verbatim: resolve each entry to
+    /// a URL, in order, with no screening (the owner already chose and ordered
+    /// them). An empty list means the owner removed everything — respected as such,
+    /// falling through to the gallery's "No work photos" placeholder.
+    @MainActor
+    private func applyCuratedPhotos(_ curated: [BusinessService.CuratedPhoto], to id: String) {
+        guard contractors.contains(where: { $0.id == id }) else { return }
+        let urls = curated.compactMap { BusinessService.resolvedPhotoURL($0) }
+        screenedByID[id] = urls
+        if let first = urls.first, let u = URL(string: first) {
+            Task { await ImageCache.shared.prefetch(u) }
+        }
+    }
+
+    /// Lead the gallery with the business's OWN uploaded photos — the ones added
+    /// in the app's Settings editor (`business_profiles.photos`). Unlike Places and
+    /// website shots these are owner-curated, so they're trusted verbatim (no
+    /// on-device screening) and placed ahead of everything else. One fetch per
+    /// business per session; a business with none simply keeps the Places/website
+    /// photos. This is what makes uploaded photos visible to real customers, not
+    /// only in the owner's preview.
+    @MainActor
+    private func loadOwnerProfile(for contractor: Contractor) async {
+        let id = contractor.id
+        // Obtain the profile once — seeded from the preview, or fetched from the DB.
+        // `ownerFetched` marks that the DB has been tried, so a business without a
+        // profile isn't re-queried on every re-surface.
+        if ownerInfoByID[id] == nil, !ownerFetched.contains(id) {
+            ownerFetched.insert(id)
+            if let fetched = try? await BusinessService.profile(placeId: id) {
+                ownerInfoByID[id] = fetched   // logo / about / licensed / insured
+            }
+        }
+        guard let profile = ownerInfoByID[id],
+              contractors.contains(where: { $0.id == id }) else { return }
+        // (Re)apply the uploaded photos as the lead. This runs LAST in the tail, so
+        // it re-pins the owner's photos even if `deepenPhotos` / `mergeWebsitePhotos`
+        // just rewrote the strip.
+        let urls = profile.photos.compactMap { BusinessService.publicURL($0)?.absoluteString }
+        guard !urls.isEmpty else { return }
+        let existing = screenedByID[id] ?? []
+        let have = Set(urls)
+        let merged = urls + existing.filter { !have.contains($0) }
+        guard merged != existing else { return }
+        screenedByID[id] = merged
+        // Warm the first one so the swap to the owner's lead photo is instant.
+        if let first = urls.first, let u = URL(string: first) {
+            await ImageCache.shared.prefetch(u)
+        }
     }
 
     /// Merge the business's OWN website photos (free, zero-consent enrichment via
@@ -709,6 +1008,14 @@ struct ContractorGalleryScreen: View {
             // Continue the List view's search as the user swipes past its results.
             nextPageToken = initialPageToken
             pagingCoord = presetCoordinate
+            // Owner preview: seed the profile straight from the editor so the logo,
+            // description, credentials, and uploaded photos reflect the CURRENT
+            // (even just-edited) state without a DB read. Only the INFO is seeded —
+            // the photos are applied later by `loadOwnerProfile` (which reads this
+            // seed), so the Google pool still gets screened and merged behind them.
+            if let profile = previewProfile, let id = preloaded.first?.id {
+                ownerInfoByID[id] = profile
+            }
             return
         }
 
@@ -1065,7 +1372,6 @@ private struct PhotoZoomViewer: View {
 // ─────────────────────────────────────────────────────────────────────────────
 
 private struct GalleryHeader: View {
-    let title: String
     let onBack: () -> Void
 
     var body: some View {
@@ -1079,13 +1385,7 @@ private struct GalleryHeader: View {
             }
             .buttonStyle(.plain)
 
-            Text(title)
-                .font(.h2)
-                .foregroundStyle(.white)
-                .lineLimit(1)
-                .truncationMode(.tail)
-                // Absorbs the slack and truncates so a long name never overflows.
-                .frame(maxWidth: .infinity, alignment: .leading)
+            Spacer(minLength: 0)
         }
         // 4pt before the 44×44 back button; content keeps 16pt off the right edge.
         .padding(.leading, 4)
@@ -1097,54 +1397,8 @@ private struct GalleryHeader: View {
     }
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// MARK: - CallReminderSheet
-// Bottom sheet shown before dialing: a nudge to say the request came from
-// Brightglow, with a single primary Call action. The actual call is never placed
-// here — Call hands off to the system dialer, which shows its own confirmation
-// with the number pre-filled.
-// ─────────────────────────────────────────────────────────────────────────────
-
-private struct CallReminderSheet: View {
-    let contractor: Contractor
-    /// Fired by the Call button — the screen dismisses this sheet and dials.
-    let onCall: () -> Void
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            Text("Before you call")
-                .font(.h2)
-                .foregroundStyle(.white)
-
-            Text("When they pick up, mention you found them on Brightglow — so \(contractor.name) knows your request came from the app.")
-                .font(.bodySmall)
-                .foregroundStyle(.white.opacity(0.5))
-                .lineSpacing(4)
-                .fixedSize(horizontal: false, vertical: true)
-                .padding(.top, 12)
-
-            Button(action: onCall) {
-                Text("Call")
-                    .font(.h3)
-                    .foregroundStyle(.white)
-                    .frame(maxWidth: .infinity)
-                    .frame(height: 48)
-                    .background(AppColors.btnPrimary,
-                                in: RoundedRectangle(cornerRadius: 32, style: .continuous))
-            }
-            .buttonStyle(.plain)
-            .padding(.top, 24)
-
-            Spacer(minLength: 0)
-        }
-        .padding(.horizontal, 24)
-        .padding(.top, 24)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .presentationDetents([.height(236)])
-        .presentationDragIndicator(.visible)
-        .presentationBackground(AppColors.bg)
-    }
-}
+// CallReminderSheet moved to Components/CallReminderSheet.swift so the list rows
+// and the gallery footer present the identical pop-up.
 
 // ─────────────────────────────────────────────────────────────────────────────
 // MARK: - Small components
@@ -1188,7 +1442,7 @@ private struct ReviewRowGallery: View {
                 StarRow(rating: Double(review.rating))
                 Text(showingOriginal ? (review.originalText ?? review.text) : review.text)
                     .font(.bodySmall)
-                    .foregroundStyle(.white.opacity(0.5))
+                    .foregroundStyle(.white.opacity(0.6))
                     .lineSpacing(4)
                     .fixedSize(horizontal: false, vertical: true)
 
@@ -1202,7 +1456,7 @@ private struct ReviewRowGallery: View {
                              : "See original (\(review.originalLanguageName ?? "original"))")
                             .font(.bodySmall)
                             .underline()
-                            .foregroundStyle(.white.opacity(0.5))
+                            .foregroundStyle(.white.opacity(0.6))
                     }
                     .buttonStyle(.plain)
                 }

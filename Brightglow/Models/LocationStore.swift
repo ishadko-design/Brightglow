@@ -60,18 +60,30 @@ final class LocationStore: NSObject, ObservableObject {
             request.naturalLanguageQuery = query
             request.resultTypes = [.address, .pointOfInterest]
             if let item = try? await MKLocalSearch(request: request).start().mapItems.first {
-                coordinate = item.location.coordinate
-                label = item.addressRepresentations?.cityName ?? item.name ?? query
+                coordinate = Self.coordinate(of: item)
+                label = Self.cityName(of: item) ?? item.name ?? query
                 return
             }
 
-            // Fallback: ZIP / address string via a geocoding request.
-            if let geocode = MKGeocodingRequest(addressString: query),
-               let item = try? await geocode.mapItems.first {
-                coordinate = item.location.coordinate
-                label = item.addressRepresentations?.cityName ?? query
+            // Fallback: ZIP / address string via CLGeocoder (works iOS 11+).
+            if let placemark = try? await CLGeocoder().geocodeAddressString(query).first,
+               let loc = placemark.location {
+                coordinate = loc.coordinate
+                label = placemark.locality ?? query
             }
         }
+    }
+
+    // MARK: - MKMapItem accessors (iOS 26 renamed these; fall back for iOS 18–25)
+
+    private static func coordinate(of item: MKMapItem) -> CLLocationCoordinate2D {
+        if #available(iOS 26.0, *) { item.location.coordinate }
+        else { item.placemark.coordinate }
+    }
+
+    private static func cityName(of item: MKMapItem) -> String? {
+        if #available(iOS 26.0, *) { item.addressRepresentations?.cityName }
+        else { item.placemark.locality }
     }
 
     // MARK: - Permission + fix
@@ -99,10 +111,19 @@ final class LocationStore: NSObject, ObservableObject {
 
     private func reverseGeocode(_ coord: CLLocationCoordinate2D) async -> String? {
         let loc = CLLocation(latitude: coord.latitude, longitude: coord.longitude)
-        guard let request = MKReverseGeocodingRequest(location: loc),
-              let item = try? await request.mapItems.first else { return nil }
         // City name, falling back to "City, ST" (mirrors locality → admin area).
-        return item.addressRepresentations?.cityName ?? item.addressRepresentations?.cityWithContext
+        if #available(iOS 26.0, *) {
+            guard let request = MKReverseGeocodingRequest(location: loc),
+                  let item = try? await request.mapItems.first else { return nil }
+            return item.addressRepresentations?.cityName ?? item.addressRepresentations?.cityWithContext
+        } else {
+            guard let placemark = try? await CLGeocoder().reverseGeocodeLocation(loc).first else { return nil }
+            if let city = placemark.locality {
+                if let state = placemark.administrativeArea { return "\(city), \(state)" }
+                return city
+            }
+            return placemark.administrativeArea
+        }
     }
 
     private func resume(_ coord: CLLocationCoordinate2D?) {

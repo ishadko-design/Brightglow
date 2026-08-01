@@ -72,7 +72,7 @@ function leadEmailBlock({ publicId, city }) {
 // a valid physical postal address).
 function unsubscribeFooter(email) {
   const link = unsubscribeUrl(email);
-  const addr = process.env.BUSINESS_POSTAL_ADDRESS || "Brightglow LLC";
+  const addr = process.env.BUSINESS_POSTAL_ADDRESS || "Brightglow Technologies LLC";
   return `
   <hr style="border:none;border-top:1px solid #e6e6e6;margin:28px 0 14px">
   <p style="font-size:12px;color:#999;line-height:1.5;font-family:Arial,sans-serif">

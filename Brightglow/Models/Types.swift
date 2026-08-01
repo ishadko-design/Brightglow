@@ -1,22 +1,25 @@
 import Foundation
 
 enum Category: String, CaseIterable, Codable {
+    // Ordered by how often U.S. homeowners hire a pro (see categoryItems). This
+    // drives allCases everywhere — the home grid, matching, and pickers.
     case plumbing      = "Plumbing"
     case electrical    = "Electrical"
     case hvac          = "HVAC"
-    case painting      = "Painting"
+    case landscaping   = "Landscaping"
+    case pestControl   = "Mold & Pest Control"
+    case appliances    = "Appliances"
     case carpentry     = "Carpentry"
+    case painting      = "Painting"
     case roofing       = "Roofing"
     case flooring      = "Flooring"
     case windowsDoors  = "Windows & Doors"
-    case landscaping   = "Landscaping"
-    case pestControl   = "Mold & Pest Control"
 
     /// Keywords a user might free-form type that map to this category.
     var keywords: [String] {
         switch self {
         case .plumbing:     return ["plumb", "tap", "faucet", "leak", "pipe", "drain", "toilet", "sink", "water heater", "sewer", "clog"]
-        case .electrical:   return ["electric", "wire", "wiring", "outlet", "socket", "breaker", "panel", "light", "lighting", "fixture", "rewire", "power", "charger", "charging", "evse"]
+        case .electrical:   return ["electric", "wire", "wiring", "outlet", "socket", "breaker", "panel", "light", "lighting", "fixture", "rewire", "power", "charger", "charging", "evse", "solar", "photovoltaic"]
         case .hvac:         return ["hvac", "heat", "heating", "ac", "air condition", "furnace", "thermostat", "cooling", "vent", "duct"]
         case .painting:     return ["paint", "painting", "wall color", "primer", "repaint"]
         case .carpentry:    return ["carpent", "wood", "cabinet", "shelf", "shelving", "framing", "trim", "handyman", "remodel", "deck",
@@ -26,6 +29,10 @@ enum Category: String, CaseIterable, Codable {
         case .windowsDoors: return ["window", "door", "glass", "sash", "screen", "frame"]
         case .landscaping:  return ["landscap", "lawn", "garden", "yard", "grass", "mowing", "mow", "hedge", "tree", "shrub", "mulch", "sod", "irrigation", "sprinkler", "patio", "hardscape", "weed", "leaves"]
         case .pestControl:  return ["pest", "mold", "mildew", "termite", "rodent", "rat", "mice", "mouse", "roach", "cockroach", "ant", "bug", "insect", "exterminat", "fumigat", "spider", "wasp", "bee", "bed bug", "infestation", "moisture"]
+        // No bare "washer" (it sits inside "dishwasher"), no bare "vent" (HVAC
+        // owns that), no bare "range"/"oven" (they sit inside "arrange" and
+        // "proven"). "dryer vent" is the one vent phrase this trade owns.
+        case .appliances:   return ["applianc", "dishwasher", "refrigerator", "fridge", "freezer", "ice maker", "washing machine", "dryer", "dryer vent", "stove", "cooktop", "microwave"]
         }
     }
 
@@ -67,6 +74,7 @@ extension Category {
         case .windowsDoors: return "window door installation contractor"
         case .landscaping:  return "landscaping lawn care contractor"
         case .pestControl:  return "pest control mold remediation contractor"
+        case .appliances:   return "appliance repair and installation service"
         }
     }
 
@@ -83,6 +91,7 @@ extension Category {
         case .windowsDoors: return [PriceTier(label: "Single unit", min: 300, max: 800), PriceTier(label: "Multiple units", min: 1500, max: 4000), PriceTier(label: "Full install", min: 5000, max: 12000)]
         case .landscaping:  return [PriceTier(label: "Lawn / cleanup", min: 100, max: 400), PriceTier(label: "Garden redesign", min: 1500, max: 5000), PriceTier(label: "Full landscape", min: 8000, max: 25000)]
         case .pestControl:  return [PriceTier(label: "Single treatment", min: 150, max: 400), PriceTier(label: "Mold remediation", min: 1000, max: 4000), PriceTier(label: "Full fumigation", min: 2000, max: 6000)]
+        case .appliances:   return [PriceTier(label: "Service call", min: 75, max: 150), PriceTier(label: "Repair", min: 150, max: 500), PriceTier(label: "Install / replace", min: 150, max: 450)]
         }
     }
 }
@@ -159,6 +168,10 @@ struct Contractor: Codable, Identifiable {
     /// Business website from Google Places (`websiteUri`), used only to resolve a
     /// hosted logo (see [[LogoService]]); nil when Places has no site on file.
     var website: String? = nil
+    /// Business email resolved server-side (search fn, from `business_places`);
+    /// nil when none is known. Gates the "Request quote" CTA — the async photo
+    /// thread needs an email, so businesses we can't email show "Call" only.
+    var contactEmail: String? = nil
     let licenseNumber: String?
     let isVerified: Bool
     /// Real Google reviews (populated on the live path; empty for the snapshot).

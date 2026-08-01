@@ -72,6 +72,16 @@ export const GROUND_TRUTH: GroundTruthCase[] = [
     vertical: "home",
   },
   {
+    // The default 20-panel / ~8 kW array, the case that used to read "~$270".
+    query: "install solar panels",
+    category: "Electrical",
+    expectJobType: "electrical.solar",
+    low: 15000,
+    high: 28000,
+    source: "EnergySage / NREL 2026 (gross, before the federal credit)",
+    vertical: "home",
+  },
+  {
     query: "install central air conditioning",
     category: "HVAC",
     expectJobType: "hvac.ac",
@@ -130,7 +140,114 @@ export const GROUND_TRUTH: GroundTruthCase[] = [
     vertical: "home",
   },
 
+  // Plumbing REPAIRS, added 2026-07-22. Held out from the build sources
+  // (Fixr / HomeGuide / HomeAdvisor / Angi) on purpose — these come from
+  // Homewyse and Thumbtack, which disagree with them and with each other.
+  {
+    // Sources conflict hard: Thumbtack puts toilet repair at $159 average,
+    // Homewyse at $275-376 for a fuller "leaky toilet" scope that includes
+    // pulling the bowl. THIS query is the flapper/fill-valve job — the cheap
+    // end — so the band runs from Thumbtack's average to Homewyse's low rather
+    // than spanning both scopes and calling the midpoint truth.
+    query: "my toilet keeps running",
+    category: "Plumbing",
+    expectJobType: "plumbing.toilet_repair",
+    low: 159,
+    high: 311,
+    source: "Thumbtack $159 avg / Homewyse $311 low, 2026",
+    vertical: "home",
+    wide: true,
+  },
+  {
+    query: "faucet dripping",
+    category: "Plumbing",
+    expectJobType: "plumbing.faucet_repair",
+    low: 269,
+    high: 324,
+    source: "Homewyse 2026 (repair leaky faucet, incl. labor + materials)",
+    vertical: "home",
+  },
+  {
+    // The blind spot that mattered most: this used to quote a full heater
+    // replacement, or nothing at all.
+    query: "no hot water",
+    category: "Plumbing",
+    expectJobType: "plumbing.water_heater_repair",
+    low: 303,
+    high: 365,
+    source: "Homewyse 2026 (basic hot water heater repair)",
+    vertical: "home",
+  },
+
+  {
+    // Diagnose-then-repair: a symptom routes to find-AND-fix, not a bare
+    // diagnosis. Held out from the build source (that was HomeGuide pipe-leak).
+    query: "water bill suddenly doubled",
+    category: "Plumbing",
+    expectJobType: "plumbing.hidden_leak",
+    low: 350,
+    high: 2000,
+    source: "Angi / HomeAdvisor 2026 (hidden leak locate + repair, before major drywall)",
+    vertical: "home",
+    wide: true,
+  },
+
+  // HVAC + Electrical repairs, added 2026-07-23. Held out from the build
+  // sources (Fixr / HomeGuide / HomeAdvisor / Angi): these come from Bob Vila,
+  // Forbes, This Old House, Homewyse and Thumbtack.
+  {
+    // The top HVAC call, and one that used to quote a FURNACE repair because
+    // the generic "repair" keyword owned it.
+    query: "AC not cooling",
+    category: "HVAC",
+    expectJobType: "hvac.ac_repair",
+    low: 100,
+    high: 610,
+    source: "Bob Vila 2026 ($100-610, avg $369) / Forbes / This Old House",
+    vertical: "home",
+  },
+  {
+    // Sources genuinely disagree by ~2x on the same words, and the disagreement
+    // is systematic rather than noise: the consumer aggregators price a branch
+    // breaker swap ($100-200) while Homewyse prices a fuller service visit
+    // ($319-382) and Thumbtack quotes a MAIN breaker ($200-300), which is a
+    // bigger job. Banded to span all three rather than picking a camp; marked
+    // wide so only gross error counts.
+    query: "breaker keeps tripping",
+    category: "Electrical",
+    expectJobType: "electrical.breaker",
+    low: 100,
+    high: 400,
+    source: "Thumbtack $200-300 (main) / Homewyse $319-382 / aggregators $100-200, 2026",
+    vertical: "home",
+    wide: true,
+  },
+
   // === AUTO =============================================================
+  {
+    // Reported 2026-07-22: "Wrap car" showed results with no price line at all.
+    query: "wrap my car",
+    category: "Body & Paint",
+    expectJobType: "auto.wrap_full",
+    low: 2000,
+    high: 6000,
+    source: "Wrapmate / vinylwrapro / CarWrapHub 2026 (sedan $2k-3.5k, SUV $3.5k-6.5k)",
+    vertical: "auto",
+  },
+  {
+    // Banded to the STANDARD sedan/small-SUV case, which is what the engine
+    // assumes when the user names no vehicle. The full published span runs
+    // $300 (compact) to $1,500+ (box truck, sun-baked film), but scoring
+    // against that put the midpoint at $900 — a vehicle nobody defaulted to —
+    // and made a correct $599 look 33% low.
+    query: "removing an old wrap",
+    category: "Body & Paint",
+    expectJobType: "auto.wrap_removal",
+    low: 500,
+    high: 900,
+    source: "vinylwrapro / RM Window Tint / Yeahgor 2026 (sedan & small SUV)",
+    vertical: "auto",
+  },
   {
     query: "brake pads and rotors",
     category: "Repair",
@@ -186,11 +303,57 @@ export const GROUND_TRUTH: GroundTruthCase[] = [
     vertical: "auto",
   },
 
+  {
+    // California-specific and high volume; was entirely unpriced before.
+    query: "smog check",
+    category: "Repair",
+    expectJobType: "auto.smog_check",
+    low: 30,
+    high: 80,
+    source: "SmogCheck.com / AAA 2026 (CA average $74 incl. $8.25 certificate)",
+    vertical: "auto",
+    vehicle: "auto",
+  },
+  {
+    query: "wheel bearing noise",
+    category: "Repair",
+    expectJobType: "auto.wheel_bearing",
+    low: 349,
+    high: 510,
+    source: "RepairPal 2026",
+    vertical: "auto",
+    vehicle: "auto",
+  },
+
   // === MOTO =============================================================
   // These exist because the vertical shipped priced-as-a-car: with the Moto
   // filter selected, "replace tires" quoted four car tires (~$890) for a job
   // that is two moto tires (~$440). The filter now reaches the server, and
   // these cases keep it reaching it.
+  {
+    // The worst case (2026-07-23): "clutch cable" on a bike quoted a $1,815 CAR
+    // clutch. The MOTO_VARIANT remap now prices the bike job.
+    query: "clutch cable",
+    category: "Repair",
+    vehicle: "moto",
+    expectJobType: "auto.clutch",
+    low: 60,
+    high: 600,
+    source: "Motorcycle shop service menus 2026 (cable to plate range)",
+    vertical: "auto",
+    wide: true,
+  },
+  {
+    // A moto-only job that used to fall to a flat $274 labor guess.
+    query: "valve adjustment",
+    category: "Repair",
+    vehicle: "moto",
+    expectJobType: "moto.valve_adjustment",
+    low: 150,
+    high: 500,
+    source: "JD Power / gearriderhub / shop menus 2026",
+    vertical: "auto",
+  },
   {
     // The exact failing case: bare phrasing, Moto filter selected. Two tires
     // at the $160–300 fitted rate.

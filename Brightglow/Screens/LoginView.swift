@@ -69,12 +69,17 @@ struct LoginView: View {
                                 .font(.bodySmall)
                                 .foregroundStyle(.white.opacity(0.6))
                                 .multilineTextAlignment(.center)
-                            Button("Use a different email") {
+                            Button {
                                 emailSent = false
                                 email = ""
+                            } label: {
+                                Text("Use a different email")
+                                    .font(.bodySmall)
+                                    .foregroundStyle(.white.opacity(0.9))
+                                    .padding(.horizontal, 20)
+                                    .frame(height: 40)
+                                    .secondaryButtonBackground()
                             }
-                            .font(.bodySmall)
-                            .foregroundStyle(.white.opacity(0.4))
                             .buttonStyle(.textAction)
                             .padding(.top, 8)
                         }
@@ -84,11 +89,7 @@ struct LoginView: View {
                         appleButton
                         googleButton
 
-                        Text("By continuing you agree to our **Terms & Privacy Policy**")
-                            .font(.bodySmall)
-                            .foregroundStyle(.white.opacity(0.5))
-                            .multilineTextAlignment(.center)
-                            .padding(.top, 4)
+                        consentText
                     }
                 }
                 .padding(.horizontal, 32)
@@ -96,7 +97,42 @@ struct LoginView: View {
             }
         }
         .preferredColorScheme(.dark)
-        .onTapGesture { emailFocused = false }
+        .background {
+            // Tap empty space to dismiss the keyboard — scoped to a background
+            // layer so it does NOT intercept taps meant for the buttons. A
+            // container-level .onTapGesture steals taps from the UIKit-backed
+            // Sign in with Apple button (SwiftUI Buttons like Google survive it).
+            Color.clear
+                .contentShape(Rectangle())
+                .onTapGesture { emailFocused = false }
+        }
+    }
+
+    // Consent notice sits directly beneath the sign-in buttons so the assent is
+    // coupled to the action (the Meyer/Berman "sign-in wrap" pattern): the links
+    // are set apart by being full-white and bold against 60%-white body copy,
+    // which keeps the notice conspicuous — what makes the arbitration clause and
+    // class-action waiver in the linked Terms enforceable — without underlines.
+    private var consentText: some View {
+        var text = AttributedString("By continuing, you agree to Brightglow's ")
+        var terms = AttributedString("Terms of Service")
+        terms.link = URL(string: "https://brightglow.co/terms")
+        terms.foregroundColor = .white
+        terms.inlinePresentationIntent = .stronglyEmphasized
+        var privacy = AttributedString("Privacy Policy")
+        privacy.link = URL(string: "https://brightglow.co/privacy")
+        privacy.foregroundColor = .white
+        privacy.inlinePresentationIntent = .stronglyEmphasized
+        text.append(terms)
+        text.append(AttributedString(" and "))
+        text.append(privacy)
+        text.append(AttributedString("."))
+        return Text(text)
+            .font(.bodySmall)
+            .foregroundStyle(.white.opacity(0.6))
+            .tint(.white)
+            .multilineTextAlignment(.center)
+            .padding(.top, 4)
     }
 
     // MARK: - Email field
@@ -104,7 +140,7 @@ struct LoginView: View {
     private var emailField: some View {
         HStack(spacing: 8) {
             TextField("", text: $email, prompt:
-                Text("Email").foregroundStyle(.white.opacity(0.5))
+                Text("Email").foregroundStyle(.white.opacity(0.6))
             )
             .font(.bodyLight)
             .foregroundStyle(.white)
@@ -157,29 +193,23 @@ struct LoginView: View {
 
     // MARK: - Social buttons
 
+    // Apple's native button, used directly. A SignInWithAppleButton can't be
+    // hidden behind a custom overlay — iOS won't deliver touches to a near-
+    // transparent UIKit control — and Apple's guidelines require its own button
+    // design anyway. Styled to match the other buttons' pill shape/height.
     private var appleButton: some View {
-        ZStack {
-            SignInWithAppleButton(.continue,
-                onRequest: auth.configureAppleRequest,
-                onCompletion: auth.handleApple)
-                .signInWithAppleButtonStyle(.black)
-                .frame(height: 56)
-                .clipShape(RoundedRectangle(cornerRadius: 32))
-                .opacity(0.011)
-
-            frostedButton(icon: {
-                Image(systemName: "apple.logo")
-                    .font(.system(size: 18, weight: .semibold))
-                    .foregroundStyle(.white)
-            }, label: "Continue with Apple")
-            .allowsHitTesting(false)
-        }
-        .frame(height: 56)
+        SignInWithAppleButton(.continue,
+            onRequest: auth.configureAppleRequest,
+            onCompletion: auth.handleApple)
+            .signInWithAppleButtonStyle(.black)
+            .frame(maxWidth: .infinity)
+            .frame(height: 56)
+            .clipShape(RoundedRectangle(cornerRadius: 32))
     }
 
     private var googleButton: some View {
         Button(action: auth.signInWithGoogle) {
-            frostedButton(icon: {
+            secondaryButton(icon: {
                 Image("GoogleIcon")
                     .resizable()
                     .interpolation(.high)
@@ -190,8 +220,12 @@ struct LoginView: View {
         .frame(height: 56)
     }
 
+    /// The social buttons are secondary actions, so they wear the shared secondary
+    /// surface. This stays a helper only because both need the same icon + label
+    /// layout — the background itself is `secondaryButtonBackground()` like
+    /// everywhere else.
     @ViewBuilder
-    private func frostedButton<I: View>(icon: () -> I, label: String) -> some View {
+    private func secondaryButton<I: View>(icon: () -> I, label: String) -> some View {
         HStack(spacing: 8) {
             icon()
             Text(label)
@@ -200,14 +234,7 @@ struct LoginView: View {
         }
         .frame(maxWidth: .infinity)
         .frame(height: 56)
-        .background {
-            ZStack {
-                Color.clear.background(.ultraThinMaterial)
-                Color.white.opacity(0.2)
-            }
-        }
-        .clipShape(RoundedRectangle(cornerRadius: 32))
-        .overlay(RoundedRectangle(cornerRadius: 32).stroke(Color.white.opacity(0.2), lineWidth: 1))
+        .secondaryButtonBackground()
     }
 
     // MARK: - Action

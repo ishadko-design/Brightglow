@@ -1,7 +1,7 @@
 import SwiftUI
 
 struct RootNavigator: View {
-    @StateObject private var auth = AuthService()
+    @EnvironmentObject private var auth: AuthService
     @EnvironmentObject private var businessStore: BusinessStore
 
     var body: some View {
@@ -14,7 +14,6 @@ struct RootNavigator: View {
                 LoginView()
             }
         }
-        .environmentObject(auth)
         .animation(.easeInOut(duration: 0.25), value: auth.isSignedIn)
         .animation(.easeInOut(duration: 0.25), value: auth.isRestoringSession)
         // Resolve business ownership on sign-in (drives the "For business" entry

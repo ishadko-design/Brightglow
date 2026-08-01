@@ -160,18 +160,13 @@ class CameraViewModel: NSObject, ObservableObject {
                 self.suggestedMatches = suggestions.matches
                 self.detectedMatch = suggestions.confident
                 self.detectedDetails = suggestions.details
-                // Cloud read wins — it's far more reliable than on-device Vision
-                // at "this is a car / a motorcycle", which is what stops clarify
-                // from asking the obvious. Fallback below fills in only if nil.
-                if let vehicle = suggestions.vehicle { self.detectedVehicle = vehicle }
-            }
-        }
-        Task {
-            // Fast on-device first guess so the auto tags label car vs moto right
-            // away; never clobbers the cloud read once it lands.
-            let vehicle = ImageClassifier.detectVehicleType(image)
-            await MainActor.run {
-                if self.detectedVehicle == nil { self.detectedVehicle = vehicle }
+                // `suggestions.vehicle` is already gated on an auto subject (it's
+                // nil for a home photo even if a car is visible in the background),
+                // so trusting it directly can't flip a home request to the vehicle
+                // path. It combines the cloud car-vs-moto read with an on-device
+                // fallback — no separate whole-image vehicle guess is needed here,
+                // and adding one back would reintroduce the home-photo misroute.
+                self.detectedVehicle = suggestions.vehicle
             }
         }
         Task {

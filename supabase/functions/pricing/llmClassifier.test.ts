@@ -25,10 +25,22 @@ Deno.test("buildClassifierPool with no category spans the whole taxonomy", () =>
   assert(pool.some((e) => e.job_type === "roofing.general"));
 });
 
-Deno.test("buildClassifierPool is empty for uncovered categories", () => {
-  // Mold & Pest Control has no taxonomy entries and a null general —
-  // classifyWithLLM skips the call entirely on an empty pool.
-  assertEquals(buildClassifierPool(JOB_TYPE_TAXONOMY, CATEGORY_GENERAL, "Mold & Pest Control"), []);
+Deno.test("buildClassifierPool is empty for a category with no coverage", () => {
+  // The empty pool is the signal classifyWithLLM uses to skip the call
+  // entirely. Every real category is covered now — Mold & Pest Control was the
+  // last gap and gained entries 2026-07-22 — so this exercises the mechanism
+  // with a name the taxonomy genuinely doesn't have.
+  assertEquals(buildClassifierPool(JOB_TYPE_TAXONOMY, CATEGORY_GENERAL, "Pool & Spa"), []);
+});
+
+Deno.test("every app category offers the classifier a non-empty pool", () => {
+  // A category the model cannot be offered is a category it will answer with
+  // the nearest wrong word — that is how a mold request became auto "Repair".
+  const categories = new Set(JOB_TYPE_TAXONOMY.map((e) => e.category));
+  for (const c of categories) {
+    const pool = buildClassifierPool(JOB_TYPE_TAXONOMY, CATEGORY_GENERAL, c);
+    assert(pool.length > 0, `empty classifier pool for ${c}`);
+  }
 });
 
 Deno.test("buildSystemPrompt lists every pool id", () => {

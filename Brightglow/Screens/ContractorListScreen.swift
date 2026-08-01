@@ -17,6 +17,13 @@ import CoreLocation
 
 struct ContractorListScreen: View {
     var category: String = ""
+    /// The vertical the clarifying chat resolved ("home" / "auto_moto"), empty
+    /// when no chat ran. Everything below infers the vertical from the category
+    /// NAME, and the Auto & moto vertical owns the generic word "Repair" — so a
+    /// home request the model labelled "Repair" opened a car-shop list, complete
+    /// with an Auto/Moto toggle ("fix fridge", reported live 2026-07-22). An
+    /// explicit "home" outranks the inference; empty leaves it untouched.
+    var clarifyVertical: String = ""
     var searchQuery: String = ""
     var aiResult: AIResult? = nil
     /// When set (manual ZIP/city or an already-resolved fix), used instead of GPS.
@@ -45,6 +52,7 @@ struct ContractorListScreen: View {
     var clarifyTranscript: ClarifyTranscript = .empty
 
     init(category: String = "",
+         clarifyVertical: String = "",
          searchQuery: String = "",
          aiResult: AIResult? = nil,
          presetCoordinate: CLLocationCoordinate2D? = nil,
@@ -56,6 +64,7 @@ struct ContractorListScreen: View {
          clarifyTranscript: ClarifyTranscript = .empty,
          initialVehicle: VehicleFilter? = nil) {
         self.category = category
+        self.clarifyVertical = clarifyVertical
         self.searchQuery = searchQuery
         self.aiResult = aiResult
         self.presetCoordinate = presetCoordinate
@@ -81,6 +90,11 @@ struct ContractorListScreen: View {
     }
 
     @Environment(\.dismiss) var dismiss
+    @Environment(\.openURL) private var openURL
+    /// The business whose row "Call" was tapped — drives the shared "Before you
+    /// call" reminder sheet before we hand off to the dialer. Same pop-up the
+    /// gallery shows, so the mention-Brightglow nudge appears wherever Call lives.
+    @State private var callContractor: Contractor? = nil
     @StateObject private var location = LocationProvider()
 
     @State private var contractors: [Contractor] = []
@@ -112,6 +126,9 @@ struct ContractorListScreen: View {
     /// with the reviews sheet expanded rather than the default collapsed peek.
     @State private var startReviewsExpanded = false
     @State private var startContractorID: String? = nil
+    /// The review quoted on the row the user opened, pinned to the top of the
+    /// gallery's reviews sheet. Cleared when opening by any other route.
+    @State private var pinnedReviewID: String? = nil
     /// Which photo in the tapped contractor's strip was tapped — the gallery
     /// opens on that exact shot.
     @State private var startPhotoIndex: Int = 0
@@ -131,6 +148,10 @@ struct ContractorListScreen: View {
     /// Kept work photos + their scene labels per contractor (the source of truth);
     /// `screenedByID` is this list ordered by the current query for display.
     @State private var keptPhotos: [String: [ScreenedPhoto]] = [:]
+    /// A business's OWN uploaded photos (from the app's Settings editor), by id.
+    /// Owner-curated, so they lead the strip un-screened and keep a claimed
+    /// business visible even when Google returns no usable work photos for it.
+    @State private var ownerPhotosByID: [String: [String]] = [:]
     /// Active contractor licences (CSLB), by contractor id. Absence means
     /// "unknown" — CSLB is California-only — never "unlicensed", so a missing
     /// entry shows no badge rather than a negative one.
@@ -158,7 +179,28 @@ struct ContractorListScreen: View {
     }
 
     /// The Auto & moto category being viewed, if any (drives the vehicle filter).
-    private var autoCategory: AutoCategory? { autoCategoryItems.first { $0.name == category } }
+    /// A chat that resolved the request as a home trade vetoes the match: the
+    /// category names overlap across verticals, the vertical itself doesn't.
+    private var autoCategory: AutoCategory? {
+        guard clarifyVertical != "home" else { return nil }
+        return autoCategoryItems.first { $0.name == category }
+    }
+
+    /// Vehicle label sent to the business on an Auto & moto quote, so a shop
+    /// that services both cars and bikes knows which this is. Empty for home.
+    private var quoteVehicleNote: String {
+        guard autoCategory != nil else { return "" }
+        return vehicle == .moto ? "Motorcycle" : "Car"
+    }
+
+    /// Whether vehicle photos count as work photos for this search. Same veto as
+    /// `autoCategory`, and needed separately because `isAutoService` also matches
+    /// on the query text — "refrigerator repair service" hits the Repair
+    /// keywords, which would keep car photos on an appliance search.
+    private func allowsVehiclePhotos(_ query: String) -> Bool {
+        guard clarifyVertical != "home" else { return false }
+        return isAutoService(category: category, searchQuery: query)
+    }
 
     /// Query actually sent to Places — the moto variant when the filter is on
     /// Moto, else the chat's refined `search_terms` when present, else the raw
@@ -170,11 +212,39 @@ struct ContractorListScreen: View {
         return override.isEmpty ? searchQuery : override
     }
 
-    /// What the user actually typed, if anything — auto categories carry a
-    /// synthetic Places query in `searchQuery`, which must never pre-fill the
-    /// quote-request text.
+    /// What the pricing engine classifies and sizes the job from.
+    ///
+    /// `effectiveSearchQuery` is the right phrase to find BUSINESSES with, but
+    /// for an auto category it is a synthetic Places query ("tire shop") that
+    /// carries nothing about the request — so "Replace 4 tires on a Model 3,
+    /// all-season" was being priced from the words "tire shop", losing both the
+    /// count and any grade signal (`resolveQuantity` and `qualityTier` both read
+    /// this string). Send the user's own words instead; an empty result means a
+    /// bare category browse, which the server answers with its typical-job
+    /// figure. Home is untouched — there `effectiveSearchQuery` is already
+    /// either the chat's refined phrase or the raw typed text.
+    private var pricingDescription: String {
+        guard let auto = autoCategory else { return effectiveSearchQuery }
+        let typed = searchQuery.trimmingCharacters(in: .whitespacesAndNewlines)
+        // A grid-card tap puts the synthetic phrase in `searchQuery`; a search
+        // puts the user's request there. Only the latter describes a job.
+        let synthetic = [auto.searchQuery.lowercased(), auto.motoSearchQuery.lowercased()]
+        return synthetic.contains(typed.lowercased()) ? "" : typed
+    }
+
+    /// What the user actually typed, if anything — pre-fills the quote-request text.
+    ///
+    /// An auto GRID-CARD tap carries a synthetic Places query ("tire shop") in
+    /// `searchQuery`; that's routing input, not the user's words, so it must never
+    /// pre-fill the quote. But a typed/clarified auto request ("I need to replace
+    /// tires on the motorcycle") puts the user's ACTUAL words there — those SHOULD
+    /// carry through. So suppress ONLY the synthetic query, not every auto category
+    /// (the same distinction `pricingDescription` makes). Home is untouched.
     private var typedQuery: String {
-        autoCategory == nil ? searchQuery.trimmingCharacters(in: .whitespacesAndNewlines) : ""
+        let typed = searchQuery.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard let auto = autoCategory else { return typed }
+        let synthetic = [auto.searchQuery.lowercased(), auto.motoSearchQuery.lowercased()]
+        return synthetic.contains(typed.lowercased()) ? "" : typed
     }
 
     /// Term source for photo ordering — the chat's `photo_terms` when present (a
@@ -243,6 +313,14 @@ struct ContractorListScreen: View {
         PhotoFilter.mostRelevantReview(c.reviews.map(\.text), query: matchQuery)
     }
 
+    /// Identity of the review `matchingReview` quoted, handed to the gallery so
+    /// the sheet leads with that exact comment. The quote is a sentence pulled
+    /// from mid-review, so it can't be matched by text on the other side.
+    private func matchingReviewID(_ c: Contractor) -> String? {
+        PhotoFilter.mostRelevantReviewIndex(c.reviews.map(\.text), query: matchQuery)
+            .map { c.reviews[$0].id }
+    }
+
     /// More to show: either already-fetched businesses held back by the limit, or
     /// another page still available from Places.
     private var hasMore: Bool {
@@ -280,6 +358,10 @@ struct ContractorListScreen: View {
                 // The effective (auto/moto) query so the gallery paginates the same
                 // search the user is viewing.
                 searchQuery: effectiveSearchQuery,
+                // The user's real words (synthetic auto query already stripped), so
+                // the gallery's own "Request quote" pre-fills the description — it
+                // can't re-derive this from the effective query above.
+                requestSummary: typedQuery,
                 aiResult: aiResult,
                 presetCoordinate: resolvedCoord ?? presetCoordinate,
                 preloadedContractors: contractors,
@@ -291,7 +373,9 @@ struct ContractorListScreen: View {
                 attachedImages: attachedImages,
                 startReviewsExpanded: startReviewsExpanded,
                 photoMatchTerms: photoMatchTerms,
-                clarifyTranscript: clarifyTranscript
+                pinnedReviewID: pinnedReviewID,
+                clarifyTranscript: clarifyTranscript,
+                vehicleNote: quoteVehicleNote
             )
         }
         .navigationDestination(item: $quoteContractorID) { id in
@@ -301,14 +385,42 @@ struct ContractorListScreen: View {
                 contractor: contractors.first { $0.id == id },
                 requestSummary: typedQuery,
                 initialImages: attachedImages,
-                clarifyTranscript: clarifyTranscript
+                clarifyTranscript: clarifyTranscript,
+                vehicleNote: quoteVehicleNote
             )
         }
+        // Custom bottom overlay (same as the gallery) so the card is a flush,
+        // full-width bottom sheet rather than iOS 26's inset floating card.
+        .overlay {
+            if let contractor = callContractor {
+                CallReminderSheet(contractor: contractor) {
+                    callContractor = nil
+                    dial(contractor)
+                } onDismiss: {
+                    callContractor = nil
+                }
+            }
+        }
+        .animation(.interpolatingSpring(stiffness: 320, damping: 32), value: callContractor?.id)
         .alert("How we estimate", isPresented: $showEstimateInfo) {
             Button("OK", role: .cancel) {}
         } message: {
             Text(estimateInfoText)
         }
+    }
+
+    /// Hands off to the system dialer with the business's number pre-filled (the
+    /// OS shows its own call confirmation — we never place the call ourselves).
+    private func dial(_ contractor: Contractor) {
+        guard let phone = contractor.phone else { return }
+        // Meter the call toward the business's free allowance (fire-and-forget).
+        LeadBridgeService.recordCall(placeId: contractor.id, businessName: contractor.name,
+                                     website: contractor.website, city: contractor.city,
+                                     contractorEmail: contractor.contactEmail ?? "hello@brightglow.co",
+                                     contractorPhone: phone)
+        let dialable = phone.filter { $0.isNumber || $0 == "+" }
+        guard !dialable.isEmpty, let url = URL(string: "tel:\(dialable)") else { return }
+        openURL(url)
     }
 
     // ── Scrollable list of contractor rows ────────────────────────────────────
@@ -337,7 +449,8 @@ struct ContractorListScreen: View {
                             logoURL: logoByID[contractor.id],
                             onOpen: { photoIndex in open(contractor, photoIndex: photoIndex) },
                             onReviews: { openReviews(for: contractor) },
-                            onQuote: { quoteContractorID = contractor.id }
+                            onQuote: { quoteContractorID = contractor.id },
+                            onCall: { callContractor = contractor }
                         )
                         .id(contractor.id)
                         // Strictly lazy: reveal (and screen) a row's photos only when
@@ -551,16 +664,22 @@ struct ContractorListScreen: View {
         startContractorID = contractor.id
         startPhotoIndex = photoIndex
         startReviewsExpanded = false
+        pinnedReviewID = matchingReviewID(contractor)
         goGallery = true
     }
 
     /// The "N reviews" link opens the gallery for this contractor with its bottom
     /// sheet expanded to the reviews (in-app), rather than jumping straight out to
     /// Google — the Google link now lives at the end of that sheet.
+    ///
+    /// Also the destination for tapping the quoted review on the row, which is why
+    /// the quoted review is pinned to the top of the sheet: the user tapped that
+    /// comment and it must be the first one waiting for them.
     private func openReviews(for contractor: Contractor) {
         startContractorID = contractor.id
         startPhotoIndex = 0
         startReviewsExpanded = true
+        pinnedReviewID = matchingReviewID(contractor)
         goGallery = true
     }
 
@@ -620,7 +739,7 @@ struct ContractorListScreen: View {
             resolvedCoord = coord
             // Reuse verdicts from a previous launch so businesses screened before
             // show their photos immediately without re-downloading the pool.
-            let allowVehicles = isAutoService(category: category, searchQuery: query)
+            let allowVehicles = allowsVehiclePhotos(query)
             for c in contractors {
                 guard let v = ScreeningStore.shared.get(c.id, allowVehicles: allowVehicles) else { continue }
                 if !v.kept.isEmpty {
@@ -655,10 +774,18 @@ struct ContractorListScreen: View {
                                            kept: v.kept, scanned: v.scanned, enriched: v.enriched)
             }
 
+            // Lead each business with its OWN uploaded photos (cheap: one query,
+            // and only claimed businesses come back). Done before the drop below so
+            // a business that uploaded photos stays even when Google gives us none.
+            await loadOwnerPhotos(for: contractors)
+
             // Drop businesses confirmed to have no work photos in their whole pool,
-            // so they don't reappear as blank rows on a later visit.
+            // so they don't reappear as blank rows on a later visit. A business with
+            // its own uploaded photos is exempt — it has something real to show.
             contractors.removeAll { c in
-                (scannedCount[c.id] ?? 0) >= c.photos.count && (screenedByID[c.id]?.isEmpty ?? true)
+                ownerPhotosByID[c.id] == nil
+                    && (scannedCount[c.id] ?? 0) >= c.photos.count
+                    && (screenedByID[c.id]?.isEmpty ?? true)
             }
             // Uncovered categories stay match-only — the price line shows the
             // "coming soon" state (with a real business count) instead. Auto &
@@ -667,7 +794,7 @@ struct ContractorListScreen: View {
             if !contractors.isEmpty && priceable {
                 Task { @MainActor in
                     estimate = await ContractorLoader.estimate(
-                        category: category, searchQuery: query, near: coord,
+                        category: category, searchQuery: pricingDescription, near: coord,
                         photoDetails: photoDetails,
                         vehicle: allowVehicles ? vehicle : nil)
                 }
@@ -714,6 +841,34 @@ struct ContractorListScreen: View {
         logoByID.merge(found) { _, new in new }
     }
 
+    /// Fetch each business's OWN uploaded photos and lead its strip with them.
+    /// One batched query; most place_ids have no `business_profiles` row, so only
+    /// the claimed few return. Owner photos are trusted verbatim (no screening) and
+    /// prepended ahead of the Google/website shots, and the business is revealed
+    /// immediately so its curated work shows on the first render.
+    @MainActor
+    private func loadOwnerPhotos(for batch: [Contractor]) async {
+        let ids = batch.map(\.id).filter { ownerPhotosByID[$0] == nil }
+        guard !ids.isEmpty else { return }
+        let map = await BusinessService.uploadedPhotoURLs(placeIds: ids)
+        guard !map.isEmpty else { return }
+        for (id, urls) in map {
+            ownerPhotosByID[id] = urls
+            revealedIDs.insert(id)
+            screenedByID[id] = withOwnerLead(id, screenedByID[id] ?? [])
+        }
+    }
+
+    /// Prepend a business's owner-uploaded photos ahead of `list`, de-duped. The
+    /// choke point every `screenedByID` write for a claimed business flows through,
+    /// so screening/enrichment can re-order the Google photos without ever dropping
+    /// the owner's curated ones from the lead.
+    private func withOwnerLead(_ id: String, _ list: [String]) -> [String] {
+        guard let owner = ownerPhotosByID[id], !owner.isEmpty else { return list }
+        let have = Set(owner)
+        return owner + list.filter { !have.contains($0) }
+    }
+
     /// Look up active contractor licences for businesses we haven't checked yet.
     /// One batched call; best-effort, so a failure simply leaves the badges off.
     @MainActor
@@ -730,6 +885,7 @@ struct ContractorListScreen: View {
         contractors = []
         screenedByID = [:]
         keptPhotos = [:]
+        ownerPhotosByID = [:]
         scannedCount = [:]
         revealedIDs = []
         needsEnrich = []
@@ -763,7 +919,7 @@ struct ContractorListScreen: View {
         // row shows placeholders (not a blank strip) while scanning. Scan deeper
         // into the pool if early photos are rejected, so a business whose first
         // shots are logos/people still surfaces its work photos.
-        let allowVehicles = isAutoService(category: category, searchQuery: effectiveSearchQuery)
+        let allowVehicles = allowsVehiclePhotos(effectiveSearchQuery)
         var kept: [ScreenedPhoto] = []
         var scanned = 0
         while kept.count < stripInitialFill && scanned < c.photos.count {
@@ -781,14 +937,22 @@ struct ContractorListScreen: View {
         VerdictService.upload(id: c.id, allowVehicles: allowVehicles, kept: kept, scanned: scanned)
 
         if kept.isEmpty {
-            // Whole pool was non-work imagery → drop the business rather than show
-            // a blank strip (mirrors the gallery).
-            contractors.removeAll { $0.id == c.id }
+            if ownerPhotosByID[c.id] != nil {
+                // No Google work photos, but the business uploaded its own — show
+                // those instead of dropping the claimed business.
+                screenedByID[c.id] = withOwnerLead(c.id, [])
+                revealedIDs.insert(c.id)
+            } else {
+                // Whole pool was non-work imagery → drop the business rather than
+                // show a blank strip (mirrors the gallery).
+                contractors.removeAll { $0.id == c.id }
+            }
         } else {
             keptPhotos[c.id] = kept
-            // Reveal once, ordered so query-matching photos (e.g. the kitchen) lead.
-            screenedByID[c.id] = PhotoFilter.order(kept, query: orderQuery,
-                                                   capPremises: stripMaxPremises)
+            // Reveal once, ordered so query-matching photos (e.g. the kitchen) lead;
+            // any owner-uploaded photos stay pinned ahead of them.
+            screenedByID[c.id] = withOwnerLead(c.id, PhotoFilter.order(kept, query: orderQuery,
+                                                   capPremises: stripMaxPremises))
             // Then sharpen the order with rich vision tags in the background.
             enrichInBackground(c.id, kept: kept, scanned: scanned, allowVehicles: allowVehicles)
         }
@@ -802,7 +966,7 @@ struct ContractorListScreen: View {
     private func enrichIfNeeded(_ c: Contractor) async {
         guard needsEnrich.remove(c.id) != nil,
               let kept = keptPhotos[c.id], !kept.isEmpty else { return }
-        let allowVehicles = isAutoService(category: category, searchQuery: effectiveSearchQuery)
+        let allowVehicles = allowsVehiclePhotos(effectiveSearchQuery)
         enrichInBackground(c.id, kept: kept, scanned: scannedCount[c.id] ?? kept.count,
                            allowVehicles: allowVehicles)
     }
@@ -826,8 +990,8 @@ struct ContractorListScreen: View {
             // either way mark the verdict enriched so we don't re-tag every visit.
             if enriched != kept {
                 keptPhotos[id] = enriched
-                screenedByID[id] = PhotoFilter.order(enriched, query: orderQuery,
-                                                     capPremises: stripMaxPremises)
+                screenedByID[id] = withOwnerLead(id, PhotoFilter.order(enriched, query: orderQuery,
+                                                     capPremises: stripMaxPremises))
             }
             ScreeningStore.shared.save(id, allowVehicles: allowVehicles, kept: enriched,
                                        scanned: scanned, enriched: true)
@@ -900,6 +1064,10 @@ private struct ContractorListRow: View {
     let onReviews: () -> Void
     /// Fired by the row's "Get quote" capsule — requests a quote from this business.
     let onQuote: () -> Void
+    /// Fired by the row's "Call" capsule — the parent shows the shared reminder
+    /// pop-up, then dials. (Not dialed here, so the mention-Brightglow nudge shows
+    /// from the list exactly as it does from the gallery.)
+    let onCall: () -> Void
 
     // Exact Figma values (793:1779).
     private let sideInset: CGFloat = 16      // content left/right margin
@@ -930,16 +1098,53 @@ private struct ContractorListRow: View {
                     }
                     .buttonStyle(.plain)
 
-                    // Secondary capsule, 32pt tall (Figma "Button Secondary").
-                    Button(action: onQuote) {
-                        Text("Get quote")
-                            .font(.h4)                      // Lato 700 / 14
-                            .foregroundStyle(.white)
-                            .padding(.horizontal, 16)
-                            .frame(height: 32)
-                            .background(AppColors.btnPrimary, in: Capsule())
+                    // Two icon buttons (Figma 1049:4441): 44x32 pills, 8pt apart.
+                    // Call (secondary/dark) whenever there's a phone; Get quote
+                    // (primary/blue, chat glyph) whenever we can DELIVER a quote —
+                    // a phone (it now sends as a P2P text) OR an email. That's
+                    // effectively every business, so the quote CTA is back on the
+                    // row rather than gated to email-only businesses.
+                    HStack(spacing: 8) {
+                        if contractor.phone != nil {
+                            Button(action: onCall) {
+                                // Exact phone icon from Figma (1049:4441), white
+                                // template on the pill.
+                                Image("PhoneIcon")
+                                    .renderingMode(.template)
+                                    .resizable()
+                                    .scaledToFit()
+                                    .frame(width: 24, height: 24)
+                                    .foregroundStyle(.white)
+                                    .frame(width: 44, height: 32)
+                                    .background {
+                                        ZStack {
+                                            Rectangle().fill(.ultraThinMaterial)
+                                            AppColors.btnSecondary
+                                        }
+                                    }
+                                    .clipShape(Capsule())
+                            }
+                            .buttonStyle(.plain)
+                        }
+                        if contractor.phone != nil || contractor.contactEmail != nil {
+                            Button(action: onQuote) {
+                                // Chat glyph from Figma (1049:4441) — "message this
+                                // business for a quote", white template on the blue pill.
+                                // Its own asset (not the shared header ic_chat) so the
+                                // CTA can carry Figma's exact 24pt icon size without
+                                // resizing the larger MainScreen header bubble.
+                                Image("ic_message")
+                                    .renderingMode(.template)
+                                    .resizable()
+                                    .scaledToFit()
+                                    .frame(width: 24, height: 24)
+                                    .foregroundStyle(.white)
+                                    .frame(width: 44, height: 32)
+                                    .background(AppColors.btnPrimary, in: Capsule())
+                            }
+                            .buttonStyle(.plain)
+                        }
                     }
-                    .buttonStyle(.plain)
                 }
                 .frame(height: 32)
 
@@ -975,7 +1180,7 @@ private struct ContractorListRow: View {
                         }
                     }
                     .font(.bodySmall)
-                    .foregroundStyle(.white.opacity(0.5))
+                    .foregroundStyle(.white.opacity(0.6))
                     .lineLimit(1)
 
                     Spacer(minLength: 0)
