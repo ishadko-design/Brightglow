@@ -54,6 +54,19 @@ export default {
   async fetch(request, env) {
     const url = new URL(request.url);
     if (isProxied(url.pathname)) return proxy(request, url);
-    return env.ASSETS.fetch(request);
+
+    const resp = await env.ASSETS.fetch(request);
+
+    // The zone edge-caches responses, which pinned stale HTML/JS/CSS across
+    // deploys — a fix would ship but visitors kept the old file for hours.
+    // Tell Cloudflare's edge not to cache the markup/code (this header is
+    // honoured by the edge and stripped before the browser), so a deploy is
+    // live immediately. Images/fonts keep their default caching.
+    if (url.pathname.endsWith("/") || /\.(html|js|css)$/.test(url.pathname)) {
+      const out = new Response(resp.body, resp);
+      out.headers.set("Cloudflare-CDN-Cache-Control", "no-store");
+      return out;
+    }
+    return resp;
   },
 };
