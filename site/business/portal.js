@@ -259,10 +259,28 @@ async function enterDashboard() {
     }
     byPlace.get(l.place_id).leads.push(l);
   }
+  // Second source: places I already own, or can claim outright because my
+  // OTP-verified phone matches the Google-listed number (method 1). A lead-less
+  // business exists only here, so without this it could never surface.
+  // See BUSINESS_CLAIM_PLAN.md.
+  try {
+    const { data: places } = await sb.rpc("my_claimable_places");
+    for (const p of places || []) {
+      let biz = byPlace.get(p.place_id);
+      if (!biz) {
+        biz = { place_id: p.place_id, name: p.business_name || "Your business",
+                city: "", website: p.website || "", leads: [] };
+        byPlace.set(p.place_id, biz);
+      }
+      biz.claimable = !p.owned;   // phone-matched but not yet owned -> offer a claim
+    }
+  } catch (err) {
+    console.error("my_claimable_places failed:", err);   // non-fatal; leads still work
+  }
   businesses = [...byPlace.values()];
 
   if (businesses.length === 0) {
-    fail("We couldn't match a claimable business to this number or email yet. Make sure you're using the phone or email a customer reached you through — or contact hello@brightglow.co.");
+    noBusiness();   // dead end -> offer to create a brand-new listing (method 6)
     return;
   }
 
@@ -472,6 +490,76 @@ function fail(text) {
     <button class="ghost-btn" onclick="location.reload()" style="margin-top:16px">Reload</button>`;
 }
 
+// No lead- or phone-matched business for this account. Instead of a dead end,
+// offer to create a brand-new listing (method 6). See BUSINESS_CLAIM_PLAN.md.
+function noBusiness() {
+  show($("bootView"), false);
+  show($("dashView"), false);
+  show($("chatsView"), false);
+  show($("editorView"), false);
+  show($("tabs"), false);
+  show($("signOutBtn"), true);
+  const c = $("authView");
+  c.hidden = false;
+  c.innerHTML = `
+    <h1>Nothing to manage here yet</h1>
+    <p class="muted">We couldn't match a business to your phone or email. If a customer
+      reached you through Brightglow, sign in with that exact number or email. Otherwise,
+      add your business below.</p>
+    <form id="createBizForm" style="margin-top:16px">
+      <input id="newBizName" type="text" placeholder="Business name" autocomplete="organization" required>
+      <input id="newBizWebsite" type="url" placeholder="Website (optional)" autocomplete="url">
+      <input id="newBizPhone" type="tel" placeholder="Business phone (optional)" autocomplete="tel">
+      <button type="submit" class="primary-btn wide" style="margin-top:12px">Add my business</button>
+      <p id="createBizMsg" class="form-msg"></p>
+    </form>`;
+  $("createBizForm").addEventListener("submit", createBusiness);
+}
+
+async function createBusiness(e) {
+  e.preventDefault();
+  const msg = $("createBizMsg");
+  const name = $("newBizName").value.trim();
+  if (!name) return;
+  msg.className = "form-msg"; msg.textContent = "";
+  const btn = e.target.querySelector('button[type="submit"]');
+  btn.disabled = true; btn.textContent = "Adding…";
+  const { data: placeId, error } = await sb.rpc("create_business", {
+    p_name: name,
+    p_website: $("newBizWebsite").value.trim() || null,
+    p_phone: $("newBizPhone").value.trim() || null,
+  });
+  if (error || !placeId) {
+    btn.disabled = false; btn.textContent = "Add my business";
+    msg.className = "form-msg err";
+    msg.textContent = error ? error.message : "Couldn't create the business. Try again.";
+    return;
+  }
+  await enterDashboard();   // reload the list — the new place is now owned by you
+}
+
+// A phone-matched but unclaimed place shows a claim CTA (method 1). One tap writes
+// ownership via claim_business(), so profile edits and leads stick to this account.
+function renderClaimBanner() {
+  show($("claimBanner"), !!(current && current.claimable));
+}
+
+async function claimCurrentBusiness() {
+  if (!current) return;
+  const btn = $("claimBtn");
+  btn.disabled = true; btn.textContent = "Claiming…";
+  const { data: ok, error } = await sb.rpc("claim_business", { p_place_id: current.place_id });
+  btn.disabled = false; btn.textContent = "Claim this business";
+  if (error || !ok) {
+    alert(error ? ("Claim failed: " + error.message)
+                : "We couldn't verify this business is yours from your phone number. " +
+                  "If it's yours, contact hello@brightglow.co.");
+    return;
+  }
+  current.claimable = false;
+  renderClaimBanner();
+}
+
 // ── business switching ──────────────────────────────────────
 function renderSwitcher() {
   const el = $("bizSwitcher");
@@ -509,6 +597,7 @@ async function selectBusiness(biz) {
   renderLeads();
   renderStats();
   renderSwitcher();
+  renderClaimBanner();
   updateCompleteness();
 }
 
@@ -1007,6 +1096,7 @@ function wireStaticHandlers() {
   $("billingBtn").addEventListener("click", () => showView("billing"));
   $("billingBack").addEventListener("click", () => showView("dash"));
   $("deletePageBtn").addEventListener("click", deletePage);
+  $("claimBtn").addEventListener("click", claimCurrentBusiness);
   // Leaving inside the debounce window must not lose the edit. keepalive-style
   // flush: fire the save without awaiting, the same shape as the app's onDisappear.
   window.addEventListener("beforeunload", () => { if (dirty) saveProfile(); });
