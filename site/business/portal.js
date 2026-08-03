@@ -966,9 +966,27 @@ async function deletePage() {
   )) return;
   const btn = $("deletePageBtn");
   btn.disabled = true; btn.textContent = "Deleting…";
-  const { error } = await sb.from("business_profiles").delete().eq("place_id", current.place_id);
+  // `.select()` makes the delete return the rows it actually removed. Under RLS a
+  // caller who isn't the owner deletes 0 rows and gets NO error — so without this
+  // the failure is invisible and the profile silently survives.
+  const { data: deleted, error } = await sb
+    .from("business_profiles").delete().eq("place_id", current.place_id).select("place_id");
   btn.disabled = false; btn.textContent = "Delete profile";
   if (error) { alert("Delete failed: " + (error.message || "unknown error")); return; }
+  if (!deleted || deleted.length === 0) {
+    // 0 rows removed: either there was no saved profile (fine — nothing to delete),
+    // or RLS refused it. Re-read (public read is always allowed) to tell them apart.
+    const { data: still } = await sb.from("business_profiles")
+      .select("place_id").eq("place_id", current.place_id).maybeSingle();
+    if (still) {
+      alert(
+        "The database wouldn't let this account delete the page — you're not recognized " +
+        "as its owner. This happens when you signed in by phone but the page is linked to " +
+        "an email (or vice-versa). Email hello@brightglow.co and we'll fix the ownership link."
+      );
+      return;
+    }
+  }
   dirty = false;
   showView("dash");               // leave the editor immediately — never strand the
                                   // owner on the just-deleted profile if the re-seed throws
