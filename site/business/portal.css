@@ -188,6 +188,17 @@ select { appearance: none; background-image: none; }
 /* One scrolling row, like the app's horizontal ScrollView of business chips —
    wrapping onto extra lines pushed the whole dashboard down. */
 .biz-switcher { display: flex; gap: 8px; flex-wrap: nowrap; overflow-x: auto; margin-bottom: 16px; padding-bottom: 4px; }
+
+/* Claim CTA for a phone-matched but unclaimed place (method 1). */
+.claim-banner {
+  display: flex; align-items: center; justify-content: space-between; gap: 16px;
+  flex-wrap: wrap;
+  background: rgba(212, 166, 0, .12);
+  border: 1px solid rgba(212, 166, 0, .35);
+  border-radius: 24px; padding: 16px; margin-bottom: 16px;
+}
+.claim-banner p { margin: 0; flex: 1 1 220px; }
+.claim-banner .primary-btn { white-space: nowrap; }
 .biz-chip { background: var(--surface); border: 1px solid var(--gray20); border-radius: 999px; padding: 8px 16px; font-size: 13px; cursor: pointer; color: var(--gray70); flex-shrink: 0; white-space: nowrap; }
 .biz-chip.is-active { background: var(--accent-soft); border-color: var(--accent); color: var(--white); }
 
