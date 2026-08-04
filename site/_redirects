@@ -1,1 +1,3 @@
-/claim /business 302
+/claim   /biz          302
+/business /biz          301
+/business/* /biz/:splat 301

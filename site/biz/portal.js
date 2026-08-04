@@ -60,39 +60,36 @@ function enterAuth() {
   show($("bootView"), false);
   show($("dashView"), false);
   show($("signOutBtn"), false);
-  showPhoneStep();
+  showIntroStep();
   show($("authView"), true);
 }
 
-// The sign-in steps swap in place — only ever one is on screen.
+// The signed-out screen has four panels — the marketing intro, then the three
+// sign-in steps — and only ever one is on screen. `only` names the visible one.
+function showStep(only) {
+  ["introStep", "phoneStep", "emailStep", "codeStep"].forEach((id) =>
+    show($(id), id === only)
+  );
+  clearAuthMsg();
+}
+
 function clearAuthMsg() {
   $("authMsg").className = "form-msg";
   $("authMsg").textContent = "";
   $("code").value = "";
 }
 
-function showPhoneStep() {
-  authMethod = "sms";
-  show($("phoneStep"), true);
-  show($("emailStep"), false);
-  show($("codeStep"), false);
-  clearAuthMsg();
-}
+// The intro is the landing hero: its one CTA leads into the phone step. Nothing to
+// submit here, so it stays clean.
+function showIntroStep() { showStep("introStep"); }
 
-function showEmailStep() {
-  authMethod = "email";
-  show($("phoneStep"), false);
-  show($("emailStep"), true);
-  show($("codeStep"), false);
-  clearAuthMsg();
-}
+function showPhoneStep() { authMethod = "sms"; showStep("phoneStep"); }
+
+function showEmailStep() { authMethod = "email"; showStep("emailStep"); }
 
 function showCodeStep(target) {
   $("codeTarget").textContent = target;
-  show($("phoneStep"), false);
-  show($("emailStep"), false);
-  show($("codeStep"), true);
-  clearAuthMsg();
+  showStep("codeStep");
   $("code").focus();
 }
 
@@ -110,6 +107,11 @@ $("restartBtn").addEventListener("click", () => {
   if (authMethod === "email") { showEmailStep(); $("email").focus(); }
   else { showPhoneStep(); $("phone").focus(); }
 });
+
+// The intro's CTA opens the phone step; the steps' "Back" links return to it.
+$("startClaimBtn").addEventListener("click", () => { showPhoneStep(); $("phone").focus(); });
+document.querySelectorAll('[data-goto="intro"]').forEach((b) =>
+  b.addEventListener("click", showIntroStep));
 
 // Swap between the phone (primary) and email (alternate) sign-in methods.
 $("useEmailBtn").addEventListener("click", () => { showEmailStep(); $("email").focus(); });
@@ -374,7 +376,14 @@ function renderBilling() {
   const flash = billingFlash();
   el.innerHTML = flash + (billing.subscribed ? subscribedHTML() : unsubscribedHTML());
   const sub = $("subscribeBtn");
-  if (sub) sub.addEventListener("click", startCheckout);
+  if (sub) {
+    // ARL: the Subscribe button stays disabled until the owner ticks the
+    // consent box, so enrollment can't happen without express affirmative
+    // consent to the auto-renewal terms.
+    const consent = $("renewConsent");
+    consent.addEventListener("change", () => { sub.disabled = !consent.checked; });
+    sub.addEventListener("click", startCheckout);
+  }
   const manage = $("manageBtn");
   if (manage) manage.addEventListener("click", openStripePortal);
 }
@@ -411,12 +420,20 @@ function unsubscribedHTML() {
         : `After your ${limit} free leads, a subscription keeps customer requests coming.`}
     </p>
     <div class="price-row"><span class="price">$25</span><span class="muted">/month · unlimited leads</span></div>
-    <button class="primary-btn wide" id="subscribeBtn">Subscribe</button>
-    <p class="fineprint">
-      $25 per month, charged to your card today and automatically on the same day each month
-      until you cancel. <strong>Cancel anytime in one click</strong> from this page — no phone
-      call, no email. See our <a href="../business-terms.html">Business Terms</a>.
-    </p>`;
+    <div class="renewal-terms">
+      <p><strong>This is an automatically renewing subscription.</strong></p>
+      <ul>
+        <li>You'll be charged <strong>$25.00</strong> today.</li>
+        <li>It renews automatically for <strong>$25.00 every month</strong>, on this same date, until you cancel.</li>
+        <li><strong>Cancel anytime in one click</strong> from this Billing page — no phone call, no email.</li>
+      </ul>
+    </div>
+    <label class="consent" for="renewConsent">
+      <input type="checkbox" id="renewConsent">
+      <span>I agree to the <a href="../business-terms.html">Business Terms</a> and understand this
+        subscription renews automatically at $25/month until I cancel.</span>
+    </label>
+    <button class="primary-btn wide" id="subscribeBtn" disabled>Subscribe</button>`;
 }
 
 function subscribedHTML() {
@@ -447,9 +464,17 @@ function subscribedHTML() {
 
 async function startCheckout() {
   const btn = $("subscribeBtn");
+  const consent = $("renewConsent");
+  if (!consent || !consent.checked) return;   // belt-and-suspenders: never charge without consent
   btn.disabled = true; btn.textContent = "Opening secure checkout…";
   try {
-    const resp = await authedFetch("/api/billing/checkout", { method: "POST" });
+    // Send the consent signal so the server can persist a dated record of it —
+    // ARL requires keeping proof of consent for 3 years (1 year post-cancel).
+    const resp = await authedFetch("/api/billing/checkout", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ renewalConsent: true }),
+    });
     if (!resp.ok) throw new Error(`Couldn't start checkout (${resp.status}).`);
     const { url } = await resp.json();
     location.href = url;      // Stripe-hosted — no card data touches this page
@@ -1044,43 +1069,40 @@ async function signOut() {
   location.reload();
 }
 
-// The app's "Delete profile": drops only the owner-authored business_profiles row.
-// Requests are untouched and the listing reverts to its Google-derived info.
-// RLS gates this to the owner.
-async function deletePage() {
+// Permanent account deletion. Unlinks every business this owner holds, removes
+// their profile pages, and deletes the login itself — then signs out for good.
+// The browser's anon key CAN'T delete a Supabase auth user, so the actual removal
+// happens server-side in /api/account/delete (service role); here we just kick it
+// off and, on success, drop the local session and reload to the signed-out page.
+// Customer requests are preserved (they're keyed to the customer, not this owner).
+async function deleteAccount() {
   if (!confirm(
-    "Delete this page?\n\nYour photos, services and description are removed. " +
-    "Your requests stay, and your listing falls back to its public info. " +
-    "You can rebuild the page anytime."
+    "Delete your account?\n\n" +
+    "This permanently removes your business page and signs you out for good — you " +
+    "won't be able to log in again with this phone or email. Your listing reverts to " +
+    "its public info, and customer requests are kept. This cannot be undone."
   )) return;
   const btn = $("deletePageBtn");
   btn.disabled = true; btn.textContent = "Deleting…";
-  // `.select()` makes the delete return the rows it actually removed. Under RLS a
-  // caller who isn't the owner deletes 0 rows and gets NO error — so without this
-  // the failure is invisible and the profile silently survives.
-  const { data: deleted, error } = await sb
-    .from("business_profiles").delete().eq("place_id", current.place_id).select("place_id");
-  btn.disabled = false; btn.textContent = "Delete profile";
-  if (error) { alert("Delete failed: " + (error.message || "unknown error")); return; }
-  if (!deleted || deleted.length === 0) {
-    // 0 rows removed: either there was no saved profile (fine — nothing to delete),
-    // or RLS refused it. Re-read (public read is always allowed) to tell them apart.
-    const { data: still } = await sb.from("business_profiles")
-      .select("place_id").eq("place_id", current.place_id).maybeSingle();
-    if (still) {
-      alert(
-        "The database wouldn't let this account delete the page — you're not recognized " +
-        "as its owner. This happens when you signed in by phone but the page is linked to " +
-        "an email (or vice-versa). Email hello@brightglow.co and we'll fix the ownership link."
-      );
-      return;
+  try {
+    const resp = await authedFetch("/api/account/delete", { method: "POST" });
+    if (!resp.ok) {
+      const body = await resp.json().catch(() => ({}));
+      throw new Error(body.error || `Delete failed (${resp.status}).`);
     }
+  } catch (err) {
+    btn.disabled = false; btn.textContent = "Delete account";
+    alert(
+      (err && err.message) ||
+      "Delete failed. Please try again, or email hello@brightglow.co and we'll remove it."
+    );
+    return;
   }
+  // The account row is gone. Sign out to clear the local session (this may 401 now
+  // that the user no longer exists — that's fine) and hard-reload to the landing.
   dirty = false;
-  showView("dash");               // leave the editor immediately — never strand the
-                                  // owner on the just-deleted profile if the re-seed throws
-  await selectBusiness(current);   // re-seed from the lead, as the app does
-
+  try { await sb.auth.signOut(); } catch { /* user already deleted server-side */ }
+  location.reload();
 }
 
 function wireStaticHandlers() {
@@ -1095,7 +1117,7 @@ function wireStaticHandlers() {
   $("editorBack").addEventListener("click", () => showView("dash"));
   $("billingBtn").addEventListener("click", () => showView("billing"));
   $("billingBack").addEventListener("click", () => showView("dash"));
-  $("deletePageBtn").addEventListener("click", deletePage);
+  $("deletePageBtn").addEventListener("click", deleteAccount);
   $("claimBtn").addEventListener("click", claimCurrentBusiness);
   // Leaving inside the debounce window must not lose the edit. keepalive-style
   // flush: fire the save without awaiting, the same shape as the app's onDisappear.

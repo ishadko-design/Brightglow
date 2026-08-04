@@ -9,7 +9,7 @@
   <meta name="robots" content="noindex">
   <link rel="icon" type="image/png" href="../favicon.png">
   <link rel="apple-touch-icon" href="../apple-touch-icon.png">
-  <link rel="stylesheet" href="portal.css?v=3">
+  <link rel="stylesheet" href="portal.css?v=7">
 </head>
 <body class="portal">
   <header class="topbar">
@@ -39,18 +39,56 @@
       <div class="spinner" aria-label="Loading"></div>
     </section>
 
-    <!-- Signed-out: claim / sign in. Steps swap in place — phone (primary, the
-         number we texted the request to) or email, then the 6-digit code. -->
-    <section id="authView" class="card auth" hidden>
-      <!-- Step 1a: phone (primary). The number customers were texted is the number
-           the business proves possession of, so this reaches the ~70% of businesses
-           we have no email for. -->
-      <div id="phoneStep">
-        <h1>Claim your business page</h1>
+    <!-- Signed-out: a spare marketing intro (mirrors the consumer landing — one
+         headline, one CTA, one image) that leads INTO the sign-in steps. Only one
+         panel shows at a time (showStep in portal.js). NOTE: fail()/noBusiness()
+         overwrite this section's innerHTML with a plain message, so #authView must
+         tolerate simple content too. -->
+    <section id="authView" class="auth-landing" hidden>
+      <!-- Intro: the hero. "Claim your business" opens the phone step — nothing to
+           fill in here, so it stays clean. -->
+      <div id="introStep" class="intro">
+        <h1>Get found for the work you do best.</h1>
+        <p class="intro-sub">
+          Real customers, matched to you by the jobs you've actually done — then a
+          spam-free chat. No cold calls, no bidding wars. Just the leads meant for you.
+        </p>
+
+        <ul class="feature-row">
+          <li>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 10c0 6-9 12-9 12s-9-6-9-12a9 9 0 0 1 18 0Z"/><circle cx="12" cy="10" r="3"/></svg>
+            <span>Matched leads</span>
+          </li>
+          <li>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3 4 6v6c0 5 3.5 7.5 8 9 4.5-1.5 8-4 8-9V6l-8-3Z"/><path d="m9 12 2 2 4-4"/></svg>
+            <span>Spam-free chat</span>
+          </li>
+          <li>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M13 2 3 14h7l-1 8 10-12h-7l1-8Z"/></svg>
+            <span>Free to claim</span>
+          </li>
+        </ul>
+
+        <button type="button" class="primary-btn cta" id="startClaimBtn">Claim your business</button>
+        <p class="fineprint">
+          By continuing you agree to our <a href="../business-terms.html">Business Terms of Service</a>.
+        </p>
+
+        <!-- One image, consumer-style: the app customers use to find and message
+             pros. Decorative. -->
+        <div class="intro-stage" aria-hidden="true">
+          <img class="intro-phone" src="../media/app-screen-home.png" alt="">
+        </div>
+      </div>
+
+      <!-- Phone claim (primary). The number customers were texted is what the
+           business proves possession of — reaches the ~70% we have no email for. -->
+      <div id="phoneStep" class="auth-card" hidden>
+        <button type="button" class="linklike back" data-goto="intro">← Back</button>
+        <h2 class="card-title">Claim your business</h2>
         <p class="muted">
-          Enter your business phone — the number customers call or text you on.
-          We'll text you a 6-digit code, no password. Only that number can manage
-          the page, so your listing stays yours.
+          Enter the phone customers call or text you on. We'll text a 6-digit code —
+          no password. Only that number can manage the page.
         </p>
         <form id="phoneForm" novalidate>
           <label for="phone">Business phone</label>
@@ -61,14 +99,14 @@
         <button type="button" class="linklike" id="useEmailBtn">Use email instead</button>
       </div>
 
-      <!-- Step 1b: email (alternate) — for a business that would rather use the
-           inbox we matched, or whose phone we never recorded. -->
-      <div id="emailStep" hidden>
-        <h1>Claim your business page</h1>
+      <!-- Email (alternate) — for a business that would rather use the inbox we
+           matched, or whose phone we never recorded. -->
+      <div id="emailStep" class="auth-card" hidden>
+        <button type="button" class="linklike back" data-goto="intro">← Back</button>
+        <h2 class="card-title">Claim your business</h2>
         <p class="muted">
-          Enter the email where you received your Brightglow request. We'll email
-          you a 6-digit sign-in code — no password. Only the inbox we matched can
-          manage the page, so your listing stays yours.
+          Enter the email where you received your Brightglow request. We'll email a
+          6-digit sign-in code — no password. Only that inbox can manage the page.
         </p>
         <form id="authForm" novalidate>
           <label for="email">Business email</label>
@@ -79,12 +117,12 @@
         <button type="button" class="linklike" id="usePhoneBtn">Use phone instead</button>
       </div>
 
-      <!-- Step 2: enter the code. Replaces step 1 once the code is sent. -->
-      <div id="codeStep" hidden>
-        <h1>Enter your code</h1>
+      <!-- Enter the code. Replaces the phone/email step once a code is sent. -->
+      <div id="codeStep" class="auth-card" hidden>
+        <h2 class="card-title">Enter your code</h2>
         <p class="muted">
-          We sent a 6-digit code to <strong id="codeTarget"></strong>. Enter it
-          below to sign in. It can take a minute to arrive.
+          We sent a 6-digit code to <strong id="codeTarget"></strong>. Enter it below
+          to sign in. It can take a minute to arrive.
         </p>
         <form id="codeForm" novalidate>
           <label for="code">6-digit code</label>
@@ -97,9 +135,6 @@
       </div>
 
       <p id="authMsg" class="form-msg" role="status" aria-live="polite"></p>
-      <p class="fineprint">
-        By continuing you agree to our <a href="../business-terms.html">Business Terms of Service</a>.
-      </p>
     </section>
 
     <!-- Signed-in: dashboard -->
@@ -247,11 +282,13 @@
       <div id="serviceRows" class="service-rows"></div>
       <button type="button" class="add-row-btn" id="addServiceBtn">Add service</button>
 
-      <!-- Tail of the screen, as in Figma: a rule, then a centered Delete profile.
-           Sign out lives in the topbar (the Figma header has no profile icon). -->
+      <!-- Tail of the screen, as in Figma: a rule, then a centered Delete account.
+           Sign out lives in the topbar (the Figma header has no profile icon).
+           This is a permanent account deletion (see deleteAccount in portal.js),
+           not a page reset — it removes the login and signs the owner out. -->
       <hr class="tail-rule">
       <div class="tail-actions">
-        <button type="button" class="ghost-btn" id="deletePageBtn">Delete profile</button>
+        <button type="button" class="ghost-btn danger" id="deletePageBtn">Delete account</button>
         <p class="muted small" id="signedInAs"></p>
       </div>
 
@@ -287,6 +324,6 @@
     <span>© 2026 Brightglow Technologies LLC</span>
   </footer>
 
-  <script type="module" src="portal.js?v=3"></script>
+  <script type="module" src="portal.js?v=7"></script>
 </body>
 </html>

@@ -13,7 +13,7 @@ name = "brightglow"
 main = "worker.js"
 compatibility_date = "2026-07-16"
 
-# Static site. Directory index.html (so /business/ works) is handled by the
+# Static site. Directory index.html (so /biz/ works) is handled by the
 # default html_handling — no config needed.
 #
 # not_found_handling MUST stay "none": anything else makes the asset router
