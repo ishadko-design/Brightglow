@@ -43,12 +43,29 @@ final class AuthService: ObservableObject {
 
     // MARK: - Email OTP
 
+    /// App Review demo account. This one address signs in with a fixed password
+    /// (typed into the "code" field) instead of a real email OTP, so Apple's
+    /// reviewer can get past the login wall without receiving an email. Any other
+    /// address goes through the normal OTP path untouched — this is a real
+    /// credentialed Supabase account we control, not a shared backdoor.
+    static let reviewEmail = "appreview@brightglow.co"
+
+    /// True when `raw` is the App Review demo address (case/whitespace-insensitive).
+    /// LoginView uses this to swap the "check your email" screen for a password
+    /// field, since the demo account signs in with a password, not a magic link.
+    static func isReviewEmail(_ raw: String) -> Bool {
+        raw.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() == reviewEmail
+    }
+
     func sendOTP(email: String) async {
         let trimmed = email.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
         guard trimmed.contains("@"), trimmed.contains(".") else {
             message = "Enter a valid email address."
             return
         }
+        // Demo account: nothing to send. Return cleanly so LoginView advances to
+        // the code screen, where the reviewer types the password.
+        if trimmed == Self.reviewEmail { return }
         isLoading = true
         defer { isLoading = false }
         do {
@@ -63,12 +80,20 @@ final class AuthService: ObservableObject {
     }
 
     func verifyOTP(email: String, code: String) async {
+        let trimmedEmail = email.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        let trimmedCode = code.trimmingCharacters(in: .whitespacesAndNewlines)
         isLoading = true
         defer { isLoading = false }
         do {
+            // Demo account: the "code" is actually the account password.
+            if trimmedEmail == Self.reviewEmail {
+                let session = try await supabase.auth.signIn(email: trimmedEmail, password: trimmedCode)
+                user = session.user
+                return
+            }
             let session = try await supabase.auth.verifyOTP(
-                email: email.trimmingCharacters(in: .whitespacesAndNewlines).lowercased(),
-                token: code.trimmingCharacters(in: .whitespacesAndNewlines),
+                email: trimmedEmail,
+                token: trimmedCode,
                 type: .email
             )
             user = session.user

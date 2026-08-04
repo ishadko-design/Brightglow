@@ -6,7 +6,9 @@ struct LoginView: View {
     @EnvironmentObject var auth: AuthService
     @State private var email = ""
     @State private var emailSent = false
+    @State private var reviewCode = ""
     @FocusState private var emailFocused: Bool
+    @FocusState private var reviewCodeFocused: Bool
 
     var body: some View {
         ZStack {
@@ -45,20 +47,35 @@ struct LoginView: View {
                 .ignoresSafeArea()
                 .allowsHitTesting(false)
 
-            // Layer 3: wordmark, centered in the vertical middle (matches the
-            // splash and the email-sent screen — the logo is centered everywhere).
-            Text("Brightglow")
-                .font(.h1)
-                .foregroundStyle(.white)
-                .frame(maxWidth: .infinity, alignment: .center)
-                .padding(.horizontal, 32)
+            // Layer 3: wordmark, centered in the vertical middle. Hidden on the
+            // confirmation screen so it doesn't sit behind the raised input.
+            if !emailSent {
+                Text("Brightglow")
+                    .font(.h1)
+                    .foregroundStyle(.white)
+                    .frame(maxWidth: .infinity, alignment: .center)
+                    .padding(.horizontal, 32)
+            }
 
-            // Layer 4: form pinned to bottom
+            // Layer 4: form, pinned to the bottom. Native keyboard avoidance nudges
+            // the focused field up a little when the keyboard appears. The wordmark
+            // (Layer 3) is hidden while confirming so nothing shows behind it.
             VStack(spacing: 0) {
                 Spacer()
                 VStack(spacing: 16) {
                     if emailSent {
-                        VStack(spacing: 12) {
+                        if AuthService.isReviewEmail(email) {
+                            // App Review demo account: no magic link is sent — the
+                            // reviewer types the account password here and AuthService
+                            // signs in with it (see reviewEmail).
+                            reviewCodeField
+                            useDifferentEmailButton
+                            // Reserve the same space the entry screen keeps under its
+                            // email field (Apple + Google + consent) so the code field
+                            // rests at that same height — the keyboard then only nudges
+                            // it up a little instead of making it jump.
+                            Spacer().frame(height: 140)
+                        } else {
                             Image(systemName: "envelope.fill")
                                 .font(.system(size: 36))
                                 .foregroundStyle(.white.opacity(0.8))
@@ -69,21 +86,8 @@ struct LoginView: View {
                                 .font(.bodySmall)
                                 .foregroundStyle(.white.opacity(0.6))
                                 .multilineTextAlignment(.center)
-                            Button {
-                                emailSent = false
-                                email = ""
-                            } label: {
-                                Text("Use a different email")
-                                    .font(.bodySmall)
-                                    .foregroundStyle(.white.opacity(0.9))
-                                    .padding(.horizontal, 20)
-                                    .frame(height: 40)
-                                    .secondaryButtonBackground()
-                            }
-                            .buttonStyle(.textAction)
-                            .padding(.top, 8)
+                            useDifferentEmailButton
                         }
-                        .padding(.vertical, 16)
                     } else {
                         emailField
                         appleButton
@@ -191,6 +195,91 @@ struct LoginView: View {
         .overlay(RoundedRectangle(cornerRadius: 32).stroke(Color.white.opacity(0.2), lineWidth: 3))
     }
 
+    private var useDifferentEmailButton: some View {
+        Button {
+            emailSent = false
+            email = ""
+            reviewCode = ""
+        } label: {
+            Text("Use a different email")
+                .font(.bodySmall)
+                .foregroundStyle(.white.opacity(0.9))
+                .padding(.horizontal, 20)
+                .frame(height: 40)
+                .secondaryButtonBackground()
+        }
+        .buttonStyle(.textAction)
+        .padding(.top, 8)
+    }
+
+    // MARK: - App Review demo code field
+
+    // Shown only for the demo account (see AuthService.reviewEmail). The reviewer
+    // types the account password; verifyOTP routes this address to a password
+    // sign-in instead of an email OTP.
+    private var reviewCodeField: some View {
+        VStack(spacing: 12) {
+            Image(systemName: "lock.fill")
+                .font(.system(size: 36))
+                .foregroundStyle(.white.opacity(0.8))
+            Text("Enter access code")
+                .font(.h2)
+                .foregroundStyle(.white)
+            HStack(spacing: 8) {
+                SecureField("", text: $reviewCode, prompt:
+                    Text("Access code").foregroundStyle(.white.opacity(0.6))
+                )
+                .font(.bodyLight)
+                .foregroundStyle(.white)
+                .tint(.white)
+                .textContentType(.password)
+                .textInputAutocapitalization(.never)
+                .autocorrectionDisabled()
+                .focused($reviewCodeFocused)
+                .submitLabel(.go)
+                .onSubmit { submitReviewCode() }
+
+                Button(action: submitReviewCode) {
+                    ZStack {
+                        if auth.isLoading {
+                            ProgressView().tint(.white).scaleEffect(0.8)
+                        } else {
+                            Image(systemName: "arrow.forward")
+                                .font(.system(size: 16, weight: .semibold))
+                                .foregroundStyle(.white)
+                        }
+                    }
+                    .frame(width: 44, height: 44)
+                    .background(
+                        LinearGradient(
+                            colors: [AppColors.accentStart, AppColors.accentEnd],
+                            startPoint: .top, endPoint: .bottom
+                        )
+                    )
+                    .clipShape(Circle())
+                }
+                .disabled(auth.isLoading || reviewCode.isEmpty)
+            }
+            .padding(.leading, 20)
+            .padding(.trailing, 8)
+            .padding(.vertical, 8)
+            .frame(height: 64)
+            .background {
+                // Identical to emailField so the two screens' inputs match exactly.
+                ZStack {
+                    RoundedRectangle(cornerRadius: 32).fill(Color.black.opacity(0.85))
+                    RoundedRectangle(cornerRadius: 32)
+                        .fill(LinearGradient(
+                            colors: [.black, Color.white.opacity(0.4)],
+                            startPoint: .leading, endPoint: .trailing
+                        ).opacity(0.5))
+                    RoundedRectangle(cornerRadius: 32).fill(.ultraThinMaterial.opacity(0.2))
+                }
+            }
+            .overlay(RoundedRectangle(cornerRadius: 32).stroke(Color.white.opacity(0.2), lineWidth: 3))
+        }
+    }
+
     // MARK: - Social buttons
 
     // Apple's native button, used directly. A SignInWithAppleButton can't be
@@ -245,6 +334,11 @@ struct LoginView: View {
             await auth.sendOTP(email: email)
             if auth.message == nil { emailSent = true }
         }
+    }
+
+    private func submitReviewCode() {
+        reviewCodeFocused = false
+        Task { await auth.verifyOTP(email: email, code: reviewCode) }
     }
 }
 
