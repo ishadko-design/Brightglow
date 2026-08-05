@@ -154,7 +154,8 @@ body.landing::before {
 }
 
 .hero-copy {
-  padding-top: calc(28 * var(--s));
+  /* Figma node 1367:3260: 56 gap between the header and the hero */
+  padding-top: calc(56 * var(--s));
   text-align: center;
 }
 
