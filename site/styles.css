@@ -207,10 +207,8 @@ body.landing::before {
 .stage {
   position: relative;
   width: 100%;
-  height: calc(740 * var(--s));
-  /* extra top room so the flooring card can sit above the phone's top edge
-     (clear of the CTA button, with headroom for its parallax drift) */
-  margin: calc(158 * var(--s)) auto 0;
+  height: calc(700 * var(--s));
+  margin: calc(56 * var(--s)) auto 0;
   /* purely decorative — never intercept taps meant for links above/below it */
   pointer-events: none;
 }
@@ -224,11 +222,16 @@ body.landing::before {
   display: block;
 }
 
+/* phone.png carries ~50px of transparent shadow margin per side, so the
+   element is 419 units wide to render the visible phone at Figma's 320; the
+   visible screen then spans 50% ± 160 with its top 21.5 below the stage top.
+   All card/chip offsets below are derived from Figma node 1367:3260 against
+   that visible frame. */
 .stage .phone {
   left: 50%;
   transform: translateX(-50%);
   top: 0;
-  width: calc(320 * var(--s));
+  width: calc(419 * var(--s));
   z-index: 2;
 }
 
@@ -240,41 +243,40 @@ body.landing::before {
           drop-shadow(0 4px 10px rgba(0, 0, 0, 0.45));
 }
 
-/* flooring card sits above the phone's top-left (raised out of the frame) */
+/* photo cards behind the phone (their inner edge tucks under it) */
 .stage .card-flooring {
-  left: calc(50% - 210 * var(--s));
-  top: calc(-122 * var(--s));
-  width: calc(150 * var(--s));
+  left: calc(50% - 277 * var(--s));
+  top: calc(40 * var(--s));
+  width: calc(211 * var(--s));
   z-index: 1;
 }
 
-/* dent card — behind the phone, peeks from its top-right edge */
 .stage .card-dent {
-  left: calc(50% + 118 * var(--s));
-  top: calc(18 * var(--s));
-  width: calc(120 * var(--s));
+  left: calc(50% + 93 * var(--s));
+  top: calc(44 * var(--s));
+  width: calc(162 * var(--s));
   z-index: 1;
 }
 
-/* real-job photo cards — in front of the phone */
+/* photo cards in front of the phone */
 .stage .card-bulb {
-  left: calc(50% - 56 * var(--s));
-  top: calc(300 * var(--s));
-  width: calc(96 * var(--s));
+  left: calc(50% - 76 * var(--s));
+  top: calc(238 * var(--s));
+  width: calc(152 * var(--s));
   z-index: 4;
 }
 
 .stage .card-flat-tire {
-  left: calc(50% - 206 * var(--s));
-  top: calc(508 * var(--s));
-  width: calc(120 * var(--s));
+  left: calc(50% - 240 * var(--s));
+  top: calc(425 * var(--s));
+  width: calc(161 * var(--s));
   z-index: 4;
 }
 
 .stage .card-roof-leak {
-  left: calc(50% + 96 * var(--s));
-  top: calc(452 * var(--s));
-  width: calc(132 * var(--s));
+  left: calc(50% + 67 * var(--s));
+  top: calc(345 * var(--s));
+  width: calc(187 * var(--s));
   z-index: 4;
 }
 
@@ -298,11 +300,11 @@ body.landing::before {
   box-shadow: 0 11px 26px rgba(0, 0, 0, 0.28);
 }
 
-.stage .chip-dent      { left: calc(50% + 100 * var(--s)); top: calc(116 * var(--s)); }
-.stage .chip-flooring  { left: calc(50% - 178 * var(--s)); top: calc(-16 * var(--s)); }
-.stage .chip-bulb      { left: calc(50% - 96 * var(--s));  top: calc(334 * var(--s)); }
-.stage .chip-roof-leak { left: calc(50% + 58 * var(--s));  top: calc(556 * var(--s)); }
-.stage .chip-flat-tire { left: calc(50% - 166 * var(--s)); top: calc(604 * var(--s)); }
+.stage .chip-dent      { left: calc(50% + 77 * var(--s));  top: calc(124 * var(--s)); }
+.stage .chip-flooring  { left: calc(50% - 183 * var(--s)); top: calc(186 * var(--s)); }
+.stage .chip-bulb      { left: calc(50% - 82 * var(--s));  top: calc(360 * var(--s)); }
+.stage .chip-roof-leak { left: calc(50% + 79 * var(--s));  top: calc(490 * var(--s)); }
+.stage .chip-flat-tire { left: calc(50% - 188 * var(--s)); top: calc(520 * var(--s)); }
 
 /* ---------- landing footer ---------- */
 
