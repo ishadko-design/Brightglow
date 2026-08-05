@@ -136,10 +136,16 @@ a { color: inherit; }
   z-index: -1;
   pointer-events: none;
   background:
-    linear-gradient(212deg, rgba(255, 172, 54, 0.42) 0%, rgba(10, 10, 11, 0) 52%),
-    linear-gradient(34deg, rgba(6, 6, 6, 0.94) 42%, rgba(74, 51, 18, 0.6) 100%),
-    url("../media/biz-hero.jpg?v=1") 62% 28% / cover no-repeat,
-    #000;
+    /* amber glow bleeding in from the top-right (Figma frame gradient) */
+    linear-gradient(212deg, rgba(255, 172, 54, 0.32) 0%, rgba(10, 10, 11, 0) 42%),
+    /* wash: warm-dark at the top for the logo, muted through the middle so the
+       teal photo reads but stays subdued, darker again at the bottom */
+    linear-gradient(180deg, rgba(28, 20, 8, 0.62) 0%, rgba(18, 18, 12, 0.24) 34%,
+                    rgba(9, 12, 13, 0.42) 72%, rgba(5, 9, 11, 0.82) 100%),
+    /* flat warm veil to mute the blue toward the Figma's warmer cast */
+    linear-gradient(0deg, rgba(52, 40, 20, 0.20), rgba(52, 40, 20, 0.20)),
+    url("../media/biz-hero.jpg?v=2") 44% 42% / cover no-repeat,
+    #0a0f12;
 }
 /* Let the photo run under the header on the landing — no bar, just the logo,
    and the Figma landing wordmark is plain "Brightglow" (no "for Business"). */
