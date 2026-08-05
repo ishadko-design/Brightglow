@@ -149,6 +149,10 @@ body.portal:has(#authView:not([hidden])) .topbar {
   backdrop-filter: none;
 }
 body.portal:has(#authView:not([hidden])) .brand em { display: none; }
+/* Landing header matches the consumer's: 44px icon + 24px Lato-Heavy wordmark
+   (the default portal header stays small so it fits the signed-in actions). */
+body.portal:has(#authView:not([hidden])) .brand { font-weight: 800; font-size: calc(24 * var(--s)); }
+body.portal:has(#authView:not([hidden])) .brand .appicon { width: calc(44 * var(--s)); height: calc(44 * var(--s)); border-radius: calc(11 * var(--s)); }
 .intro { text-align: center; }
 /* Figma node 1369:2826: Lato Regular 400, 44 / 52.8 */
 .intro h1 {
