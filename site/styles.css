@@ -296,8 +296,8 @@ body.landing::before {
 }
 
 .stage .chip-dent      { left: calc(50% + 100 * var(--s)); top: calc(116 * var(--s)); }
-.stage .chip-flooring  { left: calc(50% - 168 * var(--s)); top: calc(214 * var(--s)); }
-.stage .chip-bulb      { left: calc(50% - 96 * var(--s));  top: calc(468 * var(--s)); }
+.stage .chip-flooring  { left: calc(50% - 178 * var(--s)); top: calc(120 * var(--s)); }
+.stage .chip-bulb      { left: calc(50% - 96 * var(--s));  top: calc(374 * var(--s)); }
 .stage .chip-roof-leak { left: calc(50% + 58 * var(--s));  top: calc(556 * var(--s)); }
 .stage .chip-flat-tire { left: calc(50% - 166 * var(--s)); top: calc(604 * var(--s)); }
 
