@@ -208,7 +208,9 @@ body.landing::before {
   position: relative;
   width: 100%;
   height: calc(740 * var(--s));
-  margin: calc(56 * var(--s)) auto 0;
+  /* extra top room so the flooring card can sit above the phone's top edge
+     (clear of the CTA button, with headroom for its parallax drift) */
+  margin: calc(158 * var(--s)) auto 0;
   /* purely decorative — never intercept taps meant for links above/below it */
   pointer-events: none;
 }
@@ -238,14 +240,15 @@ body.landing::before {
           drop-shadow(0 4px 10px rgba(0, 0, 0, 0.45));
 }
 
-/* real-job photo cards — behind the phone (peek from its top edges) */
+/* flooring card sits above the phone's top-left (raised out of the frame) */
 .stage .card-flooring {
   left: calc(50% - 210 * var(--s));
-  top: calc(6 * var(--s));
+  top: calc(-122 * var(--s));
   width: calc(150 * var(--s));
   z-index: 1;
 }
 
+/* dent card — behind the phone, peeks from its top-right edge */
 .stage .card-dent {
   left: calc(50% + 118 * var(--s));
   top: calc(18 * var(--s));
@@ -296,8 +299,8 @@ body.landing::before {
 }
 
 .stage .chip-dent      { left: calc(50% + 100 * var(--s)); top: calc(116 * var(--s)); }
-.stage .chip-flooring  { left: calc(50% - 178 * var(--s)); top: calc(120 * var(--s)); }
-.stage .chip-bulb      { left: calc(50% - 96 * var(--s));  top: calc(374 * var(--s)); }
+.stage .chip-flooring  { left: calc(50% - 178 * var(--s)); top: calc(-16 * var(--s)); }
+.stage .chip-bulb      { left: calc(50% - 96 * var(--s));  top: calc(334 * var(--s)); }
 .stage .chip-roof-leak { left: calc(50% + 58 * var(--s));  top: calc(556 * var(--s)); }
 .stage .chip-flat-tire { left: calc(50% - 166 * var(--s)); top: calc(604 * var(--s)); }
 
