@@ -125,8 +125,8 @@ a { color: inherit; }
   padding-top: calc(28 * var(--s));   /* = .hero-copy padding-top */
 }
 
-/* Full-bleed hero photo (Figma 1369:2826): a contractor at work, darkened by a
-   near-black→warm-brown wash with an amber glow bleeding in from the top-right.
+/* Hero background (Figma "Site-Biz" frame): black with an amber glow bleeding
+   from the top-right — exact stops #ffac36 @ 60% → #0a0a0b @ 59%, ending 85%.
    Fixed and behind everything; scoped to #authView so it only paints while
    signed out (the element is display:none once a business is being managed). */
 #authView::before {
@@ -136,16 +136,8 @@ a { color: inherit; }
   z-index: -1;
   pointer-events: none;
   background:
-    /* amber glow bleeding in from the top-right (Figma frame gradient) */
-    linear-gradient(212deg, rgba(255, 172, 54, 0.30) 0%, rgba(10, 10, 11, 0) 45%),
-    /* Figma photo overlay (node 1369:2826 rect): a near-black wash from the
-       bottom-left warming to brown at the top-right — heavy enough to subdue
-       the photo but keep the scene readable. Left-anchored so the narrow
-       mobile crop keeps the pipes + hands, not the arm. */
-    linear-gradient(36deg, rgba(6, 6, 6, 0.82) 0%, rgba(6, 6, 6, 0.5) 45%,
-                    rgba(78, 54, 20, 0.62) 100%),
-    url("../media/biz-hero.jpg?v=2") left center / cover no-repeat,
-    #060606;
+    linear-gradient(212deg, rgba(255, 172, 54, 0.6) 0%, rgba(10, 10, 11, 0.59) 85%),
+    #000;
 }
 /* Let the photo run under the header on the landing — no bar, just the logo,
    and the Figma landing wordmark is plain "Brightglow" (no "for Business"). */
@@ -156,44 +148,40 @@ body.portal:has(#authView:not([hidden])) .topbar {
 }
 body.portal:has(#authView:not([hidden])) .brand em { display: none; }
 .intro { text-align: center; }
+/* Figma node 1369:2826: Lato Regular 400, 44 / 52.8 */
 .intro h1 {
-  font-weight: 800;
+  font-weight: 400;
   font-size: calc(44 * var(--s));
-  line-height: calc(53 * var(--s));
+  line-height: calc(52.8 * var(--s));
 }
 .intro-sub {
+  /* Poppins Light 17 / 25.5, white 60% */
   margin-top: calc(24 * var(--s));
-  font-size: 17px; line-height: 26px; color: var(--gray50);
+  font-size: calc(17 * var(--s)); line-height: calc(25.5 * var(--s));
+  color: rgba(255, 255, 255, 0.6);
 }
 
-/* Icon feature row (Figma): one translucent bar, amber marks, three items
-   spread across a single row. */
+/* Icon feature row (Figma): no container — three items in a row, amber marks,
+   Poppins Light 14, white 60%. */
 .feature-row {
-  list-style: none; margin: calc(32 * var(--s)) 0 0;
-  display: flex; justify-content: space-between; align-items: center; gap: 8px;
-  padding: calc(13 * var(--s)) calc(10 * var(--s));
-  border: 1px solid var(--gray10);
-  border-radius: calc(16 * var(--s));
-  background: rgba(255, 255, 255, 0.04);
-  -webkit-backdrop-filter: blur(12px);
-  backdrop-filter: blur(12px);
+  list-style: none; margin: calc(36 * var(--s)) 0 0;
+  display: flex; justify-content: space-between; align-items: center; gap: 10px;
 }
-.feature-row li { display: flex; align-items: center; gap: 5px; font-size: 11.5px; color: var(--gray70); white-space: nowrap; }
-.feature-row svg { width: 14px; height: 14px; color: var(--gold); flex: none; }
-/* very narrow phones: let the bar wrap rather than overflow */
-@media (max-width: 374px) { .feature-row { flex-wrap: wrap; justify-content: center; gap: 10px 16px; } }
+.feature-row li { display: flex; align-items: center; gap: 8px; font-size: calc(14 * var(--s)); line-height: calc(21 * var(--s)); color: rgba(255, 255, 255, 0.6); white-space: nowrap; }
+.feature-row svg { width: calc(20 * var(--s)); height: calc(20 * var(--s)); color: var(--gold); flex: none; }
+/* very narrow phones: let the row wrap rather than overflow */
+@media (max-width: 360px) { .feature-row { flex-wrap: wrap; justify-content: center; gap: 12px 18px; } }
 
-/* CTA = the consumer's .appstore-btn spec (height, radius, font). Centred, sized
-   to its label as in Figma (not full-width). */
+/* CTA (Figma "Frame 36953"): 222 wide, centred, blue, Lato 700 / 18. */
 .primary-btn.cta {
-  margin: calc(32 * var(--s)) auto 0;
-  width: auto; min-width: calc(200 * var(--s)); height: calc(52 * var(--s));
-  padding: 0 calc(40 * var(--s));
+  margin: calc(44 * var(--s)) auto 0;
+  width: calc(222 * var(--s)); max-width: 100%; height: calc(52 * var(--s));
+  padding: 0;
   display: flex; align-items: center; justify-content: center;
   border-radius: 32px;
   font-size: 18px;
 }
-.intro .fineprint { margin-top: calc(20 * var(--s)); font-size: 14px; color: var(--gray70); }
+.intro .fineprint { margin-top: calc(20 * var(--s)); font-size: calc(14 * var(--s)); line-height: calc(21 * var(--s)); color: rgba(255, 255, 255, 0.6); }
 
 /* The claim card — same surface as the app's cards; a centred panel per step. */
 .auth-card {

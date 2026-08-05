@@ -159,9 +159,10 @@ body.landing::before {
 }
 
 .hero-copy h1 {
-  font-weight: 800;
+  /* Figma node 1367:3260: Lato Regular 400, 44 / 52.8 */
+  font-weight: 400;
   font-size: calc(44 * var(--s));
-  line-height: calc(53 * var(--s));
+  line-height: calc(52.8 * var(--s));
   color: var(--white);
 }
 
@@ -171,19 +172,22 @@ body.landing::before {
 }
 
 .hero-copy .sub {
-  margin-top: calc(24 * var(--s));
-  font-size: 17px;
-  line-height: 26px;
-  color: var(--gray50);
+  /* Figma: Poppins Light 17 / 25.5, white 60% */
+  margin-top: calc(32 * var(--s));
+  font-size: calc(17 * var(--s));
+  line-height: calc(25.5 * var(--s));
+  color: rgba(255, 255, 255, 0.6);
 }
 
 .appstore-btn {
-  margin-top: calc(24 * var(--s));
+  /* Figma "Frame 36953": 297 wide, centred, 44 below the subtitle */
+  margin: calc(44 * var(--s)) auto 0;
   display: flex;
   align-items: center;
   justify-content: center;
   gap: 10px;
-  width: 100%;
+  width: calc(297 * var(--s));
+  max-width: 100%;
   height: calc(52 * var(--s));
   border-radius: var(--radius);
   background: var(--accent);
@@ -207,8 +211,10 @@ body.landing::before {
 .stage {
   position: relative;
   width: 100%;
-  height: calc(700 * var(--s));
-  margin: calc(56 * var(--s)) auto 0;
+  height: calc(680 * var(--s));
+  /* Figma gap from CTA to the phone is 100; the phone art carries 21.5 of
+     transparent headroom, so the section margin makes up the rest. */
+  margin: calc(78 * var(--s)) auto 0;
   /* purely decorative — never intercept taps meant for links above/below it */
   pointer-events: none;
 }
@@ -237,74 +243,73 @@ body.landing::before {
 
 .stage .float {
   will-change: transform;
-  /* drop-shadow follows the PNG alpha (rounded corners + baked-in fades),
-     unlike box-shadow which would draw a rectangle. Kept soft so the cards
-     sit on the page rather than punch out of it. */
-  filter: drop-shadow(0 16px 32px rgba(0, 0, 0, 0.4))
-          drop-shadow(0 4px 10px rgba(0, 0, 0, 0.26));
+  /* The card PNGs already carry their exact Figma drop shadow (0 / 12 / 26.8,
+     black 20–40%) baked into the alpha — so NO extra CSS shadow here, or the
+     cards read heavy and dirty. */
 }
 
-/* all photo cards sit in front of the phone, overlapping onto the screen */
+/* all photo cards sit in front of the phone, overlapping onto the screen.
+   Positions/sizes derived from Figma node 1367:3260 against the phone frame
+   (centre = 50%, phone top = Figma y 582). */
 .stage .card-flooring {
   left: calc(50% - 277 * var(--s));
-  top: calc(40 * var(--s));
+  top: calc(-4 * var(--s));
   width: calc(211 * var(--s));
   z-index: 4;
 }
 
 .stage .card-dent {
-  left: calc(50% + 93 * var(--s));
-  top: calc(44 * var(--s));
+  left: calc(50% + 94 * var(--s));
+  top: calc(0 * var(--s));
   width: calc(162 * var(--s));
   z-index: 4;
 }
 
 .stage .card-bulb {
-  left: calc(50% - 76 * var(--s));
-  top: calc(238 * var(--s));
+  left: calc(50% - 75 * var(--s));
+  top: calc(194 * var(--s));
   width: calc(152 * var(--s));
   z-index: 4;
 }
 
 .stage .card-flat-tire {
   left: calc(50% - 240 * var(--s));
-  top: calc(425 * var(--s));
+  top: calc(329 * var(--s));
   width: calc(161 * var(--s));
   z-index: 4;
 }
 
 .stage .card-roof-leak {
   left: calc(50% + 67 * var(--s));
-  top: calc(345 * var(--s));
+  top: calc(255 * var(--s));
   width: calc(187 * var(--s));
   z-index: 4;
 }
 
-/* floating job-label pills — Figma "Button Secondary": navy→brown gradient,
-   glassy, rounded. Sit above the phone and cards. */
+/* floating job-label pills — Figma "Button Secondary": opaque navy→brown
+   gradient, 64px backdrop blur, NO drop shadow. */
 .stage .chip {
   z-index: 5;
   display: inline-flex;
   align-items: center;
-  padding: calc(13 * var(--s)) calc(18 * var(--s));
+  padding: calc(16 * var(--s));
   border-radius: calc(24 * var(--s));
-  background: linear-gradient(-49deg, rgba(45, 48, 71, 0.92) 0%, rgba(61, 44, 0, 0.92) 100%);
-  -webkit-backdrop-filter: blur(24px);
-  backdrop-filter: blur(24px);
+  background: linear-gradient(-49deg, rgba(45, 48, 71, 1) 0%, rgba(61, 44, 0, 1) 100%);
+  -webkit-backdrop-filter: blur(64px);
+  backdrop-filter: blur(64px);
   font-family: "Poppins", system-ui, sans-serif;
   font-weight: 300;
   font-size: calc(17 * var(--s));
-  line-height: 1;
+  line-height: calc(25.5 * var(--s));
   color: var(--white);
   white-space: nowrap;
-  box-shadow: 0 11px 26px rgba(0, 0, 0, 0.28);
 }
 
-.stage .chip-dent      { left: calc(50% + 77 * var(--s));  top: calc(124 * var(--s)); }
-.stage .chip-flooring  { left: calc(50% - 183 * var(--s)); top: calc(186 * var(--s)); }
-.stage .chip-bulb      { left: calc(50% - 82 * var(--s));  top: calc(360 * var(--s)); }
-.stage .chip-roof-leak { left: calc(50% + 79 * var(--s));  top: calc(490 * var(--s)); }
-.stage .chip-flat-tire { left: calc(50% - 188 * var(--s)); top: calc(520 * var(--s)); }
+.stage .chip-dent      { left: calc(50% + 77 * var(--s));  top: calc(81 * var(--s)); }
+.stage .chip-flooring  { left: calc(50% - 183 * var(--s)); top: calc(143 * var(--s)); }
+.stage .chip-bulb      { left: calc(50% - 82 * var(--s));  top: calc(317 * var(--s)); }
+.stage .chip-roof-leak { left: calc(50% + 79 * var(--s));  top: calc(401 * var(--s)); }
+.stage .chip-flat-tire { left: calc(50% - 188 * var(--s)); top: calc(424 * var(--s)); }
 
 /* ---------- landing footer ---------- */
 
