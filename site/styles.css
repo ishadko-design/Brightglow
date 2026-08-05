@@ -154,8 +154,8 @@ body.landing::before {
 }
 
 .hero-copy {
-  /* Figma node 1367:3260: 56 gap between the header and the hero */
-  padding-top: calc(56 * var(--s));
+  /* Match the business landing's header→hero gap (logo bottom to H1 = 96) */
+  padding-top: calc(96 * var(--s));
   text-align: center;
 }
 

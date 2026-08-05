@@ -133,7 +133,10 @@ a { color: inherit; }
    the top 801 units (the Figma frame height); black fills anything below. */
 body.portal:has(#authView:not([hidden])) {
   background-color: #000;
-  background-image: linear-gradient(212deg, rgba(255, 172, 54, 0.6) 0%, rgba(10, 10, 11, 0.59) 85%);
+  /* Figma's diagonal handles concentrate the amber in the top ~40% (top-right)
+     before it reads as black — a plain 212deg needs its dark stop pulled in to
+     ~42% to match, otherwise the glow washes down over the whole hero. */
+  background-image: linear-gradient(212deg, rgba(255, 172, 54, 0.6) 0%, rgba(10, 10, 11, 0.59) 42%);
   background-repeat: no-repeat;
   background-position: top center;
   background-size: 100% calc(801 * var(--s));
