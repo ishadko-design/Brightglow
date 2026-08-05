@@ -131,6 +131,24 @@ a { color: inherit; }
    content the way a fixed layer does) and scoped with :has() so it only shows
    while signed out — the dashboard keeps its plain --bg. The gradient occupies
    the top 801 units (the Figma frame height); black fills anything below. */
+/* Marketing intro fits the viewport and never scrolls; --s scales the whole
+   hero to whichever of width/height is the tighter fit. Scoped to the intro
+   step (NOT the whole signed-out view) so the sign-in forms below it can still
+   scroll for a keyboard / error messages; the dashboard scrolls normally too. */
+body.portal:has(#introStep:not([hidden])) {
+  --s: min(calc(100vw / 402), calc(100vh / 760));
+  --s: min(calc(100vw / 402), calc(100svh / 760));
+  height: 100vh;
+  height: 100svh;
+  min-height: 100svh;
+  overflow: hidden;
+}
+/* Scale the chrome that's normally fixed-px so the whole intro tracks --s
+   (harmless on the form steps, where --s falls back to 1px). */
+body.portal:has(#introStep:not([hidden])) .topbar { padding: calc(16 * var(--s)) calc(20 * var(--s)); }
+body.portal:has(#introStep:not([hidden])) .wrap { padding: calc(24 * var(--s)) calc(20 * var(--s)) calc(24 * var(--s)); }
+body.portal:has(#introStep:not([hidden])) .portal-footer { padding: calc(20 * var(--s)); font-size: calc(12.5 * var(--s)); gap: calc(14 * var(--s)) calc(20 * var(--s)); border-top: 0; }
+
 body.portal:has(#authView:not([hidden])) {
   background-color: #000;
   /* Figma's diagonal handles concentrate the amber in the top ~40% (top-right)

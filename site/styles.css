@@ -91,7 +91,17 @@ a {
 
 body.landing {
   background: #000;
-  overflow-x: hidden;
+  /* The whole landing scales to fit the viewport so it NEVER scrolls: --s (the
+     unit every dimension is built from) tracks whichever of width or height is
+     the tighter fit for the 402×~1500 design. svh keeps it correct under mobile
+     browser chrome; the vh line is a fallback for engines without svh. */
+  --s: min(calc(100vw / 402), calc(100vh / 1500));
+  --s: min(calc(100vw / 402), calc(100svh / 1500));
+  height: 100vh;
+  height: 100svh;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
 }
 
 /* warm ambient gradient — from Figma node 1367:3260: an amber bloom sweeping
@@ -106,12 +116,6 @@ body.landing::before {
   background:
     linear-gradient(212deg, rgba(255, 172, 54, 0.45) 0%, rgba(10, 10, 11, 0) 42%),
     radial-gradient(60% 40% at 88% 60%, rgba(180, 120, 40, 0.18), transparent 70%);
-}
-
-@media (min-width: 700px) {
-  body.landing {
-    --s: 1.25px;
-  }
 }
 
 .column {
@@ -186,7 +190,7 @@ body.landing::before {
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 10px;
+  gap: calc(10 * var(--s));
   width: calc(297 * var(--s));
   max-width: 100%;
   height: calc(52 * var(--s));
@@ -195,7 +199,7 @@ body.landing::before {
   color: var(--white);
   font-family: "Lato", system-ui, sans-serif;
   font-weight: 700;
-  font-size: 18px;
+  font-size: calc(18 * var(--s));
   text-decoration: none;
   white-space: nowrap;
 }
@@ -317,10 +321,10 @@ body.landing::before {
 .landing-footer {
   position: relative;
   z-index: 6;
-  padding: calc(64 * var(--s)) 0 calc(59 * var(--s));
+  padding: calc(40 * var(--s)) 0 calc(28 * var(--s));
   text-align: center;
-  font-size: 17px;
-  line-height: 32px;
+  font-size: calc(17 * var(--s));
+  line-height: calc(32 * var(--s));
 }
 
 .landing-footer a {
@@ -338,7 +342,7 @@ body.landing::before {
   flex: none;
   font-family: "Lato", system-ui, sans-serif;
   font-weight: 700;
-  font-size: 14px;
+  font-size: calc(14 * var(--s));
   color: var(--white);
   text-decoration: none;
   padding: calc(8 * var(--s)) calc(16 * var(--s));
