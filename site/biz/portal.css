@@ -136,16 +136,16 @@ a { color: inherit; }
    step (NOT the whole signed-out view) so the sign-in forms below it can still
    scroll for a keyboard / error messages; the dashboard scrolls normally too. */
 body.portal:has(#introStep:not([hidden])) {
-  --s: min(calc(100vw / 402), calc(100vh / 760));
-  --s: min(calc(100vw / 402), calc(100svh / 760));
+  --s: min(calc(100vw / 402), calc((100vh - 56px) / 648));
+  --s: min(calc(100vw / 402), calc((100svh - 56px) / 648));
   height: 100vh;
   height: 100svh;
   min-height: 100svh;
   overflow: hidden;
 }
-/* Scale the chrome that's normally fixed-px so the whole intro tracks --s
-   (harmless on the form steps, where --s falls back to 1px). */
-body.portal:has(#introStep:not([hidden])) .topbar { padding: calc(16 * var(--s)) calc(20 * var(--s)); }
+/* Scale the chrome below the header so the intro tracks --s (harmless on the
+   form steps, where --s falls back to 1px). The header itself stays fixed-px
+   (see the identical rules under :has(#authView)) so it matches the consumer. */
 body.portal:has(#introStep:not([hidden])) .wrap { padding: calc(24 * var(--s)) calc(20 * var(--s)) calc(24 * var(--s)); }
 body.portal:has(#introStep:not([hidden])) .portal-footer { padding: calc(20 * var(--s)); font-size: calc(12.5 * var(--s)); gap: calc(14 * var(--s)) calc(20 * var(--s)); border-top: 0; }
 /* Desktop / tablet: render the intro at the native scale and scroll normally
@@ -178,10 +178,17 @@ body.portal:has(#authView:not([hidden])) .topbar {
   backdrop-filter: none;
 }
 body.portal:has(#authView:not([hidden])) .brand em { display: none; }
-/* Landing header matches the consumer's: 44px icon + 24px Lato-Heavy wordmark
-   (the default portal header stays small so it fits the signed-in actions). */
-body.portal:has(#authView:not([hidden])) .brand { font-weight: 800; font-size: calc(24 * var(--s)); }
-body.portal:has(#authView:not([hidden])) .brand .appicon { width: calc(44 * var(--s)); height: calc(44 * var(--s)); border-radius: calc(11 * var(--s)); }
+/* Landing header — FIXED px, pixel-identical to the consumer's .topbar so the
+   logo never jumps when navigating between the two sites (the default portal
+   header stays small so it fits the signed-in actions). */
+body.portal:has(#authView:not([hidden])) .topbar { padding: 16px 20px 0; gap: 16px; }
+body.portal:has(#authView:not([hidden])) .brand { font-weight: 800; font-size: 22px; gap: 10px; letter-spacing: -0.01em; }
+body.portal:has(#authView:not([hidden])) .brand .appicon { width: 40px; height: 40px; border-radius: 10px; }
+@media (min-width: 700px) {
+  body.portal:has(#authView:not([hidden])) .topbar { padding: 20px 28px 0; gap: 20px; }
+  body.portal:has(#authView:not([hidden])) .brand { font-size: 26px; gap: 12px; }
+  body.portal:has(#authView:not([hidden])) .brand .appicon { width: 48px; height: 48px; border-radius: 12px; }
+}
 .intro { text-align: center; }
 /* Figma node 1369:2826: Lato Regular 400, 44 / 52.8 */
 .intro h1 {

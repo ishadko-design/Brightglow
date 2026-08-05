@@ -95,8 +95,8 @@ body.landing {
      unit every dimension is built from) tracks whichever of width or height is
      the tighter fit for the 402×~1500 design. svh keeps it correct under mobile
      browser chrome; the vh line is a fallback for engines without svh. */
-  --s: min(calc(100vw / 402), calc(100vh / 1500));
-  --s: min(calc(100vw / 402), calc(100svh / 1500));
+  --s: min(calc(100vw / 402), calc((100vh - 56px) / 1408));
+  --s: min(calc(100vw / 402), calc((100svh - 56px) / 1408));
   height: 100vh;
   height: 100svh;
   overflow: hidden;
@@ -139,35 +139,46 @@ body.landing::before {
 }
 
 /* top navbar — full page width (not confined to the centred .column):
-   logo lockup pinned left, "For businesses" pill pinned right, 32px gutters. */
+   logo lockup pinned left, "For businesses" pill pinned right.
+   FIXED size (not --s): the header must be pixel-identical to the business
+   landing's header so it never jumps when navigating between the two. Only the
+   hero below it scales to fit. */
 .topbar {
-  padding: calc(24 * var(--s)) calc(32 * var(--s)) 0;
+  padding: 16px 20px 0;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: calc(16 * var(--s));
+  gap: 16px;
 }
 
 .topbar .logo {
   display: flex;
   align-items: center;
-  gap: calc(12 * var(--s));
+  gap: 10px;
   text-decoration: none;
 }
 
 .topbar .appicon {
-  width: calc(44 * var(--s));
-  height: calc(44 * var(--s));
-  border-radius: calc(11 * var(--s));
+  width: 40px;
+  height: 40px;
+  border-radius: 10px;
 }
 
 .topbar .wordmark {
   font-family: "Lato", system-ui, sans-serif;
   font-weight: 800;
-  font-size: calc(24 * var(--s));
+  font-size: 22px;
   line-height: 1;
   letter-spacing: -0.01em;
   color: var(--white);
+}
+
+/* Larger fixed header on desktop/tablet — still identical across both landings. */
+@media (min-width: 700px) {
+  .topbar { padding: 20px 28px 0; gap: 20px; }
+  .topbar .logo { gap: 12px; }
+  .topbar .appicon { width: 48px; height: 48px; border-radius: 12px; }
+  .topbar .wordmark { font-size: 26px; }
 }
 
 .hero-copy {
@@ -359,10 +370,10 @@ body.landing::before {
   flex: none;
   font-family: "Lato", system-ui, sans-serif;
   font-weight: 700;
-  font-size: calc(14 * var(--s));
+  font-size: 14px;
   color: var(--white);
   text-decoration: none;
-  padding: calc(8 * var(--s)) calc(16 * var(--s));
+  padding: 8px 16px;
   border-radius: 999px;
   background: rgba(217, 217, 217, 0.2);
   transition: background 0.15s ease;
