@@ -148,6 +148,17 @@ body.portal:has(#introStep:not([hidden])) {
 body.portal:has(#introStep:not([hidden])) .topbar { padding: calc(16 * var(--s)) calc(20 * var(--s)); }
 body.portal:has(#introStep:not([hidden])) .wrap { padding: calc(24 * var(--s)) calc(20 * var(--s)) calc(24 * var(--s)); }
 body.portal:has(#introStep:not([hidden])) .portal-footer { padding: calc(20 * var(--s)); font-size: calc(12.5 * var(--s)); gap: calc(14 * var(--s)) calc(20 * var(--s)); border-top: 0; }
+/* Desktop / tablet: render the intro at the native scale and scroll normally
+   (matches the consumer). Height-fitting a short hero on a tall window would
+   otherwise blow it up huge. The phone no-scroll fit stays below 700px. */
+@media (min-width: 700px) {
+  body.portal:has(#introStep:not([hidden])) {
+    --s: 1.25px;
+    height: auto;
+    min-height: 100vh;
+    overflow: visible;
+  }
+}
 
 body.portal:has(#authView:not([hidden])) {
   background-color: #000;

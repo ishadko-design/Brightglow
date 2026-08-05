@@ -104,6 +104,19 @@ body.landing {
   flex-direction: column;
 }
 
+/* Desktop / tablet (wide viewports): the tall phone-showcase can't fit one
+   short-but-wide screen without shrinking to an unreadable strip, so render it
+   at the native design scale and let the page scroll normally, as it did
+   before. The single-screen no-scroll fit stays for phones. */
+@media (min-width: 700px) {
+  body.landing {
+    --s: 1.25px;
+    height: auto;
+    overflow: visible;
+    display: block;
+  }
+}
+
 /* warm ambient gradient — from Figma node 1367:3260: an amber bloom sweeping
    down from the upper-right into near-black. Fixed so it stays a calm backdrop
    while the page scrolls. */
@@ -206,6 +219,10 @@ body.landing::before {
 
 .appstore-btn svg {
   flex: none;
+  /* SVG carries a fixed 20×24 in markup; scale it with --s so the Apple mark
+     stays proportional to the label at every scale. */
+  width: calc(20 * var(--s));
+  height: calc(24 * var(--s));
 }
 
 /* ---------- phone stage with parallax cards ---------- */
