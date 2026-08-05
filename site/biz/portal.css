@@ -124,6 +124,31 @@ a { color: inherit; }
   margin: 0 auto;
   padding-top: calc(28 * var(--s));   /* = .hero-copy padding-top */
 }
+
+/* Full-bleed hero photo (Figma 1369:2826): a contractor at work, darkened by a
+   near-black→warm-brown wash with an amber glow bleeding in from the top-right.
+   Fixed and behind everything; scoped to #authView so it only paints while
+   signed out (the element is display:none once a business is being managed). */
+#authView::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background:
+    linear-gradient(212deg, rgba(255, 172, 54, 0.42) 0%, rgba(10, 10, 11, 0) 52%),
+    linear-gradient(34deg, rgba(6, 6, 6, 0.94) 42%, rgba(74, 51, 18, 0.6) 100%),
+    url("../media/biz-hero.jpg?v=1") 62% 28% / cover no-repeat,
+    #000;
+}
+/* Let the photo run under the header on the landing — no bar, just the logo,
+   and the Figma landing wordmark is plain "Brightglow" (no "for Business"). */
+body.portal:has(#authView:not([hidden])) .topbar {
+  background: transparent;
+  border-bottom: 0;
+  backdrop-filter: none;
+}
+body.portal:has(#authView:not([hidden])) .brand em { display: none; }
 .intro { text-align: center; }
 .intro h1 {
   font-weight: 800;
@@ -135,41 +160,34 @@ a { color: inherit; }
   font-size: 17px; line-height: 26px; color: var(--gray50);
 }
 
-/* Icon feature row — centred to match, amber marks. */
+/* Icon feature row (Figma): one translucent bar, amber marks, three items
+   spread across a single row. */
 .feature-row {
-  list-style: none; padding: 0; margin: calc(24 * var(--s)) 0 0;
-  display: flex; flex-wrap: wrap; justify-content: center; gap: 12px 22px;
+  list-style: none; margin: calc(32 * var(--s)) 0 0;
+  display: flex; justify-content: space-between; align-items: center; gap: 10px;
+  padding: calc(14 * var(--s)) calc(18 * var(--s));
+  border: 1px solid var(--gray10);
+  border-radius: calc(16 * var(--s));
+  background: rgba(255, 255, 255, 0.04);
+  -webkit-backdrop-filter: blur(12px);
+  backdrop-filter: blur(12px);
 }
-.feature-row li { display: flex; align-items: center; gap: 8px; font-size: 13.5px; color: var(--gray70); }
+.feature-row li { display: flex; align-items: center; gap: 8px; font-size: 13.5px; color: var(--gray70); white-space: nowrap; }
 .feature-row svg { width: 18px; height: 18px; color: var(--gold); flex: none; }
+/* very narrow phones: let the bar wrap rather than overflow */
+@media (max-width: 360px) { .feature-row { flex-wrap: wrap; justify-content: center; gap: 10px 18px; } }
 
-/* CTA = the consumer's .appstore-btn spec (height, radius, font, top margin).
-   .primary-btn isn't a flexbox, so centre the label explicitly for the fixed
-   height. 32px radius matches the consumer button (whose --radius is 32, vs the
-   portal's 20). */
+/* CTA = the consumer's .appstore-btn spec (height, radius, font). Centred, sized
+   to its label as in Figma (not full-width). */
 .primary-btn.cta {
-  margin-top: calc(24 * var(--s));
-  width: 100%; height: calc(52 * var(--s)); padding: 0;
+  margin: calc(32 * var(--s)) auto 0;
+  width: auto; min-width: calc(200 * var(--s)); height: calc(52 * var(--s));
+  padding: 0 calc(40 * var(--s));
   display: flex; align-items: center; justify-content: center;
   border-radius: 32px;
   font-size: 18px;
 }
-.intro .fineprint { margin-top: calc(16 * var(--s)); }
-
-/* One decorative image, consumer-style: phone (260-unit, like .stage .phone) with
-   its lower edge fading into the page background. Same 64-unit top gap as .stage. */
-.intro-stage {
-  position: relative; margin: calc(64 * var(--s)) auto 0;
-  width: calc(260 * var(--s)); pointer-events: none;
-}
-.intro-phone {
-  display: block; width: calc(260 * var(--s));
-  filter: drop-shadow(0 22px 44px rgba(0, 0, 0, 0.5));
-}
-.intro-stage::after {
-  content: ""; position: absolute; left: -40px; right: -40px; bottom: -2px;
-  height: 120px; background: linear-gradient(to bottom, rgba(19, 19, 21, 0), var(--bg) 82%);
-}
+.intro .fineprint { margin-top: calc(20 * var(--s)); font-size: 14px; color: var(--gray70); }
 
 /* The claim card — same surface as the app's cards; a centred panel per step. */
 .auth-card {

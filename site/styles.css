@@ -238,9 +238,10 @@ body.landing::before {
 .stage .float {
   will-change: transform;
   /* drop-shadow follows the PNG alpha (rounded corners + baked-in fades),
-     unlike box-shadow which would draw a rectangle */
-  filter: drop-shadow(0 18px 36px rgba(0, 0, 0, 0.65))
-          drop-shadow(0 4px 10px rgba(0, 0, 0, 0.45));
+     unlike box-shadow which would draw a rectangle. Kept soft so the cards
+     sit on the page rather than punch out of it. */
+  filter: drop-shadow(0 16px 32px rgba(0, 0, 0, 0.4))
+          drop-shadow(0 4px 10px rgba(0, 0, 0, 0.26));
 }
 
 /* all photo cards sit in front of the phone, overlapping onto the screen */
