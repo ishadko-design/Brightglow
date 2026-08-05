@@ -243,22 +243,21 @@ body.landing::before {
           drop-shadow(0 4px 10px rgba(0, 0, 0, 0.45));
 }
 
-/* photo cards behind the phone (their inner edge tucks under it) */
+/* all photo cards sit in front of the phone, overlapping onto the screen */
 .stage .card-flooring {
   left: calc(50% - 277 * var(--s));
   top: calc(40 * var(--s));
   width: calc(211 * var(--s));
-  z-index: 1;
+  z-index: 4;
 }
 
 .stage .card-dent {
   left: calc(50% + 93 * var(--s));
   top: calc(44 * var(--s));
   width: calc(162 * var(--s));
-  z-index: 1;
+  z-index: 4;
 }
 
-/* photo cards in front of the phone */
 .stage .card-bulb {
   left: calc(50% - 76 * var(--s));
   top: calc(238 * var(--s));
