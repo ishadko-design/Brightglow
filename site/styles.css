@@ -94,9 +94,9 @@ body.landing {
   overflow-x: hidden;
 }
 
-/* warm ambient gradient — echoes the app launch/splash screen
-   (SplashDark.png): amber bloom upper-right, softer warmth lower-left,
-   over near-black. Fixed so it stays a calm backdrop while the page scrolls. */
+/* warm ambient gradient — from Figma node 1367:3260: an amber bloom sweeping
+   down from the upper-right into near-black. Fixed so it stays a calm backdrop
+   while the page scrolls. */
 body.landing::before {
   content: "";
   position: fixed;
@@ -104,9 +104,8 @@ body.landing::before {
   z-index: -1;
   pointer-events: none;
   background:
-    radial-gradient(55% 45% at 90% 3%, rgba(132, 101, 54, 0.55), rgba(132, 101, 54, 0) 62%),
-    radial-gradient(60% 42% at 10% 32%, rgba(78, 64, 46, 0.34), transparent 60%),
-    radial-gradient(52% 32% at 86% 74%, rgba(96, 76, 46, 0.22), transparent 66%);
+    linear-gradient(212deg, rgba(255, 172, 54, 0.45) 0%, rgba(10, 10, 11, 0) 42%),
+    radial-gradient(60% 40% at 88% 60%, rgba(180, 120, 40, 0.18), transparent 70%);
 }
 
 @media (min-width: 700px) {
@@ -166,6 +165,11 @@ body.landing::before {
   color: var(--white);
 }
 
+/* keep the house + car emoji together on one line */
+.hero-copy h1 .emoji {
+  white-space: nowrap;
+}
+
 .hero-copy .sub {
   margin-top: calc(24 * var(--s));
   font-size: 17px;
@@ -203,14 +207,18 @@ body.landing::before {
 .stage {
   position: relative;
   width: 100%;
-  height: calc(608 * var(--s));
-  margin: calc(64 * var(--s)) auto 0;
+  height: calc(740 * var(--s));
+  margin: calc(56 * var(--s)) auto 0;
   /* purely decorative — never intercept taps meant for links above/below it */
   pointer-events: none;
 }
 
-.stage img {
+.stage img,
+.stage .chip {
   position: absolute;
+}
+
+.stage img {
   display: block;
 }
 
@@ -218,7 +226,7 @@ body.landing::before {
   left: 50%;
   transform: translateX(-50%);
   top: 0;
-  width: calc(260 * var(--s));
+  width: calc(320 * var(--s));
   z-index: 2;
 }
 
@@ -230,48 +238,68 @@ body.landing::before {
           drop-shadow(0 4px 10px rgba(0, 0, 0, 0.45));
 }
 
-/* behind the phone */
-.stage .card-3 {
-  left: calc(50% + 88 * var(--s));
-  top: calc(217 * var(--s));
-  width: calc(124 * var(--s));
+/* real-job photo cards — behind the phone (peek from its top edges) */
+.stage .card-flooring {
+  left: calc(50% - 210 * var(--s));
+  top: calc(6 * var(--s));
+  width: calc(150 * var(--s));
   z-index: 1;
 }
 
-/* fade the phone's lower content into the page background */
-.stage::after {
-  content: "";
-  position: absolute;
-  left: calc(-40 * var(--s));
-  right: calc(-40 * var(--s));
-  bottom: calc(-2 * var(--s));
-  height: calc(200 * var(--s));
-  background: linear-gradient(to bottom, rgba(0, 0, 0, 0), #000 78%);
-  z-index: 3;
-  pointer-events: none;
+.stage .card-dent {
+  left: calc(50% + 118 * var(--s));
+  top: calc(18 * var(--s));
+  width: calc(120 * var(--s));
+  z-index: 1;
 }
 
-/* in front of the phone (these exports carry their own baked-in fades) */
-.stage .card-1 {
-  left: calc(50% - 216 * var(--s));
-  top: calc(76 * var(--s));
-  width: calc(113 * var(--s));
+/* real-job photo cards — in front of the phone */
+.stage .card-bulb {
+  left: calc(50% - 56 * var(--s));
+  top: calc(300 * var(--s));
+  width: calc(96 * var(--s));
   z-index: 4;
 }
 
-.stage .card-2 {
-  left: calc(50% - 209 * var(--s));
-  top: calc(451 * var(--s));
-  width: calc(117 * var(--s));
+.stage .card-flat-tire {
+  left: calc(50% - 206 * var(--s));
+  top: calc(508 * var(--s));
+  width: calc(120 * var(--s));
   z-index: 4;
 }
 
-.stage .card-4 {
-  left: calc(50% + 90 * var(--s));
-  top: calc(505 * var(--s));
-  width: calc(77 * var(--s));
+.stage .card-roof-leak {
+  left: calc(50% + 96 * var(--s));
+  top: calc(452 * var(--s));
+  width: calc(132 * var(--s));
   z-index: 4;
 }
+
+/* floating job-label pills — Figma "Button Secondary": navy→brown gradient,
+   glassy, rounded. Sit above the phone and cards. */
+.stage .chip {
+  z-index: 5;
+  display: inline-flex;
+  align-items: center;
+  padding: calc(13 * var(--s)) calc(18 * var(--s));
+  border-radius: calc(24 * var(--s));
+  background: linear-gradient(-49deg, rgba(45, 48, 71, 0.92) 0%, rgba(61, 44, 0, 0.92) 100%);
+  -webkit-backdrop-filter: blur(24px);
+  backdrop-filter: blur(24px);
+  font-family: "Poppins", system-ui, sans-serif;
+  font-weight: 300;
+  font-size: calc(17 * var(--s));
+  line-height: 1;
+  color: var(--white);
+  white-space: nowrap;
+  box-shadow: 0 11px 26px rgba(0, 0, 0, 0.28);
+}
+
+.stage .chip-dent      { left: calc(50% + 100 * var(--s)); top: calc(116 * var(--s)); }
+.stage .chip-flooring  { left: calc(50% - 168 * var(--s)); top: calc(214 * var(--s)); }
+.stage .chip-bulb      { left: calc(50% - 96 * var(--s));  top: calc(468 * var(--s)); }
+.stage .chip-roof-leak { left: calc(50% + 58 * var(--s));  top: calc(556 * var(--s)); }
+.stage .chip-flat-tire { left: calc(50% - 166 * var(--s)); top: calc(604 * var(--s)); }
 
 /* ---------- landing footer ---------- */
 
