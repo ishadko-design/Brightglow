@@ -135,7 +135,7 @@ a { color: inherit; }
    hero to whichever of width/height is the tighter fit. Scoped to the intro
    step (NOT the whole signed-out view) so the sign-in forms below it can still
    scroll for a keyboard / error messages; the dashboard scrolls normally too. */
-body.portal:has(#introStep:not([hidden])) {
+body.portal:has(#authView:not([hidden]) #introStep:not([hidden])) {
   --s: min(calc(100vw / 402), calc((100vh - 56px) / 648));
   --s: min(calc(100vw / 402), calc((100svh - 56px) / 648));
   height: 100vh;
@@ -146,13 +146,13 @@ body.portal:has(#introStep:not([hidden])) {
 /* Scale the chrome below the header so the intro tracks --s (harmless on the
    form steps, where --s falls back to 1px). The header itself stays fixed-px
    (see the identical rules under :has(#authView)) so it matches the consumer. */
-body.portal:has(#introStep:not([hidden])) .wrap { padding: calc(24 * var(--s)) calc(20 * var(--s)) calc(24 * var(--s)); }
-body.portal:has(#introStep:not([hidden])) .portal-footer { padding: calc(20 * var(--s)); font-size: calc(12.5 * var(--s)); gap: calc(14 * var(--s)) calc(20 * var(--s)); border-top: 0; }
+body.portal:has(#authView:not([hidden]) #introStep:not([hidden])) .wrap { padding: calc(24 * var(--s)) calc(20 * var(--s)) calc(24 * var(--s)); }
+body.portal:has(#authView:not([hidden]) #introStep:not([hidden])) .portal-footer { padding: calc(20 * var(--s)); font-size: calc(12.5 * var(--s)); gap: calc(14 * var(--s)) calc(20 * var(--s)); border-top: 0; }
 /* Desktop / tablet: render the intro at the native scale and scroll normally
    (matches the consumer). Height-fitting a short hero on a tall window would
    otherwise blow it up huge. The phone no-scroll fit stays below 700px. */
 @media (min-width: 700px) {
-  body.portal:has(#introStep:not([hidden])) {
+  body.portal:has(#authView:not([hidden]) #introStep:not([hidden])) {
     --s: 1.25px;
     height: auto;
     min-height: 100vh;
@@ -174,7 +174,7 @@ body.portal:has(#authView:not([hidden])) {
    On the scrolling sign-in steps — and when the keyboard lifts the content — the
    header keeps its default blurred bar so the logo never clashes with content
    sliding under it. */
-body.portal:has(#introStep:not([hidden])) .topbar {
+body.portal:has(#authView:not([hidden]) #introStep:not([hidden])) .topbar {
   background: transparent;
   border-bottom: 0;
   backdrop-filter: none;

@@ -97,6 +97,12 @@ body.landing {
      design fill the viewport width; the fixed header keeps it aligned with the
      business landing. */
   --s: calc(100vw / 402);
+  /* The decorative float cards bleed past the viewport edges by design — clip
+     the horizontal overflow so the page can never scroll sideways, while the
+     content stays centred. `clip` doesn't turn the body into a scroll container,
+     so vertical scrolling is unaffected; hidden is the fallback. */
+  overflow-x: hidden;
+  overflow-x: clip;
 }
 
 /* Desktop / tablet: native scale, centred, scrolls normally. */
