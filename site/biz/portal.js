@@ -1069,12 +1069,13 @@ async function signOut() {
   location.reload();
 }
 
-// Permanent account deletion. Unlinks every business this owner holds, removes
-// their profile pages, and deletes the login itself — then signs out for good.
-// The browser's anon key CAN'T delete a Supabase auth user, so the actual removal
-// happens server-side in /api/account/delete (service role); here we just kick it
-// off and, on success, drop the local session and reload to the signed-out page.
-// Customer requests are preserved (they're keyed to the customer, not this owner).
+// Permanent account deletion. Releases every business this owner holds (their
+// listing reverts to its public info), removes their profile pages + claims, and
+// deletes the login itself — then signs out for good. The browser's anon key
+// CAN'T delete a Supabase auth user, so the actual removal runs in the
+// `delete-account` Edge Function (service role); here we just invoke it and, on
+// success, drop the local session and reload. Customer requests are preserved
+// (they're keyed to the customer, not this owner).
 async function deleteAccount() {
   if (!confirm(
     "Delete your account?\n\n" +
@@ -1085,11 +1086,9 @@ async function deleteAccount() {
   const btn = $("deletePageBtn");
   btn.disabled = true; btn.textContent = "Deleting…";
   try {
-    const resp = await authedFetch("/api/account/delete", { method: "POST" });
-    if (!resp.ok) {
-      const body = await resp.json().catch(() => ({}));
-      throw new Error(body.error || `Delete failed (${resp.status}).`);
-    }
+    const { data, error } = await sb.functions.invoke("delete-account", { method: "POST" });
+    if (error) throw new Error(error.message || "Delete failed. Please try again.");
+    if (data && data.error) throw new Error(data.error);
   } catch (err) {
     btn.disabled = false; btn.textContent = "Delete account";
     alert(

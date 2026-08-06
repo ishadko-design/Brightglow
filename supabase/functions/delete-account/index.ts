@@ -80,12 +80,32 @@ Deno.serve(async (req) => {
       if (del.error) throw del.error;
     }
 
+    // 3b. Business owner cleanup. A business account owns listings via
+    //     business_places.owner_user_id; deleting the account must release them
+    //     back to their public (Places-derived) info: drop the business-authored
+    //     profile rows, clear the owner link, and remove the claim ledger. All
+    //     scoped to this uid, so no other owner's data is touched. (This is what
+    //     the old /api/account/delete route did on the server; done here now.)
+    let placesReleased = 0;
+    const owned = await admin.from("business_places").select("place_id").eq("owner_user_id", uid);
+    if (owned.error) throw owned.error;
+    const placeIds = (owned.data ?? []).map((r: { place_id: string }) => r.place_id);
+    if (placeIds.length > 0) {
+      const delProf = await admin.from("business_profiles").delete().in("place_id", placeIds);
+      if (delProf.error) throw delProf.error;
+      const unclaim = await admin.from("business_places").update({ owner_user_id: null }).eq("owner_user_id", uid);
+      if (unclaim.error) throw unclaim.error;
+      placesReleased = placeIds.length;
+    }
+    const delClaims = await admin.from("business_claims").delete().eq("user_id", uid);
+    if (delClaims.error) throw delClaims.error;
+
     // 4. Delete the auth user LAST. Data is already gone, so if this step fails
     //    the user can retry: the next call finds no leads and just removes them.
     const { error: authDelErr } = await admin.auth.admin.deleteUser(uid);
     if (authDelErr) throw authDelErr;
 
-    return json({ ok: true, leads_deleted: ids.length, storage_deleted: storageDeleted });
+    return json({ ok: true, leads_deleted: ids.length, storage_deleted: storageDeleted, places_released: placesReleased });
   } catch (err) {
     return json({ error: "deletion failed", detail: String((err as Error)?.message ?? err) }, 500);
   }
