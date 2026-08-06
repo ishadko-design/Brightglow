@@ -31,4 +31,4 @@ verify_jwt = false
 # Account deletion must be authenticated: verify_jwt rejects unauthenticated
 # calls, and the function additionally requires a real user (not the anon key).
 [functions.delete-account]
-verify_jwt = true
+verify_jwt = false

@@ -23,14 +23,26 @@ const SERVICE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
 // Same bucket LeadBridge stores stripped photos in (leadbridge/src/lib/storage.js).
 const BUCKET = Deno.env.get("LEADBRIDGE_STORAGE_BUCKET") ?? "leadbridge-photos";
 
+// CORS: the business web portal (brightglow.co) calls this cross-origin, so we
+// must answer the preflight and echo the allow headers. (The native app calls it
+// too, from no origin — CORS is simply ignored there.)
+const CORS: Record<string, string> = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+  "Access-Control-Allow-Methods": "POST, OPTIONS",
+};
+
 function json(payload: unknown, status = 200): Response {
   return new Response(JSON.stringify(payload), {
     status,
-    headers: { "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json", ...CORS },
   });
 }
 
 Deno.serve(async (req) => {
+  // Preflight has no Authorization header, so this MUST be answered before any
+  // auth check (config.toml sets verify_jwt = false; we verify the user below).
+  if (req.method === "OPTIONS") return new Response("ok", { headers: CORS });
   if (req.method !== "POST") return json({ error: "method not allowed" }, 405);
   if (!SUPA_URL || !SERVICE_KEY) return json({ error: "not configured" }, 500);
 
