@@ -9,7 +9,7 @@
   <meta name="robots" content="noindex">
   <link rel="icon" type="image/png" href="../favicon.png">
   <link rel="apple-touch-icon" href="../apple-touch-icon.png">
-  <link rel="stylesheet" href="portal.css?v=19">
+  <link rel="stylesheet" href="portal.css?v=20">
 </head>
 <body class="portal">
   <header class="topbar">
@@ -207,11 +207,11 @@
           </div>
         </div>
         <div class="thread-msgs" id="threadMsgs"></div>
-        <form class="composer" id="composer">
-          <textarea id="composerInput" rows="2" placeholder="Write a reply…"></textarea>
-          <button type="submit" class="primary-btn" id="composerSend">Send</button>
-        </form>
-        <p class="form-msg" id="threadMsg" aria-live="polite"></p>
+        <!-- Read-only: web replies aren't delivered to customers yet, so we show
+             the request for information only and point pros to the app to reply.
+             (Restore #composer + its handler in portal.js to re-enable sending.) -->
+        <p class="muted small thread-readonly">Reply to this customer from the Brightglow app — web replies aren't available yet.</p>
+        <p class="form-msg" id="threadMsg" aria-live="polite" hidden></p>
       </div>
     </section>
 
@@ -219,7 +219,6 @@
          view, with the same field set and nothing beyond it. -->
     <section id="editorView" hidden>
       <div class="editor-head">
-        <button type="button" class="ghost-btn" id="editorBack">← Back</button>
         <h1>Settings</h1>
       </div>
       <h2 class="section-head">Profile</h2>

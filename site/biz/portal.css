@@ -170,9 +170,11 @@ body.portal:has(#authView:not([hidden])) {
   background-position: top center;
   background-size: 100% calc(801 * var(--s));
 }
-/* Let the photo run under the header on the landing — no bar, just the logo,
-   and the Figma landing wordmark is plain "Brightglow" (no "for Business"). */
-body.portal:has(#authView:not([hidden])) .topbar {
+/* Transparent header ONLY on the marketing intro (no scroll, gradient behind).
+   On the scrolling sign-in steps — and when the keyboard lifts the content — the
+   header keeps its default blurred bar so the logo never clashes with content
+   sliding under it. */
+body.portal:has(#introStep:not([hidden])) .topbar {
   background: transparent;
   border-bottom: 0;
   backdrop-filter: none;

@@ -878,7 +878,7 @@ function renderThread(msgs) {
 // Send through LeadBridge (NOT direct to Postgres): it verifies the Supabase JWT,
 // derives direction from which party we are, and emails the customer so an
 // offline counterparty still hears about it. Same endpoint the iOS app uses.
-$("composer").addEventListener("submit", async (e) => {
+$("composer")?.addEventListener("submit", async (e) => {
   e.preventDefault();
   const input = $("composerInput");
   const body = input.value.trim();
@@ -1114,7 +1114,7 @@ function wireStaticHandlers() {
     });
   });
   $("readinessCta").addEventListener("click", openEditor);
-  $("editorBack").addEventListener("click", () => showView("dash"));
+  $("editorBack")?.addEventListener("click", () => showView("dash"));
   $("billingBtn").addEventListener("click", () => showView("billing"));
   $("billingBack").addEventListener("click", () => showView("dash"));
   $("deletePageBtn").addEventListener("click", deleteAccount);

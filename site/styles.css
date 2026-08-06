@@ -91,30 +91,17 @@ a {
 
 body.landing {
   background: #000;
-  /* The whole landing scales to fit the viewport so it NEVER scrolls: --s (the
-     unit every dimension is built from) tracks whichever of width or height is
-     the tighter fit for the 402×~1500 design. svh keeps it correct under mobile
-     browser chrome; the vh line is a fallback for engines without svh. */
-  --s: min(calc(100vw / 402), calc((100vh - 56px) / 1408));
-  --s: min(calc(100vw / 402), calc((100svh - 56px) / 1408));
-  height: 100vh;
-  height: 100svh;
-  overflow: hidden;
-  display: flex;
-  flex-direction: column;
+  /* The consumer landing is a tall phone-showcase (the phone + cards live below
+     the fold), so it renders at full size and scrolls — matching the business
+     side's scale instead of shrinking to fit one screen. --s makes the 402-unit
+     design fill the viewport width; the fixed header keeps it aligned with the
+     business landing. */
+  --s: calc(100vw / 402);
 }
 
-/* Desktop / tablet (wide viewports): the tall phone-showcase can't fit one
-   short-but-wide screen without shrinking to an unreadable strip, so render it
-   at the native design scale and let the page scroll normally, as it did
-   before. The single-screen no-scroll fit stays for phones. */
+/* Desktop / tablet: native scale, centred, scrolls normally. */
 @media (min-width: 700px) {
-  body.landing {
-    --s: 1.25px;
-    height: auto;
-    overflow: visible;
-    display: block;
-  }
+  body.landing { --s: 1.25px; }
 }
 
 /* warm ambient gradient — from Figma node 1367:3260: an amber bloom sweeping
