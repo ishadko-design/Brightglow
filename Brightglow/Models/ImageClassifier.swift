@@ -157,13 +157,15 @@ enum ImageClassifier {
         let pad = CGRect(x: rect.minX - rect.width * 0.12, y: rect.minY - rect.height * 0.12,
                          width: rect.width * 1.24, height: rect.height * 1.24)
         let target = crop(image, viewRect: pad, viewSize: viewSize) ?? image
-        return await suggestTrades(target)
+        // A drawn region is an explicit "read THIS" — never run the area/abstain gate
+        // on it, or a small circled part could be judged "nothing dominates".
+        return await suggestTrades(target, applyAreaGate: false)
     }
 
     /// Whole-image classification for **auto-suggesting** tags. (The drawing path
     /// still uses the plain `classify`, which always returns a single best guess —
     /// the user pointed at it.)
-    static func suggestTrades(_ image: UIImage) async -> Suggestions {
+    static func suggestTrades(_ image: UIImage, applyAreaGate: Bool = true) async -> Suggestions {
         var matches: [TradeMatch] = []
         var confident: TradeMatch? = nil
         var details: String? = nil
@@ -178,7 +180,16 @@ enum ImageClassifier {
         // better than an on-device saliency guess picks the subject — the prompt's
         // subject-priority rule handles "which fixture" — so it gets the full image.
         let subject: UIImage = dominantObject(image).flatMap { cropNormalized(image, $0) } ?? image
-        if let cloud = try? await cloudReply(image) {
+        // Surface-area gate: measure the single largest salient region ON-DEVICE and
+        // hand the cloud VLM a size HINT (text only — we still send the whole image,
+        // never a crop, per the note above). A big dominant region (a vanity at ~35%
+        // of the frame) tells it to anchor on that subject; when nothing dominates
+        // (the biggest object is < ~18%) the hint tells it to answer "unsure" rather
+        // than confidently mislabel a minor item — a lit floor lamp became "ceiling
+        // light fixture", and a corner of rug became "area rug" (reported 2026-08-12).
+        // On-device area separates the two cleanly; the VLM obeys both hints reliably.
+        let hint = applyAreaGate ? largestSalientRegion(image).map(areaHint) : nil
+        if let cloud = try? await cloudReply(image, hint: hint) {
             // DETAILS and DESCRIPTION are visible observations, independent of
             // whether the CATEGORY parsed to a known service — so keep them even
             // when the model hedged with "?" OR answered with a bare vertical word
@@ -235,6 +246,43 @@ enum ImageClassifier {
     }
 
     private static func area(_ r: CGRect) -> CGFloat { r.width * r.height }
+
+    /// Fraction the single largest salient region must reach to count as a dominant
+    /// subject the cloud read should anchor to. Below it, nothing clearly dominates
+    /// and the read abstains rather than guess. Measured 2026-08-12: a vanity fills
+    /// ~35% (passes), a floor lamp in a busy room is ~7% (abstains). Tunable.
+    private static let dominantHintFraction: CGFloat = 0.18
+
+    /// The largest salient region's area fraction and centre (normalized; Vision's
+    /// origin is bottom-left, so y is flipped to top-left for the centre test).
+    private static func largestSalientRegion(_ image: UIImage) -> (area: CGFloat, center: CGPoint)? {
+        guard let cg = image.normalizedUp().cgImage else { return nil }
+        let req = VNGenerateObjectnessBasedSaliencyImageRequest()
+        try? VNImageRequestHandler(cgImage: cg, options: [:]).perform([req])
+        guard let obs = req.results?.first as? VNSaliencyImageObservation,
+              let biggest = obs.salientObjects?.max(by: { area($0.boundingBox) < area($1.boundingBox) })
+        else { return nil }
+        let b = biggest.boundingBox
+        return (area(b), CGPoint(x: b.midX, y: 1 - b.midY))
+    }
+
+    /// Turn an on-device region measurement into the subject hint the cloud VLM
+    /// obeys: anchor on a dominant object, or abstain when nothing dominates.
+    private static func areaHint(_ region: (area: CGFloat, center: CGPoint)) -> String {
+        let pct = Int((region.area * 100).rounded())
+        if region.area >= dominantHintFraction {
+            let central = (0.3...0.7).contains(region.center.x) && (0.3...0.7).contains(region.center.y)
+            return "\nSUBJECT HINT (from an on-device detector): one object fills about "
+                + "\(pct)% of the frame\(central ? ", near the CENTER" : "") — this is almost "
+                + "certainly the subject. Identify and describe THAT object; do not pick a "
+                + "smaller item elsewhere in the frame."
+        }
+        return "\nSUBJECT HINT (from an on-device detector): NO single object dominates the "
+            + "frame — the largest stands out at only about \(pct)%. If there is no clearly "
+            + "repairable home or vehicle FIXTURE that dominates the shot, answer exactly "
+            + "'unsure' rather than guessing a minor item (a rug, a cushion, a plant, a "
+            + "small object)."
+    }
 
     /// Read car-vs-motorcycle from the cloud model's DETAILS string (it leads
     /// with the vehicle type for vehicles). nil when no vehicle word is present.
@@ -310,7 +358,7 @@ enum ImageClassifier {
     /// Network + parse. Throws only when the model was unreachable or replied a
     /// bare "unsure" (no usable content at all) — NOT when the category is merely
     /// unmappable, so `details`/`description` survive that case.
-    private static func cloudReply(_ image: UIImage) async throws -> CloudReply {
+    private static func cloudReply(_ image: UIImage, hint: String? = nil) async throws -> CloudReply {
         guard !hfToken.isEmpty else { throw ClassifyError.noMatch }
         guard let jpeg = image.downscaled(maxDimension: 512).jpegData(compressionQuality: 0.7),
               let url = URL(string: "https://router.huggingface.co/v1/chat/completions")
@@ -320,7 +368,7 @@ enum ImageClassifier {
         let payload: [String: Any] = [
             "model": model, "max_tokens": 90,
             "messages": [["role": "user", "content": [
-                ["type": "text", "text": prompt],
+                ["type": "text", "text": prompt + (hint ?? "")],
                 ["type": "image_url", "image_url": ["url": dataURI]],
             ]]],
         ]
