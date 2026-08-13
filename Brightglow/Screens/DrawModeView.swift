@@ -27,9 +27,37 @@ struct DrawModeView: View {
     /// Whatever the user had already typed before taking the photo — carried
     /// over so switching to the camera doesn't lose it.
     var initialDescription: String = ""
+    /// The vision model's concise read of the photo ("Blue Chevrolet Volt with
+    /// large dents on the front door"). Arrives asynchronously — classification
+    /// finishes a beat after the canvas opens. It's a BINDING (not a plain value)
+    /// on purpose: a plain value read inside a `.fullScreenCover`'s content isn't
+    /// re-evaluated when the source changes later, so the description never
+    /// appeared until an unrelated redraw forced a re-render (reported 2026-08-08).
+    /// A binding propagates into the presented cover the same way `paths` does.
+    @Binding var autoDescription: String
+    /// Increments whenever a re-classification COMPLETES (see CameraViewModel).
+    /// Drives the "reading that area" feedback and lets a circled read replace the
+    /// field even when its text matches the previous guess. Defaults to a constant
+    /// binding for callers with no live classifier (e.g. the quote-request editor).
+    var classifyGeneration: Binding<Int> = .constant(0)
+    /// The user circled a region — its bounding box in this view's space, plus the
+    /// view size. Wired to re-classify that crop so the description disambiguates
+    /// to what was circled. No-op by default (e.g. the quote-request editor).
+    var onRegionDrawn: (CGRect, CGSize) -> Void = { _, _ in }
     @Binding var paths: [DrawnPath]
 
     @State private var description: String = ""
+    /// Set once the user types their own text or taps clear — from then on the
+    /// model's guess never overwrites what they chose to leave in the field.
+    @State private var suppressAutofill = false
+    /// The exact text we last auto-filled. Lets a fresh guess (e.g. after the user
+    /// circles a region) replace an earlier guess still sitting untouched in the
+    /// field, while never overwriting text the user actually typed.
+    @State private var lastAutofill = ""
+    /// True from the moment the user finishes a stroke until the resulting
+    /// re-classification lands — drives the inline "reading that area…" spinner so
+    /// a circle gives immediate feedback instead of looking like nothing happened.
+    @State private var reclassifying = false
     @FocusState private var inputFocused: Bool
     @State private var keyboardHeight: CGFloat = 0
     @State private var showDrawHint = true
@@ -45,8 +73,17 @@ struct DrawModeView: View {
                     .clipped()
 
                 // ── Drawing canvas — strokes are baked into the photo at submit;
-                // interpreting what was circled happens on the backend.
-                DrawingCanvas(paths: $paths)
+                // interpreting what was circled happens on the backend. Circling
+                // also re-classifies that region to disambiguate the description
+                // (see onRegionDrawn).
+                DrawingCanvas(paths: $paths, onSelection: { box in
+                    // A finished stroke — even an open loop — is an explicit "read
+                    // THIS" signal: re-fire immediately and show feedback. The
+                    // region result then force-adopts on the next classifyGeneration
+                    // bump (below), overriding a stale or typed field.
+                    withAnimation(.easeInOut(duration: 0.15)) { reclassifying = true }
+                    onRegionDrawn(box, geo.size)
+                })
                     .frame(width: geo.size.width, height: geo.size.height)
                     .allowsHitTesting(!inputFocused)
 
@@ -110,6 +147,12 @@ struct DrawModeView: View {
 
                     // Input bar — text field + send.
                     HStack(spacing: 8) {
+                        // Immediate feedback that a circled area is being re-read.
+                        if reclassifying {
+                            ThinkingOrb(size: 22, color: .white)
+                                .padding(.leading, 8)
+                                .transition(.opacity)
+                        }
                         TextField("Describe what you need…", text: $description, axis: .vertical)
                             .font(.bodyLight)
                             .foregroundStyle(.white)
@@ -122,24 +165,46 @@ struct DrawModeView: View {
                             .frame(maxWidth: .infinity, alignment: .leading)
                             .padding(.leading, 8)
 
+                        // Clear — wipes the field (mainly the auto-filled guess
+                        // when it's off) and stops it from re-populating. Shown
+                        // only when there's text to clear.
+                        // Reserved slot (always 32pt) so the field width never
+                        // jumps when the clear button appears/disappears; only its
+                        // opacity animates, never the container geometry.
+                        Button {
+                            suppressAutofill = true
+                            description = ""
+                        } label: {
+                            Image(systemName: "xmark.circle.fill")
+                                .font(.system(size: 18))
+                                .foregroundStyle(.white.opacity(0.55))
+                                .frame(width: 32, height: 32)
+                        }
+                        .opacity(description.isEmpty ? 0 : 1)
+                        .allowsHitTesting(!description.isEmpty)
+                        .animation(.easeInOut(duration: 0.15), value: description.isEmpty)
+                        .accessibilityLabel("Clear text")
+
                         // CTA — right-pointing white arrow on blue background.
                         // Hidden until the user has given something: typed text
                         // or a drawn mark.
-                        if canSend {
-                            Button(action: { submit(viewSize: geo.size) }) {
-                                ZStack {
-                                    Circle().fill(AppColors.accentGradient)
-                                    Image(systemName: "arrow.right")
-                                        .font(.system(size: 15, weight: .bold))
-                                        .foregroundStyle(.white)
-                                }
-                                .frame(width: 36, height: 36)
+                        // Reserved slot (always 44pt) — fades/scales in place so the
+                        // input never resizes when it becomes sendable.
+                        Button(action: { submit(viewSize: geo.size) }) {
+                            ZStack {
+                                Circle().fill(AppColors.accentGradient)
+                                Image(systemName: "arrow.right")
+                                    .font(.system(size: 15, weight: .bold))
+                                    .foregroundStyle(.white)
                             }
-                            .frame(width: 44, height: 44)
-                            .transition(.opacity.combined(with: .scale(scale: 0.8)))
+                            .frame(width: 36, height: 36)
                         }
+                        .frame(width: 44, height: 44)
+                        .opacity(canSend ? 1 : 0)
+                        .scaleEffect(canSend ? 1 : 0.8)
+                        .allowsHitTesting(canSend)
+                        .animation(.easeInOut(duration: 0.15), value: canSend)
                     }
-                    .animation(.easeInOut(duration: 0.15), value: canSend)
                     .padding(.horizontal, 16)
                     .padding(.vertical, 8)
                     .frame(minHeight: 60)
@@ -175,10 +240,40 @@ struct DrawModeView: View {
         // Modal (full-screen cover) → no system pop gesture; left-edge swipe = back.
         .edgeSwipeBack(perform: onBack)
         .onAppear {
-            if description.isEmpty { description = initialDescription }
+            if description.isEmpty {
+                // The user's own prior text wins and blocks the model's guess from
+                // ever overwriting it.
+                let prior = initialDescription.trimmingCharacters(in: .whitespacesAndNewlines)
+                if !prior.isEmpty { description = initialDescription; suppressAutofill = true }
+            }
+            applyAutofillIfPossible()   // classification may already be in
             DispatchQueue.main.asyncAfter(deadline: .now() + 3) {
                 withAnimation { showDrawHint = false }
             }
+        }
+        // Classification usually returns a beat after the canvas opens — fill then.
+        // Re-fires too when circling a region swaps in a new region-based guess.
+        .onChange(of: autoDescription) { applyAutofillIfPossible() }
+        // A re-classification COMPLETED. When it was triggered by a draw, adopt its
+        // read unconditionally — the user pointed at that area, so it overrides a
+        // stale guess (and even text they'd typed). Fires on the generation bump,
+        // not the text, so an identical re-read still clears the spinner and counts.
+        .onChange(of: classifyGeneration.wrappedValue) {
+            guard reclassifying else { return }
+            withAnimation(.easeInOut(duration: 0.15)) { reclassifying = false }
+            let guess = autoDescription.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !guess.isEmpty else { return }   // read failed → keep what's there
+            suppressAutofill = false
+            lastAutofill = autoDescription
+            // No animation on the text write itself — animating a TextField's bound
+            // string snapshots the field (material background and all) and crossfades
+            // it, which read as a duplicate "background behind the input".
+            description = autoDescription
+        }
+        // Any change we didn't make ourselves is the user typing — from then on
+        // their text is theirs, and no guess (initial or region) overwrites it.
+        .onChange(of: description) {
+            if description != lastAutofill { suppressAutofill = true }
         }
         .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillShowNotification)) { notif in
             guard let frame = notif.userInfo?[UIResponder.keyboardFrameEndUserInfoKey] as? CGRect else { return }
@@ -189,11 +284,27 @@ struct DrawModeView: View {
         }
     }
 
-    /// True when the user has actually given input — typed text or a drawn
-    /// stroke. An untouched screen shows no CTA (the model's own guess about
-    /// the photo never counts as user input).
+    /// True when there's something to send — typed or auto-filled text, or a drawn
+    /// stroke. The model's inferred phrase now lands in the field as real,
+    /// editable text the user can see (and clear), so it counts as sendable.
     private var canSend: Bool {
         !description.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || !paths.isEmpty
+    }
+
+    /// Write the model's inferred phrase into the input. Fills when the field is
+    /// empty, or still holds an earlier auto-guess the user hasn't touched (so a
+    /// region re-classification can replace it). Never overwrites text the user
+    /// typed, or a field they cleared. Called on appear and whenever the model's
+    /// guess changes.
+    private func applyAutofillIfPossible() {
+        guard !suppressAutofill,
+              !autoDescription.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+              autoDescription != description
+        else { return }
+        let current = description.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard current.isEmpty || description == lastAutofill else { return }
+        lastAutofill = autoDescription
+        description = autoDescription
     }
 
     /// Send the typed text (possibly empty when the user only drew) and bake any
