@@ -53,6 +53,13 @@ struct MainScreen: View {
     /// the image already answers (e.g. "car or motorcycle?" for a plain car
     /// photo). Distinct from `photoDetails`, which is cost-only and feeds pricing.
     @State private var photoContext: String? = nil
+    /// A human-readable, ready-to-show description of what the last capture shows
+    /// ("Large two-panel sliding patio door"), mirrored from
+    /// `camera.detectedDescription` before `retake()` clears it. Carried into the
+    /// results screen so the user sees the photo diagnosis above the matches —
+    /// the "we understood your photo" moment. Distinct from `photoContext` (a
+    /// machine phrase for the clarify chat) and `photoDetails` (cost-only).
+    @State private var photoDescription: String? = nil
     @State private var searchText = ""
     // ── Clarifying chat — after a typed request, the input pill grows into a
     // small chat card where the AI asks a scalable number of questions (1 for a
@@ -96,8 +103,27 @@ struct MainScreen: View {
     /// the live viewfinder back.
     private var chatHasPhoto: Bool { clarifyBackdrop != nil }
     /// The camera only earns its power while it's something the user can actually
-    /// see and use. During a picture-less chat it's covered, so shut it down.
-    private var cameraShouldRun: Bool { !(chatActive && !chatHasPhoto) }
+    /// see and use. During ANY clarifying chat the live viewfinder is fully covered
+    /// — by a solid backdrop (picture-less) or by the captured photo — so the
+    /// session must be off, or the green in-use dot stays lit behind the chat
+    /// (reported 2026-08-12: taking a photo then entering chat left the camera on).
+    private var cameraShouldRun: Bool { !chatActive }
+
+    /// Briefly show the coaching hint, then fade it after 5s. Called whenever the
+    /// camera is exposed — the default mid view and the pulled-down full view — so
+    /// people learn they can add a picture, not only after discovering the pull.
+    /// Only fires while the landing chooser's camera is actually on screen.
+    private func flashCameraHint() {
+        guard camera.isAuthorized, !searchFocused, selectedVertical == nil, !chatActive,
+              !hasCapturedThisSession else { return }
+        cameraHintToken += 1
+        let token = cameraHintToken
+        showCameraHint = true
+        DispatchQueue.main.asyncAfter(deadline: .now() + 5) {
+            // Only the most recent flash clears it — a newer flash keeps it up.
+            if cameraHintToken == token { withAnimation { showCameraHint = false } }
+        }
+    }
 
     /// Whether a category tap has enough to justify a price. A bare tap tells us
     /// nothing about the job — "Plumbing" alone spans a $90 unclog and a $6k
@@ -131,6 +157,16 @@ struct MainScreen: View {
     /// so we route the user to Settings or manual ZIP entry).
     @State private var showLocationNeeded = false
     @State private var drawnPaths: [DrawnPath] = []
+    /// Mirror of `camera.detectedDescription` for the draw-over input. Kept as a
+    /// MainScreen @State (fed by an onChange) and passed to DrawModeView as a
+    /// binding, because a value read directly inside the `.fullScreenCover`
+    /// content isn't re-evaluated when the async classification lands — a binding
+    /// propagates into the cover the way `drawnPaths` does.
+    @State private var captureAutoDescription = ""
+    /// Mirror of `camera.classifyGeneration` (same binding reason as above), so the
+    /// draw canvas can tell a re-classification COMPLETED — and react even when the
+    /// new phrase matches the old — to show fresh feedback after circling.
+    @State private var captureClassifyGen = 0
     /// The captured photo (with any drawn strokes baked in) carried forward to
     /// the quote-request screen once the user reaches a contractor.
     @State private var attachedImages: [UIImage] = []
@@ -143,9 +179,18 @@ struct MainScreen: View {
     /// Lights the orange dot on the chat icon when a counterparty has sent a
     /// message since the inbox was last opened.
     @State private var hasUnreadChat = false
-    /// Coaching hint above the shutter — appears when the sheet is pulled down to
-    /// expose the full camera, then auto-dismisses after a few seconds.
+    /// Coaching hint above the shutter — shown in the default and full camera
+    /// views, then auto-dismisses after a few seconds.
     @State private var showCameraHint = false
+    /// Monotonic token so overlapping flashes don't hide the hint early: only the
+    /// latest flash's fade timer is allowed to clear it.
+    @State private var cameraHintToken = 0
+    /// The coaching hint teaches the capture gesture, so it's only useful until the
+    /// user has taken their first photo. Once they have — anytime this app session —
+    /// they've learned it, and re-showing it on every return to the landing is
+    /// noise. Latches true on the first shutter tap and never resets (MainScreen is
+    /// the root view, so its lifetime IS the session).
+    @State private var hasCapturedThisSession = false
     /// Native photo-picker selection (raw items) and the decoded images shown
     /// as thumbnails above the input bar.
     @State private var pickedItems: [PhotosPickerItem] = []
@@ -257,6 +302,9 @@ struct MainScreen: View {
                             // Chat + profile sit flush together on the right (Figma
                             // header: two 44pt tap targets, no gap between them).
                             HStack(spacing: 0) {
+                              // Account-based surfaces (in-app chat + business/profile)
+                              // are hidden in the consumer-only build. See FeatureFlags.
+                              if FeatureFlags.accountFeaturesEnabled {
                                 Button(action: { openChat() }) {
                                     // Plain glyph, no background — same flat style as
                                     // the profile icon (white, line icon). Exact Figma
@@ -297,6 +345,7 @@ struct MainScreen: View {
                                         .foregroundStyle(.white)
                                         .iconTapTarget()
                                 }
+                              }
                             }
                         }
                         .padding(.horizontal, 16)
@@ -316,18 +365,27 @@ struct MainScreen: View {
                     if selectedVertical == nil && !chatActive {
                         VStack(spacing: 0) {
                             Spacer()
-                            // Coaching hint — appears when the sheet is pulled down to
-                            // expose the full camera, then crossfades out after 3s
-                            // (driven by showCameraHint). 16pt above the shutter.
-                            if sheetDetent == .collapsed && camera.isAuthorized && !searchFocused {
-                                HintPill(text: "Add a picture and explain your task to connect with businesses.")
+                            // Coaching hint — shown whenever the camera is exposed:
+                            // the default mid view AND the pulled-down full view, so
+                            // people learn they can add a picture without having to
+                            // discover the full-camera pull first. Crossfades out
+                            // after 5s (driven by showCameraHint). 16pt above the shutter.
+                            if (sheetDetent == .mid || sheetDetent == .collapsed) && camera.isAuthorized && !searchFocused && !hasCapturedThisSession {
+                                HintPill(text: "Add a photo and describe your job to see a price estimate and local pros.")
                                     .opacity(showCameraHint ? 1 : 0)
                                     .animation(.easeInOut(duration: 0.4), value: showCameraHint)
                                     .padding(.bottom, 16)
                             }
                             Group {
                                 if camera.isAuthorized {
-                                    Button(action: { camera.capturePhoto() }) {
+                                    Button(action: {
+                                        // First capture retires the coaching hint for
+                                        // the rest of the session (and stops it fading
+                                        // back in on the next return to the landing).
+                                        hasCapturedThisSession = true
+                                        showCameraHint = false
+                                        camera.capturePhoto()
+                                    }) {
                                         ZStack {
                                             Circle()
                                                 .fill(AppColors.shutterBg)
@@ -607,10 +665,18 @@ struct MainScreen: View {
                 // resume the session whenever the landing reappears. Also grab the
                 // user's location automatically when permission is already granted.
                 .onAppear {
-                    camera.activateIfNeeded()
+                    // Don't resume while a chat still covers the viewfinder (e.g.
+                    // reappearing right as a photo-backed clarify chat opens after
+                    // DrawMode), or the camera powers back on behind it.
+                    if cameraShouldRun { camera.activateIfNeeded() }
                     autoFetchLocationIfGranted()
-                    consumePendingChatDeepLink()   // e.g. a business arriving right after login
-                    refreshChatUnread()
+                    if FeatureFlags.accountFeaturesEnabled {
+                        consumePendingChatDeepLink()   // e.g. a business arriving right after login
+                        refreshChatUnread()            // reads the user's threads — needs a session
+                    }
+                    // The landing opens at the mid detent, so onChange never fires
+                    // for it — flash the hint here so it's seen in the default view.
+                    flashCameraHint()
                 }
                 // A brightglow://chat deep link that fires while the app is
                 // already on the landing opens the inbox immediately.
@@ -628,9 +694,8 @@ struct MainScreen: View {
                 .onDisappear {
                     camera.deactivate()
                 }
-                // Power the camera down for a picture-less clarifying chat, and
-                // bring it back the moment it's visible again — the chat ending, or
-                // the user attaching a photo mid-conversation.
+                // Power the camera down whenever a clarifying chat covers the
+                // viewfinder, and bring it back the moment the chat ends.
                 .onChange(of: cameraShouldRun) { _, run in
                     if run { camera.activateIfNeeded() } else { camera.deactivate() }
                 }
@@ -653,6 +718,7 @@ struct MainScreen: View {
                                          // carried through (see searchResults).
                                          attachedImages: attachedImages + pickedImages,
                                          photoDetails: photoDetails,
+                                         photoDescription: photoDescription ?? "",
                                          priceable: categoryPriceable)
                 }
                 .navigationDestination(isPresented: $showChat) {
@@ -677,6 +743,7 @@ struct MainScreen: View {
                                          // Camera capture + any library picks (see
                                          // searchResults) so neither source is lost.
                                          attachedImages: attachedImages + pickedImages,
+                                         photoDescription: photoDescription ?? "",
                                          priceable: autoCategoryPriceable,
                                          initialVehicle: autoInitialVehicle)
                 }
@@ -732,17 +799,25 @@ struct MainScreen: View {
                 } message: {
                     Text("Brightglow needs your location to find contractors near you. Turn it on in Settings, or enter a ZIP code.")
                 }
-                // Show the coaching hint each time the camera is fully exposed,
-                // then fade it out after 3s.
+                // Flash the coaching hint whenever the camera is exposed — the
+                // mid (default) and collapsed (full) detents — then fade after 3s.
+                // Hidden while the categories sheet is expanded (.full).
                 .onChange(of: sheetDetent) { _, newDetent in
-                    if newDetent == .collapsed {
-                        showCameraHint = true
-                        DispatchQueue.main.asyncAfter(deadline: .now() + 3) {
-                            withAnimation { showCameraHint = false }
-                        }
+                    if newDetent == .mid || newDetent == .collapsed {
+                        flashCameraHint()
                     } else {
                         showCameraHint = false
                     }
+                }
+                // Mirror the async photo description into a binding-backed @State so
+                // it actually reaches the draw-over input. MainScreen owns the
+                // camera, so this fires reliably; the cover picks it up via the
+                // binding (retake() nils it → clears for the next shot).
+                .onChange(of: camera.detectedDescription) { _, newValue in
+                    captureAutoDescription = newValue ?? ""
+                }
+                .onChange(of: camera.classifyGeneration) { _, gen in
+                    captureClassifyGen = gen
                 }
             }
         }
@@ -765,6 +840,21 @@ struct MainScreen: View {
                         let q = word.trimmingCharacters(in: .whitespacesAndNewlines)
                         let detected = camera.detectedMatch
                         let details = camera.detectedDetails
+                        // The human-readable photo diagnosis, shown atop the results
+                        // — captured here before `retake()` (below) clears it. Gated
+                        // so a wrong or contradicted guess never headlines results:
+                        // surfaced ONLY when the classifier was confident (a
+                        // `detectedMatch`) AND the user didn't edit the autofilled
+                        // text into something different (which the banner would then
+                        // contradict). Both fail → no banner, which is better than a
+                        // confident-looking wrong read.
+                        let describe: String? = {
+                            guard detected != nil,
+                                  let d = camera.detectedDescription?.trimmingCharacters(in: .whitespacesAndNewlines),
+                                  !d.isEmpty else { return nil }
+                            if !q.isEmpty, q.caseInsensitiveCompare(d) != .orderedSame { return nil }
+                            return d
+                        }()
                         // Capture the vehicle guess before `retake()` clears it, so
                         // the clarify chat knows this is a car/moto and won't ask —
                         // and so the auto list can open on the Moto toggle when the
@@ -779,6 +869,7 @@ struct MainScreen: View {
                         DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
                             photoDetails = details
                             photoContext = context
+                            photoDescription = describe
                             if !q.isEmpty {
                                 // Through the clarify chat, same as a typed
                                 // search — the photo's extracted details ride
@@ -808,6 +899,19 @@ struct MainScreen: View {
                         }
                     },
                     initialDescription: searchText,
+                    // Bound (not passed by value) so the async classification result
+                    // actually reaches the presented cover — see captureAutoDescription
+                    // and the onChange that feeds it.
+                    autoDescription: $captureAutoDescription,
+                    // Bumps when any re-classification completes, so the draw canvas
+                    // can show fresh feedback + adopt a region read even if its text
+                    // matches the previous guess.
+                    classifyGeneration: $captureClassifyGen,
+                    // Circling an area re-classifies that crop; the new description
+                    // flows back through detectedDescription → captureAutoDescription.
+                    onRegionDrawn: { rect, viewSize in
+                        camera.reclassifyRegion(rect, viewSize: viewSize)
+                    },
                     paths: $drawnPaths
                 )
             }
@@ -929,6 +1033,7 @@ struct MainScreen: View {
                              // screen when a snapped photo was already attached).
                              attachedImages: attachedImages + pickedImages,
                              photoDetails: mergedDetails,
+                             photoDescription: photoDescription ?? "",
                              businessSearchOverride: chatSearchTerms,
                              photoMatchTerms: chatPhotoTerms,
                              priceable: chatPriceable,
@@ -1379,7 +1484,7 @@ struct MainScreen: View {
     private func removeAttachedImage(at index: Int) {
         guard attachedImages.indices.contains(index) else { return }
         attachedImages.remove(at: index)
-        if attachedImages.isEmpty { photoDetails = nil; photoContext = nil }
+        if attachedImages.isEmpty { photoDetails = nil; photoContext = nil; photoDescription = nil }
     }
 
     /// Compose what the clarify chat should know about the user's photo, so it
