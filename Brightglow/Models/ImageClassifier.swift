@@ -39,16 +39,34 @@ enum ImageClassifier {
     private static let prompt: String = {
         let home = Category.allCases.map(\.rawValue).joined(separator: ", ")
         let auto = autoCategoryItems.map(\.name).joined(separator: ", ")
-        return "You route a repair request to the right contractor from one photo. "
-            + "First decide whether the main subject is a VEHICLE (car, truck, or "
-            + "motorcycle, or a part of one) or a HOME / property. Then choose exactly "
-            + "ONE category:\n"
+        return "You route a repair request to the right contractor from one photo.\n"
+            + "STEP 1 — PICK THE SUBJECT (do this FIRST, before choosing a category). "
+            + "Choose the SINGLE thing the request is about. Prefer the physically "
+            + "LARGEST built fixture the shot is framed around — a vanity, cabinet, "
+            + "sink, countertop, bathtub, shower surround, appliance, water heater, "
+            + "window, glass/patio door, or roof — EVEN WHEN smaller, higher-contrast "
+            + "hardware is also in view. A large fixture near the CENTER of the frame "
+            + "BEATS small hardware (a faucet, valve, handle, knob, spout, hinge, "
+            + "cartridge) near the EDGE of the frame: do NOT pick a small edge object "
+            + "over a large central one. Pick the small part ONLY when the photo is "
+            + "clearly a tight CLOSE-UP of it — it fills most of the frame. Pick "
+            + "EXACTLY ONE subject; never merge two (not \"faucet and valve\", not "
+            + "\"door and floor\"). Ignore the floor, tiles, rug, wall, and ceiling "
+            + "unless the camera clearly points DOWN at the floor with no fixture in "
+            + "view. Leave DESCRIPTION empty only for a truly featureless wide shot (a "
+            + "whole-house exterior from afar, an empty yard).\n"
+            + "STEP 2 — ROUTE IT. Decide whether that ONE subject is a VEHICLE (car, "
+            + "truck, or motorcycle, or a part of one) or part of a HOME / property. "
+            + "Then choose exactly ONE category:\n"
             + "- If it's a vehicle, choose from: \(auto).\n"
             + "- If it's a home/property, choose from: \(home).\n"
+            + "Always answer with one of those SPECIFIC category names — never just "
+            + "\"Vehicle\" or \"Home\". If unsure which, pick the closest and append a \"?\".\n"
             + "Note: floors and floor coverings (hardwood, laminate, tile, carpet, rugs) "
             + "are Flooring — NOT Carpentry. Carpentry is furniture, cabinets, trim, "
             + "framing, decks.\n"
-            + "Reply on one line as: CATEGORY | DETAILS\n"
+            + "Reply on EXACTLY ONE line as: CATEGORY | DETAILS | DESCRIPTION — no "
+            + "preamble, no second line, and never repeat this template in your answer.\n"
             + "CATEGORY is the chosen category name, exactly as written above. If you can "
             + "pick a category but are not certain, append a question mark (e.g. Carpentry?).\n"
             + "DETAILS is a short comma-separated list of attributes visible in the photo. "
@@ -63,7 +81,33 @@ enum ImageClassifier {
             + "and any visible scope cue (a fogged/cracked pane vs. the whole unit). Only "
             + "include what's actually visible — never guess a make, dimension, condition, or "
             + "problem you can't see. Write \"none\" if nothing relevant is visible.\n"
-            + "If the photo doesn't clearly show a single repairable subject, reply only: unsure."
+            + "DESCRIPTION is ONE short line the user could send as their request, as you "
+            + "understand it — START WITH AN ACTION VERB (Replace, Repair, Fix, Install) and "
+            + "name the ONE subject you chose above with ONE action. Never combine several "
+            + "objects or list multiple problems (not \"repair the door and the floor\"): pick "
+            + "the single spotlight subject and describe only what's needed for THAT. Name a "
+            + "fixture by its MAIN noun and do NOT list its built-in parts — a vanity already "
+            + "includes its sink and countertop, so write \"Replace the bathroom vanity\", never "
+            + "\"vanity with sink and countertop\". Fold in "
+            + "the make/model, type, material or colour. Include a SIZE ONLY when the photo actually shows it — a legible or "
+            + "standard dimension, or a clear room/panel boundary you can judge — otherwise "
+            + "leave the size out rather than guessing. For a fixture, name its type when "
+            + "visible (gas vs electric, tank vs tankless). Examples: \"Replace large French "
+            + "door, about 72x80\", \"Replace hardwood floor\" (size not visible), \"Repair gas "
+            + "furnace\", \"Body repair for blue Chevrolet Volt — large dents on front door and "
+            + "fender\". Under ~12 words, plain words, no label, no trailing period.\n"
+            + "VEHICLE EXCEPTION: for a car or motorcycle, write a DESCRIPTION ONLY when a "
+            + "concrete problem is actually VISIBLE — collision or dent, a scratch/scrape, "
+            + "cracked or shattered glass, a flat/shredded tire, a fluid leak or puddle, rust, "
+            + "or a broken or missing part. If the vehicle simply looks normal (the likely "
+            + "problem is mechanical or internal and NOT visible in the photo), write DESCRIPTION "
+            + "as \"none\" — do NOT invent an action like \"Repair car\" or \"Replace part\". The "
+            + "user, not the app, should say what's wrong when it can't be seen; a made-up "
+            + "suggestion they have to delete is worse than a blank box. (DETAILS still records "
+            + "the visible vehicle type, make, model, and colour — only DESCRIPTION is withheld.)\n"
+            + "Reply only the single word 'unsure' when there is genuinely NO home or vehicle "
+            + "repair subject in view at all — e.g. a person, a pet, food, or plain sky. A normal "
+            + "room interior is NOT unsure: name its most prominent fixture."
     }()
 
     // MARK: - Public API
@@ -85,17 +129,36 @@ enum ImageClassifier {
     /// separated list of visible cost-relevant attributes (size, capacity,
     /// material) — nil when nothing relevant was visible or the model wasn't
     /// confident enough to trust its category call in the first place.
-    struct Suggestion { let match: TradeMatch; let isConfident: Bool; let details: String? }
+    struct Suggestion { let match: TradeMatch; let isConfident: Bool; let details: String?; let description: String? }
 
     /// Ordered guesses for the capture flow, best first: the cloud verdict (when
     /// available) then the on-device Vision guess. `confident` is set only when
     /// the cloud model answered without hedging — that one may be preselected;
-    /// everything else only leads the category carousel. `details` mirrors the
-    /// confident cloud verdict's extracted attributes, if any. `vehicle` is the
+    /// everything else only leads the category carousel. `details` carries the
+    /// cloud verdict's visible attributes (material, size, vehicle type) whether
+    /// or not the category was confident — they're observations, not a category
+    /// call, and clarify needs them to avoid re-asking. `vehicle` is the
     /// cloud model's car-vs-motorcycle read (from the vehicle words it leads
     /// DETAILS with) — nil when the subject isn't a vehicle or the model didn't
     /// name the type; the caller falls back to the on-device `detectVehicleType`.
-    struct Suggestions { let matches: [TradeMatch]; let confident: TradeMatch?; let details: String?; let vehicle: VehicleFilter? }
+    /// `description` is the cloud model's ready-to-show phrase for the subject and
+    /// its problem ("Blue Chevrolet Volt with large dents on the front door"),
+    /// used to auto-fill the capture input — kept whether or not the category was
+    /// confident, like `details`. nil when the model left it empty or was offline.
+    struct Suggestions { let matches: [TradeMatch]; let confident: TradeMatch?; let details: String?; let vehicle: VehicleFilter?; let description: String? }
+
+    /// Re-run capture classification on just the region the user circled. The
+    /// drawn area is a strong "THIS is the subject" signal that overrides a
+    /// whole-frame read which latched onto something more prominent — e.g. circled
+    /// kitchen cabinets in a shot the whole-frame guess called "hardwood floor"
+    /// (reported 2026-08-08). `rect` is in the draw canvas's view space; it's
+    /// padded a little so a tight loop doesn't clip the subject's edges.
+    static func suggestTrades(_ image: UIImage, regionInView rect: CGRect, viewSize: CGSize) async -> Suggestions {
+        let pad = CGRect(x: rect.minX - rect.width * 0.12, y: rect.minY - rect.height * 0.12,
+                         width: rect.width * 1.24, height: rect.height * 1.24)
+        let target = crop(image, viewRect: pad, viewSize: viewSize) ?? image
+        return await suggestTrades(target)
+    }
 
     /// Whole-image classification for **auto-suggesting** tags. (The drawing path
     /// still uses the plain `classify`, which always returns a single best guess —
@@ -104,22 +167,34 @@ enum ImageClassifier {
         var matches: [TradeMatch] = []
         var confident: TradeMatch? = nil
         var details: String? = nil
+        var description: String? = nil
         var vehicle: VehicleFilter? = nil
-        // When a single object fills most of the frame it IS the subject: classify
-        // just that region so the model can't latch onto a smaller distractor with
-        // several things in view (e.g. a car parked in front of the house that's
-        // actually being repaired). Falls back to the whole image when nothing
-        // clearly dominates.
+        // The on-device saliency crop is used ONLY for the weak on-device fallback
+        // below — NEVER for the cloud vision model. Saliency over-picks a big
+        // high-texture foreground (a patterned rug, a tile floor), so cropping to
+        // it fed the strong model a floor and it dutifully returned "floor tiles" /
+        // "hardwood floor" for photos plainly framed on a window, door, or vanity
+        // (reported repeatedly 2026-08-09). The cloud VLM reads the WHOLE scene far
+        // better than an on-device saliency guess picks the subject — the prompt's
+        // subject-priority rule handles "which fixture" — so it gets the full image.
         let subject: UIImage = dominantObject(image).flatMap { cropNormalized(image, $0) } ?? image
-        if let cloud = try? await classifyCloud(subject) {
-            matches.append(cloud.match)
-            // When the cloud model saw a vehicle it leads DETAILS with the type
-            // (car/truck/motorcycle) — read car-vs-moto from there even if the
-            // category itself was hedged, so clarify never re-asks it.
-            if case .auto = cloud.match { vehicle = vehicleFilter(from: cloud.details) }
-            if cloud.isConfident {
-                confident = cloud.match
-                details = cloud.details
+        if let cloud = try? await cloudReply(image) {
+            // DETAILS and DESCRIPTION are visible observations, independent of
+            // whether the CATEGORY parsed to a known service — so keep them even
+            // when the model hedged with "?" OR answered with a bare vertical word
+            // ("Vehicle") that maps to no category. Discarding them on those was
+            // why clear photos re-asked the fence material (2026-08-07) and showed
+            // no auto-description (2026-08-08). `match`-gated things (carousel,
+            // vehicle read, confident preselect) still require a real match.
+            details = cloud.details
+            description = cloud.description
+            if let match = cloud.match {
+                matches.append(match)
+                // When the cloud model saw a vehicle it leads DETAILS with the
+                // type (car/truck/motorcycle) — read car-vs-moto from there even
+                // if the category itself was hedged, so clarify never re-asks it.
+                if case .auto = match { vehicle = vehicleFilter(from: cloud.details) }
+                if cloud.isConfident { confident = match }
             }
         }
         // The on-device guess always contributes a carousel suggestion (never a
@@ -138,7 +213,7 @@ enum ImageClassifier {
         // house repaint (reported 2026-07-26).
         let subjectIsAuto = matches.contains { if case .auto = $0 { return true } else { return false } }
         if vehicle == nil, subjectIsAuto { vehicle = detectVehicleType(subject) }
-        return Suggestions(matches: matches, confident: confident, details: details, vehicle: subjectIsAuto ? vehicle : nil)
+        return Suggestions(matches: matches, confident: confident, details: details, vehicle: subjectIsAuto ? vehicle : nil, description: description)
     }
 
     /// Fraction of the frame a single salient object must exceed to be treated as
@@ -218,7 +293,24 @@ enum ImageClassifier {
 
     // MARK: - Cloud (vision LLM)
 
-    private static func classifyCloud(_ image: UIImage) async throws -> Suggestion {
+    /// The parsed vision reply. `match` is nil when the model answered with a
+    /// vertical word ("Vehicle", "Home / property") or anything that doesn't map
+    /// to a known category — but `details` and `description` are still filled, so
+    /// the capture input can auto-fill and the estimate can use the attributes
+    /// even when the exact service wasn't named. (Reported 2026-08-08: clear
+    /// photos produced no auto-description because the whole verdict was thrown
+    /// away whenever the category came back as a bare vertical word.)
+    private struct CloudReply {
+        let match: TradeMatch?
+        let isConfident: Bool
+        let details: String?
+        let description: String?
+    }
+
+    /// Network + parse. Throws only when the model was unreachable or replied a
+    /// bare "unsure" (no usable content at all) — NOT when the category is merely
+    /// unmappable, so `details`/`description` survive that case.
+    private static func cloudReply(_ image: UIImage) async throws -> CloudReply {
         guard !hfToken.isEmpty else { throw ClassifyError.noMatch }
         guard let jpeg = image.downscaled(maxDimension: 512).jpegData(compressionQuality: 0.7),
               let url = URL(string: "https://router.huggingface.co/v1/chat/completions")
@@ -226,7 +318,7 @@ enum ImageClassifier {
 
         let dataURI = "data:image/jpeg;base64,\(jpeg.base64EncodedString())"
         let payload: [String: Any] = [
-            "model": model, "max_tokens": 50,
+            "model": model, "max_tokens": 90,
             "messages": [["role": "user", "content": [
                 ["type": "text", "text": prompt],
                 ["type": "image_url", "image_url": ["url": dataURI]],
@@ -250,17 +342,39 @@ enum ImageClassifier {
         // A trailing "?" is the model hedging: keep the guess but mark it weak.
         if content.lowercased().contains("unsure") { throw ClassifyError.unsure }
 
-        // "CATEGORY | DETAILS" — split off the details before category matching
-        // so a stray "?"/word in DETAILS never affects category parsing.
-        let parts = content.split(separator: "|", maxSplits: 1).map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
-        let categoryText = parts.first ?? content
+        // "CATEGORY | DETAILS | DESCRIPTION" — parse only the FIRST non-empty line.
+        // The model occasionally appends extra lines (a repeated format header, a
+        // second guess); without this, DESCRIPTION captured all of it and the raw
+        // "Repair | DETAILS | none | …" template leaked into the input field
+        // (reported 2026-08-09). One line in, three fields out.
+        let firstLine = content
+            .split(separator: "\n")
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .first(where: { !$0.isEmpty }) ?? content
+        let parts = firstLine.split(separator: "|", maxSplits: 2).map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+        let categoryText = parts.first ?? firstLine
         let detailsText = parts.count > 1 ? parts[1] : ""
         let details: String? = (detailsText.isEmpty || detailsText.lowercased() == "none") ? nil : detailsText
+        let descriptionText = parts.count > 2 ? parts[2] : ""
+        let description: String? = (descriptionText.isEmpty || descriptionText.lowercased() == "none") ? nil : descriptionText
 
-        do { return Suggestion(match: try matchTrade(in: categoryText),
-                               isConfident: !categoryText.contains("?"),
-                               details: details) }
-        catch { throw ClassifyError.unsure }   // reachable but unmappable → don't guess
+        // A category we can't map -> nil match (not a thrown-away verdict). The
+        // model naming a bare vertical word is common, and its DETAILS/DESCRIPTION
+        // are still good.
+        return CloudReply(match: try? matchTrade(in: categoryText),
+                          isConfident: !categoryText.contains("?"),
+                          details: details,
+                          description: description)
+    }
+
+    /// A single cloud verdict with a MAPPED category — used by the plain
+    /// `classify` paths that need a category. Throws when the model didn't name a
+    /// category we recognize, so those callers fall back to the on-device guess.
+    private static func classifyCloud(_ image: UIImage) async throws -> Suggestion {
+        let reply = try await cloudReply(image)
+        guard let match = reply.match else { throw ClassifyError.unsure }
+        return Suggestion(match: match, isConfident: reply.isConfident,
+                          details: reply.details, description: reply.description)
     }
 
     /// Map a free-text classification reply to a home or auto category. Exact
