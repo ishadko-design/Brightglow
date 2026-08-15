@@ -9,7 +9,7 @@
   <meta name="robots" content="noindex">
   <link rel="icon" type="image/png" href="../favicon.png">
   <link rel="apple-touch-icon" href="../apple-touch-icon.png">
-  <link rel="stylesheet" href="portal.css?v=21">
+  <link rel="stylesheet" href="portal.css?v=22">
 </head>
 <body class="portal">
   <header class="topbar">
@@ -18,6 +18,11 @@
       <span>Brightglow <em>for Business</em></span>
     </a>
     <div class="topbar-actions">
+      <!-- Figma landing header (node 1602:6617): a "For businesses" secondary
+           pill on the right. Shown only on the signed-out landing (CSS-scoped to
+           #authView); it collapses on the dashboard, where Billing / Sign out
+           take this slot. -->
+      <a class="biz-pill" href="../index.html">For businesses</a>
       <button id="billingBtn" class="ghost-btn" hidden>Billing</button>
       <!-- Settings is a tab now (see .tabs below), not a topbar button. Sign out
            stays here: the Figma web header is just the wordmark and the Settings
@@ -51,7 +56,7 @@
         <h1>Get found for the work you do best</h1>
         <p class="intro-sub">
           Real customers, matched to you by the jobs you've actually done — then a
-          spam-free chat. No cold calls, no bidding wars. Just the leads meant for you.
+          spam-free chat. No cold calls, no bidding wars.
         </p>
 
         <ul class="feature-row">
@@ -73,6 +78,12 @@
         <p class="fineprint">
           By continuing you agree to our <a href="../business-terms.html">Business Terms of Service</a>.
         </p>
+
+        <!-- Hero visual (Figma node 1602:6378 "Group 36990"): a phone rendering
+             the app Home screen with four job-photo cards floating around it.
+             Exported one-to-one from the design and placed exactly as composed —
+             sits 100 below the CTA card, bleeds slightly past the 402 column. -->
+        <img class="intro-phone" src="../media/biz/hero-phone.png" alt="" aria-hidden="true">
       </div>
 
       <!-- Phone claim (primary). The number customers were texted is what the

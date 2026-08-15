@@ -90,6 +90,20 @@ a { color: inherit; }
 .brand { display: flex; align-items: center; gap: 10px; text-decoration: none; font-family: "Lato"; font-weight: 700; font-size: 17px; }
 .brand em { color: var(--gray50); font-style: normal; font-weight: 400; }
 .brand .appicon { width: 30px; height: 30px; border-radius: 8px; }
+/* "For businesses" pill (Figma 1602:6617) — the same cross-site pill the
+   consumer header uses, so the two landings stay identical. Only on the
+   signed-out landing; the dashboard uses this slot for Billing / Sign out. */
+.biz-pill {
+  display: none;
+  flex: none;
+  font-family: "Lato", system-ui, sans-serif; font-weight: 700; font-size: 14px;
+  color: var(--white); text-decoration: none;
+  padding: 8px 16px; border-radius: 999px;
+  background: rgba(217, 217, 217, 0.2);
+  transition: background 0.15s ease;
+}
+.biz-pill:hover { background: rgba(217, 217, 217, 0.3); }
+body.portal:has(#authView:not([hidden])) .biz-pill { display: inline-flex; }
 
 .wrap { width: 100%; max-width: 760px; margin: 0 auto; padding: 24px 20px 64px; flex: 1; }
 
@@ -131,17 +145,16 @@ a { color: inherit; }
    content the way a fixed layer does) and scoped with :has() so it only shows
    while signed out — the dashboard keeps its plain --bg. The gradient occupies
    the top 801 units (the Figma frame height); black fills anything below. */
-/* Marketing intro fits the viewport and never scrolls; --s scales the whole
-   hero to whichever of width/height is the tighter fit. Scoped to the intro
-   step (NOT the whole signed-out view) so the sign-in forms below it can still
-   scroll for a keyboard / error messages; the dashboard scrolls normally too. */
+/* Marketing intro is the tall Figma frame (node 1602:6559, 401×1531): the copy,
+   the CTA, then the phone-and-cards hero below the fold. It renders at full
+   width and scrolls; --s makes the 402-unit design fill the viewport width. The
+   phone image bleeds slightly past the column, so clip horizontal overflow to
+   stop any sideways scroll. Scoped to the intro step so the sign-in forms keep
+   their own scroll behavior and the dashboard scrolls normally. */
 body.portal:has(#authView:not([hidden]) #introStep:not([hidden])) {
-  --s: min(calc(100vw / 402), calc((100vh - 56px) / 648));
-  --s: min(calc(100vw / 402), calc((100svh - 56px) / 648));
-  height: 100vh;
-  height: 100svh;
-  min-height: 100svh;
-  overflow: hidden;
+  --s: calc(100vw / 402);
+  overflow-x: hidden;
+  overflow-x: clip;
 }
 /* Scale the chrome below the header so the intro tracks --s (harmless on the
    form steps, where --s falls back to 1px). The header itself stays fixed-px
@@ -154,21 +167,18 @@ body.portal:has(#authView:not([hidden]) #introStep:not([hidden])) .portal-footer
 @media (min-width: 700px) {
   body.portal:has(#authView:not([hidden]) #introStep:not([hidden])) {
     --s: 1.25px;
-    height: auto;
-    min-height: 100vh;
-    overflow: visible;
   }
 }
 
 body.portal:has(#authView:not([hidden])) {
   background-color: #000;
-  /* Figma's diagonal handles concentrate the amber in the top ~40% (top-right)
-     before it reads as black — a plain 212deg needs its dark stop pulled in to
-     ~42% to match, otherwise the glow washes down over the whole hero. */
-  background-image: linear-gradient(212deg, rgba(255, 172, 54, 0.6) 0%, rgba(10, 10, 11, 0.59) 42%);
+  /* Figma frame fill (node 1602:6559), exact: a 212° amber→near-black gradient
+     over black, amber concentrated at the top and gone by ~40% of the frame
+     height (1531 units). */
+  background-image: linear-gradient(212deg, rgba(255, 172, 54, 0.25) 0%, rgba(25, 25, 34, 0.59) 40%);
   background-repeat: no-repeat;
   background-position: top center;
-  background-size: 100% calc(801 * var(--s));
+  background-size: 100% calc(1531 * var(--s));
 }
 /* Transparent header ONLY on the marketing intro (no scroll, gradient behind).
    On the scrolling sign-in steps — and when the keyboard lifts the content — the
@@ -178,6 +188,8 @@ body.portal:has(#authView:not([hidden]) #introStep:not([hidden])) .topbar {
   background: transparent;
   border-bottom: 0;
   backdrop-filter: none;
+  /* Scroll away with the hero instead of sticking over the phone below. */
+  position: static;
 }
 body.portal:has(#authView:not([hidden])) .brand em { display: none; }
 /* Landing header — FIXED px, pixel-identical to the consumer's .topbar so the
@@ -199,8 +211,8 @@ body.portal:has(#authView:not([hidden])) .brand .appicon { width: 40px; height: 
   line-height: calc(52.8 * var(--s));
 }
 .intro-sub {
-  /* Poppins Light 17 / 25.5, white 60% */
-  margin-top: calc(24 * var(--s));
+  /* Poppins Light 17 / 25.5, white 60%. Figma gap title→sub = 32. */
+  margin-top: calc(32 * var(--s));
   font-size: calc(17 * var(--s)); line-height: calc(25.5 * var(--s));
   color: rgba(255, 255, 255, 0.6);
 }
@@ -208,24 +220,40 @@ body.portal:has(#authView:not([hidden])) .brand .appicon { width: 40px; height: 
 /* Icon feature row (Figma): no container — three items in a row, amber marks,
    Poppins Light 14, white 60%. */
 .feature-row {
-  list-style: none; margin: calc(36 * var(--s)) 0 0;
-  display: flex; justify-content: space-between; align-items: center; gap: 10px;
+  /* Figma: gap 64 below the sub, items centered with 16 between (node C6AIZN). */
+  list-style: none; margin: calc(64 * var(--s)) 0 0;
+  display: flex; justify-content: center; align-items: center; gap: calc(16 * var(--s));
 }
 .feature-row li { display: flex; align-items: center; gap: 8px; font-size: calc(14 * var(--s)); line-height: calc(21 * var(--s)); color: rgba(255, 255, 255, 0.6); white-space: nowrap; }
 .feature-row svg { width: calc(20 * var(--s)); height: calc(20 * var(--s)); color: var(--gold); flex: none; }
 /* very narrow phones: let the row wrap rather than overflow */
 @media (max-width: 360px) { .feature-row { flex-wrap: wrap; justify-content: center; gap: 12px 18px; } }
 
-/* CTA (Figma "Frame 36953"): 222 wide, centred, blue, Lato 700 / 18. */
+/* CTA (Figma "Frame 36953"): hug width, padding 16/32, height 52, radius 32, a
+   24° blue gradient (#0039F5 → #00218F), Lato Bold 17. Sits 32 below the row. */
 .primary-btn.cta {
-  margin: calc(44 * var(--s)) auto 0;
-  width: calc(222 * var(--s)); max-width: 100%; height: calc(52 * var(--s));
-  padding: 0;
-  display: flex; align-items: center; justify-content: center;
+  margin: calc(32 * var(--s)) auto 0;
+  width: auto; max-width: 100%; height: calc(52 * var(--s));
+  padding: 0 calc(32 * var(--s));
+  display: inline-flex; align-items: center; justify-content: center;
   border-radius: 32px;
-  font-size: 18px;
+  background: linear-gradient(24deg, #0039f5 0%, #00218f 100%);
+  font-family: "Lato", sans-serif; font-weight: 700;
+  font-size: calc(17 * var(--s));
 }
-.intro .fineprint { margin-top: calc(20 * var(--s)); font-size: calc(14 * var(--s)); line-height: calc(21 * var(--s)); color: rgba(255, 255, 255, 0.6); }
+/* Figma gap CTA→fineprint = 16 (card node LZUQ77). */
+.intro .fineprint { margin-top: calc(16 * var(--s)); font-size: calc(14 * var(--s)); line-height: calc(21 * var(--s)); color: rgba(255, 255, 255, 0.6); }
+
+/* Hero phone image (Figma group 1602:6378, 427.5×607.77). Placed 100 below the
+   CTA card (frame node VH8UDU gap), centered, bleeding ~13 past the 402 column
+   exactly as the group overhangs the frame in the design. */
+.intro-phone {
+  display: block;
+  width: calc(427.5 * var(--s));
+  max-width: none;
+  height: auto;
+  margin: calc(100 * var(--s)) auto 0;
+}
 
 /* The claim card — same surface as the app's cards; a centred panel per step. */
 .auth-card {
