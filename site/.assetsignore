@@ -1,0 +1,5 @@
+# Keep raw hi-res card masters (101MB) out of the deployed asset bundle. The site
+# ships only the sips-optimized derivatives in media/slides and media/biz/hero,
+# which are generated from these masters. (wrangler deploy uploads the on-disk
+# site/ dir and ignores .gitignore, so the exclusion must live here too.)
+media/biz/cards/
