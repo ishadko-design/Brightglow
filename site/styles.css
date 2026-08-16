@@ -414,18 +414,6 @@ body.landing .biz-link {
   background: linear-gradient(180deg, rgba(21, 21, 21, 0), #1a1a1a);
   z-index: 1;
 }
-.stage .peek-label {
-  position: absolute;
-  left: calc(15 * var(--s));
-  bottom: calc(15 * var(--s));
-  z-index: 2;
-  font-family: "Lato", system-ui, sans-serif;
-  font-weight: 700;
-  font-size: calc(12.43 * var(--s));
-  line-height: calc(15 * var(--s));
-  color: var(--white);
-  white-space: nowrap;
-}
 .stage .peek-left  { left: calc(-66 * var(--s)); }
 .stage .peek-right { left: calc(343 * var(--s)); }
 

@@ -8,7 +8,7 @@
   <meta name="theme-color" content="#000000">
   <link rel="icon" type="image/png" href="favicon.png">
   <link rel="apple-touch-icon" href="apple-touch-icon.png">
-  <link rel="stylesheet" href="styles.css?v=24">
+  <link rel="stylesheet" href="styles.css?v=25">
 </head>
 <body class="landing">
   <header class="topbar">
@@ -45,11 +45,9 @@
     <section class="stage" aria-hidden="true">
       <div class="peek peek-left">
         <img alt="" src="media/slides/slide-02-electrical.jpg?v=2">
-        <span class="peek-label">Electrical</span>
       </div>
       <div class="peek peek-right">
         <img alt="" src="media/slides/slide-17-moto.jpg?v=2">
-        <span class="peek-label">Motorcycle</span>
       </div>
 
       <div class="phone">
@@ -138,16 +136,16 @@
       // Preload every photo so a rotation never flashes an unloaded frame.
       JOBS.forEach(function (j) { var im = new Image(); im.src = BASE + j.img + V; });
 
-      var leftImg = leftPeek.querySelector("img"), leftLabel = leftPeek.querySelector(".peek-label");
-      var rightImg = rightPeek.querySelector("img"), rightLabel = rightPeek.querySelector(".peek-label");
+      var leftImg = leftPeek.querySelector("img");
+      var rightImg = rightPeek.querySelector("img");
 
       var i = 0;      // centred job
       var front = 0;  // which phone layer currently shows the centred job
 
       function paintPeeks() {
         // left = the job about to enter the phone; right = the one just left it.
-        leftImg.src = url(i + 1);  leftLabel.textContent = JOBS[mod(i + 1)].cat;
-        rightImg.src = url(i - 1); rightLabel.textContent = JOBS[mod(i - 1)].cat;
+        leftImg.src = url(i + 1);
+        rightImg.src = url(i - 1);
       }
 
       layers[front].src = url(i);
