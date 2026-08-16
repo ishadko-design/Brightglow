@@ -198,6 +198,33 @@ body.portal:has(#authView:not([hidden])) .brand .appicon { width: 40px; height: 
   body.portal:has(#authView:not([hidden])) .brand { font-size: 26px; gap: 12px; }
   body.portal:has(#authView:not([hidden])) .brand .appicon { width: 48px; height: 48px; border-radius: 12px; }
 }
+/* Sign-in form steps (phone / email / code): the card must fit the screen with the
+   mobile keyboard up — no page scroll. Top-anchor a compact card and hide the
+   footer + tall paddings so the input and button stay above the keyboard on every
+   phone size. Scoped to authView-without-introStep, so the marketing intro and the
+   signed-in views keep their own layout. */
+body.portal:has(#authView:not([hidden])):not(:has(#introStep:not([hidden]))) {
+  /* Pin to the viewport and never scroll — the card fits well within it, so the
+     page can't scroll into empty space when the keyboard lifts the layout. */
+  height: 100vh;
+  height: 100dvh;
+  overflow: hidden;
+}
+body.portal:has(#authView:not([hidden])):not(:has(#introStep:not([hidden]))) .wrap {
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-start;
+  padding: 16px 20px 24px;
+  min-height: 0;
+}
+body.portal:has(#authView:not([hidden])):not(:has(#introStep:not([hidden]))) .auth-landing {
+  width: 100%;
+  padding-top: 0;
+}
+body.portal:has(#authView:not([hidden])):not(:has(#introStep:not([hidden]))) .portal-footer {
+  display: none;
+}
+
 .intro { text-align: center; }
 /* Figma node 1369:2826: Lato Regular 400, 44 / 52.8 */
 .intro h1 {
@@ -320,7 +347,9 @@ input[type=number], textarea, select {
   padding: 10px 18px;
   transition: border-color .15s ease;
 }
-input:focus, textarea:focus, select:focus { outline: none; border-color: var(--accent); }
+/* Focus: brighten the hairline to white rather than the blue accent, so fields
+   stay monochrome like the rest of the UI. */
+input:focus, textarea:focus, select:focus { outline: none; border-color: var(--white); }
 input::placeholder, textarea::placeholder { color: var(--gray50); }
 textarea { resize: vertical; }
 select { appearance: none; background-image: none; }
