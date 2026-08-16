@@ -229,10 +229,10 @@ body.landing .biz-link {
 
 .appstore-btn svg {
   flex: none;
-  /* SVG carries a fixed 20×24 in markup; scale it with --s so the Apple mark
-     stays proportional to the label at every scale. */
-  width: calc(20 * var(--s));
-  height: calc(24 * var(--s));
+  /* Apple mark at 16 tall (Figma "Union"); width follows the 20×24 viewBox so the
+     glyph keeps its aspect. Scaled with --s to stay proportional to the label. */
+  width: auto;
+  height: calc(16 * var(--s));
 }
 
 /* ---------- phone hero (Figma node 1599:5807) ---------- */
