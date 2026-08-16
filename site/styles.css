@@ -283,31 +283,30 @@ body.landing .biz-link {
   transform-origin: center;
   backface-visibility: hidden;
 }
-/* Cross-dissolve: the incoming photo fades up (full-frame, so the phone's rounded
-   clip gives it rounded corners) while the outgoing one fades out beneath it. No
-   scale/translate, so there's no dark corner-ring and nothing to jank — the
-   smoothest possible swap. will-change only on the 2 layers actually animating. */
-/* the incoming photo fades up on TOP of the previous one, which holds full-frame
-   underneath (never removed until the new one covers it) — so the phone can never
-   dim or flash empty mid-transition. */
-.stage .phone-slide.is-active {
+/* Carousel motion: each tick the LEFT card's photo slides into the phone from the
+   left while the phone's current photo slides out to the right (toward the right
+   card) — so a job visibly travels left → centre → right. Two layers so the
+   incoming and outgoing photos animate independently; transform + opacity only, so
+   it stays GPU-smooth. will-change only while a layer is actually animating. */
+.stage .phone-slide.is-front { opacity: 1; z-index: 1; }
+.stage .phone-slide.incoming {
   opacity: 1;
   z-index: 3;
-  will-change: opacity;
-  animation: phoneFadeIn 0.6s ease both;
+  will-change: transform, opacity;
+  animation: phoneSlideIn 0.62s ease both;
 }
-.stage .phone-slide.under {
-  opacity: 1;
+.stage .phone-slide.outgoing {
   z-index: 2;
+  will-change: transform, opacity;
+  animation: phoneSlideOut 0.62s ease both;
 }
-/* the first photo is already up on load — don't play the fade-in intro for it */
-.stage .phone-slide.is-active.init {
-  animation: none;
-  opacity: 1;
+@keyframes phoneSlideIn {
+  from { opacity: 0; transform: translateX(-16%); }
+  to   { opacity: 1; transform: translateX(0); }
 }
-@keyframes phoneFadeIn {
-  from { opacity: 0; }
-  to   { opacity: 1; }
+@keyframes phoneSlideOut {
+  from { opacity: 1; transform: translateX(0); }
+  to   { opacity: 0; transform: translateX(16%); }
 }
 
 /* iOS status bar overlaid on the photo — 9:41 + signal/wifi/battery, over a
@@ -429,6 +428,14 @@ body.landing .biz-link {
 }
 .stage .peek-left  { left: calc(-66 * var(--s)); }
 .stage .peek-right { left: calc(343 * var(--s)); }
+
+/* Each rotation the side cards swap to their new neighbour with a soft fade + a
+   slight rightward drift, echoing the left → centre → right flow. */
+.stage .peek.swap img { animation: peekSwap 0.62s ease both; }
+@keyframes peekSwap {
+  from { opacity: 0; transform: translateX(-8%); }
+  to   { opacity: 1; transform: translateX(0); }
+}
 
 /* ---------- landing footer ---------- */
 

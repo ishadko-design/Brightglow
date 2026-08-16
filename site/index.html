@@ -8,7 +8,7 @@
   <meta name="theme-color" content="#000000">
   <link rel="icon" type="image/png" href="favicon.png">
   <link rel="apple-touch-icon" href="apple-touch-icon.png">
-  <link rel="stylesheet" href="styles.css?v=23">
+  <link rel="stylesheet" href="styles.css?v=24">
 </head>
 <body class="landing">
   <header class="topbar">
@@ -48,29 +48,18 @@
         <span class="peek-label">Electrical</span>
       </div>
       <div class="peek peek-right">
-        <img alt="" src="media/slides/slide-05-landscaping.jpg?v=2">
-        <span class="peek-label">Landscaping</span>
+        <img alt="" src="media/slides/slide-17-moto.jpg?v=2">
+        <span class="peek-label">Motorcycle</span>
       </div>
 
       <div class="phone">
+        <!-- Two layers only: the carousel script sets their src and cross-slides
+             them (incoming from the left, outgoing to the right). The job list —
+             photo, category label, and the search text typed below — lives in the
+             script. -->
         <div class="phone-slides">
-          <img class="phone-slide is-active init" src="media/slides/slide-01-plumbing.jpg?v=2"   alt="" data-cat="Plumbing">
-          <img class="phone-slide" src="media/slides/slide-02-electrical.jpg?v=2"  alt="" data-cat="Electrical">
-          <img class="phone-slide" src="media/slides/slide-03-repair.jpg?v=2"      alt="" data-cat="Auto repair">
-          <img class="phone-slide" src="media/slides/slide-04-hvac.jpg?v=2"        alt="" data-cat="HVAC">
-          <img class="phone-slide" src="media/slides/slide-05-landscaping.jpg?v=2" alt="" data-cat="Landscaping">
-          <img class="phone-slide" src="media/slides/slide-06-tires.jpg?v=2"       alt="" data-cat="Tires">
-          <img class="phone-slide" src="media/slides/slide-07-pest.jpg?v=2"        alt="" data-cat="Pest control">
-          <img class="phone-slide" src="media/slides/slide-08-appliances.jpg?v=2"  alt="" data-cat="Appliances">
-          <img class="phone-slide" src="media/slides/slide-09-body.jpg?v=2"        alt="" data-cat="Body &amp; paint">
-          <img class="phone-slide" src="media/slides/slide-10-carpentry.jpg?v=2"   alt="" data-cat="Carpentry">
-          <img class="phone-slide" src="media/slides/slide-11-painting.jpg?v=2"    alt="" data-cat="Painting">
-          <img class="phone-slide" src="media/slides/slide-12-detailing.jpg?v=2"   alt="" data-cat="Auto detailing">
-          <img class="phone-slide" src="media/slides/slide-13-roofing.jpg?v=2"     alt="" data-cat="Roofing">
-          <img class="phone-slide" src="media/slides/slide-14-flooring.jpg?v=2"    alt="" data-cat="Flooring">
-          <img class="phone-slide" src="media/slides/slide-15-autoglass.jpg?v=2"   alt="" data-cat="Auto glass">
-          <img class="phone-slide" src="media/slides/slide-16-windows.jpg?v=2"     alt="" data-cat="Windows &amp; doors">
-          <img class="phone-slide" src="media/slides/slide-17-moto.jpg?v=2"        alt="" data-cat="Motorcycle">
+          <img class="phone-slide is-front" src="media/slides/slide-01-plumbing.jpg?v=2" alt="">
+          <img class="phone-slide" alt="">
         </div>
 
         <div class="phone-status">
@@ -90,7 +79,7 @@
         </div>
 
         <div class="phone-input">
-          <span class="phone-input-text">Plumbing</span>
+          <span class="phone-input-text">fix a faucet leak</span>
           <span class="phone-input-send" aria-hidden="true">
             <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
               <path d="M3 8h9M8.5 3.8 12.7 8l-4.2 4.2" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
@@ -108,38 +97,93 @@
   </footer>
 
   <script>
-    // Phone photo slideshow (the side cards are static, per Figma): each tick the
-    // previous photo cross-dissolves to the next, and the input caption re-types
-    // to the matching service. Honors reduced-motion.
+    // Photo carousel: each tick the LEFT card's job slides into the phone from the
+    // left, the phone's current job slides out to the right (onto the right card),
+    // and a new job appears on the left — left → centre → right. The search field
+    // retypes to a deliberate, human-sounding request for the centred job. Honors
+    // reduced-motion (holds on the first job, no rotation).
     (function () {
       var stage = document.querySelector(".stage");
       if (!stage) return;
       var phone = stage.querySelector(".phone");
-      var slides = [].slice.call(phone.querySelectorAll(".phone-slide"));
+      var layers = [].slice.call(phone.querySelectorAll(".phone-slide"));
       var caption = phone.querySelector(".phone-input-text");
-      var n = slides.length;
-      if (n < 2 || !caption) return;
+      var leftPeek = stage.querySelector(".peek-left");
+      var rightPeek = stage.querySelector(".peek-right");
+      if (layers.length < 2 || !caption || !leftPeek || !rightPeek) return;
 
-      function catOf(k) { return slides[((k % n) + n) % n].getAttribute("data-cat"); }
+      var BASE = "media/slides/", V = "?v=2";
+      // photo · short category (the side-card label) · the search text typed below.
+      var JOBS = [
+        { img: "slide-01-plumbing.jpg",    cat: "Plumbing",        q: "fix a faucet leak" },
+        { img: "slide-02-electrical.jpg",  cat: "Electrical",      q: "install a ceiling light" },
+        { img: "slide-03-repair.jpg",      cat: "Auto repair",     q: "car service: how to replace oil" },
+        { img: "slide-04-hvac.jpg",        cat: "HVAC",            q: "AC not blowing cold air" },
+        { img: "slide-05-landscaping.jpg", cat: "Landscaping",     q: "redo my front yard" },
+        { img: "slide-06-tires.jpg",       cat: "Tires",           q: "replace two worn tires" },
+        { img: "slide-07-pest.jpg",        cat: "Pest control",    q: "get rid of ants in the kitchen" },
+        { img: "slide-08-appliances.jpg",  cat: "Appliances",      q: "dishwasher won't drain" },
+        { img: "slide-09-body.jpg",        cat: "Body & paint",    q: "fix a dented car door" },
+        { img: "slide-10-carpentry.jpg",   cat: "Carpentry",       q: "build custom shelves" },
+        { img: "slide-11-painting.jpg",    cat: "Painting",        q: "repaint the bedroom" },
+        { img: "slide-12-detailing.jpg",   cat: "Auto detailing",  q: "detail my car inside and out" },
+        { img: "slide-13-roofing.jpg",     cat: "Roofing",         q: "fix a leaking roof" },
+        { img: "slide-14-flooring.jpg",    cat: "Flooring",        q: "install hardwood floors" },
+        { img: "slide-15-autoglass.jpg",   cat: "Auto glass",      q: "replace a cracked windshield" },
+        { img: "slide-16-windows.jpg",     cat: "Windows & doors", q: "install sliding doors" },
+        { img: "slide-17-moto.jpg",        cat: "Motorcycle",      q: "motorcycle won't start" }
+      ];
+      var n = JOBS.length;
+      var mod = function (k) { return ((k % n) + n) % n; };
+      var url = function (k) { return BASE + JOBS[mod(k)].img + V; };
+
+      // Preload every photo so a rotation never flashes an unloaded frame.
+      JOBS.forEach(function (j) { var im = new Image(); im.src = BASE + j.img + V; });
+
+      var leftImg = leftPeek.querySelector("img"), leftLabel = leftPeek.querySelector(".peek-label");
+      var rightImg = rightPeek.querySelector("img"), rightLabel = rightPeek.querySelector(".peek-label");
+
+      var i = 0;      // centred job
+      var front = 0;  // which phone layer currently shows the centred job
+
+      function paintPeeks() {
+        // left = the job about to enter the phone; right = the one just left it.
+        leftImg.src = url(i + 1);  leftLabel.textContent = JOBS[mod(i + 1)].cat;
+        rightImg.src = url(i - 1); rightLabel.textContent = JOBS[mod(i - 1)].cat;
+      }
+
+      layers[front].src = url(i);
+      caption.textContent = JOBS[i].q;
+      paintPeeks();
 
       if (matchMedia("(prefers-reduced-motion: reduce)").matches) return;
 
-      var i = 0;
       var HOLD = 3600; // ms each job stays centred
       function advance() {
-        var prev = i;
-        i = (i + 1) % n;
-        slides[prev].classList.remove("is-active", "init");
-        slides[prev].classList.add("under");      // hold full behind the incoming
-        slides[i].classList.remove("under");
-        slides[i].classList.add("is-active");     // fade up on top
-        setTimeout(function () { slides[prev].classList.remove("under"); }, 620);
-        // caption re-types under cover of the dissolve
-        caption.style.opacity = "0";
+        var prev = front, next = 1 - front;
+        i = mod(i + 1);
+
+        layers[next].src = url(i);
+        layers[next].classList.remove("is-front", "outgoing");
+        layers[next].classList.add("incoming");   // new centre slides in from the left
+        layers[prev].classList.remove("is-front", "incoming");
+        layers[prev].classList.add("outgoing");    // old centre slides out to the right
         setTimeout(function () {
-          caption.textContent = catOf(i);
-          caption.style.opacity = "1";
-        }, 260);
+          layers[next].classList.remove("incoming");
+          layers[next].classList.add("is-front");
+          layers[prev].classList.remove("outgoing");
+        }, 620);
+        front = next;
+
+        // retype the request under cover of the motion
+        caption.style.opacity = "0";
+        setTimeout(function () { caption.textContent = JOBS[i].q; caption.style.opacity = "1"; }, 240);
+
+        // side cards take their new neighbours, with the swap animation restarted
+        leftPeek.classList.remove("swap"); rightPeek.classList.remove("swap");
+        void leftPeek.offsetWidth;         // reflow so the animation replays
+        paintPeeks();
+        leftPeek.classList.add("swap"); rightPeek.classList.add("swap");
       }
       setInterval(advance, HOLD);
     })();
