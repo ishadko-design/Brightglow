@@ -91,11 +91,8 @@ a {
 
 body.landing {
   background: #000;
-  /* The consumer landing is a tall phone-showcase (the phone + cards live below
-     the fold), so it renders at full size and scrolls — matching the business
-     side's scale instead of shrinking to fit one screen. --s makes the 402-unit
-     design fill the viewport width; the fixed header keeps it aligned with the
-     business landing. */
+  /* Figma-exact scale: 1 Figma unit = one 402nd of the viewport width, so every
+     element (H1, phone, CTA, subtext) renders at its true Figma size. */
   --s: calc(100vw / 402);
   /* The decorative float cards bleed past the viewport edges by design — clip
      the horizontal overflow so the page can never scroll sideways, while the
@@ -174,51 +171,60 @@ body.landing::before {
   .topbar .wordmark { font-size: 26px; }
 }
 
-.hero-copy {
-  /* Match the business landing's header→hero gap (logo bottom to H1 = 96) */
-  padding-top: calc(96 * var(--s));
-  text-align: center;
+/* Consumer landing header — pixel-matched to Figma node 1599:5807 and scaled with
+   --s: 48 app icon, 16 logo gap, and a 44-tall "For businesses" pill (radius 100,
+   2px white-20 stroke, 24 side padding, Lato 700 14) at the frame's 32 inset. */
+body.landing .topbar { padding: calc(20 * var(--s)) calc(32 * var(--s)) 0; gap: calc(16 * var(--s)); }
+body.landing .topbar .logo { gap: calc(16 * var(--s)); }
+body.landing .topbar .appicon { width: calc(48 * var(--s)); height: calc(48 * var(--s)); border-radius: calc(17 * var(--s)); }
+body.landing .topbar .wordmark { font-size: calc(22 * var(--s)); }
+body.landing .biz-link {
+  font-size: calc(14 * var(--s));
+  line-height: 1;
+  padding: calc(13 * var(--s)) calc(24 * var(--s));
+  border-width: calc(2 * var(--s));
+  border-radius: calc(100 * var(--s));
 }
 
-.hero-copy h1 {
-  /* Figma node 1367:3260: Lato Regular 400, 44 / 52.8 */
+/* H1 — Figma node 1599:5807: Lato Regular 44 / 52.8, centred, below the header */
+.hero-h1 {
+  padding-top: calc(52 * var(--s));
+  text-align: center;
+  font-family: "Lato", system-ui, sans-serif;
   font-weight: 400;
   font-size: calc(44 * var(--s));
   line-height: calc(52.8 * var(--s));
   color: var(--white);
 }
 
-/* keep the house + car emoji together on one line */
-.hero-copy h1 .emoji {
-  white-space: nowrap;
-}
-
-.hero-copy .sub {
-  /* Figma: Poppins Light 17 / 25.5, white 60% */
-  margin-top: calc(32 * var(--s));
-  font-size: calc(17 * var(--s));
-  line-height: calc(25.5 * var(--s));
-  color: rgba(255, 255, 255, 0.6);
-}
-
+/* App Store button — Figma "Frame 36953" (y353): 283×52, #0039F5→#00218F,
+   32 below the subtext. */
 .appstore-btn {
-  /* Figma "Frame 36953": 297 wide, centred, 44 below the subtitle */
-  margin: calc(44 * var(--s)) auto 0;
+  margin: calc(32 * var(--s)) auto 0;
   display: flex;
   align-items: center;
   justify-content: center;
   gap: calc(10 * var(--s));
-  width: calc(297 * var(--s));
+  width: calc(283 * var(--s));
   max-width: 100%;
   height: calc(52 * var(--s));
   border-radius: var(--radius);
-  background: var(--accent);
+  background: linear-gradient(90deg, #0039f5 0%, #00218f 100%);
   color: var(--white);
   font-family: "Lato", system-ui, sans-serif;
   font-weight: 700;
-  font-size: calc(18 * var(--s));
+  font-size: calc(17 * var(--s));
   text-decoration: none;
   white-space: nowrap;
+}
+
+/* subtext — Figma (Frame 37011, gap 24): Poppins Light 14 / 21, centred, white 60%, 24 below H1 */
+.hero-sub {
+  margin: calc(24 * var(--s)) auto 0;
+  text-align: center;
+  font-size: calc(14 * var(--s));
+  line-height: calc(21 * var(--s));
+  color: rgba(255, 255, 255, 0.6);
 }
 
 .appstore-btn svg {
@@ -229,136 +235,230 @@ body.landing::before {
   height: calc(24 * var(--s));
 }
 
-/* ---------- phone stage with parallax cards ---------- */
+/* ---------- phone hero (Figma node 1599:5807) ---------- */
 
-/* Everything is anchored to the phone's centre (50%) so the phone always sits
-   dead-centre in the viewport; each card is offset from that centre by its
-   Figma distance from the phone centre (design x 203 in the 402-unit grid). */
+/* A 402-unit-wide stage: the app phone centred, two category cards peeking from
+   the frame edges. It breaks out of the .column's 32 padding so the peeks reach
+   the frame edges; overflow:hidden clips them to a peek at each side. */
 .stage {
   position: relative;
-  width: 100%;
-  height: calc(680 * var(--s));
-  /* Figma gap from CTA to the phone is 100; the phone art carries 21.5 of
-     transparent headroom, so the section margin makes up the rest. */
-  margin: calc(78 * var(--s)) auto 0;
+  width: calc(402 * var(--s));
+  height: calc(482 * var(--s));
+  margin: calc(56 * var(--s)) calc(-32 * var(--s)) 0;
+  /* no clipping — the side cards sit fully inside the frame gaps, so nothing is
+     ever cropped on any width. */
+  overflow: visible;
   /* purely decorative — never intercept taps meant for links above/below it */
   pointer-events: none;
 }
 
-.stage img,
-.stage .chip {
+/* the centre phone: rounded edge-to-edge screen showing a live job photo */
+.stage .phone {
   position: absolute;
+  left: calc(71 * var(--s));
+  top: 0;
+  width: calc(260 * var(--s));
+  height: calc(482 * var(--s));
+  border-radius: calc(20.7 * var(--s));
+  overflow: hidden;
+  background: #1a1a1a;
+  z-index: 2;
+  box-shadow: 0 calc(16 * var(--s)) calc(40 * var(--s)) rgba(0, 0, 0, 0.5);
 }
 
-.stage img {
+/* rotating job photos — a soft dissolve: the previous photo fades out while the
+   next one appears as a ROUNDED card and eases up to fill the phone, with a hint
+   of leftward drift. Transform + opacity only, so it stays GPU-smooth. */
+.stage .phone-slides { position: absolute; inset: 0; }
+.stage .phone-slide {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  opacity: 0;
+  z-index: 1;
+  /* the incoming card carries the phone's corner radius as it grows in */
+  border-radius: calc(20.7 * var(--s));
+  transform-origin: center;
+  backface-visibility: hidden;
+}
+/* Cross-dissolve: the incoming photo fades up (full-frame, so the phone's rounded
+   clip gives it rounded corners) while the outgoing one fades out beneath it. No
+   scale/translate, so there's no dark corner-ring and nothing to jank — the
+   smoothest possible swap. will-change only on the 2 layers actually animating. */
+/* the incoming photo fades up on TOP of the previous one, which holds full-frame
+   underneath (never removed until the new one covers it) — so the phone can never
+   dim or flash empty mid-transition. */
+.stage .phone-slide.is-active {
+  opacity: 1;
+  z-index: 3;
+  will-change: opacity;
+  animation: phoneFadeIn 0.6s ease both;
+}
+.stage .phone-slide.under {
+  opacity: 1;
+  z-index: 2;
+}
+/* the first photo is already up on load — don't play the fade-in intro for it */
+.stage .phone-slide.is-active.init {
+  animation: none;
+  opacity: 1;
+}
+@keyframes phoneFadeIn {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+/* iOS status bar overlaid on the photo — 9:41 + signal/wifi/battery, over a
+   soft top scrim (Figma "Blurred bg": black→transparent) for legibility. */
+.stage .phone-status {
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  z-index: 5;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: calc(11 * var(--s)) calc(18 * var(--s)) calc(14 * var(--s));
+  background: linear-gradient(180deg, rgba(0, 0, 0, 0.35), rgba(0, 0, 0, 0));
+}
+.stage .phone-time {
+  font-family: "SF Pro Text", system-ui, sans-serif;
+  font-weight: 600;
+  font-size: calc(11 * var(--s));
+  letter-spacing: 0.02em;
+  color: #fff;
+}
+.stage .phone-signals {
+  width: calc(44 * var(--s));
+  height: calc(12 * var(--s));
+}
+
+/* input pill — the app search field (MainScreen.swift): #131315 @ 0.9 + blur,
+   1.5px white-20 hairline, showing the current service + a #0039F5 send button. */
+.stage .phone-input {
+  position: absolute;
+  left: calc(14 * var(--s));
+  right: calc(14 * var(--s));
+  bottom: calc(15 * var(--s));
+  z-index: 6;
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: calc(8 * var(--s));
+  height: calc(48 * var(--s));
+  padding: calc(6.5 * var(--s)) calc(8 * var(--s)) calc(6.5 * var(--s)) calc(12 * var(--s));
+  border-radius: calc(25.36 * var(--s));
+  background: rgba(19, 19, 21, 0.9);
+  -webkit-backdrop-filter: blur(20px);
+  backdrop-filter: blur(20px);
+  border: 1.5px solid rgba(255, 255, 255, 0.2);
+}
+.stage .phone-input-text {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-family: "Poppins", system-ui, sans-serif;
+  font-weight: 300;
+  font-size: calc(13.5 * var(--s));
+  line-height: calc(20 * var(--s));
+  color: #fff;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  transition: opacity 0.3s ease;
+}
+.stage .phone-input-send {
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: calc(35 * var(--s));
+  height: calc(35 * var(--s));
+  border-radius: 50%;
+  background: #0039f5;
+}
+.stage .phone-input-send svg {
+  width: calc(16 * var(--s));
+  height: calc(16 * var(--s));
   display: block;
 }
 
-/* phone.png carries ~50px of transparent shadow margin per side, so the
-   element is 419 units wide to render the visible phone at Figma's 320; the
-   visible screen then spans 50% ± 160 with its top 21.5 below the stage top.
-   All card/chip offsets below are derived from Figma node 1367:3260 against
-   that visible frame. */
-.stage .phone {
-  left: 50%;
-  transform: translateX(-50%);
-  top: 0;
-  width: calc(419 * var(--s));
+/* Category cards (Figma 1599:5879/5880): 125×167, radius 22, photo + label on a
+   bottom transparent→#1A1A1A scrim, dimmed to 20%. At the frame edges (x −66 /
+   343, y 261 within the phone). The stage isn't clipped, so on wide/desktop they
+   show in full; on a phone they slip behind the screen edges (acceptable). */
+.stage .peek {
+  position: absolute;
+  z-index: 1;
+  top: calc(261 * var(--s));
+  width: calc(125 * var(--s));
+  height: calc(167 * var(--s));
+  border-radius: calc(22 * var(--s));
+  overflow: hidden;
+  background: #353535;
+  opacity: 0.2;
+}
+.stage .peek img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+.stage .peek::after {
+  content: "";
+  position: absolute;
+  left: 0; right: 0; bottom: 0;
+  height: calc(84 * var(--s));
+  background: linear-gradient(180deg, rgba(21, 21, 21, 0), #1a1a1a);
+  z-index: 1;
+}
+.stage .peek-label {
+  position: absolute;
+  left: calc(15 * var(--s));
+  bottom: calc(15 * var(--s));
   z-index: 2;
-}
-
-.stage .float {
-  will-change: transform;
-  /* The card PNGs already carry their exact Figma drop shadow (0 / 12 / 26.8,
-     black 20–40%) baked into the alpha — so NO extra CSS shadow here, or the
-     cards read heavy and dirty. */
-}
-
-/* all photo cards sit in front of the phone, overlapping onto the screen.
-   Positions/sizes derived from Figma node 1367:3260 against the phone frame
-   (centre = 50%, phone top = Figma y 582). */
-.stage .card-flooring {
-  left: calc(50% - 277 * var(--s));
-  top: calc(-4 * var(--s));
-  width: calc(211 * var(--s));
-  z-index: 4;
-}
-
-.stage .card-dent {
-  left: calc(50% + 94 * var(--s));
-  top: calc(0 * var(--s));
-  width: calc(162 * var(--s));
-  z-index: 4;
-}
-
-.stage .card-bulb {
-  left: calc(50% - 75 * var(--s));
-  top: calc(194 * var(--s));
-  width: calc(152 * var(--s));
-  z-index: 4;
-}
-
-.stage .card-flat-tire {
-  left: calc(50% - 240 * var(--s));
-  top: calc(329 * var(--s));
-  width: calc(161 * var(--s));
-  z-index: 4;
-}
-
-.stage .card-roof-leak {
-  left: calc(50% + 67 * var(--s));
-  top: calc(255 * var(--s));
-  width: calc(187 * var(--s));
-  z-index: 4;
-}
-
-/* floating job-label pills — Figma "Button Secondary": opaque navy→brown
-   gradient, 64px backdrop blur, NO drop shadow. */
-.stage .chip {
-  z-index: 5;
-  display: inline-flex;
-  align-items: center;
-  padding: calc(16 * var(--s));
-  border-radius: calc(24 * var(--s));
-  background: linear-gradient(-49deg, rgba(45, 48, 71, 1) 0%, rgba(61, 44, 0, 1) 100%);
-  -webkit-backdrop-filter: blur(64px);
-  backdrop-filter: blur(64px);
-  font-family: "Poppins", system-ui, sans-serif;
-  font-weight: 300;
-  font-size: calc(17 * var(--s));
-  line-height: calc(25.5 * var(--s));
+  font-family: "Lato", system-ui, sans-serif;
+  font-weight: 700;
+  font-size: calc(12.43 * var(--s));
+  line-height: calc(15 * var(--s));
   color: var(--white);
   white-space: nowrap;
 }
-
-.stage .chip-dent      { left: calc(50% + 77 * var(--s));  top: calc(81 * var(--s)); }
-.stage .chip-flooring  { left: calc(50% - 183 * var(--s)); top: calc(143 * var(--s)); }
-.stage .chip-bulb      { left: calc(50% - 82 * var(--s));  top: calc(317 * var(--s)); }
-.stage .chip-roof-leak { left: calc(50% + 79 * var(--s));  top: calc(401 * var(--s)); }
-.stage .chip-flat-tire { left: calc(50% - 188 * var(--s)); top: calc(424 * var(--s)); }
+.stage .peek-left  { left: calc(-66 * var(--s)); }
+.stage .peek-right { left: calc(343 * var(--s)); }
 
 /* ---------- landing footer ---------- */
 
+/* Footer — Figma: Lato 700 14 / 32, white 60%, stacked & centred, 56 below sub */
 .landing-footer {
   position: relative;
-  z-index: 6;
-  padding: calc(40 * var(--s)) 0 calc(28 * var(--s));
+  z-index: 1;
+  margin-top: calc(56 * var(--s));
+  padding: 0 calc(32 * var(--s)) calc(40 * var(--s));
   text-align: center;
-  font-size: calc(17 * var(--s));
+  font-family: "Lato", system-ui, sans-serif;
+  font-weight: 700;
+  font-size: calc(14 * var(--s));
   line-height: calc(32 * var(--s));
+  color: rgba(255, 255, 255, 0.6);
 }
 
-.landing-footer a {
-  display: inline-block;
-  color: var(--white);
-}
-
+/* three stacked, centred lines (Figma): Terms · email · copyright */
+.landing-footer a,
 .landing-footer .copyright {
-  color: var(--gray50);
+  display: block;
+  color: rgba(255, 255, 255, 0.6);
+  text-decoration: none;
+}
+.landing-footer .footer-terms {
+  text-decoration: underline;
 }
 
-/* "For businesses" entry point — the navbar pill (right of the logo lockup),
-   plus a footer link (in .landing-footer a). */
+/* "For businesses" entry point — navbar pill, right of the logo lockup.
+   Figma "Button Secondary": outlined (white-20 hairline), transparent fill. */
 .biz-link {
   flex: none;
   font-family: "Lato", system-ui, sans-serif;
@@ -366,13 +466,14 @@ body.landing::before {
   font-size: 14px;
   color: var(--white);
   text-decoration: none;
-  padding: 8px 16px;
+  padding: 8px 20px;
   border-radius: 999px;
-  background: rgba(217, 217, 217, 0.2);
+  border: 1.5px solid rgba(255, 255, 255, 0.2);
+  background: transparent;
   transition: background 0.15s ease;
 }
 .biz-link:hover {
-  background: rgba(217, 217, 217, 0.3);
+  background: rgba(255, 255, 255, 0.08);
 }
 
 /* ---------- terms ---------- */

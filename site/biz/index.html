@@ -9,7 +9,7 @@
   <meta name="robots" content="noindex">
   <link rel="icon" type="image/png" href="../favicon.png">
   <link rel="apple-touch-icon" href="../apple-touch-icon.png">
-  <link rel="stylesheet" href="portal.css?v=22">
+  <link rel="stylesheet" href="portal.css?v=29">
 </head>
 <body class="portal">
   <header class="topbar">
@@ -18,11 +18,6 @@
       <span>Brightglow <em>for Business</em></span>
     </a>
     <div class="topbar-actions">
-      <!-- Figma landing header (node 1602:6617): a "For businesses" secondary
-           pill on the right. Shown only on the signed-out landing (CSS-scoped to
-           #authView); it collapses on the dashboard, where Billing / Sign out
-           take this slot. -->
-      <a class="biz-pill" href="../index.html">For businesses</a>
       <button id="billingBtn" class="ghost-btn" hidden>Billing</button>
       <!-- Settings is a tab now (see .tabs below), not a topbar button. Sign out
            stays here: the Figma web header is just the wordmark and the Settings
@@ -32,11 +27,12 @@
   </header>
 
   <main class="wrap">
-    <!-- Three peer tabs (Figma 1140:2933 / 1140:1668 / 1140:1827), landing on
-         Chats. Hidden until there's a claimed business to manage. -->
+    <!-- Two peer tabs, landing on Dashboard. Messages/conversations are handled in
+         the app now, so there's no Chats tab; a job-email `?lead=` deep link can
+         still open a single read-only thread. Hidden until there's a business to
+         manage. -->
     <nav class="tabs" id="tabs" hidden>
-      <button type="button" class="tab is-active" data-view="chats">Chats</button>
-      <button type="button" class="tab" data-view="dash">Dashboard</button>
+      <button type="button" class="tab is-active" data-view="dash">Dashboard</button>
       <button type="button" class="tab" data-view="editor">Settings</button>
     </nav>
     <!-- Boot / loading -->
@@ -59,31 +55,40 @@
           spam-free chat. No cold calls, no bidding wars.
         </p>
 
-        <ul class="feature-row">
-          <li>
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
-            <span>Serious leads</span>
-          </li>
-          <li>
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5Z"/></svg>
-            <span>No spam</span>
-          </li>
-          <li>
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M13 2 3 14h7l-1 8 10-12h-7l1-8Z"/></svg>
-            <span>Free to claim</span>
-          </li>
-        </ul>
-
         <button type="button" class="primary-btn cta" id="startClaimBtn">Claim your business</button>
         <p class="fineprint">
           By continuing you agree to our <a href="../business-terms.html">Business Terms of Service</a>.
         </p>
 
-        <!-- Hero visual (Figma node 1602:6378 "Group 36990"): a phone rendering
-             the app Home screen with four job-photo cards floating around it.
-             Exported one-to-one from the design and placed exactly as composed —
-             sits 100 below the CTA card, bleeds slightly past the 402 column. -->
-        <img class="intro-phone" src="../media/biz/hero-phone.png" alt="" aria-hidden="true">
+        <!-- Hero (Figma node 1602:6378): the app Home screen phone, centered,
+             with a few job-photo cards floating around it at the exact Figma
+             group coordinates (427.5×607.77). No labels, no rotation. The phone
+             shows home services, so the floating cards are auto jobs (repair,
+             tires, detailing, moto) — categories NOT on the screen, to show the
+             app's breadth. Decorative. -->
+        <div class="hero-mock" aria-hidden="true">
+          <img class="hm-phone" src="../media/biz/phone-mock.jpg" alt="">
+          <div class="hm-tile hm-tile1">
+            <img class="hm-layer is-active" src="../media/biz/hero/repair.jpg" alt="">
+            <img class="hm-layer" src="../media/biz/hero/flooring.jpg" alt="">
+            <img class="hm-layer" src="../media/biz/hero/roofing.jpg" alt="">
+          </div>
+          <div class="hm-tile hm-tile2">
+            <img class="hm-layer is-active" src="../media/biz/hero/hvac.jpg" alt="">
+            <img class="hm-layer" src="../media/biz/hero/landscaping.jpg" alt="">
+            <img class="hm-layer" src="../media/biz/hero/windows.jpg" alt="">
+          </div>
+          <div class="hm-tile hm-tile3">
+            <img class="hm-layer is-active" src="../media/biz/hero/detailing.jpg" alt="">
+            <img class="hm-layer" src="../media/biz/hero/carpentry.jpg" alt="">
+            <img class="hm-layer" src="../media/biz/hero/pest.jpg" alt="">
+          </div>
+          <div class="hm-tile hm-tile4">
+            <img class="hm-layer is-active" src="../media/biz/hero/moto.jpg" alt="">
+            <img class="hm-layer" src="../media/biz/hero/auto.jpg" alt="">
+            <img class="hm-layer" src="../media/biz/hero/roofing.jpg" alt="">
+          </div>
+        </div>
       </div>
 
       <!-- Phone claim (primary). The number customers were texted is what the
@@ -172,6 +177,8 @@
            (BusinessDashboardScreen): the counts first, then a "finish your page"
            nudge that only shows while the page is incomplete. The readiness
            percentage also rides in the header subtitle, as it does in the app. -->
+      <!-- Views + Leads (Figma 1611:7531). Counts only — opening a conversation
+           happens in the app, so the tiles no longer carry a "View" button. -->
       <div class="stat-tiles">
         <div class="stat-tile">
           <span class="stat-label">Views</span>
@@ -180,12 +187,6 @@
         <div class="stat-tile">
           <span class="stat-label">Leads</span>
           <span class="stat-value" id="statRequests">0</span>
-          <button type="button" class="tile-btn" data-view="chats">View</button>
-        </div>
-        <div class="stat-tile">
-          <span class="stat-label">Requests</span>
-          <span class="stat-value" id="statReply">0</span>
-          <button type="button" class="tile-btn is-primary" data-view="chats">View</button>
         </div>
       </div>
 
@@ -326,6 +327,30 @@
     <span>© 2026 Brightglow Technologies LLC</span>
   </footer>
 
-  <script type="module" src="portal.js?v=8"></script>
+  <!-- Cross-fade each floating card through its set of jobs so the hero shows a
+       diverse mix of home + auto work. Staggered so they don't all switch at
+       once. The cards live in the signed-out intro, so this is inert once the
+       owner signs in. Honors reduced-motion (stays on the first image). -->
+  <script>
+    (function () {
+      if (matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+      var tiles = [].slice.call(document.querySelectorAll(".hero-mock .hm-tile"));
+      tiles.forEach(function (tile, idx) {
+        var layers = [].slice.call(tile.querySelectorAll(".hm-layer"));
+        if (layers.length < 2) return;
+        var i = 0;
+        setTimeout(function () {
+          setInterval(function () {
+            var next = (i + 1) % layers.length;
+            layers[i].classList.remove("is-active");
+            layers[next].classList.add("is-active");
+            i = next;
+          }, 5400);
+        }, idx * 900);
+      });
+    })();
+  </script>
+
+  <script type="module" src="portal.js?v=9"></script>
 </body>
 </html>

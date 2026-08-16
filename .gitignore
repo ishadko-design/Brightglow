@@ -34,3 +34,8 @@ leadbridge/
 node_modules/
 deno.lock
 pricing-engine/dist/
+
+# Raw hi-res card masters (5–16MB each). The site ships the optimized
+# derivatives in media/slides and media/biz/hero, generated from these — the
+# masters themselves must not be committed or deployed.
+site/media/biz/cards/

@@ -222,6 +222,11 @@ function authErrorText(error) {
 $("signOutBtn").addEventListener("click", signOut);
 
 // ── dashboard load ──────────────────────────────────────────
+// Set just before enterDashboard() when the owner should land in Settings rather
+// than the dashboard — e.g. right after creating a brand-new business, so they go
+// straight to filling in their page instead of an empty dashboard.
+let landOnEditor = false;
+
 async function enterDashboard() {
   show($("authView"), false);
   show($("bootView"), true);
@@ -302,9 +307,13 @@ async function enterDashboard() {
 
   show($("bootView"), false);
   show($("signOutBtn"), true);   // signed in — the topbar is the only way out
-  // Chats is the landing tab. A `?lead=` deep link has already opened the thread
-  // above, and the thread lives inside this view — so this lands on it either way.
-  showView("chats");
+  // Landing view: a `?lead=` deep link (from a job email) opened a thread above, so
+  // stay on it; a just-created business goes to Settings to fill its page in;
+  // everyone else lands on the Dashboard. Messages/conversations are handled in the
+  // app now, so Chats is no longer a tab — it's reachable only via a lead deep link.
+  if (target) showView("chats");
+  else if (landOnEditor) { landOnEditor = false; openEditor(); }
+  else showView("dash");
   renderSwitcher();
   loadBilling();   // not awaited: the dashboard is usable while this resolves
 }
@@ -515,8 +524,10 @@ function fail(text) {
     <button class="ghost-btn" onclick="location.reload()" style="margin-top:16px">Reload</button>`;
 }
 
-// No lead- or phone-matched business for this account. Instead of a dead end,
-// offer to create a brand-new listing (method 6). See BUSINESS_CLAIM_PLAN.md.
+// No lead- or phone-matched business for this account. Rather than a dead-end
+// "nothing to manage" screen, this is the start of setting a page up: name the
+// business (that's all it takes to create an owned listing — method 6), then land
+// straight in Settings to fill in the rest. See BUSINESS_CLAIM_PLAN.md.
 function noBusiness() {
   show($("bootView"), false);
   show($("dashView"), false);
@@ -527,15 +538,15 @@ function noBusiness() {
   const c = $("authView");
   c.hidden = false;
   c.innerHTML = `
-    <h1>Nothing to manage here yet</h1>
-    <p class="muted">We couldn't match a business to your phone or email. If a customer
-      reached you through Brightglow, sign in with that exact number or email. Otherwise,
-      add your business below.</p>
+    <h1>Set up your business page</h1>
+    <p class="muted">Add your business, then fill in your services, prices, and photos.
+      If a customer already reached you through Brightglow, sign in with that exact
+      number or email to open your existing page instead.</p>
     <form id="createBizForm" style="margin-top:16px">
       <input id="newBizName" type="text" placeholder="Business name" autocomplete="organization" required>
       <input id="newBizWebsite" type="url" placeholder="Website (optional)" autocomplete="url">
       <input id="newBizPhone" type="tel" placeholder="Business phone (optional)" autocomplete="tel">
-      <button type="submit" class="primary-btn wide" style="margin-top:12px">Add my business</button>
+      <button type="submit" class="primary-btn wide" style="margin-top:12px">Continue to your page</button>
       <p id="createBizMsg" class="form-msg"></p>
     </form>`;
   $("createBizForm").addEventListener("submit", createBusiness);
@@ -555,18 +566,38 @@ async function createBusiness(e) {
     p_phone: $("newBizPhone").value.trim() || null,
   });
   if (error || !placeId) {
-    btn.disabled = false; btn.textContent = "Add my business";
+    btn.disabled = false; btn.textContent = "Continue to your page";
     msg.className = "form-msg err";
     msg.textContent = error ? error.message : "Couldn't create the business. Try again.";
     return;
   }
-  await enterDashboard();   // reload the list — the new place is now owned by you
+  // The new place is owned by you now — reload the list and land in Settings so the
+  // next thing you see is your page, ready to fill in.
+  landOnEditor = true;
+  await enterDashboard();
 }
 
 // A phone-matched but unclaimed place shows a claim CTA (method 1). One tap writes
 // ownership via claim_business(), so profile edits and leads stick to this account.
 function renderClaimBanner() {
   show($("claimBanner"), !!(current && current.claimable));
+}
+
+// Claim-first write gate. A place is writable when it's NOT `claimable` — i.e. it
+// matched a lead (owns_business passes via the lead's email/phone) or is already
+// owned (business_places.owner_user_id). A phone-matched-but-unclaimed place is
+// writable only AFTER claim_business() stamps ownership; calling it here means the
+// owner never has to hit the claim banner before editing. Returns false if the
+// claim couldn't be established, so callers can surface an error instead of a raw
+// RLS rejection.
+async function ensureWritable() {
+  if (!current) return false;
+  if (!current.claimable) return true;
+  const { data: ok, error } = await sb.rpc("claim_business", { p_place_id: current.place_id });
+  if (error || !ok) { console.error("claim before write failed:", error); return false; }
+  current.claimable = false;
+  renderClaimBanner();
+  return true;
 }
 
 async function claimCurrentBusiness() {
@@ -785,6 +816,13 @@ $("logoInput").addEventListener("change", async (e) => {
 // Upload to "<place_id>/<uuid>.<ext>"; storage RLS confirms ownership by the
 // place_id path segment. Returns the object path stored in the DB.
 async function uploadImage(file, prefix = "") {
+  // Claim-first: a phone-matched-but-unclaimed place isn't writable yet, so the
+  // storage insert policy (owns_business on the path's place_id) would reject the
+  // upload with "row violates row-level security policy". Establish ownership
+  // before the first byte goes up.
+  if (!(await ensureWritable())) {
+    throw new Error("Claim this business before adding photos — tap “Claim this business”, then try again.");
+  }
   const ext = (file.name.split(".").pop() || "jpg").toLowerCase().replace(/[^a-z0-9]/g, "") || "jpg";
   const path = `${current.place_id}/${prefix ? prefix + "-" : ""}${crypto.randomUUID()}.${ext}`;
   const { error } = await sb.storage.from(PHOTO_BUCKET).upload(path, file, {
@@ -965,21 +1003,11 @@ function updateCompleteness() {
   show($("readinessCard"), pct < 100);
 }
 
-// The customer is waiting when the LAST message came from them. Direction is
-// stored relative to the customer, so "outbound" = customer→business.
-function needsReply(lead) {
-  const msgs = sortMsgs(lead.messages || []);
-  const last = msgs[msgs.length - 1];
-  return !!last && last.direction === "outbound";
-}
-
-// The two dashboard counts, mirroring the app's stat tiles.
+// The dashboard counts (Figma 1611:7531): Views + Leads. Replies/"needs reply" is
+// gone — conversations are handled in the app now, not this portal.
 function renderStats() {
   const leads = current.leads || [];
-  const waiting = leads.filter(needsReply).length;
   $("statRequests").textContent = leads.length;
-  $("statReply").textContent = waiting;
-  $("statReply").classList.toggle("is-waiting", waiting > 0);
   loadViews();
 }
 
@@ -1002,6 +1030,10 @@ async function loadViews() {
 async function saveProfile() {
   if (!current || !profile) return;
   clearTimeout(autosaveTimer);
+  // Claim-first: the business_profiles upsert policy is owns_business(place_id),
+  // so a phone-matched place must be claimed before the first save or the write
+  // is rejected by RLS. No-op for lead-matched / already-owned places.
+  if (!(await ensureWritable())) { show($("saveFailed"), true); return; }
   const row = {
     place_id: current.place_id,
     display_name: profile.display_name || null,
@@ -1038,11 +1070,10 @@ async function saveProfile() {
 }
 
 // ── views + guards ──────────────────────────────────────────
-// Three top-level views mirroring the app's navigation: the dashboard, the
-// Settings editor opened on top of it, and billing (web-only, no app analogue).
-// Deliberately not tabs — the app pushes a separate screen for the editor.
-// Chats / Dashboard / Settings are peer tabs; Billing is reached from Settings
-// and is not a tab of its own, so it leaves the tab strip showing Settings.
+// Dashboard and Settings are the two peer tabs. Billing is reached from Settings
+// (leaving the strip on Settings), and "chats" is a viewable-but-untabbed thread
+// opened only by a job-email `?lead=` deep link — it keeps the tab strip up so the
+// owner can step back to Dashboard/Settings.
 const TAB_VIEWS = ["chats", "dash", "editor"];
 
 function showView(name) {
@@ -1105,7 +1136,7 @@ async function deleteAccount() {
 }
 
 function wireStaticHandlers() {
-  // Tabs, plus the tiles' "View" buttons which jump to the Chats tab.
+  // The Dashboard / Settings tabs. (The stat tiles no longer carry jump buttons.)
   document.querySelectorAll("[data-view]").forEach((el) => {
     el.addEventListener("click", () => {
       const target = el.dataset.view;

@@ -90,20 +90,6 @@ a { color: inherit; }
 .brand { display: flex; align-items: center; gap: 10px; text-decoration: none; font-family: "Lato"; font-weight: 700; font-size: 17px; }
 .brand em { color: var(--gray50); font-style: normal; font-weight: 400; }
 .brand .appicon { width: 30px; height: 30px; border-radius: 8px; }
-/* "For businesses" pill (Figma 1602:6617) — the same cross-site pill the
-   consumer header uses, so the two landings stay identical. Only on the
-   signed-out landing; the dashboard uses this slot for Billing / Sign out. */
-.biz-pill {
-  display: none;
-  flex: none;
-  font-family: "Lato", system-ui, sans-serif; font-weight: 700; font-size: 14px;
-  color: var(--white); text-decoration: none;
-  padding: 8px 16px; border-radius: 999px;
-  background: rgba(217, 217, 217, 0.2);
-  transition: background 0.15s ease;
-}
-.biz-pill:hover { background: rgba(217, 217, 217, 0.3); }
-body.portal:has(#authView:not([hidden])) .biz-pill { display: inline-flex; }
 
 .wrap { width: 100%; max-width: 760px; margin: 0 auto; padding: 24px 20px 64px; flex: 1; }
 
@@ -156,10 +142,17 @@ body.portal:has(#authView:not([hidden]) #introStep:not([hidden])) {
   overflow-x: hidden;
   overflow-x: clip;
 }
+/* The document scroll lives on <html>, so clip there too — the floating cards
+   bleed ~13/side past the column and would otherwise let the page scroll
+   sideways. `clip` on one axis leaves vertical scrolling untouched. */
+html:has(#authView:not([hidden]) #introStep:not([hidden])) {
+  overflow-x: hidden;
+  overflow-x: clip;
+}
 /* Scale the chrome below the header so the intro tracks --s (harmless on the
    form steps, where --s falls back to 1px). The header itself stays fixed-px
    (see the identical rules under :has(#authView)) so it matches the consumer. */
-body.portal:has(#authView:not([hidden]) #introStep:not([hidden])) .wrap { padding: calc(24 * var(--s)) calc(20 * var(--s)) calc(24 * var(--s)); }
+body.portal:has(#authView:not([hidden]) #introStep:not([hidden])) .wrap { padding: calc(24 * var(--s)) calc(24 * var(--s)) calc(24 * var(--s)); }
 body.portal:has(#authView:not([hidden]) #introStep:not([hidden])) .portal-footer { padding: calc(20 * var(--s)); font-size: calc(12.5 * var(--s)); gap: calc(14 * var(--s)) calc(20 * var(--s)); border-top: 0; }
 /* Desktop / tablet: render the intro at the native scale and scroll normally
    (matches the consumer). Height-fitting a short hero on a tall window would
@@ -171,11 +164,13 @@ body.portal:has(#authView:not([hidden]) #introStep:not([hidden])) .portal-footer
 }
 
 body.portal:has(#authView:not([hidden])) {
-  background-color: #000;
-  /* Figma frame fill (node 1602:6559), exact: a 212° amber→near-black gradient
-     over black, amber concentrated at the top and gone by ~40% of the frame
-     height (1531 units). */
-  background-image: linear-gradient(212deg, rgba(255, 172, 54, 0.25) 0%, rgba(25, 25, 34, 0.59) 40%);
+  /* Match the phone mock's dark bezel (#131315, the app --bg) instead of pure
+     black, so the phone's edge doesn't read as a faint gray hairline against
+     the page. The amber gradient still rides on top. */
+  background-color: #131315;
+  /* Figma frame fill (node 1602:6559): a 212° amber→near-black gradient,
+     amber concentrated at the top and gone by ~40% of the frame height. */
+  background-image: linear-gradient(212deg, rgba(255, 172, 54, 0.25) 0%, rgba(25, 25, 34, 0.42) 40%);
   background-repeat: no-repeat;
   background-position: top center;
   background-size: 100% calc(1531 * var(--s));
@@ -211,26 +206,15 @@ body.portal:has(#authView:not([hidden])) .brand .appicon { width: 40px; height: 
   line-height: calc(52.8 * var(--s));
 }
 .intro-sub {
-  /* Poppins Light 17 / 25.5, white 60%. Figma gap title→sub = 32. */
-  margin-top: calc(32 * var(--s));
-  font-size: calc(17 * var(--s)); line-height: calc(25.5 * var(--s));
+  /* Poppins 14 / 21, white 60%. Figma node 1610:7052 gap H1→sub = 24. */
+  margin-top: calc(24 * var(--s));
+  font-size: calc(14 * var(--s)); line-height: calc(21 * var(--s));
   color: rgba(255, 255, 255, 0.6);
 }
 
-/* Icon feature row (Figma): no container — three items in a row, amber marks,
-   Poppins Light 14, white 60%. */
-.feature-row {
-  /* Figma: gap 64 below the sub, items centered with 16 between (node C6AIZN). */
-  list-style: none; margin: calc(64 * var(--s)) 0 0;
-  display: flex; justify-content: center; align-items: center; gap: calc(16 * var(--s));
-}
-.feature-row li { display: flex; align-items: center; gap: 8px; font-size: calc(14 * var(--s)); line-height: calc(21 * var(--s)); color: rgba(255, 255, 255, 0.6); white-space: nowrap; }
-.feature-row svg { width: calc(20 * var(--s)); height: calc(20 * var(--s)); color: var(--gold); flex: none; }
-/* very narrow phones: let the row wrap rather than overflow */
-@media (max-width: 360px) { .feature-row { flex-wrap: wrap; justify-content: center; gap: 12px 18px; } }
-
 /* CTA (Figma "Frame 36953"): hug width, padding 16/32, height 52, radius 32, a
-   24° blue gradient (#0039F5 → #00218F), Lato Bold 17. Sits 32 below the row. */
+   24° blue gradient (#0039F5 → #00218F), Lato Bold 17. Sits 32 below the subtext
+   (Figma node 1610:7052, Frame 37010 gap 32). */
 .primary-btn.cta {
   margin: calc(32 * var(--s)) auto 0;
   width: auto; max-width: 100%; height: calc(52 * var(--s));
@@ -241,19 +225,60 @@ body.portal:has(#authView:not([hidden])) .brand .appicon { width: 40px; height: 
   font-family: "Lato", sans-serif; font-weight: 700;
   font-size: calc(17 * var(--s));
 }
-/* Figma gap CTA→fineprint = 16 (card node LZUQ77). */
-.intro .fineprint { margin-top: calc(16 * var(--s)); font-size: calc(14 * var(--s)); line-height: calc(21 * var(--s)); color: rgba(255, 255, 255, 0.6); }
+/* Figma node 1610:7052: gap CTA→terms line = 24. */
+.intro .fineprint { margin-top: calc(24 * var(--s)); font-size: calc(14 * var(--s)); line-height: calc(21 * var(--s)); color: rgba(255, 255, 255, 0.6); }
 
-/* Hero phone image (Figma group 1602:6378, 427.5×607.77). Placed 100 below the
-   CTA card (frame node VH8UDU gap), centered, bleeding ~13 past the 402 column
-   exactly as the group overhangs the frame in the design. */
-.intro-phone {
-  display: block;
-  width: calc(427.5 * var(--s));
-  max-width: none;
-  height: auto;
+/* ---------- hero: centered phone mock + floating media cards ----------
+   Figma node 1602:6378 (group 427.5×607.77): the app Home screen phone centered,
+   with four job-photo cards floating around it at the exact group coordinates —
+   no labels, no rotation. The stage is full-width and everything positions off
+   50%, so the phone is pixel-centered; the cards' ~13/side bleed is clipped by
+   the intro's overflow-x: clip (no sideways scroll). Decorative. */
+.hero-mock {
+  position: relative;
+  width: 100%;
+  height: calc(607.77 * var(--s));
   margin: calc(100 * var(--s)) auto 0;
+  pointer-events: none;
 }
+.hero-mock img { position: absolute; display: block; }
+
+/* the phone screen mock (259.87×565), centered */
+.hm-phone {
+  left: 50%;
+  transform: translateX(-50%);
+  top: 0;
+  width: calc(259.87 * var(--s));
+  height: auto;
+  border-radius: calc(40 * var(--s));
+  z-index: 2;
+  box-shadow: 0 calc(22 * var(--s)) calc(52 * var(--s)) rgba(0, 0, 0, 0.42);
+}
+
+/* four floating cards — rounded, VERY soft shadow, not rotated, no labels.
+   Each card cross-fades through a diverse set of jobs (home + auto) so the hero
+   shows the app's breadth (see the cycler script in index.html). */
+.hm-tile {
+  position: absolute;
+  z-index: 4;
+  border-radius: calc(20 * var(--s));
+  overflow: hidden;
+  box-shadow: 0 calc(18 * var(--s)) calc(44 * var(--s)) rgba(0, 0, 0, 0.18);
+}
+.hm-tile .hm-layer {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  opacity: 0;
+  transition: opacity 1.8s ease; /* 50% slower crossfade */
+}
+.hm-tile .hm-layer.is-active { opacity: 1; }
+.hm-tile1 { left: calc(50% - 213.75 * var(--s)); top: calc(76 * var(--s));     width: calc(113 * var(--s)); height: calc(152 * var(--s)); }
+.hm-tile2 { left: calc(50% - 213.75 * var(--s)); top: calc(451 * var(--s));    width: calc(117 * var(--s)); height: calc(156.44 * var(--s)); }
+.hm-tile3 { left: calc(50% + 89.75 * var(--s));  top: calc(217 * var(--s));    width: calc(124 * var(--s)); height: calc(165.79 * var(--s)); }
+.hm-tile4 { left: calc(50% + 85.5 * var(--s));   top: calc(504.77 * var(--s)); width: calc(77 * var(--s));  height: calc(103 * var(--s)); }
 
 /* The claim card — same surface as the app's cards; a centred panel per step. */
 .auth-card {
@@ -365,7 +390,7 @@ select { appearance: none; background-image: none; }
    The three peer tabs (Figma 1140:2933). Same construction as the app's
    SegmentedTabs: a gray05 capsule track, the active segment a gray20 capsule. */
 .tabs {
-  display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px;
+  display: grid; grid-template-columns: repeat(2, 1fr); gap: 4px;
   background: var(--gray05); border-radius: 100px;
   margin: 0 auto 24px; max-width: 370px;
 }
@@ -378,9 +403,9 @@ select { appearance: none; background-image: none; }
 .tab.is-active { background: var(--gray20); color: var(--white); }
 
 /* ── stat tiles + readiness ───────────────────────────────
-   Mirrors the app dashboard (BusinessDashboardScreen): Views / Leads /
-   Requests, then a readiness nudge that disappears once the page is complete. */
-.stat-tiles { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin-bottom: 16px; }
+   Simplified dashboard (Figma 1611:7531): two counts — Views + Leads — then a
+   full-width readiness nudge that disappears once the page is complete. */
+.stat-tiles { display: grid; grid-template-columns: repeat(2, 1fr); gap: 16px; margin-bottom: 16px; }
 .stat-tile, .readiness {
   background: var(--bg-secondary); border: 1.5px solid var(--gray20);
   border-radius: 32px; padding: 16px; min-height: 125px;

@@ -4,11 +4,11 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Brightglow — get your job done right</title>
-  <meta name="description" content="See real photos of local pros' actual work before you hire. Get a price range, then start a spam-free chat with the ones that fit.">
+  <meta name="description" content="See real photos of local pros' work before you hire. Get a price range, then start a spam-free chat with the ones that fit.">
   <meta name="theme-color" content="#000000">
   <link rel="icon" type="image/png" href="favicon.png">
   <link rel="apple-touch-icon" href="apple-touch-icon.png">
-  <link rel="stylesheet" href="styles.css?v=6">
+  <link rel="stylesheet" href="styles.css?v=23">
 </head>
 <body class="landing">
   <header class="topbar">
@@ -20,82 +20,128 @@
   </header>
 
   <main class="column">
-    <section class="hero-copy">
-      <h1>Get your <span class="emoji">🏡 🚗</span> job done right</h1>
-      <p class="sub">
-        See real photos of local pros' actual work before you hire. Get a
-        price range, then start a spam-free chat with the ones that fit.
-      </p>
+    <h1 class="hero-h1">Get your job done right</h1>
 
-      <!--
-        When the App Store listing is live, replace href="#" with the real URL,
-        e.g. https://apps.apple.com/app/id0000000000
-      -->
-      <a class="appstore-btn" href="#">
-        <svg width="20" height="24" viewBox="0 0 20 24" fill="currentColor" aria-hidden="true">
-          <path d="M16.36 12.77c-.03-2.9 2.37-4.29 2.48-4.36-1.35-1.97-3.45-2.24-4.2-2.27-1.79-.18-3.49 1.05-4.4 1.05-.9 0-2.3-1.02-3.79-1-1.95.03-3.74 1.13-4.74 2.87-2.02 3.5-.52 8.69 1.45 11.53.96 1.39 2.11 2.95 3.62 2.9 1.45-.06 2-.94 3.76-.94 1.75 0 2.25.94 3.79.91 1.57-.03 2.56-1.42 3.52-2.82 1.11-1.61 1.56-3.17 1.59-3.25-.04-.02-3.05-1.17-3.08-4.62zM13.46 4.25c.8-.97 1.34-2.32 1.19-3.66-1.15.05-2.55.77-3.38 1.74-.74.85-1.39 2.22-1.22 3.53 1.29.1 2.6-.65 3.41-1.61z"/>
-        </svg>
-        Download from App Store
-      </a>
+    <p class="hero-sub">
+      See real photos of local pros' work before you hire. Get a price range,
+      then start a spam-free chat with the ones that fit.
+    </p>
+
+    <!--
+      When the App Store listing is live, replace href="#" with the real URL,
+      e.g. https://apps.apple.com/app/id0000000000
+    -->
+    <a class="appstore-btn" href="#">
+      <svg width="20" height="24" viewBox="0 0 20 24" fill="currentColor" aria-hidden="true">
+        <path d="M16.36 12.77c-.03-2.9 2.37-4.29 2.48-4.36-1.35-1.97-3.45-2.24-4.2-2.27-1.79-.18-3.49 1.05-4.4 1.05-.9 0-2.3-1.02-3.79-1-1.95.03-3.74 1.13-4.74 2.87-2.02 3.5-.52 8.69 1.45 11.53.96 1.39 2.11 2.95 3.62 2.9 1.45-.06 2-.94 3.76-.94 1.75 0 2.25.94 3.79.91 1.57-.03 2.56-1.42 3.52-2.82 1.11-1.61 1.56-3.17 1.59-3.25-.04-.02-3.05-1.17-3.08-4.62zM13.46 4.25c.8-.97 1.34-2.32 1.19-3.66-1.15.05-2.55.77-3.38 1.74-.74.85-1.39 2.22-1.22 3.53 1.29.1 2.6-.65 3.41-1.61z"/>
+      </svg>
+      Download from App Store
+    </a>
+
+    <!-- Hero (Figma layout node 1599:5807). Phone centre; two 125×167 category
+         cards (Electrical, Landscaping) at the frame edges, dimmed to 20%. The
+         stage isn't clipped, so on web they show fully (not cut off); on a phone
+         they slip behind the screen edges. Only the phone photo rotates. -->
+    <section class="stage" aria-hidden="true">
+      <div class="peek peek-left">
+        <img alt="" src="media/slides/slide-02-electrical.jpg">
+        <span class="peek-label">Electrical</span>
+      </div>
+      <div class="peek peek-right">
+        <img alt="" src="media/slides/slide-05-landscaping.jpg">
+        <span class="peek-label">Landscaping</span>
+      </div>
+
+      <div class="phone">
+        <div class="phone-slides">
+          <img class="phone-slide is-active init" src="media/slides/slide-01-plumbing.jpg"   alt="" data-cat="Plumbing">
+          <img class="phone-slide" src="media/slides/slide-02-electrical.jpg"  alt="" data-cat="Electrical">
+          <img class="phone-slide" src="media/slides/slide-03-repair.jpg"      alt="" data-cat="Auto repair">
+          <img class="phone-slide" src="media/slides/slide-04-hvac.jpg"        alt="" data-cat="HVAC">
+          <img class="phone-slide" src="media/slides/slide-05-landscaping.jpg" alt="" data-cat="Landscaping">
+          <img class="phone-slide" src="media/slides/slide-06-tires.jpg"       alt="" data-cat="Tires">
+          <img class="phone-slide" src="media/slides/slide-07-pest.jpg"        alt="" data-cat="Pest control">
+          <img class="phone-slide" src="media/slides/slide-08-appliances.jpg"  alt="" data-cat="Appliances">
+          <img class="phone-slide" src="media/slides/slide-09-body.jpg"        alt="" data-cat="Body &amp; paint">
+          <img class="phone-slide" src="media/slides/slide-10-carpentry.jpg"   alt="" data-cat="Carpentry">
+          <img class="phone-slide" src="media/slides/slide-11-painting.jpg"    alt="" data-cat="Painting">
+          <img class="phone-slide" src="media/slides/slide-12-detailing.jpg"   alt="" data-cat="Auto detailing">
+          <img class="phone-slide" src="media/slides/slide-13-roofing.jpg"     alt="" data-cat="Roofing">
+          <img class="phone-slide" src="media/slides/slide-14-flooring.jpg"    alt="" data-cat="Flooring">
+          <img class="phone-slide" src="media/slides/slide-15-autoglass.jpg"   alt="" data-cat="Auto glass">
+          <img class="phone-slide" src="media/slides/slide-16-windows.jpg"     alt="" data-cat="Windows &amp; doors">
+          <img class="phone-slide" src="media/slides/slide-17-moto.jpg"        alt="" data-cat="Motorcycle">
+        </div>
+
+        <div class="phone-status">
+          <span class="phone-time">9:41</span>
+          <svg class="phone-signals" viewBox="0 0 44 12" fill="#fff" aria-hidden="true">
+            <rect x="0"   y="7"   width="2.6" height="5"  rx="0.7"/>
+            <rect x="3.9" y="5"   width="2.6" height="7"  rx="0.7"/>
+            <rect x="7.8" y="3"   width="2.6" height="9"  rx="0.7"/>
+            <rect x="11.7" y="1"  width="2.6" height="11" rx="0.7"/>
+            <path fill="none" stroke="#fff" stroke-width="1.4" stroke-linecap="round"
+                  d="M18.4 4.2c2.4-2.1 6-2.1 8.4 0M20.2 6.4c1.3-1.1 3.6-1.1 4.9 0"/>
+            <circle cx="22.65" cy="9.1" r="1.15"/>
+            <rect x="31" y="1.6" width="10.5" height="8.8" rx="2.4" fill="none" stroke="#fff" stroke-width="1" opacity="0.5"/>
+            <rect x="32.2" y="2.8" width="8.1" height="6.4" rx="1.4"/>
+            <rect x="42.3" y="4.2" width="1.4" height="3.6" rx="0.7" opacity="0.5"/>
+          </svg>
+        </div>
+
+        <div class="phone-input">
+          <span class="phone-input-text">Plumbing</span>
+          <span class="phone-input-send" aria-hidden="true">
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+              <path d="M3 8h9M8.5 3.8 12.7 8l-4.2 4.2" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+          </span>
+        </div>
+      </div>
     </section>
   </main>
 
-  <!-- Hero stage: the app phone, real-job photo cards peeking from behind it,
-       and floating job-label pills. Photos span the Home + Auto verticals
-       (flooring, dent, roof leak, flat tire, flickering lights). Purely
-       decorative; the cards and pills parallax on scroll. -->
-  <section class="stage">
-    <img class="float card-flooring" data-depth="0.5" src="media/card-flooring.png" alt="">
-    <img class="float card-dent" data-depth="0.9" src="media/card-dent.png" alt="">
-
-    <img class="phone" src="media/phone-sink.png"
-         alt="Brightglow app — describing a job: “Leak under the kitchen sink”">
-
-    <img class="float card-bulb" data-depth="0.3" src="media/card-bulb.png" alt="">
-    <img class="float card-flat-tire" data-depth="0.7" src="media/card-flat-tire.png" alt="">
-    <img class="float card-roof-leak" data-depth="1.1" src="media/card-roof-leak.png" alt="">
-
-    <span class="float chip chip-dent" data-depth="0.9">Dent</span>
-    <span class="float chip chip-flooring" data-depth="0.5">Flooring</span>
-    <span class="float chip chip-bulb" data-depth="0.3">Flickering lights</span>
-    <span class="float chip chip-roof-leak" data-depth="1.1">Roof leak</span>
-    <span class="float chip chip-flat-tire" data-depth="0.7">Flat tire</span>
-  </section>
-
   <footer class="landing-footer">
-    <a href="business/">For businesses</a>
-    <a href="terms.html">Terms of Service</a>
-    <a href="privacy.html">Privacy Policy</a>
+    <a class="footer-terms" href="terms.html">Terms of Service</a>
     <a href="mailto:hello@brightglow.co">hello@brightglow.co</a>
-    <div class="copyright">© 2026 Brightglow Technologies LLC</div>
+    <div class="copyright">© 2026 Brightglow LLC</div>
   </footer>
 
   <script>
+    // Phone photo slideshow (the side cards are static, per Figma): each tick the
+    // previous photo cross-dissolves to the next, and the input caption re-types
+    // to the matching service. Honors reduced-motion.
     (function () {
-      if (matchMedia("(prefers-reduced-motion: reduce)").matches) return;
       var stage = document.querySelector(".stage");
-      var floats = [].slice.call(document.querySelectorAll(".float"));
-      var lastP = null;
-      function update() {
-        var r = stage.getBoundingClientRect();
-        // -1 .. 1 as the stage travels through the viewport
-        var p = (r.top + r.height / 2 - innerHeight / 2) / innerHeight;
-        if (lastP === null || Math.abs(p - lastP) > 0.001) {
-          lastP = p;
-          floats.forEach(function (el) {
-            var d = parseFloat(el.dataset.depth) || 0;
-            el.style.transform = "translateY(" + (-p * d * 60).toFixed(1) + "px)";
-          });
-        }
+      if (!stage) return;
+      var phone = stage.querySelector(".phone");
+      var slides = [].slice.call(phone.querySelectorAll(".phone-slide"));
+      var caption = phone.querySelector(".phone-input-text");
+      var n = slides.length;
+      if (n < 2 || !caption) return;
+
+      function catOf(k) { return slides[((k % n) + n) % n].getAttribute("data-cat"); }
+
+      if (matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+
+      var i = 0;
+      var HOLD = 3600; // ms each job stays centred
+      function advance() {
+        var prev = i;
+        i = (i + 1) % n;
+        slides[prev].classList.remove("is-active", "init");
+        slides[prev].classList.add("under");      // hold full behind the incoming
+        slides[i].classList.remove("under");
+        slides[i].classList.add("is-active");     // fade up on top
+        setTimeout(function () { slides[prev].classList.remove("under"); }, 620);
+        // caption re-types under cover of the dissolve
+        caption.style.opacity = "0";
+        setTimeout(function () {
+          caption.textContent = catOf(i);
+          caption.style.opacity = "1";
+        }, 260);
       }
-      function frame() {
-        update();
-        requestAnimationFrame(frame);
-      }
-      requestAnimationFrame(frame);
-      // fallback for environments where rAF is throttled
-      setInterval(update, 150);
-      update();
+      setInterval(advance, HOLD);
     })();
   </script>
 </body>
