@@ -171,20 +171,11 @@ body.landing::before {
   .topbar .wordmark { font-size: 26px; }
 }
 
-/* Consumer landing header — pixel-matched to Figma node 1599:5807 and scaled with
-   --s: 48 app icon, 16 logo gap, and a 44-tall "For businesses" pill (radius 100,
-   2px white-20 stroke, 24 side padding, Lato 700 14) at the frame's 32 inset. */
-body.landing .topbar { padding: calc(20 * var(--s)) calc(32 * var(--s)) 0; gap: calc(16 * var(--s)); }
-body.landing .topbar .logo { gap: calc(16 * var(--s)); }
-body.landing .topbar .appicon { width: calc(48 * var(--s)); height: calc(48 * var(--s)); border-radius: calc(17 * var(--s)); }
-body.landing .topbar .wordmark { font-size: calc(22 * var(--s)); }
-body.landing .biz-link {
-  font-size: calc(14 * var(--s));
-  line-height: 1;
-  padding: calc(13 * var(--s)) calc(24 * var(--s));
-  border-width: calc(2 * var(--s));
-  border-radius: calc(100 * var(--s));
-}
+/* Consumer landing header: FIXED size, not --s-scaled. Scaling it with the hero's
+   --s unit made it balloon on wider viewports (e.g. 60px icon on desktop). It now
+   falls back to the base .topbar rules above, which are pixel-identical to the
+   business site's header (40px icon / 22px wordmark / 16-20px padding), so the two
+   headers match and neither jumps when navigating between the sites. */
 
 /* H1 — Figma node 1599:5807: Lato Regular 44 / 52.8, centred, below the header */
 .hero-h1 {
