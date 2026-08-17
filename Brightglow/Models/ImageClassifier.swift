@@ -180,15 +180,25 @@ enum ImageClassifier {
         // better than an on-device saliency guess picks the subject — the prompt's
         // subject-priority rule handles "which fixture" — so it gets the full image.
         let subject: UIImage = dominantObject(image).flatMap { cropNormalized(image, $0) } ?? image
-        // Surface-area gate: measure the single largest salient region ON-DEVICE and
-        // hand the cloud VLM a size HINT (text only — we still send the whole image,
-        // never a crop, per the note above). A big dominant region (a vanity at ~35%
-        // of the frame) tells it to anchor on that subject; when nothing dominates
-        // (the biggest object is < ~18%) the hint tells it to answer "unsure" rather
-        // than confidently mislabel a minor item — a lit floor lamp became "ceiling
-        // light fixture", and a corner of rug became "area rug" (reported 2026-08-12).
-        // On-device area separates the two cleanly; the VLM obeys both hints reliably.
-        let hint = applyAreaGate ? largestSalientRegion(image).map(areaHint) : nil
+        // Surface-area gate: decide ON-DEVICE whether a SINGLE object clearly owns
+        // the frame before trusting a guess. Two things gate on this:
+        //   1. a text HINT to the cloud VLM (still the whole image, never a crop —
+        //      see the note above), and
+        //   2. a HARD suppression below — because the VLM does NOT reliably obey the
+        //      "answer unsure" hint on a busy frame. A cluttered kitchen and a
+        //      door-in-a-room both still auto-filled a confident wrong description
+        //      ("kitchen sink faucet", "hardwood floor") even though nothing
+        //      dominated (reported 2026-08-17). So when no object is both big AND
+        //      clearly larger than the runner-up, we don't guess at all: no auto-
+        //      fill, no preselect — the user says what they want. A big spotlighted
+        //      subject (a vanity at ~35%) still anchors the read as before.
+        // Circled regions bypass the gate (applyAreaGate == false): the loop already
+        // IS the "this is the subject" signal.
+        let dominance: SubjectDominance = applyAreaGate
+            ? subjectDominance(image)
+            : .dominant(area: 1, center: CGPoint(x: 0.5, y: 0.5))
+        let dominates: Bool = { if case .dominant = dominance { return true } else { return false } }()
+        let hint = applyAreaGate ? hint(for: dominance) : nil
         if let cloud = try? await cloudReply(image, hint: hint) {
             // DETAILS and DESCRIPTION are visible observations, independent of
             // whether the CATEGORY parsed to a known service — so keep them even
@@ -198,14 +208,17 @@ enum ImageClassifier {
             // no auto-description (2026-08-08). `match`-gated things (carousel,
             // vehicle read, confident preselect) still require a real match.
             details = cloud.details
-            description = cloud.description
+            // Only auto-fill a description / preselect a tag when ONE subject clearly
+            // owns the frame. In an ambiguous frame (several roughly-equal objects),
+            // leave the input blank rather than guess a wrong subject.
+            description = dominates ? cloud.description : nil
             if let match = cloud.match {
                 matches.append(match)
                 // When the cloud model saw a vehicle it leads DETAILS with the
                 // type (car/truck/motorcycle) — read car-vs-moto from there even
                 // if the category itself was hedged, so clarify never re-asks it.
                 if case .auto = match { vehicle = vehicleFilter(from: cloud.details) }
-                if cloud.isConfident { confident = match }
+                if cloud.isConfident, dominates { confident = match }
             }
         }
         // The on-device guess always contributes a carousel suggestion (never a
@@ -253,35 +266,70 @@ enum ImageClassifier {
     /// ~35% (passes), a floor lamp in a busy room is ~7% (abstains). Tunable.
     private static let dominantHintFraction: CGFloat = 0.18
 
-    /// The largest salient region's area fraction and centre (normalized; Vision's
-    /// origin is bottom-left, so y is flipped to top-left for the centre test).
-    private static func largestSalientRegion(_ image: UIImage) -> (area: CGFloat, center: CGPoint)? {
-        guard let cg = image.normalizedUp().cgImage else { return nil }
+    /// How much bigger the largest salient object must be than the next-largest to
+    /// count as the clear "spotlight" subject. When the top two are closer than this
+    /// the frame holds several competing subjects of roughly equal weight, so the
+    /// read abstains instead of guessing one. Tunable.
+    private static let dominantRatio: CGFloat = 1.6
+
+    /// On-device verdict on whether ONE object clearly owns the frame.
+    /// `.dominant` = big AND clearly larger than the runner-up → trust a guess.
+    /// `.ambiguous`/`.none` = several roughly-equal objects, or nothing salient →
+    /// don't guess (auto-fill nothing, preselect nothing).
+    private enum SubjectDominance {
+        case dominant(area: CGFloat, center: CGPoint)
+        case ambiguous(topArea: CGFloat)
+        case none
+    }
+
+    /// Decide whether a single salient object is both big enough and clearly the
+    /// spotlight subject. Vision saliency, normalized coords (origin bottom-left);
+    /// the centre is flipped to top-left for the centrality test.
+    private static func subjectDominance(_ image: UIImage) -> SubjectDominance {
+        guard let cg = image.normalizedUp().cgImage else { return .none }
         let req = VNGenerateObjectnessBasedSaliencyImageRequest()
         try? VNImageRequestHandler(cgImage: cg, options: [:]).perform([req])
         guard let obs = req.results?.first as? VNSaliencyImageObservation,
-              let biggest = obs.salientObjects?.max(by: { area($0.boundingBox) < area($1.boundingBox) })
-        else { return nil }
-        let b = biggest.boundingBox
-        return (area(b), CGPoint(x: b.midX, y: 1 - b.midY))
+              let objects = obs.salientObjects, !objects.isEmpty else { return .none }
+        let boxes = objects.map(\.boundingBox).sorted { area($0) > area($1) }
+        let top = boxes[0]
+        let topArea = area(top)
+        let runnerUp = boxes.count > 1 ? area(boxes[1]) : 0
+        // "Big and in the spotlight": clears the area floor AND clearly outsizes the
+        // next-biggest. With no meaningful runner-up (runnerUp == 0) the top object
+        // stands alone. When the top two are close in size, several subjects compete.
+        let spotlight = runnerUp <= 0 || topArea >= runnerUp * dominantRatio
+        if topArea >= dominantHintFraction && spotlight {
+            return .dominant(area: topArea, center: CGPoint(x: top.midX, y: 1 - top.midY))
+        }
+        return .ambiguous(topArea: topArea)
     }
 
-    /// Turn an on-device region measurement into the subject hint the cloud VLM
-    /// obeys: anchor on a dominant object, or abstain when nothing dominates.
-    private static func areaHint(_ region: (area: CGFloat, center: CGPoint)) -> String {
-        let pct = Int((region.area * 100).rounded())
-        if region.area >= dominantHintFraction {
-            let central = (0.3...0.7).contains(region.center.x) && (0.3...0.7).contains(region.center.y)
+    /// The subject hint handed to the cloud VLM alongside the whole image. It
+    /// mirrors the on-device dominance verdict: anchor on a clear subject, or ask
+    /// the model to abstain when nothing dominates. (The on-device gate enforces
+    /// the abstain regardless of whether the model obeys — see `suggestTrades`.)
+    private static func hint(for dominance: SubjectDominance) -> String {
+        switch dominance {
+        case let .dominant(area, center):
+            let pct = Int((area * 100).rounded())
+            let central = (0.3...0.7).contains(center.x) && (0.3...0.7).contains(center.y)
             return "\nSUBJECT HINT (from an on-device detector): one object fills about "
                 + "\(pct)% of the frame\(central ? ", near the CENTER" : "") — this is almost "
                 + "certainly the subject. Identify and describe THAT object; do not pick a "
                 + "smaller item elsewhere in the frame."
+        case let .ambiguous(topArea):
+            let pct = Int((topArea * 100).rounded())
+            return "\nSUBJECT HINT (from an on-device detector): NO single object dominates the "
+                + "frame — several objects are of roughly equal size (the largest is only about "
+                + "\(pct)%). If there is no clearly repairable home or vehicle FIXTURE that "
+                + "dominates the shot, answer exactly 'unsure' rather than guessing a minor item "
+                + "(a rug, a cushion, a plant, a small object)."
+        case .none:
+            return "\nSUBJECT HINT (from an on-device detector): NO single object stands out in "
+                + "the frame. If there is no clearly repairable home or vehicle FIXTURE that "
+                + "dominates the shot, answer exactly 'unsure' rather than guessing."
         }
-        return "\nSUBJECT HINT (from an on-device detector): NO single object dominates the "
-            + "frame — the largest stands out at only about \(pct)%. If there is no clearly "
-            + "repairable home or vehicle FIXTURE that dominates the shot, answer exactly "
-            + "'unsure' rather than guessing a minor item (a rug, a cushion, a plant, a "
-            + "small object)."
     }
 
     /// Read car-vs-motorcycle from the cloud model's DETAILS string (it leads
