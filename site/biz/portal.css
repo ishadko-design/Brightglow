@@ -380,6 +380,17 @@ select { appearance: none; background-image: none; }
 .ghost-btn.danger { color: #ff5a5a; border-color: rgba(255, 90, 90, 0.5); }
 .ghost-btn.danger:hover { background: rgba(255, 90, 90, 0.12); border-color: #ff5a5a; }
 .ghost-btn:disabled { opacity: 0.6; cursor: default; }
+/* "Preview as customer" — below the stat tiles. The CTA is left-aligned (opens the
+   app on a phone); on desktop an always-visible QR sits centered below it to scan. */
+.preview-row { margin-top: 16px; }
+/* Left-aligned box (shrink-wrapped to the QR), QR centered inside it by the equal
+   padding on all four sides. */
+.preview-qr {
+  margin: 12px 0 0; padding: 20px; width: fit-content;
+  background: var(--white); border: 1px solid var(--gray10); border-radius: 16px;
+}
+.preview-qr img { width: 160px; height: 160px; display: block; }
+.preview-hint { margin: 10px 0 0; font-size: 13px; color: var(--gray70); max-width: 280px; line-height: 1.4; }
 .form-msg { margin-top: 14px; font-size: 14px; color: var(--gray70); min-height: 20px; }
 .form-msg.ok { color: #7ee39b; }
 .form-msg.err { color: var(--danger); }
@@ -513,7 +524,9 @@ select { appearance: none; background-image: none; }
 .upload-btn:hover { background: var(--gray10); }
 
 .logo-row { display: flex; gap: 16px; align-items: center; margin-bottom: 8px; }
+.logo-wrap { position: relative; width: 104px; height: 104px; flex-shrink: 0; }
 .logo-preview { width: 104px; height: 104px; border-radius: 16px; background: var(--surface2) center/cover no-repeat; flex-shrink: 0; border: 1px solid var(--gray10); }
+.logo-wrap .rm { position: absolute; right: 6px; top: 6px; width: 24px; height: 24px; border-radius: 50%; background: rgba(0,0,0,.6); color: #fff; border: none; cursor: pointer; font-size: 14px; line-height: 1; }
 .logo-actions { display: flex; flex-direction: column; align-items: flex-start; gap: 12px; }
 
 /* ── leads ───────────────────────────────────────────────── */

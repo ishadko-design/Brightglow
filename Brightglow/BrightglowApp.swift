@@ -7,6 +7,7 @@ import GoogleSignIn
 struct BrightglowApp: App {
     @StateObject private var auth = AuthService()
     @StateObject private var chatRouter = ChatRouter()
+    @StateObject private var previewRouter = PreviewRouter()
     @StateObject private var businessStore = BusinessStore()
 
     init() {
@@ -18,25 +19,32 @@ struct BrightglowApp: App {
             RootNavigator()
                 .environmentObject(auth)
                 .environmentObject(chatRouter)
+                .environmentObject(previewRouter)
                 .environmentObject(businessStore)
                 .onOpenURL { url in
                     #if DEBUG
                     print("🔗 onOpenURL: \(url.absoluteString)")
                     #endif
-                    // A chat deep link (brightglow://chat) opens the inbox; a
-                    // Google OAuth callback is the SDK's own. Anything else is the
-                    // email magic-link callback, which AuthService completes.
+                    // A preview deep link (brightglow://preview/<id>) opens the
+                    // consumer gallery; a chat deep link (brightglow://chat) opens
+                    // the inbox; a Google OAuth callback is the SDK's own. Anything
+                    // else is the email magic-link callback, which AuthService
+                    // completes.
+                    if previewRouter.handle(url) { return }
                     if chatRouter.handle(url) { return }
                     if GIDSignIn.sharedInstance.handle(url) { return }
                     Task { await auth.handleOpenURL(url) }
                 }
-                // Universal Links (https://brightglow.co/chat…) arrive as a web
-                // browsing activity rather than an openURL — route them to chat too.
+                // Universal Links (https://brightglow.co/…) arrive as a web browsing
+                // activity rather than an openURL — route preview and chat links too.
                 .onContinueUserActivity(NSUserActivityTypeBrowsingWeb) { activity in
                     #if DEBUG
                     print("🔗 onContinueUserActivity(web): \(activity.webpageURL?.absoluteString ?? "nil")")
                     #endif
-                    if let url = activity.webpageURL { _ = chatRouter.handle(url) }
+                    if let url = activity.webpageURL {
+                        if previewRouter.handle(url) { return }
+                        _ = chatRouter.handle(url)
+                    }
                 }
         }
     }

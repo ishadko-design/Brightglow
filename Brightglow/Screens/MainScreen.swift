@@ -23,6 +23,7 @@ struct MainScreen: View {
     @StateObject private var camera = CameraViewModel()
     @StateObject private var locationStore = LocationStore()
     @EnvironmentObject private var chatRouter: ChatRouter
+    @EnvironmentObject private var previewRouter: PreviewRouter
     @EnvironmentObject private var businessStore: BusinessStore
     /// Landing opens compact (just the two vertical tiles); expands to .full when
     /// a vertical is opened so its category grid can scroll.
@@ -176,6 +177,10 @@ struct MainScreen: View {
     /// Pushes the business dashboard — from a lead-email deep link (for an owner)
     /// or the "For business" row in Profile.
     @State private var showBusiness = false
+    /// Consumer-preview deep link (brightglow://preview/<place_id>) target — a
+    /// business tapping "Preview as customer" in the web portal. Presented full
+    /// screen over the landing.
+    @State private var previewTarget: PreviewTarget? = nil
     /// Lights the orange dot on the chat icon when a counterparty has sent a
     /// message since the inbox was last opened.
     @State private var hasUnreadChat = false
@@ -683,6 +688,11 @@ struct MainScreen: View {
                 .onChange(of: chatRouter.openInboxRequested) { _, _ in
                     consumePendingChatDeepLink()
                 }
+                // A brightglow://preview/<place_id> deep link presents the consumer
+                // gallery over the landing. No ownership gate — it's a public view.
+                .onChange(of: previewRouter.placeID) { _, id in
+                    if let id { previewTarget = PreviewTarget(id: id); previewRouter.placeID = nil }
+                }
                 // Ownership resolves asynchronously after sign-in; a link that
                 // arrived first is routed once we know which inbox it belongs to.
                 .onChange(of: businessStore.didLoad) { _, _ in
@@ -822,6 +832,11 @@ struct MainScreen: View {
             }
         }
         .preferredColorScheme(.dark)
+        // Consumer preview from a web-portal deep link — the owner's own page as a
+        // customer sees it, presented over the landing with its own close control.
+        .fullScreenCover(item: $previewTarget) { target in
+            BusinessPreviewScreen(placeId: target.id)
+        }
         // ── Draw mode — proper full-screen cover with its own layout + keyboard handling
         .fullScreenCover(isPresented: $camera.showDrawingCanvas) {
             if let img = camera.capturedImage {

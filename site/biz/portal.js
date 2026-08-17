@@ -660,6 +660,9 @@ async function selectBusiness(biz) {
 // ── profile fields ──────────────────────────────────────────
 function renderProfile() {
   $("bizName").textContent = profile.display_name || current.name;
+  // Show the "Preview as customer" action once a business is selected — it opens
+  // the app to this place's consumer-facing page (brightglow://preview/<id>).
+  renderPreviewQr();
   // bizMeta (city · readiness) is owned by updateCompleteness, which runs after
   // this and keeps the subtitle in sync as fields are filled in.
   $("displayName").value = profile.display_name || "";
@@ -679,6 +682,43 @@ function renderLogo() {
   el.style.alignItems = "center";
   el.style.justifyContent = "center";
   el.style.fontSize = "28px";
+  $("logoRemove").hidden = !url;
+}
+
+$("logoRemove").addEventListener("click", () => {
+  profile.logo_path = null;
+  renderLogo(); markDirty(); updateCompleteness();
+});
+
+// "Preview as customer" — open the app to this business's consumer page. The app
+// reads the SAVED profile, so flush any pending edit first, then follow the deep
+// link. On a phone with the app installed this opens the preview; on desktop the
+// custom scheme is a no-op, so we tell the owner where to tap it.
+const isMobile = () => /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+const previewLink = () => `brightglow://preview/${encodeURIComponent(current.place_id)}`;
+
+// The CTA opens the app on a phone. On desktop the app can't open, so the QR
+// below (rendered by renderPreviewQr) is the path — the button is a no-op there.
+$("previewBtn").addEventListener("click", async () => {
+  if (!current?.place_id || !isMobile()) return;
+  if (dirty) await saveProfile();
+  window.location.href = previewLink();
+});
+
+// Render the deep-link QR under the CTA. Desktop-only — scanning a QR on the same
+// phone you'd tap the button on is pointless, so mobile shows just the CTA.
+async function renderPreviewQr() {
+  if (!current?.place_id) { show($("previewRow"), false); return; }
+  show($("previewRow"), true);
+  show($("previewQr"), !isMobile());
+  show($("previewHint"), !isMobile());
+  if (isMobile()) return;
+  try {
+    const QRCode = (await import("https://esm.sh/qrcode@1.5.4")).default;
+    $("previewQrImg").src = await QRCode.toDataURL(previewLink(), { margin: 1, width: 320 });
+  } catch (err) {
+    console.error("QR generation failed:", err);
+  }
 }
 
 // Bind simple text fields → profile on input. Only the two the app's editor
@@ -757,7 +797,7 @@ function renderPhotos() {
   strip.innerHTML = photos.map((p, i) => `
     <div class="photo-cell" draggable="true" data-i="${i}">
       ${i === 0 ? '<span class="lead-badge">Leads</span>' : ""}
-      <img src="${publicUrl(p)}" alt="">
+      <img src="${publicUrl(p)}" alt="" draggable="false">
       <button class="rm" data-i="${i}" title="Remove">×</button>
     </div>`).join("")
     + `<label class="photo-add" for="photoInput" title="Add photos"><span>+</span></label>`;
@@ -771,7 +811,11 @@ function renderPhotos() {
 function wirePhotoDrag(grid) {
   let from = null;
   grid.querySelectorAll(".photo-cell").forEach((cell) => {
-    cell.addEventListener("dragstart", () => { from = +cell.dataset.i; cell.classList.add("dragging"); });
+    cell.addEventListener("dragstart", (e) => {
+      from = +cell.dataset.i;
+      cell.classList.add("dragging");
+      if (e.dataTransfer) { e.dataTransfer.effectAllowed = "move"; e.dataTransfer.setData("text/plain", String(from)); }
+    });
     cell.addEventListener("dragend", () => cell.classList.remove("dragging"));
     cell.addEventListener("dragover", (e) => e.preventDefault());
     cell.addEventListener("drop", (e) => {
@@ -796,7 +840,7 @@ $("photoInput").addEventListener("change", async (e) => {
       const path = await uploadImage(file);
       (profile.photos ||= []).push(path);
     }
-    msg.className = "form-msg ok"; msg.textContent = "Uploaded. Remember to Save.";
+    msg.className = "form-msg ok"; msg.textContent = files.length > 1 ? "Photos added." : "Photo added.";
     renderPhotos(); markDirty(); updateCompleteness();
   } catch (err) {
     msg.className = "form-msg err"; msg.textContent = err.message || "Upload failed.";

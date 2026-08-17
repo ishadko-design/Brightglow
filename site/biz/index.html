@@ -9,7 +9,7 @@
   <meta name="robots" content="noindex">
   <link rel="icon" type="image/png" href="../favicon.png">
   <link rel="apple-touch-icon" href="../apple-touch-icon.png">
-  <link rel="stylesheet" href="portal.css?v=30">
+  <link rel="stylesheet" href="portal.css?v=37">
 </head>
 <body class="portal">
   <header class="topbar">
@@ -190,6 +190,16 @@
         </div>
       </div>
 
+      <!-- Preview as customer — below the numbers. On a phone it opens the app to
+           this business's consumer page; on desktop it shows a QR to scan. -->
+      <div class="preview-row" id="previewRow" hidden>
+        <button type="button" id="previewBtn" class="ghost-btn">Preview as customer</button>
+        <div class="preview-qr" id="previewQr">
+          <img id="previewQrImg" alt="QR code to preview your page" width="160" height="160">
+        </div>
+        <p class="preview-hint" id="previewHint">Scan with your phone's camera to open your page in the Brightglow app.</p>
+      </div>
+
       <div class="readiness" id="readinessCard" hidden>
         <div class="stat-label">Profile readiness</div>
         <div class="readiness-pct" id="readinessPct">0%</div>
@@ -235,7 +245,10 @@
         <div class="card">
           <!-- Logo: 104px preview, then button above caption — the app's layout. -->
           <div class="logo-row">
-            <div class="logo-preview" id="logoPreview" aria-hidden="true"></div>
+            <div class="logo-wrap">
+              <div class="logo-preview" id="logoPreview" aria-hidden="true"></div>
+              <button class="rm" id="logoRemove" title="Remove logo" hidden>×</button>
+            </div>
             <div class="logo-actions">
               <label class="upload-btn">
                 Upload logo
@@ -351,6 +364,6 @@
     })();
   </script>
 
-  <script type="module" src="portal.js?v=9"></script>
+  <script type="module" src="portal.js?v=15"></script>
 </body>
 </html>
