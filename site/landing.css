@@ -255,9 +255,7 @@ html.has-gl .bg-fallback { opacity: 0; }
 /* floating proof cards — real job photos, glass-edged, at varied depths */
 .pcard {
   position: absolute; border-radius: 20px; overflow: hidden;
-  border: 1px solid rgba(255,255,255,0.14);
-  box-shadow: 0 30px 70px rgba(0,0,0,0.55), inset 0 1px 0 rgba(255,255,255,0.12);
-  background: #16161a; will-change: transform;
+  will-change: transform;
   transform: translateZ(var(--z,0px)) translate3d(0,0,0);
 }
 .pcard img { width: 100%; height: 100%; object-fit: cover; }
@@ -278,11 +276,10 @@ html.has-gl .bg-fallback { opacity: 0; }
 .phone {
   position: absolute; left: 50%; top: 50%; width: 236px; height: 480px;
   transform: translate(-50%,-50%) translateZ(80px);
-  border-radius: 34px; padding: 9px; background: linear-gradient(160deg,#26262b,#0e0e11);
-  box-shadow: 0 44px 90px rgba(0,0,0,0.6), inset 0 1px 0 rgba(255,255,255,0.18);
-  border: 1px solid rgba(255,255,255,0.1); will-change: transform;
+  border-radius: 30px; padding: 0; background: transparent;
+  box-shadow: 0 30px 60px rgba(0,0,0,0.45); will-change: transform;
 }
-.phone-screen { position:absolute; inset:9px; border-radius:26px; overflow:hidden; background:#111; }
+.phone-screen { position:absolute; inset:0; border-radius:30px; overflow:hidden; }
 .phone-slides { position:absolute; inset:0; }
 .phone-slide { position:absolute; inset:0; width:100%; height:100%; object-fit:cover; opacity:0; }
 .phone-slide.is-front { opacity:1; }
@@ -385,7 +382,7 @@ html.has-gl .bg-fallback { opacity: 0; }
 @keyframes scrollx { to { transform: translateX(-50%); } }
 .vchip {
   flex: none; position: relative; width: 208px; height: 268px; border-radius: var(--r-card);
-  overflow: hidden; border: 1px solid var(--line); box-shadow: 0 16px 40px rgba(0,0,0,0.4);
+  overflow: hidden;
 }
 .vchip img { width: 100%; height: 100%; object-fit: cover; transition: transform .8s var(--ease); }
 .vchip:hover img { transform: scale(1.08); }
