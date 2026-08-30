@@ -370,16 +370,19 @@
       var caption = document.getElementById("phoneTxt");
       if (layers.length < 2 || !caption) return;
       var BASE = "media/slides/";
+      // NOTE: keep these distinct from the four surrounding cards (roofing,
+      // landscaping, auto repair, painting) so the phone never duplicates a
+      // card next to it.
       var JOBS = [
         { img: "slide-01-plumbing.jpg",   q: "fix a faucet leak" },
         { img: "slide-02-electrical.jpg", q: "install a ceiling light" },
-        { img: "slide-03-repair.jpg",     q: "car service: replace the brakes" },
         { img: "slide-04-hvac.jpg",       q: "AC not blowing cold air" },
-        { img: "slide-05-landscaping.jpg",q: "redo my front yard" },
-        { img: "slide-11-painting.jpg",   q: "repaint the bedroom" },
         { img: "slide-12-detailing.jpg",  q: "detail my car inside and out" },
-        { img: "slide-13-roofing.jpg",    q: "fix a leaking roof" },
         { img: "slide-14-flooring.jpg",   q: "install hardwood floors" },
+        { img: "slide-06-tires.jpg",      q: "rotate and balance my tires" },
+        { img: "slide-08-appliances.jpg", q: "washer won't drain" },
+        { img: "slide-16-windows.jpg",    q: "replace a foggy window" },
+        { img: "slide-10-carpentry.jpg",  q: "build custom shelving" },
         { img: "slide-17-moto.jpg",       q: "motorcycle won't start" }
       ];
       JOBS.forEach(function (j) { var im = new Image(); im.src = BASE + j.img; });
