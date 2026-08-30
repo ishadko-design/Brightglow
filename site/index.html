@@ -3,186 +3,511 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Brightglow — get your job done right</title>
-  <meta name="description" content="See real photos of local pros' work before you hire. Get a price range, then start a spam-free chat with the ones that fit.">
-  <meta name="theme-color" content="#000000">
+  <title>Brightglow — see the work before you hire</title>
+  <meta name="description" content="Brightglow matches you to local pros who have demonstrably done your exact job — shown as real photos of that work, not star ratings or ads. One honest chat, no spam, no bidding wars.">
+  <meta name="theme-color" content="#08080b">
   <link rel="icon" type="image/png" href="favicon.png">
   <link rel="apple-touch-icon" href="apple-touch-icon.png">
-  <link rel="stylesheet" href="styles.css?v=27">
+  <link rel="canonical" href="https://brightglow.co/">
+  <meta property="og:title" content="Brightglow — see the work before you hire">
+  <meta property="og:description" content="Matched to local pros who've actually done your job, proven by real work photos. One spam-free chat — not an auction.">
+  <meta property="og:type" content="website">
+  <meta property="og:url" content="https://brightglow.co/">
+  <meta property="og:image" content="https://brightglow.co/media/slides/slide-01-plumbing.jpg">
+  <meta name="twitter:card" content="summary_large_image">
+  <link rel="preload" as="image" href="media/slides/slide-01-plumbing.jpg">
+  <script>document.documentElement.classList.add("js");</script>
+  <link rel="stylesheet" href="landing.css?v=1">
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "MobileApplication",
+    "name": "Brightglow",
+    "applicationCategory": "LifestyleApplication",
+    "operatingSystem": "iOS",
+    "description": "Brightglow matches you to local home and auto pros who have demonstrably done your exact job, proven by real photos of that work — then lets you start one spam-free chat.",
+    "offers": { "@type": "Offer", "price": "0", "priceCurrency": "USD" },
+    "publisher": { "@type": "Organization", "name": "Brightglow LLC", "url": "https://brightglow.co" }
+  }
+  </script>
 </head>
-<body class="landing">
-  <header class="topbar">
-    <a class="logo" href="/">
+<body>
+  <canvas id="aurora" aria-hidden="true"></canvas>
+  <div class="bg-fallback" aria-hidden="true"></div>
+  <div class="grain" aria-hidden="true"></div>
+  <div class="cursor" aria-hidden="true"></div>
+
+  <!-- ================= header ================= -->
+  <header class="topbar" id="topbar">
+    <a class="logo" href="/" aria-label="Brightglow home">
       <img class="appicon" src="media/appicon.png" alt="">
       <span class="wordmark">Brightglow</span>
     </a>
-    <a class="biz-link" href="business/">For businesses</a>
+    <a class="biz-link" href="/biz" data-magnetic>For businesses</a>
   </header>
 
-  <main class="column">
-    <h1 class="hero-h1">Get your job done right</h1>
-
-    <p class="hero-sub">
-      See real photos of local pros' work before you hire. Get a price range,
-      then start a spam-free chat with the ones that fit.
-    </p>
-
-    <!--
-      When the App Store listing is live, replace href="#" with the real URL,
-      e.g. https://apps.apple.com/app/id0000000000
-    -->
-    <a class="appstore-btn" href="#">
-      <svg width="20" height="24" viewBox="0 0 20 24" fill="currentColor" aria-hidden="true">
-        <path d="M16.36 12.77c-.03-2.9 2.37-4.29 2.48-4.36-1.35-1.97-3.45-2.24-4.2-2.27-1.79-.18-3.49 1.05-4.4 1.05-.9 0-2.3-1.02-3.79-1-1.95.03-3.74 1.13-4.74 2.87-2.02 3.5-.52 8.69 1.45 11.53.96 1.39 2.11 2.95 3.62 2.9 1.45-.06 2-.94 3.76-.94 1.75 0 2.25.94 3.79.91 1.57-.03 2.56-1.42 3.52-2.82 1.11-1.61 1.56-3.17 1.59-3.25-.04-.02-3.05-1.17-3.08-4.62zM13.46 4.25c.8-.97 1.34-2.32 1.19-3.66-1.15.05-2.55.77-3.38 1.74-.74.85-1.39 2.22-1.22 3.53 1.29.1 2.6-.65 3.41-1.61z"/>
-      </svg>
-      Download from App Store
-    </a>
-
-    <!-- Hero (Figma layout node 1599:5807). Phone centre; two 125×167 category
-         cards (Electrical, Landscaping) at the frame edges, dimmed to 20%. The
-         stage isn't clipped, so on web they show fully (not cut off); on a phone
-         they slip behind the screen edges. Only the phone photo rotates. -->
-    <section class="stage" aria-hidden="true">
-      <div class="peek peek-left">
-        <img alt="" src="media/slides/slide-02-electrical.jpg?v=2">
-      </div>
-      <div class="peek peek-right">
-        <img alt="" src="media/slides/slide-17-moto.jpg?v=2">
-      </div>
-
-      <div class="phone">
-        <!-- Two layers only: the carousel script sets their src and cross-slides
-             them (incoming from the left, outgoing to the right). The job list —
-             photo, category label, and the search text typed below — lives in the
-             script. -->
-        <div class="phone-slides">
-          <img class="phone-slide is-front" src="media/slides/slide-01-plumbing.jpg?v=2" alt="">
-          <img class="phone-slide" alt="">
+  <main>
+    <!-- ================= HERO ================= -->
+    <section class="hero" id="top">
+      <div class="wrap hero-inner">
+        <div class="hero-copy">
+          <span class="kicker enter e1">Home &amp; auto · Bay Area</span>
+          <h1 class="hero-h1">
+            <span class="line enter e2"><span>See the</span></span>
+            <span class="line enter e3"><span class="glow">work</span> <span>first.</span></span>
+          </h1>
+          <p class="hero-sub enter e4">
+            Stars are gamed. Leads are sold. Brightglow ranks local pros by one thing
+            you can't fake — <strong style="color:var(--ink-80);font-weight:400">real photos of the exact job they've already done.</strong>
+            Then you start one spam-free chat.
+          </p>
+          <div class="hero-cta enter e5">
+            <a class="btn" href="#" id="appstore" data-magnetic>
+              <svg width="20" height="24" viewBox="0 0 20 24" fill="currentColor" aria-hidden="true">
+                <path d="M16.36 12.77c-.03-2.9 2.37-4.29 2.48-4.36-1.35-1.97-3.45-2.24-4.2-2.27-1.79-.18-3.49 1.05-4.4 1.05-.9 0-2.3-1.02-3.79-1-1.95.03-3.74 1.13-4.74 2.87-2.02 3.5-.52 8.69 1.45 11.53.96 1.39 2.11 2.95 3.62 2.9 1.45-.06 2-.94 3.76-.94 1.75 0 2.25.94 3.79.91 1.57-.03 2.56-1.42 3.52-2.82 1.11-1.61 1.56-3.17 1.59-3.25-.04-.02-3.05-1.17-3.08-4.62zM13.46 4.25c.8-.97 1.34-2.32 1.19-3.66-1.15.05-2.55.77-3.38 1.74-.74.85-1.39 2.22-1.22 3.53 1.29.1 2.6-.65 3.41-1.61z"/>
+              </svg>
+              Download on the App Store
+            </a>
+          </div>
+          <p class="hero-note enter e5"><span class="dot"></span> Coming soon to iOS · Free to search</p>
         </div>
 
-        <div class="phone-status">
-          <span class="phone-time">9:41</span>
-          <svg class="phone-signals" viewBox="0 0 44 12" fill="#fff" aria-hidden="true">
-            <rect x="0"   y="7"   width="2.6" height="5"  rx="0.7"/>
-            <rect x="3.9" y="5"   width="2.6" height="7"  rx="0.7"/>
-            <rect x="7.8" y="3"   width="2.6" height="9"  rx="0.7"/>
-            <rect x="11.7" y="1"  width="2.6" height="11" rx="0.7"/>
-            <path fill="none" stroke="#fff" stroke-width="1.4" stroke-linecap="round"
-                  d="M18.4 4.2c2.4-2.1 6-2.1 8.4 0M20.2 6.4c1.3-1.1 3.6-1.1 4.9 0"/>
-            <circle cx="22.65" cy="9.1" r="1.15"/>
-            <rect x="31" y="1.6" width="10.5" height="8.8" rx="2.4" fill="none" stroke="#fff" stroke-width="1" opacity="0.5"/>
-            <rect x="32.2" y="2.8" width="8.1" height="6.4" rx="1.4"/>
-            <rect x="42.3" y="4.2" width="1.4" height="3.6" rx="0.7" opacity="0.5"/>
-          </svg>
+        <!-- interactive 3D proof cluster -->
+        <div class="stage enter e3" id="stage" aria-hidden="true">
+          <div class="stage-scene" id="scene">
+            <!-- floating proof cards (real work photos) -->
+            <div class="pcard" data-depth="1.15" style="width:150px;height:196px;left:2%;top:8%;--z:-40px;">
+              <img src="media/slides/slide-13-roofing.jpg" alt="" loading="lazy">
+              <span class="tag">Roofing</span>
+            </div>
+            <div class="pcard" data-depth="1.4" style="width:132px;height:172px;right:0;top:2%;--z:-90px;">
+              <img src="media/slides/slide-05-landscaping.jpg" alt="" loading="lazy">
+              <span class="tag">Landscaping</span>
+            </div>
+            <div class="pcard" data-depth="1.25" style="width:146px;height:190px;left:-2%;bottom:6%;--z:-60px;">
+              <img src="media/slides/slide-03-repair.jpg" alt="" loading="lazy">
+              <span class="tag">Auto repair</span>
+            </div>
+            <div class="pcard" data-depth="1.5" style="width:138px;height:180px;right:1%;bottom:2%;--z:-110px;">
+              <img src="media/slides/slide-11-painting.jpg" alt="" loading="lazy">
+              <span class="tag">Painting</span>
+            </div>
+
+            <!-- central phone showing the app, live carousel -->
+            <div class="phone" data-depth="0.35" id="phone">
+              <div class="phone-notch"></div>
+              <div class="phone-screen">
+                <div class="phone-slides">
+                  <img class="phone-slide is-front" src="media/slides/slide-01-plumbing.jpg" alt="">
+                  <img class="phone-slide" alt="">
+                </div>
+                <div class="phone-status">
+                  <span>9:41</span>
+                  <svg width="44" height="12" viewBox="0 0 44 12" fill="#fff" aria-hidden="true">
+                    <rect x="0" y="7" width="2.6" height="5" rx="0.7"/><rect x="3.9" y="5" width="2.6" height="7" rx="0.7"/>
+                    <rect x="7.8" y="3" width="2.6" height="9" rx="0.7"/><rect x="11.7" y="1" width="2.6" height="11" rx="0.7"/>
+                    <path fill="none" stroke="#fff" stroke-width="1.4" stroke-linecap="round" d="M18.4 4.2c2.4-2.1 6-2.1 8.4 0M20.2 6.4c1.3-1.1 3.6-1.1 4.9 0"/>
+                    <circle cx="22.65" cy="9.1" r="1.15"/>
+                    <rect x="31" y="1.6" width="10.5" height="8.8" rx="2.4" fill="none" stroke="#fff" stroke-width="1" opacity="0.5"/>
+                    <rect x="32.2" y="2.8" width="8.1" height="6.4" rx="1.4"/><rect x="42.3" y="4.2" width="1.4" height="3.6" rx="0.7" opacity="0.5"/>
+                  </svg>
+                </div>
+                <div class="phone-input">
+                  <span class="txt" id="phoneTxt">fix a faucet leak</span>
+                  <span class="send" aria-hidden="true">
+                    <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+                      <path d="M3 8h9M8.5 3.8 12.7 8l-4.2 4.2" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                    </svg>
+                  </span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <a class="scroll-cue" href="#problem" aria-label="Scroll down">
+        <span>Scroll</span>
+        <span class="rail"></span>
+      </a>
+    </section>
+
+    <!-- ================= THE PROBLEM ================= -->
+    <section class="section" id="problem">
+      <div class="wrap">
+        <p class="kicker reveal">The trust problem</p>
+        <h2 class="statement reveal d1">Everyone's&nbsp;4.7&nbsp;stars. <em>None of it tells you who's good.</em></h2>
+        <p class="lede reveal d2">
+          Reviews are inflated and gamed. Lead-gen apps sell your one request to eight
+          businesses and bury you in cold calls. The result is the same on both sides of
+          the house and the driveway — you still can't tell who to trust.
+        </p>
+
+        <div class="stats">
+          <div class="stat reveal d1">
+            <div class="n">67%</div>
+            <div class="l">of people distrust online reviews because so many are fake.</div>
+          </div>
+          <div class="stat reveal d2">
+            <div class="n">3–8</div>
+            <div class="l">businesses each lead-gen request is sold to — then the phone won't stop.</div>
+          </div>
+          <div class="stat reveal d3">
+            <div class="n">2 in 3</div>
+            <div class="l">drivers don't trust auto shops to charge fairly or do only needed work.</div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ================= PROOF OVER REPUTATION ================= -->
+    <section class="section" id="proof">
+      <div class="wrap">
+        <div class="proof-head">
+          <div>
+            <p class="kicker reveal">Proof over reputation</p>
+            <h2 class="reveal d1">We rank pros by whether they've&nbsp;<span class="glow">actually done your job.</span></h2>
+          </div>
+          <p class="reveal d2">
+            Not a star average everyone shares. Not who paid the most for the lead.
+            The photo of the finished work is the proof — and it's hard to fake.
+          </p>
         </div>
 
-        <div class="phone-input">
-          <span class="phone-input-text">fix a faucet leak</span>
-          <span class="phone-input-send" aria-hidden="true">
-            <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
-              <path d="M3 8h9M8.5 3.8 12.7 8l-4.2 4.2" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+        <div class="gallery" id="gallery">
+          <figure class="gtile reveal"><img src="media/slides/slide-01-plumbing.jpg" alt="Finished plumbing repair by a local pro" loading="lazy"><figcaption>Plumbing · 0.8 mi</figcaption></figure>
+          <figure class="gtile reveal d1"><img src="media/slides/slide-14-flooring.jpg" alt="Newly installed hardwood flooring" loading="lazy"><figcaption>Flooring · 1.2 mi</figcaption></figure>
+          <figure class="gtile reveal d2"><img src="media/slides/slide-09-body.jpg" alt="Repaired and repainted car body panel" loading="lazy"><figcaption>Body &amp; paint · 2.0 mi</figcaption></figure>
+          <figure class="gtile reveal d3"><img src="media/slides/slide-02-electrical.jpg" alt="Completed electrical work" loading="lazy"><figcaption>Electrical · 1.5 mi</figcaption></figure>
+          <figure class="gtile reveal"><img src="media/slides/slide-13-roofing.jpg" alt="Repaired roof section" loading="lazy"><figcaption>Roofing · 3.1 mi</figcaption></figure>
+          <figure class="gtile reveal d1"><img src="media/slides/slide-04-hvac.jpg" alt="Installed HVAC unit" loading="lazy"><figcaption>HVAC · 0.9 mi</figcaption></figure>
+          <figure class="gtile reveal d2"><img src="media/slides/slide-12-detailing.jpg" alt="Freshly detailed car interior" loading="lazy"><figcaption>Detailing · 1.7 mi</figcaption></figure>
+          <figure class="gtile reveal d3"><img src="media/slides/slide-10-carpentry.jpg" alt="Custom carpentry build" loading="lazy"><figcaption>Carpentry · 2.4 mi</figcaption></figure>
+        </div>
+      </div>
+    </section>
+
+    <!-- ================= HOW IT WORKS ================= -->
+    <section class="section" id="how">
+      <div class="wrap">
+        <p class="kicker reveal">How it works</p>
+        <h2 class="statement reveal d1" style="max-width:24ch">Three steps. No wall of forms, no auction.</h2>
+
+        <div class="steps">
+          <div class="step reveal d1">
+            <div class="num" aria-hidden="true"></div>
+            <h3>Describe the job</h3>
+            <p>Snap a photo or type it in plain words. A short chat scopes exactly what you need — it stops the moment the match is clear, not after twenty questions.</p>
+          </div>
+          <div class="step reveal d2">
+            <div class="num" aria-hidden="true"></div>
+            <h3>See the proof</h3>
+            <p>Get a short, ranked set of local pros who've done your exact job, each led by a real photo of that work — plus an honest price range where we have the data.</p>
+          </div>
+          <div class="step reveal d3">
+            <div class="num" aria-hidden="true"></div>
+            <h3>Message the one you pick</h3>
+            <p>You start one conversation with the business you choose. No shared requests, no bidding war, no eight phones ringing back. Just a clear, durable thread.</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ================= TWO WORLDS (verticals marquee) ================= -->
+    <section class="section" id="worlds">
+      <div class="wrap">
+        <div class="worlds-head">
+          <h2 class="reveal">One app for the <span class="glow">home</span> and the <span class="glow">driveway.</span></h2>
+          <p class="reveal d1">Contractors and trades, plus auto &amp; moto repair, tires, detailing, body &amp; glass — matched the same honest way.</p>
+        </div>
+      </div>
+
+      <!-- full-bleed marquee rows -->
+      <div class="marquee reveal d1" aria-label="Home &amp; auto service categories">
+        <div class="track" id="trackA">
+          <div class="vchip"><img src="media/slides/slide-01-plumbing.jpg" alt="" loading="lazy"><span>Plumbing</span></div>
+          <div class="vchip"><img src="media/slides/slide-02-electrical.jpg" alt="" loading="lazy"><span>Electrical</span></div>
+          <div class="vchip"><img src="media/slides/slide-04-hvac.jpg" alt="" loading="lazy"><span>HVAC</span></div>
+          <div class="vchip"><img src="media/slides/slide-05-landscaping.jpg" alt="" loading="lazy"><span>Landscaping</span></div>
+          <div class="vchip"><img src="media/slides/slide-11-painting.jpg" alt="" loading="lazy"><span>Painting</span></div>
+          <div class="vchip"><img src="media/slides/slide-13-roofing.jpg" alt="" loading="lazy"><span>Roofing</span></div>
+          <div class="vchip"><img src="media/slides/slide-14-flooring.jpg" alt="" loading="lazy"><span>Flooring</span></div>
+          <div class="vchip"><img src="media/slides/slide-10-carpentry.jpg" alt="" loading="lazy"><span>Carpentry</span></div>
+          <div class="vchip"><img src="media/slides/slide-16-windows.jpg" alt="" loading="lazy"><span>Windows &amp; doors</span></div>
+        </div>
+      </div>
+      <div class="marquee reveal d2" aria-hidden="true">
+        <div class="track rev" id="trackB">
+          <div class="vchip"><img src="media/slides/slide-03-repair.jpg" alt="" loading="lazy"><span>Auto repair</span></div>
+          <div class="vchip"><img src="media/slides/slide-06-tires.jpg" alt="" loading="lazy"><span>Tires</span></div>
+          <div class="vchip"><img src="media/slides/slide-12-detailing.jpg" alt="" loading="lazy"><span>Detailing</span></div>
+          <div class="vchip"><img src="media/slides/slide-09-body.jpg" alt="" loading="lazy"><span>Body &amp; paint</span></div>
+          <div class="vchip"><img src="media/slides/slide-15-autoglass.jpg" alt="" loading="lazy"><span>Auto glass</span></div>
+          <div class="vchip"><img src="media/slides/slide-17-moto.jpg" alt="" loading="lazy"><span>Motorcycle</span></div>
+          <div class="vchip"><img src="media/slides/slide-07-pest.jpg" alt="" loading="lazy"><span>Pest control</span></div>
+          <div class="vchip"><img src="media/slides/slide-08-appliances.jpg" alt="" loading="lazy"><span>Appliances</span></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ================= COMPARE (anti-auction) ================= -->
+    <section class="section" id="compare">
+      <div class="wrap">
+        <p class="kicker reveal">One match, not an auction</p>
+        <h2 class="statement reveal d1" style="max-width:22ch">The opposite of a lead-gen directory.</h2>
+
+        <div class="compare">
+          <div class="col old reveal d1">
+            <h3>The old way</h3>
+            <ul>
+              <li><span class="mk">✕</span> Your request is sold to 3–8 businesses at once</li>
+              <li><span class="mk">✕</span> Cold calls and texts until you give up</li>
+              <li><span class="mk">✕</span> Ranked by ad spend and a gamed star score</li>
+              <li><span class="mk">✕</span> Storefront stock photos, never the real work</li>
+              <li><span class="mk">✕</span> Guessed or scraped prices you can't trust</li>
+            </ul>
+          </div>
+          <div class="col new reveal d2">
+            <h3>With Brightglow</h3>
+            <ul>
+              <li><span class="mk">✓</span> A short, ranked set of genuinely relevant pros</li>
+              <li><span class="mk">✓</span> You start one chat — nobody cold-calls you</li>
+              <li><span class="mk">✓</span> Ranked on proof they've done your exact job</li>
+              <li><span class="mk">✓</span> Real photos of that work lead every match</li>
+              <li><span class="mk">✓</span> An honest price range, or a clean "not yet"</li>
+            </ul>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ================= FINAL CTA ================= -->
+    <section class="finale" id="get">
+      <div class="wrap">
+        <h2 class="reveal">Get your job<br>done right.</h2>
+        <p class="reveal d1">See who's actually done your job — then message the one you pick. That's the whole thing.</p>
+        <div class="hero-cta reveal d2">
+          <a class="btn" href="#" data-magnetic>
+            <svg width="20" height="24" viewBox="0 0 20 24" fill="currentColor" aria-hidden="true">
+              <path d="M16.36 12.77c-.03-2.9 2.37-4.29 2.48-4.36-1.35-1.97-3.45-2.24-4.2-2.27-1.79-.18-3.49 1.05-4.4 1.05-.9 0-2.3-1.02-3.79-1-1.95.03-3.74 1.13-4.74 2.87-2.02 3.5-.52 8.69 1.45 11.53.96 1.39 2.11 2.95 3.62 2.9 1.45-.06 2-.94 3.76-.94 1.75 0 2.25.94 3.79.91 1.57-.03 2.56-1.42 3.52-2.82 1.11-1.61 1.56-3.17 1.59-3.25-.04-.02-3.05-1.17-3.08-4.62zM13.46 4.25c.8-.97 1.34-2.32 1.19-3.66-1.15.05-2.55.77-3.38 1.74-.74.85-1.39 2.22-1.22 3.53 1.29.1 2.6-.65 3.41-1.61z"/>
             </svg>
-          </span>
+            Download on the App Store
+          </a>
+          <a class="btn btn-ghost" href="/biz" data-magnetic>I'm a business</a>
         </div>
       </div>
     </section>
   </main>
 
-  <footer class="landing-footer">
-    <a class="footer-terms" href="terms.html">Terms of Service</a>
-    <a href="mailto:hello@brightglow.co">hello@brightglow.co</a>
-    <div class="copyright">© 2026 Brightglow LLC</div>
+  <!-- ================= FOOTER ================= -->
+  <footer class="site-footer">
+    <div class="wrap footer-grid">
+      <a class="logo" href="/" aria-label="Brightglow home">
+        <img class="appicon" src="media/appicon.png" alt="">
+        <span class="wordmark">Brightglow</span>
+      </a>
+      <nav class="footer-links">
+        <a href="/biz">For businesses</a>
+        <a href="terms.html">Terms</a>
+        <a href="privacy.html">Privacy</a>
+        <a href="mailto:hello@brightglow.co">hello@brightglow.co</a>
+      </nav>
+      <div class="footer-copy">© 2026 Brightglow LLC · Proof over reputation.</div>
+    </div>
   </footer>
 
   <script>
-    // Photo carousel: each tick the LEFT card's job slides into the phone from the
-    // left, the phone's current job slides out to the right (onto the right card),
-    // and a new job appears on the left — left → centre → right. The search field
-    // retypes to a deliberate, human-sounding request for the centred job. Honors
-    // reduced-motion (holds on the first job, no rotation).
-    (function () {
-      var stage = document.querySelector(".stage");
-      if (!stage) return;
-      var phone = stage.querySelector(".phone");
-      var layers = [].slice.call(phone.querySelectorAll(".phone-slide"));
-      var caption = phone.querySelector(".phone-input-text");
-      var leftPeek = stage.querySelector(".peek-left");
-      var rightPeek = stage.querySelector(".peek-right");
-      if (layers.length < 2 || !caption || !leftPeek || !rightPeek) return;
+  (function () {
+    "use strict";
+    var reduce = matchMedia("(prefers-reduced-motion: reduce)").matches;
+    document.body.classList.add("loaded");
 
-      var BASE = "media/slides/", V = "?v=2";
-      // photo · short category (the side-card label) · the search text typed below.
-      // Only the crisp, card-backed photos are listed here; the four older upscaled
-      // slides (tires, appliances, body, auto glass) were dropped from the cycle.
-      var JOBS = [
-        { img: "slide-01-plumbing.jpg",    cat: "Plumbing",        q: "fix a faucet leak" },
-        { img: "slide-02-electrical.jpg",  cat: "Electrical",      q: "install a ceiling light" },
-        { img: "slide-03-repair.jpg",      cat: "Auto repair",     q: "car service: how to replace oil" },
-        { img: "slide-04-hvac.jpg",        cat: "HVAC",            q: "AC not blowing cold air" },
-        { img: "slide-05-landscaping.jpg", cat: "Landscaping",     q: "redo my front yard" },
-        { img: "slide-07-pest.jpg",        cat: "Pest control",    q: "get rid of ants in the kitchen" },
-        { img: "slide-10-carpentry.jpg",   cat: "Carpentry",       q: "build custom shelves" },
-        { img: "slide-11-painting.jpg",    cat: "Painting",        q: "repaint the bedroom" },
-        { img: "slide-12-detailing.jpg",   cat: "Auto detailing",  q: "detail my car inside and out" },
-        { img: "slide-13-roofing.jpg",     cat: "Roofing",         q: "fix a leaking roof" },
-        { img: "slide-14-flooring.jpg",    cat: "Flooring",        q: "install hardwood floors" },
-        { img: "slide-16-windows.jpg",     cat: "Windows & doors", q: "install sliding doors" },
-        { img: "slide-17-moto.jpg",        cat: "Motorcycle",      q: "motorcycle won't start" }
-      ];
-      var n = JOBS.length;
-      var mod = function (k) { return ((k % n) + n) % n; };
-      var url = function (k) { return BASE + JOBS[mod(k)].img + V; };
+    /* ---------- 1. WebGL aurora backdrop (hand-written shader, no deps) ---------- */
+    (function aurora() {
+      if (reduce) return;
+      var canvas = document.getElementById("aurora");
+      var gl = canvas.getContext("webgl") || canvas.getContext("experimental-webgl");
+      if (!gl) return;
+      document.documentElement.classList.add("has-gl");
 
-      // Preload every photo so a rotation never flashes an unloaded frame.
-      JOBS.forEach(function (j) { var im = new Image(); im.src = BASE + j.img + V; });
+      var frag = [
+        "precision highp float;",
+        "uniform vec2 u_res; uniform float u_time; uniform vec2 u_m;",
+        "float hash(vec2 p){p=fract(p*vec2(123.34,456.21));p+=dot(p,p+45.32);return fract(p.x*p.y);}",
+        "float noise(vec2 p){vec2 i=floor(p),f=fract(p);float a=hash(i),b=hash(i+vec2(1.,0.)),c=hash(i+vec2(0.,1.)),d=hash(i+vec2(1.,1.));vec2 u=f*f*(3.-2.*f);return mix(mix(a,b,u.x),mix(c,d,u.x),u.y);}",
+        "float fbm(vec2 p){float v=0.,a=.5;for(int i=0;i<5;i++){v+=a*noise(p);p=p*2.02;a*=.5;}return v;}",
+        "void main(){",
+        "  vec2 uv=gl_FragCoord.xy/u_res.xy;",
+        "  vec2 p=uv*vec2(u_res.x/u_res.y,1.0)*2.1;",
+        "  float t=u_time*0.04;",
+        "  vec2 q=vec2(fbm(p+vec2(0.,t)+u_m*0.3),fbm(p+vec2(5.2,-t)));",
+        "  vec2 r=vec2(fbm(p+2.0*q+vec2(1.7,9.2)+0.15*t),fbm(p+2.0*q+vec2(8.3,2.8)-0.13*t));",
+        "  float f=fbm(p+2.0*r);",
+        "  vec3 base=vec3(0.03,0.03,0.045);",
+        "  vec3 amber=vec3(1.0,0.63,0.18);",
+        "  vec3 blue=vec3(0.02,0.10,0.42);",
+        "  vec3 col=base;",
+        "  col=mix(col,blue,smoothstep(0.35,1.0,f)*0.42*(1.0-uv.x*0.5)*(uv.y*0.7+0.15));",
+        "  float amt=smoothstep(0.45,1.12,r.x)*(0.24+0.76*uv.x)*(0.35+0.65*(1.0-uv.y));",
+        "  col=mix(col,amber,amt*0.55);",
+        "  float glow=smoothstep(1.05,0.02,distance(uv,vec2(0.9,0.94)));",
+        "  col+=amber*glow*(0.18+0.16*f);",
+        "  col*=1.0-0.30*smoothstep(0.1,0.9,distance(uv,vec2(0.4,0.5)));",
+        "  col*=1.0-0.4*length(uv-0.5);",
+        "  col+=(hash(gl_FragCoord.xy+fract(u_time))-0.5)*0.03;",
+        "  gl_FragColor=vec4(max(col,0.0),1.0);",
+        "}"
+      ].join("\n");
 
-      var leftImg = leftPeek.querySelector("img");
-      var rightImg = rightPeek.querySelector("img");
-
-      var i = 0;      // centred job
-      var front = 0;  // which phone layer currently shows the centred job
-
-      function paintPeeks() {
-        // left = the job about to enter the phone; right = the one just left it.
-        leftImg.src = url(i + 1);
-        rightImg.src = url(i - 1);
+      function sh(t, s) { var o = gl.createShader(t); gl.shaderSource(o, s); gl.compileShader(o); return o; }
+      var prog = gl.createProgram();
+      gl.attachShader(prog, sh(gl.VERTEX_SHADER, "attribute vec2 a;void main(){gl_Position=vec4(a,0.,1.);}"));
+      gl.attachShader(prog, sh(gl.FRAGMENT_SHADER, frag));
+      gl.linkProgram(prog); gl.useProgram(prog);
+      var buf = gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER, buf);
+      gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1,-1, 3,-1, -1,3]), gl.STATIC_DRAW);
+      var loc = gl.getAttribLocation(prog, "a"); gl.enableVertexAttribArray(loc);
+      gl.vertexAttribPointer(loc, 2, gl.FLOAT, false, 0, 0);
+      var uRes = gl.getUniformLocation(prog, "u_res"),
+          uTime = gl.getUniformLocation(prog, "u_time"),
+          uM = gl.getUniformLocation(prog, "u_m");
+      var mx = 0, my = 0;
+      function resize() {
+        var dpr = Math.min(devicePixelRatio || 1, 1.5);
+        canvas.width = innerWidth * dpr; canvas.height = innerHeight * dpr;
+        gl.viewport(0, 0, canvas.width, canvas.height); gl.uniform2f(uRes, canvas.width, canvas.height);
       }
+      addEventListener("resize", resize, { passive: true }); resize();
+      addEventListener("mousemove", function (e) { mx = e.clientX / innerWidth - 0.5; my = e.clientY / innerHeight - 0.5; }, { passive: true });
 
-      layers[front].src = url(i);
-      caption.textContent = JOBS[i].q;
-      paintPeeks();
+      var start = performance.now(), raf, running = true;
+      function frame(now) { gl.uniform1f(uTime, (now - start) / 1000); gl.uniform2f(uM, mx, my); gl.drawArrays(gl.TRIANGLES, 0, 3); raf = requestAnimationFrame(frame); }
+      raf = requestAnimationFrame(frame);
+      document.addEventListener("visibilitychange", function () {
+        if (document.hidden) { cancelAnimationFrame(raf); running = false; }
+        else if (!running) { start = performance.now() - 0; running = true; raf = requestAnimationFrame(frame); }
+      });
+    })();
 
-      if (matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+    /* ---------- 2. scroll-reveal ---------- */
+    (function reveal() {
+      var els = [].slice.call(document.querySelectorAll(".reveal"));
+      if (reduce || !("IntersectionObserver" in window)) { els.forEach(function (e) { e.classList.add("in"); }); return; }
+      var io = new IntersectionObserver(function (ents) {
+        ents.forEach(function (en) { if (en.isIntersecting) { en.target.classList.add("in"); io.unobserve(en.target); } });
+      }, { rootMargin: "0px 0px -12% 0px", threshold: 0.12 });
+      els.forEach(function (e) { io.observe(e); });
+    })();
 
-      var HOLD = 3600; // ms each job stays centred
-      function advance() {
+    /* ---------- 3. sticky header state ---------- */
+    (function stuck() {
+      var bar = document.getElementById("topbar");
+      var onScroll = function () { bar.classList.toggle("is-stuck", scrollY > 24); };
+      addEventListener("scroll", onScroll, { passive: true }); onScroll();
+    })();
+
+    /* ---------- 4. hero 3D parallax (cursor + gyro) ---------- */
+    (function parallax() {
+      if (reduce) return;
+      var scene = document.getElementById("scene");
+      var stage = document.getElementById("stage");
+      var floats = [].slice.call(document.querySelectorAll(".pcard, #phone"));
+      if (!scene) return;
+      var tx = 0, ty = 0, cx = 0, cy = 0, active = false;
+      function loop() {
+        cx += (tx - cx) * 0.07; cy += (ty - cy) * 0.07;
+        scene.style.setProperty("--rx", (cx * 9).toFixed(2) + "deg");
+        scene.style.setProperty("--ry", (-cy * 9).toFixed(2) + "deg");
+        floats.forEach(function (el) {
+          var d = parseFloat(el.dataset.depth) || 0;
+          var base = el.id === "phone" ? "translate(-50%,-50%)" : "";
+          var z = getComputedStyle(el).getPropertyValue("--z") || "0px";
+          var zt = el.id === "phone" ? " translateZ(80px)" : " translateZ(" + z.trim() + ")";
+          el.style.transform = base + " translate3d(" + (cx * d * 24).toFixed(1) + "px," + (cy * d * 24).toFixed(1) + "px,0)" + zt;
+        });
+        if (active) requestAnimationFrame(loop);
+      }
+      function kick() { if (!active) { active = true; requestAnimationFrame(loop); } }
+      // only run while the hero is on screen
+      var vis = true;
+      if ("IntersectionObserver" in window) {
+        new IntersectionObserver(function (e) { vis = e[0].isIntersecting; if (vis) kick(); else active = false; }, { threshold: 0.05 }).observe(stage);
+      }
+      addEventListener("mousemove", function (e) { tx = (e.clientX / innerWidth - 0.5) * 2; ty = (e.clientY / innerHeight - 0.5) * 2; if (vis) kick(); }, { passive: true });
+      addEventListener("deviceorientation", function (e) {
+        if (e.gamma == null) return;
+        tx = Math.max(-1, Math.min(1, e.gamma / 26)); ty = Math.max(-1, Math.min(1, (e.beta - 45) / 26)); if (vis) kick();
+      }, { passive: true });
+      kick();
+    })();
+
+    /* ---------- 5. custom cursor + magnetic targets ---------- */
+    (function cursor() {
+      if (reduce || matchMedia("(hover: none)").matches) return;
+      var dot = document.querySelector(".cursor");
+      var x = innerWidth / 2, y = innerHeight / 2, tx = x, ty = y;
+      addEventListener("mousemove", function (e) { tx = e.clientX; ty = e.clientY; dot.style.opacity = "1"; }, { passive: true });
+      (function ren() { x += (tx - x) * 0.2; y += (ty - y) * 0.2; dot.style.transform = "translate(" + x + "px," + y + "px)"; requestAnimationFrame(ren); })();
+
+      var mags = [].slice.call(document.querySelectorAll("[data-magnetic]"));
+      mags.forEach(function (el) {
+        el.addEventListener("mouseenter", function () { dot.classList.add("is-active"); });
+        el.addEventListener("mouseleave", function () { dot.classList.remove("is-active"); el.style.transform = ""; });
+        el.addEventListener("mousemove", function (e) {
+          var r = el.getBoundingClientRect();
+          var mx = (e.clientX - (r.left + r.width / 2)) / r.width;
+          var my = (e.clientY - (r.top + r.height / 2)) / r.height;
+          el.style.transform = "translate(" + (mx * 12).toFixed(1) + "px," + (my * 12).toFixed(1) + "px)";
+        });
+      });
+    })();
+
+    /* ---------- 6. hero phone carousel ---------- */
+    (function carousel() {
+      var phone = document.getElementById("phone");
+      if (!phone) return;
+      var layers = [].slice.call(phone.querySelectorAll(".phone-slide"));
+      var caption = document.getElementById("phoneTxt");
+      if (layers.length < 2 || !caption) return;
+      var BASE = "media/slides/";
+      var JOBS = [
+        { img: "slide-01-plumbing.jpg",   q: "fix a faucet leak" },
+        { img: "slide-02-electrical.jpg", q: "install a ceiling light" },
+        { img: "slide-03-repair.jpg",     q: "car service: replace the brakes" },
+        { img: "slide-04-hvac.jpg",       q: "AC not blowing cold air" },
+        { img: "slide-05-landscaping.jpg",q: "redo my front yard" },
+        { img: "slide-11-painting.jpg",   q: "repaint the bedroom" },
+        { img: "slide-12-detailing.jpg",  q: "detail my car inside and out" },
+        { img: "slide-13-roofing.jpg",    q: "fix a leaking roof" },
+        { img: "slide-14-flooring.jpg",   q: "install hardwood floors" },
+        { img: "slide-17-moto.jpg",       q: "motorcycle won't start" }
+      ];
+      JOBS.forEach(function (j) { var im = new Image(); im.src = BASE + j.img; });
+      var i = 0, front = 0;
+      layers[0].src = BASE + JOBS[0].img; caption.textContent = JOBS[0].q;
+      if (reduce) return;
+      setInterval(function () {
         var prev = front, next = 1 - front;
-        i = mod(i + 1);
-
-        layers[next].src = url(i);
-        layers[next].classList.remove("is-front", "outgoing");
-        layers[next].classList.add("incoming");   // new centre slides in from the left
-        layers[prev].classList.remove("is-front", "incoming");
-        layers[prev].classList.add("outgoing");    // old centre slides out to the right
-        setTimeout(function () {
-          layers[next].classList.remove("incoming");
-          layers[next].classList.add("is-front");
-          layers[prev].classList.remove("outgoing");
-        }, 620);
+        i = (i + 1) % JOBS.length;
+        layers[next].src = BASE + JOBS[i].img;
+        layers[next].classList.remove("is-front", "outgoing"); layers[next].classList.add("incoming");
+        layers[prev].classList.remove("is-front", "incoming"); layers[prev].classList.add("outgoing");
+        setTimeout(function () { layers[next].classList.remove("incoming"); layers[next].classList.add("is-front"); layers[prev].classList.remove("outgoing"); }, 600);
         front = next;
-
-        // retype the request under cover of the motion
         caption.style.opacity = "0";
         setTimeout(function () { caption.textContent = JOBS[i].q; caption.style.opacity = "1"; }, 240);
-
-        // side cards take their new neighbours, with the swap animation restarted
-        leftPeek.classList.remove("swap"); rightPeek.classList.remove("swap");
-        void leftPeek.offsetWidth;         // reflow so the animation replays
-        paintPeeks();
-        leftPeek.classList.add("swap"); rightPeek.classList.add("swap");
-      }
-      setInterval(advance, HOLD);
+      }, 3600);
     })();
+
+    /* ---------- 7. duplicate marquee tracks for seamless loop ---------- */
+    (function marquee() {
+      ["trackA", "trackB"].forEach(function (id) {
+        var t = document.getElementById(id);
+        if (!t) return;
+        t.innerHTML += t.innerHTML; // second copy → -50% translate loops seamlessly
+      });
+    })();
+  })();
   </script>
 </body>
 </html>
