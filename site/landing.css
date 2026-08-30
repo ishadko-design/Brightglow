@@ -181,7 +181,7 @@ html.has-gl .bg-fallback { opacity: 0; }
   gap: 10px; height: 56px; padding: 0 28px; border: 0; cursor: pointer;
   border-radius: var(--r-pill); font-family: var(--disp); font-weight: 700; font-size: 17px;
   color: #fff; white-space: nowrap;
-  background: linear-gradient(100deg, #0039f5 0%, #2f5bff 55%, #00218f 100%);
+  background: linear-gradient(100deg, #0039f5 0%, #2f5bff 60%, #1a44d6 100%);
   box-shadow: 0 10px 34px rgba(0,57,245,0.42), inset 0 1px 0 rgba(255,255,255,0.25);
   transition: transform .2s var(--ease), box-shadow .35s var(--ease);
   overflow: hidden;
