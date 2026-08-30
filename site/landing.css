@@ -221,9 +221,11 @@ html.has-gl .bg-fallback { opacity: 0; }
 .hero-h1 {
   margin-top: 22px;
   font-family: var(--disp); font-weight: 800;
-  font-size: clamp(44px, 8.2vw, 92px); line-height: 0.98; letter-spacing: -0.035em;
+  font-size: clamp(44px, 8.2vw, 92px); line-height: 1.02; letter-spacing: -0.035em;
 }
-.hero-h1 .line { display: block; overflow: hidden; }
+/* padding gives descenders (j, g, y) and the period room; the matching
+   negative margin keeps the visual line spacing tight. */
+.hero-h1 .line { display: block; padding-bottom: 0.12em; margin-bottom: -0.08em; }
 .hero-h1 .line > span { display: inline-block; }
 /* amber gradient accent word — used across headings */
 .glow {
