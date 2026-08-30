@@ -276,10 +276,11 @@ html.has-gl .bg-fallback { opacity: 0; }
 .phone {
   position: absolute; left: 50%; top: 50%; width: 236px; height: 480px;
   transform: translate(-50%,-50%) translateZ(80px);
-  border-radius: 30px; padding: 0; background: transparent;
-  box-shadow: 0 30px 60px rgba(0,0,0,0.45); will-change: transform;
+  border-radius: 34px; padding: 9px; background: linear-gradient(160deg,#26262b,#0e0e11);
+  box-shadow: 0 44px 90px rgba(0,0,0,0.6), inset 0 1px 0 rgba(255,255,255,0.18);
+  border: 1px solid rgba(255,255,255,0.1); will-change: transform;
 }
-.phone-screen { position:absolute; inset:0; border-radius:30px; overflow:hidden; }
+.phone-screen { position:absolute; inset:9px; border-radius:26px; overflow:hidden; background:#111; }
 .phone-slides { position:absolute; inset:0; }
 .phone-slide { position:absolute; inset:0; width:100%; height:100%; object-fit:cover; opacity:0; }
 .phone-slide.is-front { opacity:1; }
