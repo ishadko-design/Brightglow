@@ -227,11 +227,16 @@ html.has-gl .bg-fallback { opacity: 0; }
    negative margin keeps the visual line spacing tight. */
 .hero-h1 .line { display: block; padding-bottom: 0.12em; margin-bottom: -0.08em; }
 .hero-h1 .line > span { display: inline-block; }
-/* amber gradient accent word — used across headings */
+/* amber gradient accent word — used across headings.
+   display:inline-block + padding-bottom gives the background-clip:text box
+   room for descenders (g, y) and the period; the negative margin cancels the
+   layout impact so line spacing is unchanged. */
 .glow {
+  display: inline-block;
+  padding-bottom: 0.14em;
+  margin-bottom: -0.14em;
   background: linear-gradient(92deg, var(--amber-lite), #ffd98a 60%, var(--amber));
   -webkit-background-clip: text; background-clip: text; color: transparent;
-  position: relative;
 }
 .hero-sub {
   margin-top: 26px; max-width: 30em; font-size: clamp(16px, 1.8vw, 19px);
@@ -372,9 +377,11 @@ html.has-gl .bg-fallback { opacity: 0; }
 .step p { margin-top: 12px; color: var(--ink-60); font-size: 15.5px; line-height: 1.6; }
 
 /* ====================== section: verticals marquee ====================== */
-.worlds-head { display:flex; flex-wrap:wrap; gap:20px 40px; align-items:flex-end; justify-content:space-between; }
-.worlds-head h2 { font-size: clamp(30px,5vw,60px); font-weight:800; letter-spacing:-0.03em; max-width: 16ch; }
-.worlds-head p { max-width: 32ch; color: var(--ink-60); }
+/* description on top, title beneath (column-reverse keeps the h2 first in the
+   DOM for hierarchy while showing it under the paragraph). */
+.worlds-head { display:flex; flex-direction: column-reverse; align-items:flex-start; gap:16px; }
+.worlds-head h2 { font-size: clamp(30px,5vw,60px); font-weight:800; letter-spacing:-0.03em; max-width: 20ch; }
+.worlds-head p { max-width: 54ch; color: var(--ink-60); }
 .marquee { margin-top: 52px; position: relative; overflow: hidden;
   -webkit-mask-image: linear-gradient(90deg, transparent, #000 8%, #000 92%, transparent);
   mask-image: linear-gradient(90deg, transparent, #000 8%, #000 92%, transparent); }
