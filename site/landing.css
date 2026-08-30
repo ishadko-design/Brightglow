@@ -287,13 +287,6 @@ html.has-gl .bg-fallback { opacity: 0; }
 .phone-slide.outgoing { z-index:2; animation: pOut .6s var(--ease) both; }
 @keyframes pIn  { from{opacity:0; transform:translateX(-14%) scale(1.04)} to{opacity:1; transform:none} }
 @keyframes pOut { from{opacity:1; transform:none} to{opacity:0; transform:translateX(14%) scale(1.04)} }
-.phone-status {
-  position:absolute; top:0; left:0; right:0; z-index:5; display:flex; align-items:center;
-  justify-content:space-between; padding:12px 18px 16px;
-  background:linear-gradient(180deg, rgba(0,0,0,0.4), transparent);
-  font-family:"SF Pro Text",system-ui,sans-serif; font-weight:600; font-size:12px;
-}
-.phone-notch { position:absolute; top:9px; left:50%; transform:translateX(-50%); z-index:6; width:96px; height:22px; background:#000; border-radius:14px; }
 .phone-input {
   position:absolute; left:12px; right:12px; bottom:14px; z-index:6; display:flex; align-items:center;
   gap:8px; height:46px; padding:6px 6px 6px 14px; border-radius:24px;
