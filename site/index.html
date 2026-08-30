@@ -17,7 +17,7 @@
   <meta name="twitter:card" content="summary_large_image">
   <link rel="preload" as="image" href="media/slides/slide-01-plumbing.jpg">
   <script>document.documentElement.classList.add("js");</script>
-  <link rel="stylesheet" href="landing.css?v=8">
+  <link rel="stylesheet" href="landing.css?v=16">
   <script type="application/ld+json">
   {
     "@context": "https://schema.org",
@@ -116,7 +116,6 @@
     <!-- ================= HOW IT WORKS ================= -->
     <section class="section" id="how">
       <div class="wrap">
-        <p class="kicker reveal">How it works</p>
         <h2 class="statement reveal d1" style="max-width:24ch">Three steps. No wall of forms, no spam</h2>
 
         <div class="steps">
@@ -149,7 +148,7 @@
       </div>
 
       <!-- full-bleed marquee rows -->
-      <div class="marquee reveal d1" aria-label="Home &amp; auto service categories">
+      <div class="marquee" aria-label="Home &amp; auto service categories">
         <div class="track" id="trackA">
           <div class="vchip"><img src="media/slides/slide-01-plumbing.jpg" alt="" loading="lazy"><span>Plumbing</span></div>
           <div class="vchip"><img src="media/slides/slide-02-electrical.jpg" alt="" loading="lazy"><span>Electrical</span></div>
@@ -162,7 +161,7 @@
           <div class="vchip"><img src="media/slides/slide-16-windows.jpg" alt="" loading="lazy"><span>Windows &amp; doors</span></div>
         </div>
       </div>
-      <div class="marquee reveal d2" aria-hidden="true">
+      <div class="marquee" aria-hidden="true">
         <div class="track rev" id="trackB">
           <div class="vchip"><img src="media/slides/slide-03-repair.jpg" alt="" loading="lazy"><span>Auto repair</span></div>
           <div class="vchip"><img src="media/slides/slide-06-tires.jpg" alt="" loading="lazy"><span>Tires</span></div>
@@ -233,7 +232,9 @@
         "float fbm(vec2 p){float v=0.,a=.5;for(int i=0;i<5;i++){v+=a*noise(p);p=p*2.02;a*=.5;}return v;}",
         "void main(){",
         "  vec2 uv=gl_FragCoord.xy/u_res.xy;",
-        "  vec2 p=uv*vec2(u_res.x/u_res.y,1.0)*2.1;",
+        // smoothing only: larger, softer noise features (was *2.1) so the
+        // gradient reads as a soft wash instead of distinct blur bubbles/smog
+        "  vec2 p=uv*vec2(u_res.x/u_res.y,1.0)*1.5;",
         "  float t=u_time*0.04;",
         "  vec2 q=vec2(fbm(p+vec2(0.,t)+u_m*0.3),fbm(p+vec2(5.2,-t)));",
         "  vec2 r=vec2(fbm(p+2.0*q+vec2(1.7,9.2)+0.15*t),fbm(p+2.0*q+vec2(8.3,2.8)-0.13*t));",
@@ -249,7 +250,8 @@
         "  col+=amber*glow*(0.18+0.16*f);",
         "  col*=1.0-0.30*smoothstep(0.1,0.9,distance(uv,vec2(0.4,0.5)));",
         "  col*=1.0-0.4*length(uv-0.5);",
-        "  col+=(hash(gl_FragCoord.xy+fract(u_time))-0.5)*0.03;",
+        // slightly stronger dither than the original 0.03 to break up banding
+        "  col+=(hash(gl_FragCoord.xy+fract(u_time))-0.5)*0.04;",
         "  gl_FragColor=vec4(max(col,0.0),1.0);",
         "}"
       ].join("\n");

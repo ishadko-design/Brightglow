@@ -139,10 +139,6 @@ html.has-gl .bg-fallback { opacity: 0; }
   font-family: var(--disp); font-weight: 700; font-size: 12px;
   letter-spacing: 0.16em; text-transform: uppercase; color: var(--ink-60);
 }
-.kicker::before {
-  content: ""; width: 26px; height: 1px; background: var(--amber-lite);
-  box-shadow: 0 0 12px var(--amber-lite);
-}
 
 /* ============================ header ============================ */
 /* Replicated from styles.css .topbar so it matches the business site exactly. */
@@ -185,7 +181,7 @@ html.has-gl .bg-fallback { opacity: 0; }
   gap: 10px; height: 56px; padding: 0 28px; border: 0; cursor: pointer;
   border-radius: var(--r-pill); font-family: var(--disp); font-weight: 700; font-size: 17px;
   color: #fff; white-space: nowrap;
-  background: linear-gradient(100deg, #0039f5 0%, #2f5bff 55%, #00218f 100%);
+  background: linear-gradient(100deg, #0039f5 0%, #2f5bff 60%, #1a44d6 100%);
   box-shadow: 0 10px 34px rgba(0,57,245,0.42), inset 0 1px 0 rgba(255,255,255,0.25);
   transition: transform .2s var(--ease), box-shadow .35s var(--ease);
   overflow: hidden;
@@ -259,9 +255,7 @@ html.has-gl .bg-fallback { opacity: 0; }
 /* floating proof cards — real job photos, glass-edged, at varied depths */
 .pcard {
   position: absolute; border-radius: 20px; overflow: hidden;
-  border: 1px solid rgba(255,255,255,0.14);
-  box-shadow: 0 30px 70px rgba(0,0,0,0.55), inset 0 1px 0 rgba(255,255,255,0.12);
-  background: #16161a; will-change: transform;
+  will-change: transform;
   transform: translateZ(var(--z,0px)) translate3d(0,0,0);
 }
 .pcard img { width: 100%; height: 100%; object-fit: cover; }
@@ -389,7 +383,7 @@ html.has-gl .bg-fallback { opacity: 0; }
 @keyframes scrollx { to { transform: translateX(-50%); } }
 .vchip {
   flex: none; position: relative; width: 208px; height: 268px; border-radius: var(--r-card);
-  overflow: hidden; border: 1px solid var(--line); box-shadow: 0 16px 40px rgba(0,0,0,0.4);
+  overflow: hidden;
 }
 .vchip img { width: 100%; height: 100%; object-fit: cover; transition: transform .8s var(--ease); }
 .vchip:hover img { transform: scale(1.08); }
@@ -467,6 +461,11 @@ html.js .enter { opacity: 0; transform: translateY(22px); }
   .hero-cta { margin-top: 22px; }
   /* 1b. more breathing room between the CTA and the phone below it */
   .hero-inner { gap: 64px; }
+
+  /* 1c. center-align all hero text on phones */
+  .hero-copy { text-align: center; }
+  .hero-sub { margin-inline: auto; }
+  .hero-cta { justify-content: center; }
 
   /* on phones the floating cards crowd the frame — drop them entirely,
      leaving just the phone. */
