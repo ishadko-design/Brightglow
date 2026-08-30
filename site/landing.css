@@ -139,10 +139,6 @@ html.has-gl .bg-fallback { opacity: 0; }
   font-family: var(--disp); font-weight: 700; font-size: 12px;
   letter-spacing: 0.16em; text-transform: uppercase; color: var(--ink-60);
 }
-.kicker::before {
-  content: ""; width: 26px; height: 1px; background: var(--amber-lite);
-  box-shadow: 0 0 12px var(--amber-lite);
-}
 
 /* ============================ header ============================ */
 /* Replicated from styles.css .topbar so it matches the business site exactly. */
@@ -467,6 +463,11 @@ html.js .enter { opacity: 0; transform: translateY(22px); }
   .hero-cta { margin-top: 22px; }
   /* 1b. more breathing room between the CTA and the phone below it */
   .hero-inner { gap: 64px; }
+
+  /* 1c. center-align all hero text on phones */
+  .hero-copy { text-align: center; }
+  .hero-sub { margin-inline: auto; }
+  .hero-cta { justify-content: center; }
 
   /* on phones the floating cards crowd the frame — drop them entirely,
      leaving just the phone. */
