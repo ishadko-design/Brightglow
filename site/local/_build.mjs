@@ -53,7 +53,11 @@ function pageHtml(trade, city) {
     `How much does a ${trade.verb} cost in ${city.name}? Typical {CITY} prices for common ${trade.name.toLowerCase()} jobs, plus real pro photos and an instant estimate.`,
     vars
   ).slice(0, 158);
-  const canonical = `${ORIGIN}/local/${trade.slug}-${city.slug}.html`;
+  // Canonical must point at the URL that actually serves 200. Cloudflare Pages
+  // serves these as clean (extensionless) URLs and 307-redirects the .html form,
+  // so a .html canonical points at a redirect and Google discards it
+  // ("Duplicate without user-selected canonical"). Always use the clean URL.
+  const canonical = `${ORIGIN}/local/${trade.slug}-${city.slug}`;
   const intro = fill(trade.intro, vars);
 
   const rows = bands
@@ -106,10 +110,10 @@ function pageHtml(trade, city) {
   };
 
   const otherCities = CITIES.filter((c) => c.slug !== city.slug)
-    .map((c) => `<a href="${trade.slug}-${c.slug}.html">${esc(trade.name)} in ${esc(c.name)}</a>`)
+    .map((c) => `<a href="${trade.slug}-${c.slug}">${esc(trade.name)} in ${esc(c.name)}</a>`)
     .join("\n        ");
   const otherTrades = TRADES.filter((t) => t.slug !== trade.slug)
-    .map((t) => `<a href="${t.slug}-${city.slug}.html">${esc(t.name)} in ${esc(city.name)}</a>`)
+    .map((t) => `<a href="${t.slug}-${city.slug}">${esc(t.name)} in ${esc(city.name)}</a>`)
     .join("\n        ");
 
   return `<!doctype html>
@@ -167,7 +171,7 @@ function pageHtml(trade, city) {
 </head>
 <body class="landing">
   <header class="topbar">
-    <a class="logo" href="../index.html">
+    <a class="logo" href="../">
       <img class="appicon" src="../media/appicon.png" alt="">
       <span class="wordmark">Brightglow</span>
     </a>
@@ -224,7 +228,7 @@ ${faqHtml}
   </main>
 
   <footer class="landing-footer">
-    <a class="footer-terms" href="../terms.html">Terms of Service</a>
+    <a class="footer-terms" href="../terms">Terms of Service</a>
     <a href="mailto:hello@brightglow.co">hello@brightglow.co</a>
     <div class="copyright">© 2026 Brightglow LLC · estimates are informational, not quotes</div>
   </footer>
@@ -244,9 +248,10 @@ const urls = [];
 let count = 0;
 for (const trade of TRADES) {
   for (const city of CITIES) {
-    const name = `${trade.slug}-${city.slug}.html`;
-    writeFileSync(join(LOCAL_DIR, name), pageHtml(trade, city));
-    urls.push(`${ORIGIN}/local/${name}`);
+    const slug = `${trade.slug}-${city.slug}`;
+    writeFileSync(join(LOCAL_DIR, `${slug}.html`), pageHtml(trade, city));
+    // Sitemap lists the clean (200-serving) URL, not the .html redirect.
+    urls.push(`${ORIGIN}/local/${slug}`);
     count++;
   }
 }
