@@ -18,6 +18,14 @@
   <link rel="preload" as="image" href="../media/slides/slide-01-plumbing.jpg">
   <script>document.documentElement.classList.add("js");</script>
   <link rel="stylesheet" href="../landing.css?v=17">
+  <style>
+    /* business-landing tweaks on top of the shared consumer design system */
+    .hero-fine { margin-top: 16px; font-size: 13px; color: var(--ink-45); }
+    .hero-fine a { color: var(--ink-60); text-decoration: underline; }
+    /* the business headline is longer than the consumer's — cap the display
+       size so it wraps to a few lines instead of a dozen */
+    .hero-h1 { font-size: clamp(40px, 6.2vw, 66px); }
+  </style>
   <script type="application/ld+json">
   {
     "@context": "https://schema.org",
@@ -63,6 +71,7 @@
           <div class="hero-cta enter e5">
             <a class="btn" href="/biz" id="appstore" data-magnetic>Claim your business</a>
           </div>
+          <p class="hero-fine enter e5">By continuing you agree to our <a href="../business-terms.html">Business Terms of Service</a>.</p>
         </div>
 
         <!-- interactive 3D proof cluster -->
@@ -108,37 +117,11 @@
       </div>
     </section>
 
-    <!-- ================= HOW IT WORKS ================= -->
-    <section class="section" id="how">
-      <div class="wrap">
-        <h2 class="statement reveal d1" style="max-width:24ch">Three steps to your next customer</h2>
-
-        <div class="steps">
-          <div class="step reveal d1">
-            <div class="num" aria-hidden="true"></div>
-            <h3>Claim your page</h3>
-            <p>Sign in with your business phone or email. If a customer already reached you through Brightglow, your page is waiting.</p>
-          </div>
-          <div class="step reveal d2">
-            <div class="num" aria-hidden="true"></div>
-            <h3>Show your real work</h3>
-            <p>Add photos of jobs you've actually done, your services, and prices. That proof is what ranks you — not ad spend.</p>
-          </div>
-          <div class="step reveal d3">
-            <div class="num" aria-hidden="true"></div>
-            <h3>Get matched to real jobs</h3>
-            <p>You're matched when a customer needs work you've done — then one spam-free chat. No shared leads, no bidding war.</p>
-          </div>
-        </div>
-      </div>
-    </section>
-
     <!-- ================= TWO WORLDS (verticals marquee) ================= -->
     <section class="section" id="worlds">
       <div class="wrap">
         <div class="worlds-head">
-          <h2 class="reveal">For every trade, <span class="glow">home</span> and <span class="glow">auto</span></h2>
-          <p class="reveal d1">Contractors and trades, plus auto &amp; moto repair, tires, detailing, body &amp; glass — list the work you actually do.</p>
+          <h2 class="reveal">For every trade, <span class="glow">home</span> and <span class="glow">auto-moto</span></h2>
         </div>
       </div>
 
@@ -177,7 +160,6 @@
         <p class="reveal d1">Claim your page, show your work, and get matched to customers who need exactly what you do.</p>
         <div class="hero-cta reveal d2">
           <a class="btn" href="/biz" data-magnetic>Claim your business</a>
-          <a class="btn btn-ghost" href="/" data-magnetic>I'm a customer</a>
         </div>
       </div>
     </section>
