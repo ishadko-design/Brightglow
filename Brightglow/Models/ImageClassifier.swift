@@ -208,10 +208,17 @@ enum ImageClassifier {
             // no auto-description (2026-08-08). `match`-gated things (carousel,
             // vehicle read, confident preselect) still require a real match.
             details = cloud.details
-            // Only auto-fill a description / preselect a tag when ONE subject clearly
-            // owns the frame. In an ambiguous frame (several roughly-equal objects),
-            // leave the input blank rather than guess a wrong subject.
-            description = dominates ? cloud.description : nil
+            // Auto-fill the description whenever the cloud actually read a subject.
+            // The hard on-device dominance gate used to null this out unless one
+            // object clearly owned the frame — but saliency splits a normal close-up
+            // (a faucet's spout/handle/base) into competing blobs, so even confident
+            // close-ups abstained and the box stayed blank (reported after 1.0.1). An
+            // editable wrong suggestion is cheap to delete; a blank box on a clear
+            // shot reads as broken. The cloud's own "unsure" still leaves this nil
+            // (cloudReply throws), so truly featureless frames don't auto-fill. The
+            // dominance gate now guards only the HARD preselect below, where a wrong
+            // guess actually costs the user something.
+            description = cloud.description
             if let match = cloud.match {
                 matches.append(match)
                 // When the cloud model saw a vehicle it leads DETAILS with the
