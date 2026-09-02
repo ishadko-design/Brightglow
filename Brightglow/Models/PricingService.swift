@@ -49,7 +49,11 @@ enum PricingService {
         if let zip { body["zip"] = zip }
         if let vehicle { body["vehicle"] = vehicle == .moto ? "moto" : "auto" }
 
-        var req = URLRequest(url: url, timeoutInterval: 10)
+        // Generous: the server may run a web-grounded estimate (a bounded web
+        // search) before answering. The estimate loads asynchronously into the
+        // results header — nothing blocks on it — so waiting for the better number
+        // costs the user nothing; a cache hit still returns in well under a second.
+        var req = URLRequest(url: url, timeoutInterval: 25)
         req.httpMethod = "POST"
         req.setValue("application/json", forHTTPHeaderField: "Content-Type")
         req.setValue(anonKey, forHTTPHeaderField: "apikey")
@@ -71,7 +75,9 @@ enum PricingService {
                          min: Int(range.all_in_low.rounded()),
                          max: Int(range.all_in_high.rounded()),
                          typical: range.all_in_typical.map { Int($0.rounded()) },
-                         laborOnly: range.labor_only ?? false)
+                         laborOnly: range.labor_only ?? false,
+                         sources: range.sources?.isEmpty == false ? range.sources : nil,
+                         basis: range.basis)
     }
 
     /// Only decodes the success shape; the {error, fallback} shape decodes
@@ -89,6 +95,10 @@ enum PricingService {
             /// catalog, where parts are excluded rather than guessed) — the
             /// header must say so, or the number reads as an all-in price.
             let labor_only: Bool?
+            /// Web-grounded estimates carry the source domains + a one-line basis;
+            /// absent on formula estimates.
+            let sources: [String]?
+            let basis: String?
         }
 
         init(from decoder: Decoder) throws {

@@ -35,6 +35,12 @@ struct ContractorListScreen: View {
     /// capacity, material — e.g. "40 gallon, tankless"), if any. Narrows the
     /// price estimate only — never used for the business search.
     var photoDetails: String? = nil
+    /// A ready-to-show, human-readable description of the captured photo's subject
+    /// ("Large two-panel sliding patio door"), from the vision classifier. Shown
+    /// as a "From your photo" banner above the matches so the user sees what we
+    /// understood — the ChatGPT-style diagnosis moment. Empty when the request
+    /// carried no photo (typed search, grid-card tap).
+    var photoDescription: String = ""
     /// Chat-refined business-search phrase (`search_terms`). For home searches
     /// it overrides the Places query so the clarifying chat actually narrows the
     /// match; if it finds nothing we fall back to `searchQuery` so narrowing
@@ -58,6 +64,7 @@ struct ContractorListScreen: View {
          presetCoordinate: CLLocationCoordinate2D? = nil,
          attachedImages: [UIImage] = [],
          photoDetails: String? = nil,
+         photoDescription: String = "",
          businessSearchOverride: String = "",
          photoMatchTerms: String = "",
          priceable: Bool = true,
@@ -70,6 +77,7 @@ struct ContractorListScreen: View {
         self.presetCoordinate = presetCoordinate
         self.attachedImages = attachedImages
         self.photoDetails = photoDetails
+        self.photoDescription = photoDescription
         self.businessSearchOverride = businessSearchOverride
         self.photoMatchTerms = photoMatchTerms
         self.priceable = priceable
@@ -112,6 +120,10 @@ struct ContractorListScreen: View {
     @State private var resolvedCoord: CLLocationCoordinate2D? = nil
     @State private var isLoading   = false
     @State private var estimate: PriceTier? = nil
+    /// True while the (web-grounded) estimate is still being fetched — drives the
+    /// subtle "Estimating price…" placeholder so the header isn't blank during the
+    /// few seconds the search takes.
+    @State private var estimating = false
 
     /// The business whose "Get quote" was tapped — drives the quote screen.
     /// Figma 765:13844 moved the CTA from a floating bar into each row, so the
@@ -202,14 +214,32 @@ struct ContractorListScreen: View {
         return isAutoService(category: category, searchQuery: query)
     }
 
-    /// Query actually sent to Places — the moto variant when the filter is on
-    /// Moto, else the chat's refined `search_terms` when present, else the raw
-    /// query. (The auto vehicle toggle owns the query for auto services, so the
-    /// override only applies to home searches.)
+    /// Query actually sent to Places — the chat's refined `search_terms` when
+    /// present, else the user's typed words, else (only for a bare category
+    /// grid-card tap) the category's generic Places query.
+    ///
+    /// Auto used to ALWAYS collapse to the generic per-category query
+    /// (`auto.query(for:)`), discarding the specific request: "car wrap" was
+    /// searched as "auto body and paint shop", which returns collision/paint
+    /// shops with no wrap work — so no wrap photos surfaced, the ranker led with
+    /// storefront/building shots, and pricing lost the job. The refined terms the
+    /// chat already produces ("full vinyl wrap installer SUV") find the actual
+    /// wrap specialists, so use them. A grid-card tap carries no specific request
+    /// and still falls back to the generic query (honoring the Moto toggle).
     private var effectiveSearchQuery: String {
-        if let auto = autoCategory { return auto.query(for: vehicle) }
         let override = businessSearchOverride.trimmingCharacters(in: .whitespacesAndNewlines)
-        return override.isEmpty ? searchQuery : override
+        guard let auto = autoCategory else {
+            return override.isEmpty ? searchQuery : override
+        }
+        let specific = override.isEmpty ? typedQuery : override
+        guard !specific.isEmpty else { return auto.query(for: vehicle) }
+        // Keep the Moto toggle meaningful for a specific request: prefix it so
+        // Google reads it as a bike job, unless the phrase already names one.
+        let lower = specific.lowercased()
+        if vehicle == .moto, !lower.contains("motorcycle"), !lower.contains("moto") {
+            return "motorcycle \(specific)"
+        }
+        return specific
     }
 
     /// What the pricing engine classifies and sizes the job from.
@@ -450,7 +480,9 @@ struct ContractorListScreen: View {
                             onOpen: { photoIndex in open(contractor, photoIndex: photoIndex) },
                             onReviews: { openReviews(for: contractor) },
                             onQuote: { quoteContractorID = contractor.id },
-                            onCall: { callContractor = contractor }
+                            onCall: { callContractor = contractor },
+                            onPhotoUnavailable: { url in dropUnusablePhoto(url, from: contractor.id) },
+                            onNoUsablePhotos: { dropPhotolessBusiness(contractor.id) }
                         )
                         .id(contractor.id)
                         // Strictly lazy: reveal (and screen) a row's photos only when
@@ -481,6 +513,11 @@ struct ContractorListScreen: View {
                 // scroll, otherwise the lazy row may not exist to scroll to yet.
                 DispatchQueue.main.async { proxy.scrollTo(id, anchor: .center) }
             }
+            // Pull to refresh — re-runs the search and re-screens, so photos that
+            // failed to load (or a business that came back thin) get another pass.
+            // A fresh screening re-fetches images the cache never stored (a failed
+            // fetch isn't cached), so a transient miss recovers on the next pull.
+            .refreshable { await reload() }
         }
     }
 
@@ -529,13 +566,14 @@ struct ContractorListScreen: View {
     /// Falls back to the plain range only for sources with no central estimate
     /// (mocks / permit-only), which have no typical to lead with.
     private func headerEstimateText(_ tier: PriceTier) -> String {
-        if let typical = tier.typical {
-            let amount = "~$\(money(roundSig2(typical)))"
-            // Labor-only figures MUST carry the qualifier — the same number
-            // unlabelled would read as the whole job (pilot, 2026-07-16).
-            return tier.laborOnly ? "Typically \(amount) labor only" : "Typically \(amount)"
-        }
-        return "Est prices: $\(money(tier.min))–\(money(tier.max))"
+        // A concise RANGE reads clearer than a lone "~$5.4k", which users found
+        // ambiguous on its own (2026-08-09) — a single number implies a precision
+        // the estimate doesn't have. Anchor on the rounded low–high; the info
+        // button still opens the full typical + drivers.
+        let range = "$\(money(roundSig2(tier.min)))–$\(money(roundSig2(tier.max)))"
+        // Labor-only figures MUST carry the qualifier — the same number unlabelled
+        // would read as the whole job (pilot, 2026-07-16).
+        return tier.laborOnly ? "Typically \(range) labor only" : "Typically \(range)"
     }
 
     /// The info-icon explainer — where the full range lives now that the header
@@ -611,6 +649,9 @@ struct ContractorListScreen: View {
                         .buttonStyle(.plain)
                     }
                     .padding(.leading, 16)
+                } else if estimating {
+                    EstimatingLabel()
+                        .padding(.leading, 16)
                 }
             }
         }
@@ -623,7 +664,7 @@ struct ContractorListScreen: View {
 
     private func statusView(spinner: Bool, text: String) -> some View {
         VStack(spacing: 16) {
-            if spinner { ProgressView().tint(.white).scaleEffect(1.4) }
+            if spinner { ThinkingOrb(size: 52, color: .white) }
             Text(text)
                 .font(.h3)
                 .foregroundStyle(AppColors.textSecondary)
@@ -700,7 +741,8 @@ struct ContractorListScreen: View {
         defer { isLoadingMore = false }
 
         let page = await ContractorLoader.fetchLivePage(
-            category: category, searchQuery: effectiveSearchQuery, near: coord, pageToken: token)
+            category: category, searchQuery: effectiveSearchQuery, near: coord, pageToken: token,
+            isAuto: allowsVehiclePhotos(effectiveSearchQuery))
         let existing = Set(contractors.map(\.id))
         let fresh = page.contractors.filter { !existing.contains($0.id) }
         nextPageToken = page.nextPageToken
@@ -722,9 +764,10 @@ struct ContractorListScreen: View {
             preset: presetCoordinate, location: location)
 
         var query = effectiveSearchQuery
+        let isAuto = allowsVehiclePhotos(query)
         if let coord = resolved {
             var page = await ContractorLoader.fetchLivePage(
-                category: category, searchQuery: query, near: coord)
+                category: category, searchQuery: query, near: coord, isAuto: isAuto)
             // Zero-result safeguard: a chat-refined query that finds nothing
             // falls back to the user's raw query, so narrowing the search can
             // never blank the results.
@@ -732,7 +775,7 @@ struct ContractorListScreen: View {
             if page.contractors.isEmpty, !base.isEmpty, base != query {
                 query = base
                 page = await ContractorLoader.fetchLivePage(
-                    category: category, searchQuery: query, near: coord)
+                    category: category, searchQuery: query, near: coord, isAuto: isAuto)
             }
             contractors = page.contractors
             nextPageToken = page.nextPageToken
@@ -742,7 +785,7 @@ struct ContractorListScreen: View {
             let allowVehicles = allowsVehiclePhotos(query)
             for c in contractors {
                 guard let v = ScreeningStore.shared.get(c.id, allowVehicles: allowVehicles) else { continue }
-                if !v.kept.isEmpty {
+                if !v.kept.isEmpty && PhotoFilter.hasWorkPhoto(v.kept) {
                     // Cached work photos → show them, ordered by the current query.
                     keptPhotos[c.id] = v.kept
                     screenedByID[c.id] = PhotoFilter.order(v.kept, query: orderQuery,
@@ -752,6 +795,9 @@ struct ContractorListScreen: View {
                     // orders only on generic labels — enrich it when its row shows.
                     if !v.enriched { needsEnrich.insert(c.id) }
                 } else if v.scanned >= c.photos.count {
+                    // Whole pool scanned but only premises/exterior (or nothing) →
+                    // mark scanned so the drop below removes it; a storefront is not
+                    // a work photo, so we never lead with it.
                     // Whole pool scanned, no work photos → mark scanned (skip
                     // re-screening); dropped just below. A *partial* empty verdict
                     // is left unprimed so the row re-scans deeper this time.
@@ -792,11 +838,13 @@ struct ContractorListScreen: View {
             // moto is no longer among them; it passes its vehicle filter so a
             // bike isn't priced as a car.
             if !contractors.isEmpty && priceable {
+                estimating = true
                 Task { @MainActor in
                     estimate = await ContractorLoader.estimate(
                         category: category, searchQuery: pricingDescription, near: coord,
                         photoDetails: photoDetails,
                         vehicle: allowVehicles ? vehicle : nil)
+                    estimating = false
                 }
             }
         } else {
@@ -891,10 +939,41 @@ struct ContractorListScreen: View {
         needsEnrich = []
         nextPageToken = nil
         estimate = nil
+        estimating = false
         licenseByID = [:]
         logoByID = [:]
         visibleLimit = initialVisibleCount
         await load()
+    }
+
+    /// A photo failed to load in the row — remove it from this business's display
+    /// set and its cached verdict, so a stale/dead Places reference stops reserving
+    /// a gray tile (and won't return next launch). Surgical: the business keeps its
+    /// other photos.
+    @MainActor
+    private func dropUnusablePhoto(_ url: String, from id: String) {
+        var changed = false
+        if let i = screenedByID[id]?.firstIndex(of: url) { screenedByID[id]?.remove(at: i); changed = true }
+        if let i = keptPhotos[id]?.firstIndex(where: { $0.url == url }) { keptPhotos[id]?.remove(at: i); changed = true }
+        guard changed else { return }
+        let allowVehicles = allowsVehiclePhotos(effectiveSearchQuery)
+        ScreeningStore.shared.save(id, allowVehicles: allowVehicles,
+                                   kept: keptPhotos[id] ?? [], scanned: scannedCount[id] ?? 0)
+    }
+
+    /// Every photo for this business failed to load — drop it from the list so a
+    /// listed contractor always shows a real picture. The verdict is reset to
+    /// "unprimed" (not "no work photos"), so a later fresh screen — a relaunch or
+    /// pull-to-refresh that re-fetches current Places photo names — can recover it
+    /// rather than the failure being cached permanently.
+    @MainActor
+    private func dropPhotolessBusiness(_ id: String) {
+        contractors.removeAll { $0.id == id }
+        screenedByID[id] = nil
+        keptPhotos[id] = nil
+        scannedCount[id] = nil
+        let allowVehicles = allowsVehiclePhotos(effectiveSearchQuery)
+        ScreeningStore.shared.save(id, allowVehicles: allowVehicles, kept: [], scanned: 0)
     }
 
     /// Lazily screen one contractor's photos when its row appears (LazyVStack only
@@ -1068,6 +1147,16 @@ private struct ContractorListRow: View {
     /// pop-up, then dials. (Not dialed here, so the mention-Brightglow nudge shows
     /// from the list exactly as it does from the gallery.)
     let onCall: () -> Void
+    /// A specific photo URL failed to load — parent purges it from the cache so a
+    /// stale/dead reference doesn't reserve a gray tile again next launch.
+    let onPhotoUnavailable: (String) -> Void
+    /// Every one of this business's photos failed to load — parent drops the
+    /// business, enforcing "a listed contractor must show a real picture".
+    let onNoUsablePhotos: () -> Void
+
+    /// Photo URLs that failed to load, so their gray tiles are dropped and the
+    /// mosaic re-lays-out around the survivors (or the row is removed if none).
+    @State private var failed: Set<String> = []
 
     // Exact Figma values (793:1779).
     private let sideInset: CGFloat = 16      // content left/right margin
@@ -1222,12 +1311,33 @@ private struct ContractorListRow: View {
     // Tiles are given DEFINITE sizes (via GeometryReader) rather than flexible
     // frames: `.scaledToFill()` only clips correctly against a concrete frame —
     // with a flexible one the image renders at its natural size and overflows.
+    /// The screened photos still worth showing — minus any that failed to load, so
+    /// a dead/stale reference never renders as a gray tile. Nil while still
+    /// screening (drives the loading skeleton), like `photos`.
+    private var usablePhotos: [String]? {
+        guard let photos else { return nil }
+        return photos.filter { !failed.contains($0) }
+    }
+
+    /// A tile's image couldn't be fetched. Drop it (the mosaic re-lays-out around
+    /// the survivors), tell the parent to purge it from the cache, and — if every
+    /// one of this business's photos has now failed — ask the parent to drop the
+    /// business, so a listed contractor always shows a real picture.
+    private func handleFailure(_ url: String) {
+        guard !failed.contains(url) else { return }
+        failed.insert(url)
+        onPhotoUnavailable(url)
+        if let photos, photos.allSatisfy({ failed.contains($0) }) {
+            onNoUsablePhotos()
+        }
+    }
+
     private var mosaic: some View {
         GeometryReader { geo in
             let colW = (geo.size.width - mosaicGap) / 2   // 181 at the 402pt width
             let rowH = (mosaicHeight - mosaicGap) / 2      // 113
             Group {
-                if let photos {
+                if let photos = usablePhotos, !photos.isEmpty {
                     let shots = Array(photos.prefix(maxTiles))
                     switch shots.count {
                     case 0:
@@ -1274,9 +1384,11 @@ private struct ContractorListRow: View {
     // One work-photo tile at a concrete size: fill, clip to r16, tappable.
     private func photoTile(_ s: String, index: Int, width: CGFloat, height: CGFloat) -> some View {
         Button(action: { onOpen(index) }) {
-            // Same URL the screener already downloaded, so this is a cache hit —
-            // no extra Places Photo request.
-            PlacesImage(url: URL(string: PlacesService.photoURL(s, width: PlacesService.listPhotoWidth))) { placeholderFill }
+            // Same URL the screener already downloaded, so this is normally a cache
+            // hit. If it can't be fetched (a stale/dead reference), drop the tile
+            // rather than show a gray container.
+            PlacesImage(url: URL(string: PlacesService.photoURL(s, width: PlacesService.listPhotoWidth)),
+                        onLoadResult: { ok in if !ok { handleFailure(s) } }) { placeholderFill }
                 .scaledToFill()
                 .frame(width: width, height: height)
                 .clipped()
@@ -1314,6 +1426,24 @@ private func roundSig2(_ v: Int) -> Int {
     guard v >= 100 else { return v }
     let magnitude = Int(pow(10.0, floor(log10(Double(v))) - 1))
     return Int((Double(v) / Double(magnitude)).rounded()) * magnitude
+}
+
+/// A very light "Estimating price…" placeholder shown in the header while the
+/// (web-grounded) estimate loads — a slow, subtle opacity pulse so it reads as
+/// "working" without pulling focus. Replaced by the real range when it lands.
+private struct EstimatingLabel: View {
+    @State private var dim = false
+    var body: some View {
+        Text("Estimating price…")
+            .font(.bodySmall)
+            .foregroundStyle(.white.opacity(dim ? 0.35 : 0.7))
+            .lineLimit(1)
+            .onAppear {
+                withAnimation(.easeInOut(duration: 0.9).repeatForever(autoreverses: true)) {
+                    dim = true
+                }
+            }
+    }
 }
 
 /// A business's logo when one was resolved (LogoService), otherwise a colored

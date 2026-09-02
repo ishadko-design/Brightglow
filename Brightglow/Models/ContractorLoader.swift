@@ -36,15 +36,19 @@ enum ContractorLoader {
 
     /// A page of live results plus the token to fetch the next page — lets a
     /// swipe-through view keep loading more contractors while content remains.
+    /// `isAuto` forwards the caller's already-resolved vertical so a keyword-light
+    /// auto query ("vinyl wrap") searches as a shop, not a home "contractor".
     static func fetchLivePage(
         category: String,
         searchQuery: String,
         near coord: CLLocationCoordinate2D,
-        pageToken: String? = nil
+        pageToken: String? = nil,
+        isAuto: Bool? = nil
     ) async -> PlacesService.Page {
         let q = searchQuery.trimmingCharacters(in: .whitespacesAndNewlines)
         if !q.isEmpty {
-            return await PlacesService.fetchPage(searchText: q, near: coord, pageToken: pageToken)
+            return await PlacesService.fetchPage(searchText: q, near: coord,
+                                                 pageToken: pageToken, forceAuto: isAuto)
         } else if let cat = Category(rawValue: category) {
             return await PlacesService.fetchPage(category: cat, near: coord, pageToken: pageToken)
         } else {

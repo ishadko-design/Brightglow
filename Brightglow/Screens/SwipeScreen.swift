@@ -145,9 +145,7 @@ struct SwipeScreen: View {
             ZStack {
                 if isLoading && contractors.isEmpty {
                     VStack(spacing: 16) {
-                        ProgressView()
-                            .tint(AppColors.accentStart)
-                            .scaleEffect(1.4)
+                        ThinkingOrb(size: 52, color: AppColors.accentStart)
                         Text("Finding contractors near you…")
                             .font(.h3)
                             .foregroundStyle(AppColors.textSecondary)

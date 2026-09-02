@@ -105,13 +105,34 @@ final class ImageCache {
     }
 
     static func fetch(_ url: URL) async -> (Data, UIImage)? {
+        // Send the bundle header, follow the 302 to the image, decode. We keep the
+        // default (long) request timeout: an earlier attempt to add a short 15s
+        // timeout made slow-but-valid Places photos "load forever" (2026-08-09).
+        //
+        // But a single miss must not be permanent. SwiftUI's `.task(id:)` fetches a
+        // URL exactly once, so one transient failure (dropped connection, a 5xx
+        // from the photo CDN, a truncated body that won't decode) used to leave a
+        // black tile until the view was torn down and rebuilt — the "pictures just
+        // don't load, simply black" bug. Retry a few times with a short backoff.
+        // Crucially this only ever fires AFTER a nil result, so a slow-but-valid
+        // photo (which succeeds on the first try) is never cut short — the earlier
+        // regression was from a *timeout*, not from retrying.
         var req = URLRequest(url: url)
         if let bundleID = Bundle.main.bundleIdentifier {
             req.setValue(bundleID, forHTTPHeaderField: "X-Ios-Bundle-Identifier")
         }
-        guard let (data, _) = try? await URLSession.shared.data(for: req),
-              let img = UIImage(data: data) else { return nil }
-        return (data, img)
+        for attempt in 0..<3 {
+            if attempt > 0 {
+                // 0.5s, then 1.0s — enough to ride out a blip without stalling.
+                try? await Task.sleep(nanoseconds: UInt64(attempt) * 500_000_000)
+            }
+            if let (data, _) = try? await URLSession.shared.data(for: req),
+               let img = UIImage(data: data) {
+                return (data, img)
+            }
+        }
+        print("PlacesImage: photo not loaded after retries \(url.absoluteString.prefix(140))")
+        return nil
     }
 }
 
@@ -120,11 +141,19 @@ final class ImageCache {
 struct PlacesImage<Placeholder: View>: View {
     let url: URL?
     @ViewBuilder var placeholder: () -> Placeholder
+    /// Called once the load resolves: `true` if the image is displayable, `false`
+    /// if it couldn't be fetched. Lets a caller enforce "only show real pictures" —
+    /// a failed tile can be dropped and a photo-less business removed. Optional, so
+    /// existing callers (logos, gallery) are unaffected.
+    var onLoadResult: ((Bool) -> Void)? = nil
 
     @State private var image: UIImage?
 
-    init(url: URL?, @ViewBuilder placeholder: @escaping () -> Placeholder) {
+    init(url: URL?,
+         onLoadResult: ((Bool) -> Void)? = nil,
+         @ViewBuilder placeholder: @escaping () -> Placeholder) {
         self.url = url
+        self.onLoadResult = onLoadResult
         self.placeholder = placeholder
         // Seed synchronously from the cache so a warm photo renders on the first
         // frame — even when the view is re-created (e.g. crossfade .id changes).
@@ -147,10 +176,15 @@ struct PlacesImage<Placeholder: View>: View {
         // Cache hit → swap instantly, no placeholder, no network.
         if let cached = ImageCache.shared.image(for: url) {
             if image !== cached { image = cached }
+            onLoadResult?(true)
             return
         }
         // Miss → keep showing the current image until the new one decodes, then swap.
-        guard let img = await ImageCache.shared.prefetch(url) else { return }
+        guard let img = await ImageCache.shared.prefetch(url) else {
+            onLoadResult?(false)
+            return
+        }
         image = img
+        onLoadResult?(true)
     }
 }

@@ -77,10 +77,16 @@ struct DrawModeView: View {
                 // also re-classifies that region to disambiguate the description
                 // (see onRegionDrawn).
                 DrawingCanvas(paths: $paths, onSelection: { box in
-                    // A finished stroke — even an open loop — is an explicit "read
-                    // THIS" signal: re-fire immediately and show feedback. The
-                    // region result then force-adopts on the next classifyGeneration
-                    // bump (below), overriding a stale or typed field.
+                    // The user already typed their own request — their intention is
+                    // set, and the region read would be discarded anyway (we never
+                    // overwrite typed text). So don't re-classify or show the spinner;
+                    // the stroke is just an annotation baked into the photo.
+                    let current = description.trimmingCharacters(in: .whitespacesAndNewlines)
+                    if !current.isEmpty && description != lastAutofill { return }
+                    // Otherwise a finished stroke — even an open loop — is an explicit
+                    // "read THIS" signal: re-fire immediately and show feedback. The
+                    // region result adopts on the next classifyGeneration bump (below),
+                    // filling an empty field or replacing a stale machine guess.
                     withAnimation(.easeInOut(duration: 0.15)) { reclassifying = true }
                     onRegionDrawn(box, geo.size)
                 })
@@ -246,23 +252,39 @@ struct DrawModeView: View {
                 let prior = initialDescription.trimmingCharacters(in: .whitespacesAndNewlines)
                 if !prior.isEmpty { description = initialDescription; suppressAutofill = true }
             }
+            // Text carried over from before the photo means the user already started —
+            // don't float the "draw" hint over their input.
+            if !description.isEmpty { showDrawHint = false }
             applyAutofillIfPossible()   // classification may already be in
-            DispatchQueue.main.asyncAfter(deadline: .now() + 3) {
-                withAnimation { showDrawHint = false }
-            }
+        }
+        // Keep the draw hint up on a fresh photo until the user actually acts —
+        // starts typing (focuses the field) or draws their first stroke — rather than
+        // a blind 3s timeout that vanished before they'd read it.
+        .onChange(of: inputFocused) {
+            if inputFocused { withAnimation(.easeInOut(duration: 0.4)) { showDrawHint = false } }
+        }
+        .onChange(of: paths.isEmpty) {
+            if !paths.isEmpty { withAnimation(.easeInOut(duration: 0.4)) { showDrawHint = false } }
         }
         // Classification usually returns a beat after the canvas opens — fill then.
         // Re-fires too when circling a region swaps in a new region-based guess.
         .onChange(of: autoDescription) { applyAutofillIfPossible() }
-        // A re-classification COMPLETED. When it was triggered by a draw, adopt its
-        // read unconditionally — the user pointed at that area, so it overrides a
-        // stale guess (and even text they'd typed). Fires on the generation bump,
-        // not the text, so an identical re-read still clears the spinner and counts.
+        // A re-classification COMPLETED. When triggered by a draw, adopt the region
+        // read INTO an empty field or over an earlier auto-guess the user hasn't
+        // touched — but NEVER over text the user typed themselves. Circling is meant
+        // to disambiguate a machine guess, not to overwrite the user's own words
+        // (reported 2026-09-01). Fires on the generation bump, not the text, so an
+        // identical re-read still clears the spinner and counts.
         .onChange(of: classifyGeneration.wrappedValue) {
             guard reclassifying else { return }
             withAnimation(.easeInOut(duration: 0.15)) { reclassifying = false }
             let guess = autoDescription.trimmingCharacters(in: .whitespacesAndNewlines)
             guard !guess.isEmpty else { return }   // read failed → keep what's there
+            // The field holds the user's own text when it's non-empty and isn't the
+            // phrase we last auto-filled — leave it alone.
+            let current = description.trimmingCharacters(in: .whitespacesAndNewlines)
+            let userTyped = !current.isEmpty && description != lastAutofill
+            guard !userTyped else { return }
             suppressAutofill = false
             lastAutofill = autoDescription
             // No animation on the text write itself — animating a TextField's bound

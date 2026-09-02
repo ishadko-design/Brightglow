@@ -133,6 +133,13 @@ struct PriceTier: Codable, Identifiable {
     /// where parts/materials are deliberately excluded rather than guessed.
     /// The UI must label it; an unlabelled labor figure reads as all-in.
     var laborOnly: Bool = false
+    /// For a web-grounded estimate: the domains the figure was sourced from
+    /// (e.g. "angi.com"), shown in the "how we estimate" detail so the number is
+    /// verifiable. Nil for a formula estimate.
+    var sources: [String]? = nil
+    /// For a web-grounded estimate: a one-line driver of the number (e.g. "tear-off
+    /// + 2-story access + solar detach/reset at SF rates"). Nil for the formula.
+    var basis: String? = nil
 }
 
 /// A single Google review (testimonial) shown on the contractor card.

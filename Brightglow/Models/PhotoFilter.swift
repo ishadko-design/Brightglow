@@ -280,17 +280,21 @@ enum PhotoFilter {
                 let photo = ScreenedPhoto(url: displayURL, labels: decision.labels)
                 if allowVehicles && decision.isVehicle { vehicle.append(photo) }
                 else { other.append(photo) }
-            } else {
-                // Couldn't fetch to judge. Keep Places photos — their bundle-
-                // restricted key can 403 transiently and Google's pool is trusted —
-                // but DROP an unreachable non-Places (website) URL: keeping it would
-                // lead the gallery with a black tile it can never display either.
-                if url.host?.contains("googleapis.com") == true {
-                    other.append(ScreenedPhoto(url: displayURL, labels: []))
-                }
             }
+            // Else: the photo couldn't be fetched — DROP it. We only ever display
+            // images that actually load; reserving a tile for an unreachable URL is
+            // what put empty gray containers in the mosaic (reported 2026-08-09).
+            // The rule is "no picture, don't show it" — a business left with zero
+            // fetchable photos is then dropped by the caller, and a transient miss
+            // recovers on the next screen pass / pull-to-refresh. (Previously Places
+            // URLs were kept here on the theory their key 403s transiently; the gray
+            // tile that produced is worse than briefly missing a photo.)
         }
-        return Array((vehicle + other).prefix(limit))   // display full-size, work shots first
+        let result = Array((vehicle + other).prefix(limit))   // display full-size, work shots first
+        // A storefront/exterior alone is not a work photo — if nothing here is real
+        // work, return none so the caller drops the business instead of leading with
+        // its shop sign as the only picture.
+        return hasWorkPhoto(result) ? result : []
     }
 
     /// Scene labels marking a shot of the *premises* (a shop's exterior / signage)
@@ -305,6 +309,31 @@ enum PhotoFilter {
 
     private static func isPremisesShot(_ labels: [String]) -> Bool {
         labels.contains { premisesTokens.contains($0) }
+    }
+
+    /// Purely PROMOTIONAL / branding shots — a shop storefront or window, signage,
+    /// a flyer/menu/logo. These are never an example of the work itself. Kept
+    /// DELIBERATELY NARROW: `building`/`house`/`facade` are NOT here, because a
+    /// painted house, a re-roof, or new siding IS the work for those trades and
+    /// must never be dropped. The tell for a storefront is the signage/branding,
+    /// not the building.
+    private static let promoTokens: Set<String> = [
+        "storefront", "shopfront", "shop", "store", "signboard", "billboard",
+        "signage", "sign", "poster", "advertisement", "flyer", "menu", "banner",
+        "marquee", "logo", "brand", "text",
+    ]
+
+    private static func isPromoShot(_ labels: [String]) -> Bool {
+        labels.contains { promoTokens.contains($0) }
+    }
+
+    /// Whether a screened set contains at least one genuine WORK photo — anything
+    /// that isn't purely a promotional/storefront/signage shot. A house exterior
+    /// (painting, roofing, siding) counts as work and is KEPT; only a business
+    /// whose photos are all promo has nothing real to show, so the caller drops it
+    /// rather than leading with a shop sign (reported 2026-08-10).
+    static func hasWorkPhoto(_ photos: [ScreenedPhoto]) -> Bool {
+        photos.contains { !isPromoShot($0.labels) }
     }
 
     /// Scene labels marking pure scenery / landmarks — a Golden Gate Bridge

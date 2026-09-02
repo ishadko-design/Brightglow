@@ -88,10 +88,6 @@ struct QuoteRequestScreen: View {
         let e = email.trimmingCharacters(in: .whitespaces)
         return e.contains("@") && e.contains(".") && !e.hasSuffix("@") && !isRelay
     }
-    /// Shown only when the signed-in email needs attention — the screen has no
-    /// email card in the normal case (Figma doesn't show one; it's collected
-    /// at sign-in), so this only ever surfaces to unblock a broken send.
-    private var emailNeedsAttention: Bool { !email.isEmpty && !emailValid }
     /// Send needs the user's own words — a request that's just a category name
     /// (or nothing) tells the business nothing actionable. A photo helps but
     /// isn't required.
@@ -168,7 +164,12 @@ struct QuoteRequestScreen: View {
                         // attribution the business receives.
                         requestPill
 
-                        if emailNeedsAttention {
+                        // Collect the reply email inline whenever it isn't valid
+                        // yet. Signed in, it's prefilled and this stays hidden; in
+                        // the consumer-only (no-login) build there's no session, so
+                        // this is how an anonymous customer gives the pro a way to
+                        // reach them. Send stays disabled until it's valid (canSend).
+                        if !emailValid {
                             emailFixCard
                         }
 
@@ -247,6 +248,9 @@ struct QuoteRequestScreen: View {
                         drawingPaths = []
                         drawingIndex = nil
                     },
+                    // No auto-description in the annotation editor — the photo was
+                    // already described at capture time.
+                    autoDescription: .constant(""),
                     paths: $drawingPaths
                 )
             }
@@ -415,7 +419,7 @@ struct QuoteRequestScreen: View {
                 .onSubmit { requestFocused = false }
                 .frame(maxWidth: .infinity, alignment: .leading)
 
-            Text("Sent via Brightglow, brightglow.co/biz")
+            Text("See more jobs like this at brightglow.co/claim")
                 .font(.bodyLight)
                 .foregroundStyle(.white.opacity(0.5))
         }
@@ -553,11 +557,11 @@ struct QuoteRequestScreen: View {
             let publicId = LeadBridgeService.newPublicID()
             // Frictionless on a normal lead: the photo's attached to the MMS and the
             // business just replies in Messages — no page to visit. Attribute the
-            // source with the business hub (brightglow.co/biz) where they log in or
-            // claim their profile. (The /l/<id> reply link is reserved for the paywall
-            // moment — the last/over-quota lead — where the extra tap earns its keep
-            // by driving the subscribe.)
-            let body = description + "\n\nSent via Brightglow, brightglow.co/biz"
+            // source with a value-forward CTA to the claim hub (brightglow.co/claim)
+            // where they log in or claim their profile. (The /l/<id> reply link is
+            // reserved for the paywall moment — the last/over-quota lead — where the
+            // extra tap earns its keep by driving the subscribe.)
+            let body = description + "\n\nSee more jobs like this at brightglow.co/claim"
             // One atomic payload → the composer is always built from complete data.
             compose = ComposePayload(
                 recipient: Self.smsTestRecipient.isEmpty ? phone : Self.smsTestRecipient,

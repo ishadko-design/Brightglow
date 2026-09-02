@@ -56,14 +56,22 @@ enum PlacesService {
     }
 
     /// A page of free-form results plus the next-page token.
+    ///
+    /// `forceAuto` lets the caller assert the vertical it already resolved (via the
+    /// clarify chat / selected category) rather than re-guess it from the query
+    /// text. Keyword-light auto phrases ("vinyl wrap", "window tint") don't hit the
+    /// small `AutoCategory` keyword list, so without this they'd get "contractor"
+    /// appended and pull in HOME businesses (house-painter / window-film) whose
+    /// photos are houses. Nil = infer from the query text (original behavior).
     static func fetchPage(searchText query: String, near coord: CLLocationCoordinate2D,
-                          pageSize: Int = 20, pageToken: String? = nil) async -> Page {
+                          pageSize: Int = 20, pageToken: String? = nil,
+                          forceAuto: Bool? = nil) async -> Page {
         let matchedCategory = Category.matching(query: query).first
         let category = matchedCategory ?? .plumbing
         // "contractor" is a home-trade term to Google — "car painting contractor"
         // returns house painters. Vehicle queries get a shop-style query instead
         // (tuned auto queries already end in "shop" and pass through unchanged).
-        let isAuto = AutoCategory.matching(query: query) != nil
+        let isAuto = forceAuto ?? (AutoCategory.matching(query: query) != nil)
         let textQuery: String
         if isAuto {
             textQuery = query.lowercased().contains("shop") ? query : "\(query) shop"

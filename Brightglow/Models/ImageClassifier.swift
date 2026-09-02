@@ -96,6 +96,19 @@ enum ImageClassifier {
             + "door, about 72x80\", \"Replace hardwood floor\" (size not visible), \"Repair gas "
             + "furnace\", \"Body repair for blue Chevrolet Volt — large dents on front door and "
             + "fender\". Under ~12 words, plain words, no label, no trailing period.\n"
+            + "STRUCTURE EXCEPTION: for a building EXTERIOR or large fixed structure — a whole "
+            + "house, a facade, a roofline, an under-construction shell, a fence, a driveway, or "
+            + "utility equipment (a gas meter, pipes, an electrical panel) — write a DESCRIPTION "
+            + "ONLY when a concrete, VISIBLE problem is present: visible damage, a crack, a leak, "
+            + "rot or rust, a missing or broken part, or clear disrepair you can actually see. If "
+            + "the structure simply looks intact — or the likely work is a repaint/remodel/upgrade "
+            + "you CANNOT justify from a visible defect — write DESCRIPTION as \"none\" and do NOT "
+            + "invent an action like \"Replace the roof\" or \"Replace the meter\". This applies to "
+            + "the SUBJECT itself; a small tight close-up plainly framed on one damaged fixture is "
+            + "not a wide structure shot. (DETAILS still records the visible attributes; only "
+            + "DESCRIPTION is withheld.) An INTERIOR fixture the shot is framed around (a vanity, "
+            + "cabinet, appliance, water heater, window, door) is NOT covered by this exception — "
+            + "describe it normally.\n"
             + "VEHICLE EXCEPTION: for a car or motorcycle, write a DESCRIPTION ONLY when a "
             + "concrete problem is actually VISIBLE — collision or dent, a scratch/scrape, "
             + "cracked or shattered glass, a flat/shredded tire, a fluid leak or puddle, rust, "
@@ -208,17 +221,18 @@ enum ImageClassifier {
             // no auto-description (2026-08-08). `match`-gated things (carousel,
             // vehicle read, confident preselect) still require a real match.
             details = cloud.details
-            // Auto-fill the description whenever the cloud actually read a subject.
-            // The hard on-device dominance gate used to null this out unless one
-            // object clearly owned the frame — but saliency splits a normal close-up
-            // (a faucet's spout/handle/base) into competing blobs, so even confident
-            // close-ups abstained and the box stayed blank (reported after 1.0.1). An
-            // editable wrong suggestion is cheap to delete; a blank box on a clear
-            // shot reads as broken. The cloud's own "unsure" still leaves this nil
-            // (cloudReply throws), so truly featureless frames don't auto-fill. The
-            // dominance gate now guards only the HARD preselect below, where a wrong
-            // guess actually costs the user something.
-            description = cloud.description
+            // Auto-fill the description ONLY when one subject clearly owns the frame
+            // AND the model didn't hedge. Leaving it ungated (as 1.0.x did, to avoid a
+            // blank box that "reads as broken") is what produced the wrong sentences on
+            // multi-object shots — a whole facade tagged "Replace the roof", a metal
+            // fence losing to a paver, invented car scratches (reported 2026-09-01). A
+            // wrong pre-fill is worse than an empty box: it authors words the user must
+            // delete and poisons matching. The empty-box worry is a UI problem — the
+            // input shows a "Describe the work" placeholder — not a reason to ship a
+            // guess. Circled regions force `dominates` true (applyAreaGate == false), so
+            // the draw path still auto-fills; the cloud's own "unsure" still leaves this
+            // nil (cloudReply throws), so featureless frames never auto-fill either.
+            if dominates, cloud.isConfident { description = cloud.description }
             if let match = cloud.match {
                 matches.append(match)
                 // When the cloud model saw a vehicle it leads DETAILS with the
