@@ -271,7 +271,10 @@ struct ContractorGalleryScreen: View {
             if let id {
                 lastViewedID?.wrappedValue = id
                 // A business previewing its own page must not count as a view.
-                if !previewMode { recordView(placeId: id) }
+                if !previewMode {
+                    recordView(placeId: id)
+                    AnalyticsService.track("impression", ["place_id": id, "surface": "gallery"])
+                }
             }
         }
         .navigationDestination(isPresented: $showQuote) {

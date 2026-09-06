@@ -960,8 +960,8 @@ struct MainScreen: View {
                     classifyGeneration: $captureClassifyGen,
                     // Circling an area re-classifies that crop; the new description
                     // flows back through detectedDescription → captureAutoDescription.
-                    onRegionDrawn: { rect, viewSize in
-                        camera.reclassifyRegion(rect, viewSize: viewSize)
+                    onRegionDrawn: { rect, viewSize, annotated in
+                        camera.reclassifyRegion(rect, viewSize: viewSize, annotated: annotated)
                     },
                     paths: $drawnPaths
                 )

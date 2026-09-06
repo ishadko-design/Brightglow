@@ -20,8 +20,18 @@ enum AnalyticsService {
         (Bundle.main.object(forInfoDictionaryKey: "APP_TOKEN") as? String) ?? ""
     static var isConfigured: Bool { !ref.isEmpty && !anonKey.isEmpty }
 
+    /// Per-device opt-out. When set, this device records NOTHING — it keeps the
+    /// owner's own testing out of the funnel entirely (no server-side filtering
+    /// needed). Toggle it without any UI via deep links, handled in
+    /// [[BrightglowApp]]: open `brightglow://analytics-optout` to exclude this
+    /// device, `brightglow://analytics-optin` to resume.
+    private static let internalKey = "bg_analytics_internal"
+    static var isInternal: Bool { UserDefaults.standard.bool(forKey: internalKey) }
+    static func setInternal(_ on: Bool) { UserDefaults.standard.set(on, forKey: internalKey) }
+
     /// Record one event with free-form metadata. Non-blocking.
     static func track(_ event: String, _ props: [String: Any] = [:]) {
+        guard !isInternal else { return }   // owner's device: emit nothing
         guard isConfigured,
               let url = URL(string: "https://\(ref).supabase.co/rest/v1/rpc/record_event")
         else { return }

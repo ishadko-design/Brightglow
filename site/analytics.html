@@ -129,12 +129,14 @@ function render(d){
   $("empty").hidden=true; $("view").hidden=false;
 
   $("tiles").innerHTML = [
-    ["Events", d.range.events, `last ${d.range.days} days`],
+    ["App opens", t.app_open||0, "launches"],
+    ["Impressions", d.impressions?.total||0, `${d.impressions?.businesses||0} businesses shown`],
     ["Quotes sent", sends, taps? pct(sends,taps)+"% of Send taps":"—"],
     ["Send taps", taps, taps? pct(sends,taps)+"% completed":"—"],
     ["Abandoned at Messages", d.send?.cancelled||0, taps? pct(d.send?.cancelled||0,taps)+"% of taps":"—"],
     ["Calls", d.calls?.total||0, "tel: taps"],
     ["Results shown", t.results_shown||0, "searches with results"],
+    ["Events", d.range.events, `last ${d.range.days} days`],
   ].map(([k,v,n])=>`<div class="tile"><div class="k">${k}</div><div class="v">${v??0}</div><div class="n">${n}</div></div>`).join("");
 
   const f=d.funnel||[]; const top=Math.max(1, f[0]?.count||0);
@@ -159,8 +161,8 @@ function render(d){
   $("side").innerHTML = `<table>
     <tr><td>Calls — list</td><td>${c.list||0}</td></tr>
     <tr><td>Calls — gallery</td><td>${c.gallery||0}</td></tr>
-    ${tp.length? `<tr><td colspan="2" style="color:var(--ink);padding-top:12px">Top businesses by sends</td></tr>`:""}
-    ${tp.map(p=>`<tr><td style="font-family:monospace;font-size:11px">${p.place_id.slice(0,18)}…</td><td>${p.sends}</td></tr>`).join("")}
+    ${tp.length? `<tr><td style="color:var(--ink);padding-top:12px">Top businesses</td><td style="color:var(--muted);padding-top:12px">impr → sent</td></tr>`:""}
+    ${tp.map(p=>`<tr><td style="font-family:monospace;font-size:11px">${p.place_id.slice(0,18)}…</td><td>${p.impressions||0} → ${p.sends||0}</td></tr>`).join("")}
   </table>`;
 
   const days = Object.keys(d.daily||{}).sort();

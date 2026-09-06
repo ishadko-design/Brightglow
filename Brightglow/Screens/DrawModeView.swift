@@ -40,10 +40,12 @@ struct DrawModeView: View {
     /// field even when its text matches the previous guess. Defaults to a constant
     /// binding for callers with no live classifier (e.g. the quote-request editor).
     var classifyGeneration: Binding<Int> = .constant(0)
-    /// The user circled a region — its bounding box in this view's space, plus the
-    /// view size. Wired to re-classify that crop so the description disambiguates
-    /// to what was circled. No-op by default (e.g. the quote-request editor).
-    var onRegionDrawn: (CGRect, CGSize) -> Void = { _, _ in }
+    /// The user circled a region — its bounding box in this view's space, the view
+    /// size, and the photo WITH the loop baked in. Wired to re-classify that
+    /// annotated crop so the description disambiguates to what was circled (the model
+    /// needs to SEE the loop, not a bare crop). No-op by default (e.g. the
+    /// quote-request editor).
+    var onRegionDrawn: (CGRect, CGSize, UIImage) -> Void = { _, _, _ in }
     @Binding var paths: [DrawnPath]
 
     @State private var description: String = ""
@@ -88,7 +90,9 @@ struct DrawModeView: View {
                     // region result adopts on the next classifyGeneration bump (below),
                     // filling an empty field or replacing a stale machine guess.
                     withAnimation(.easeInOut(duration: 0.15)) { reclassifying = true }
-                    onRegionDrawn(box, geo.size)
+                    // Bake the loop into the photo so the classifier can see exactly
+                    // what was circled (same flatten used at submit).
+                    onRegionDrawn(box, geo.size, image.flattened(withStrokes: paths, viewSize: geo.size))
                 })
                     .frame(width: geo.size.width, height: geo.size.height)
                     .allowsHitTesting(!inputFocused)

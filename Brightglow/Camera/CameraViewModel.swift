@@ -235,10 +235,14 @@ class CameraViewModel: NSObject, ObservableObject {
     /// the cabinets in a shot the whole-frame read called "hardwood floor" should
     /// flip the auto-description (and the routing) to the cabinets. `rect` is in
     /// the draw canvas's view space, `viewSize` its size.
-    func reclassifyRegion(_ rect: CGRect, viewSize: CGSize) {
-        guard let image = capturedImage else { return }
+    ///
+    /// `annotated` is the photo WITH the user's loop drawn on it. We classify that
+    /// (not the bare capture) so the model can SEE what was circled: a loop-less
+    /// crop is just a box of pixels the model fills with its own prior (it kept
+    /// picking a door over a circled beam/ramp/fence, reported 2026-09-06).
+    func reclassifyRegion(_ rect: CGRect, viewSize: CGSize, annotated: UIImage) {
         Task {
-            let s = await ImageClassifier.suggestTrades(image, regionInView: rect, viewSize: viewSize)
+            let s = await ImageClassifier.suggestTrades(annotated, regionInView: rect, viewSize: viewSize)
             await MainActor.run {
                 // Only adopt a region read that actually resolved to something — a
                 // blank/too-small crop must not wipe the useful whole-frame guess.

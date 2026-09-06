@@ -164,6 +164,12 @@ struct ContractorListScreen: View {
     /// Owner-curated, so they lead the strip un-screened and keep a claimed
     /// business visible even when Google returns no usable work photos for it.
     @State private var ownerPhotosByID: [String: [String]] = [:]
+    /// Businesses whose OWN WEBSITE photos we've already fetched this session (once
+    /// per business — the `business-photos` function caches across users). Google
+    /// Places caps at 10 photos, mostly storefront; a contractor's site portfolio is
+    /// the real "similar job" content, so we fold it into the row here too — not just
+    /// in the gallery.
+    @State private var websiteFetched: Set<String> = []
     /// Active contractor licences (CSLB), by contractor id. Absence means
     /// "unknown" — CSLB is California-only — never "unlicensed", so a missing
     /// entry shows no badge rather than a negative one.
@@ -501,6 +507,8 @@ struct ContractorListScreen: View {
                             revealedIDs.insert(contractor.id)
                             Task { await screenIfNeeded(contractor) }
                             Task { await enrichIfNeeded(contractor) }
+                            // Pull in the business's own website portfolio (free, cached).
+                            Task { await mergeWebsitePhotos(for: contractor) }
                         }
                     }
 
@@ -793,6 +801,9 @@ struct ContractorListScreen: View {
                 "category": category,
                 "count": contractors.count,
                 "is_auto": isAuto,
+                // Per-business impressions for the list surface: the ids shown
+                // (capped so the payload stays small). Tallied server-side.
+                "place_ids": Array(contractors.prefix(25).map { $0.id }),
             ])
             // Reuse verdicts from a previous launch so businesses screened before
             // show their photos immediately without re-downloading the pool.
@@ -904,6 +915,43 @@ struct ContractorListScreen: View {
         }
     }
 
+    /// Fold the business's OWN WEBSITE photos into this row — the same free,
+    /// zero-consent enrichment the gallery uses (`business-photos`), but on the LIST
+    /// so the strip and the "did similar job" ranking see the contractor's actual
+    /// portfolio, not just Google's 10 (mostly-storefront) photos. Screened the same
+    /// way as Places (a site's hero is often a logo/van-wrap/storefront), added to
+    /// the kept pool so ranking + the badge see them, and re-ordered query-first with
+    /// any owner-uploaded photos kept on top. One call per business per session (the
+    /// function caches across users). Lazy per revealed row, so cost stays bounded.
+    @MainActor
+    private func mergeWebsitePhotos(for contractor: Contractor) async {
+        guard !websiteFetched.contains(contractor.id) else { return }
+        websiteFetched.insert(contractor.id)
+        let urls = await BusinessPhotoService.fetch(placeId: contractor.id, website: contractor.website)
+        guard !urls.isEmpty, contractors.contains(where: { $0.id == contractor.id }) else { return }
+
+        let allowVehicles = allowsVehiclePhotos(effectiveSearchQuery)
+        let screened = await PhotoFilter.screen(urls, allowVehicles: allowVehicles,
+                                                limit: urls.count, scanLimit: urls.count)
+        guard !screened.isEmpty, contractors.contains(where: { $0.id == contractor.id }) else { return }
+
+        // Add the site's work photos to the kept pool (so `matchRank`/"did similar
+        // job" and the ordering see them), de-duped against what's already there.
+        let existing = keptPhotos[contractor.id] ?? []
+        let have = Set(existing.map(\.url))
+        let fresh = screened.filter { !have.contains($0.url) }
+        guard !fresh.isEmpty else { return }
+        let merged = fresh + existing
+        keptPhotos[contractor.id] = merged
+        revealedIDs.insert(contractor.id)
+        screenedByID[contractor.id] = withOwnerLead(contractor.id,
+            PhotoFilter.order(merged, query: orderQuery, capPremises: stripMaxPremises, vehicle: photoVehicle))
+        // Rich-tag the new photos so specific queries ("bumper", "hardwood") rank them.
+        enrichInBackground(contractor.id, kept: merged,
+                           scanned: scannedCount[contractor.id] ?? merged.count,
+                           allowVehicles: allowVehicles)
+    }
+
     /// Resolve hosted logos for businesses we haven't looked up yet. One batched,
     /// best-effort call; a failure simply leaves those businesses on the monogram
     /// fallback. Only contractors with a website are sent (the rest can't resolve).
@@ -964,6 +1012,7 @@ struct ContractorListScreen: View {
         scannedCount = [:]
         revealedIDs = []
         needsEnrich = []
+        websiteFetched = []
         nextPageToken = nil
         estimate = nil
         estimating = false

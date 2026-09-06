@@ -166,6 +166,31 @@ enum ImageClassifier {
             + "room interior is NOT unsure: name its most prominent fixture."
     }()
 
+    /// Appended to the prompt when the user has DRAWN a loop and we send the cropped
+    /// region. The base prompt's subject-priority (prefer doors/windows, treat
+    /// overhangs/fences/soffits as ignorable "envelope") makes the model snap to a
+    /// door inside the crop instead of the thing the user actually circled — a beam,
+    /// a railing, a ramp, a fence (reported 2026-09-06). This hint overrides those
+    /// rules: the circled object is the subject by the user's explicit choice.
+    private static let regionOverrideHint =
+        "\n\nREGION OVERRIDE — the user drew a bright PINK loop on this photo marking the "
+        + "EXACT thing they want a contractor for. Identify the ONE object the loop is "
+        + "FOCUSED on: the thing at the CENTER of the loop, or that the loop TRACES ALONG "
+        + "its length (e.g. a fence or railing the loop runs the length of). The loop may "
+        + "be imprecise and also enclose other things near its EDGES — those are context, "
+        + "NOT the subject; IGNORE them (a door or window at the loop's edge is not the "
+        + "subject just because it falls inside the loop). Do NOT default to a door, "
+        + "window, or other 'preferred' fixture, and do NOT dismiss the subject as "
+        + "background or building 'envelope'. A beam, header or lintel, fence, gate, "
+        + "railing, ramp, deck, stair, post, trim, soffit, fascia, gutter, or siding IS a "
+        + "valid subject — identify it, pick the CLOSEST category (wood framing / railings "
+        + "/ decks → Carpentry; a fence or gate → Landscaping or Carpentry; siding / stucco "
+        + "/ soffit → Painting or Carpentry). Even with NO clearly visible damage, STILL "
+        + "give a repair/replace action — the user circled it to get work done: default to "
+        + "\"Repair\" for a serviceable item, or \"Replace\" for a worn / aged / failing one; "
+        + "only omit the action if the object is plainly pristine with nothing to do. Give a "
+        + "normal DESCRIPTION for it."
+
     // MARK: - Public API
 
     /// Best-guess trade (home or auto) — cloud first, on-device Vision fallback.
@@ -259,7 +284,11 @@ enum ImageClassifier {
         // auto-fill: we trust a confident cloud read on any non-empty frame, but still
         // abstain on a featureless one.
         let notFeatureless: Bool = { if case .none = dominance { return false } else { return true } }()
-        let hint = applyAreaGate ? hint(for: dominance) : nil
+        // `applyAreaGate == false` means this is a CROP the user drew a loop around.
+        // The base prompt's subject-priority (prefer doors/windows, ignore the
+        // building envelope) then makes it snap to a door in the crop instead of the
+        // circled thing (a beam, ramp, fence). Override those rules for the region.
+        let hint = applyAreaGate ? hint(for: dominance) : Self.regionOverrideHint
         if let cloud = try? await cloudReply(image, hint: hint) {
             // DETAILS and DESCRIPTION are visible observations, independent of
             // whether the CATEGORY parsed to a known service — so keep them even
