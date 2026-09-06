@@ -11,9 +11,10 @@ struct DetectedObject: Identifiable {
 
 /// Photo → Category classifier.
 ///
-/// Primary path: a cloud **vision LLM** (Hugging Face router, OpenAI-compatible
-/// chat completions) for precise scene-aware classification. Falls back to
-/// on-device Apple **Vision** when the network/token fails, so it always works.
+/// Primary path: a cloud **vision LLM** (Claude Sonnet 5) via the Supabase
+/// `classify` Edge Function, for precise scene-aware classification and rich,
+/// contractor-relevant detail extraction. Falls back to on-device Apple **Vision**
+/// when the network/config is unavailable, so it always works.
 enum ImageClassifier {
 
     enum ClassifyError: Error { case noImage, noMatch, unsure }
@@ -24,14 +25,16 @@ enum ImageClassifier {
 
     // MARK: - Config
 
-    /// HF token (free tier OK). Reads `HF_TOKEN` from Info.plist; when absent,
-    /// classification falls back to on-device Apple Vision.
-    private static let hfToken: String =
-        (Bundle.main.object(forInfoDictionaryKey: "HF_TOKEN") as? String) ?? ""
-
-    // 30B MoE (~3B active params): near-8B latency, much better scene reading —
-    // the 8B kept calling floor coverings "Carpentry".
-    private static let model = "Qwen/Qwen3-VL-30B-A3B-Instruct"
+    /// Recognition runs server-side via the Supabase `classify` Edge Function
+    /// (Claude Sonnet 5 vision — see that function's header for why). Reads the
+    /// shared Supabase config from Info.plist; when absent, classification falls
+    /// back to on-device Apple Vision.
+    private static let ref: String =
+        (Bundle.main.object(forInfoDictionaryKey: "SUPABASE_REF") as? String) ?? ""
+    private static let anonKey: String =
+        (Bundle.main.object(forInfoDictionaryKey: "SUPABASE_ANON_KEY") as? String) ?? ""
+    private static let appToken: String =
+        (Bundle.main.object(forInfoDictionaryKey: "APP_TOKEN") as? String) ?? ""
 
     /// Built from the live category lists so the options always match the app
     /// (no hand-maintained list to drift). The model first decides the vertical
@@ -44,16 +47,23 @@ enum ImageClassifier {
             + "Choose the SINGLE thing the request is about. Prefer the physically "
             + "LARGEST built fixture the shot is framed around — a vanity, cabinet, "
             + "sink, countertop, bathtub, shower surround, appliance, water heater, "
-            + "window, glass/patio door, or roof — EVEN WHEN smaller, higher-contrast "
+            + "skylight, lightwell, window, glass/patio door, garage door, entry door, or roof — EVEN WHEN smaller, higher-contrast "
             + "hardware is also in view. A large fixture near the CENTER of the frame "
             + "BEATS small hardware (a faucet, valve, handle, knob, spout, hinge, "
             + "cartridge) near the EDGE of the frame: do NOT pick a small edge object "
             + "over a large central one. Pick the small part ONLY when the photo is "
             + "clearly a tight CLOSE-UP of it — it fills most of the frame. Pick "
             + "EXACTLY ONE subject; never merge two (not \"faucet and valve\", not "
-            + "\"door and floor\"). Ignore the floor, tiles, rug, wall, and ceiling "
-            + "unless the camera clearly points DOWN at the floor with no fixture in "
-            + "view. Leave DESCRIPTION empty only for a truly featureless wide shot (a "
+            + "\"door and floor\"). The floor, tiles, rug, wall, and ceiling are almost "
+            + "NEVER the subject: a door, window, skylight, lightwell, or any built fixture "
+            + "in view ALWAYS outranks them. Choose Flooring ONLY when the shot is plainly a "
+            + "top-down view of the floor with no fixture in the frame at all. "
+            + "The roofline, overhang, soffit, eave, fascia, and gutter are the building "
+            + "ENVELOPE, not the subject: a garage door, entry door, window, or any fixture "
+            + "in the frame ALWAYS outranks the structure above or around it — do NOT pick the "
+            + "roof/overhang/soffit when a door or window is present. Choose the roof or "
+            + "overhang only when the shot is clearly framed UP at it AND a defect is visible. "
+            + "Leave DESCRIPTION empty only for a truly featureless wide shot (a "
             + "whole-house exterior from afar, an empty yard).\n"
             + "STEP 2 — ROUTE IT. Decide whether that ONE subject is a VEHICLE (car, "
             + "truck, or motorcycle, or a part of one) or part of a HOME / property. "
@@ -69,33 +79,79 @@ enum ImageClassifier {
             + "preamble, no second line, and never repeat this template in your answer.\n"
             + "CATEGORY is the chosen category name, exactly as written above. If you can "
             + "pick a category but are not certain, append a question mark (e.g. Carpentry?).\n"
-            + "DETAILS is a short comma-separated list of attributes visible in the photo. "
+            + "DETAILS is a comma-separated list of the attributes a CONTRACTOR would need "
+            + "to quote this job WITHOUT a site visit — capture as many as the photo actually "
+            + "shows: what the thing is, its size/dimensions, material, quantity or count, the "
+            + "condition/severity of the problem, and how it's mounted or accessed. This is the "
+            + "most valuable part — be thorough, but include ONLY what is genuinely visible; "
+            + "never invent a measurement, material, or defect, and never include colour or "
+            + "other cosmetic detail that doesn't affect the work. "
             + "For a VEHICLE, DETAILS must START with the vehicle type (car, truck, or "
-            + "motorcycle) and — when a badge or the body shape makes it legible — the make, "
-            + "model, and colour, then the visible issue: e.g. \"car, Honda Civic sedan, "
-            + "silver, front bumper dent\" or \"motorcycle, Harley-Davidson cruiser, black\". "
+            + "motorcycle), then the make and model ONLY when a badge or emblem is CLEARLY "
+            + "legible — never infer a make from the body shape (a wrong make is worse than "
+            + "none) — then the visible issue: e.g. \"car, front bumper dent\" or "
+            + "\"car, Honda Civic sedan, cracked headlight\" (make named only because the "
+            + "emblem was readable). Do NOT include colour. "
             + "For a HOME subject, list attributes useful for a repair cost estimate — size, "
             + "capacity (gallons, amps, BTU), material, or type (e.g. \"40 gallon, tankless, "
             + "gas\" or \"30 inch, vinyl\"). For a window or door, note its operation (sliding, "
-            + "casement, double-hung), a rough size only if you can judge it (e.g. \"~5x4 ft\"), "
+            + "casement, double-hung), whether it is a SOLID/panel door or a GLASS/glazed door "
+            + "(a plain panel/flush door has NO glass — say so, so nothing downstream asks about "
+            + "glass it doesn't have), a rough size only if you can judge it (e.g. \"~5x4 ft\"), "
             + "and any visible scope cue (a fogged/cracked pane vs. the whole unit). Only "
             + "include what's actually visible — never guess a make, dimension, condition, or "
             + "problem you can't see. Write \"none\" if nothing relevant is visible.\n"
-            + "DESCRIPTION is ONE short line the user could send as their request, as you "
-            + "understand it — START WITH AN ACTION VERB (Replace, Repair, Fix, Install) and "
-            + "name the ONE subject you chose above with ONE action. Never combine several "
-            + "objects or list multiple problems (not \"repair the door and the floor\"): pick "
-            + "the single spotlight subject and describe only what's needed for THAT. Name a "
-            + "fixture by its MAIN noun and do NOT list its built-in parts — a vanity already "
-            + "includes its sink and countertop, so write \"Replace the bathroom vanity\", never "
-            + "\"vanity with sink and countertop\". Fold in "
-            + "the make/model, type, material or colour. Include a SIZE ONLY when the photo actually shows it — a legible or "
-            + "standard dimension, or a clear room/panel boundary you can judge — otherwise "
-            + "leave the size out rather than guessing. For a fixture, name its type when "
-            + "visible (gas vs electric, tank vs tankless). Examples: \"Replace large French "
-            + "door, about 72x80\", \"Replace hardwood floor\" (size not visible), \"Repair gas "
-            + "furnace\", \"Body repair for blue Chevrolet Volt — large dents on front door and "
-            + "fender\". Under ~12 words, plain words, no label, no trailing period.\n"
+            + "DESCRIPTION is the request the user could send, as you understand it — a "
+            + "SPECIFIC, confident read of the ONE subject you chose, the way an expert who "
+            + "glanced at the photo would put it. START WITH AN ACTION VERB (Replace, Repair, "
+            + "Fix, Install) and name that single subject with ONE action; never combine "
+            + "several objects or problems (not \"repair the door and the floor\"). Be precise "
+            + "about WHAT it is: name the configuration (e.g. 2-panel, sliding, casement, "
+            + "French, double-hung), the material, and the type (gas vs electric, tank vs "
+            + "tankless). This is a work request, not a caption of the photo — include ONLY "
+            + "details that affect the repair, and OMIT colour and other cosmetic description "
+            + "(the contractor is fixing the damage, not matching the paint). For a vehicle, do "
+            + "NOT guess a body sub-style you can't be sure of (sedan, SUV, coupe, hatchback) — "
+            + "just name the damage, plus the make only if the emblem is clearly legible. Name a "
+            + "fixture by its MAIN noun and do NOT list its built-in "
+            + "parts — a vanity already includes its sink and countertop, so write \"Replace "
+            + "the bathroom vanity\", never \"vanity with sink and countertop\". Include a SIZE "
+            + "ONLY when the photo actually shows it — a legible or standard dimension, or a "
+            + "clear room/panel boundary you can judge — otherwise leave it out rather than "
+            + "guessing. When a concrete PROBLEM is visibly present (a crack, dent, leak, rot, "
+            + "fog, rust, a missing or broken part), name that problem as part of the request. "
+            + "When you see NO specific problem but the subject is a clearly-framed FIXTURE the "
+            + "shot is about (a door, window, garage door, vanity, cabinet, countertop, "
+            + "appliance, water heater, sink, tub), STILL give a description — the user "
+            + "photographed it to get work done, so name the object with the most likely service, "
+            + "defaulting the verb to \"Replace\", e.g. \"Replace the solid wood entry door\". Do "
+            + "NOT claim damage that isn't there; just name the object and the action. Only leave "
+            + "DESCRIPTION \"none\" for the wide-structure / vehicle EXCEPTIONS below, or a truly "
+            + "featureless frame. "
+            + "Do NOT prescribe how much to replace or the extent of the work — never write "
+            + "\"not just the ...\", \"the whole unit\", \"glass only\", or anything else telling "
+            + "the contractor how much to do; just name the subject and, when it is visible, what "
+            + "is wrong with it. State it PLAINLY and "
+            + "directly, only from what you can actually see — use NO hedge or filler words "
+            + "(never \"likely\", \"probably\", \"maybe\", \"appears\", \"seems\", \"possibly\"). "
+            + "Keep it to one or two clauses, under ~25 words, plain words, no label, no "
+            + "trailing period. Examples: \"Replace 2-panel sliding glass patio door\", "
+            + "\"Replace foggy sliding glass door pane\", \"Replace hardwood "
+            + "floor\" (size not visible), \"Repair gas furnace\", \"Repair damaged front "
+            + "bumper and headlight\".\n"
+            + "STRUCTURE EXCEPTION: for a building EXTERIOR or large fixed structure — a whole "
+            + "house, a facade, a roofline, an under-construction shell, a fence, a driveway, or "
+            + "utility equipment (a gas meter, pipes, an electrical panel) — write a DESCRIPTION "
+            + "ONLY when a concrete, VISIBLE problem is present: visible damage, a crack, a leak, "
+            + "rot or rust, a missing or broken part, or clear disrepair you can actually see. If "
+            + "the structure simply looks intact — or the likely work is a repaint/remodel/upgrade "
+            + "you CANNOT justify from a visible defect — write DESCRIPTION as \"none\" and do NOT "
+            + "invent an action like \"Replace the roof\" or \"Replace the meter\". This applies to "
+            + "the SUBJECT itself; a small tight close-up plainly framed on one damaged fixture is "
+            + "not a wide structure shot. (DETAILS still records the visible attributes; only "
+            + "DESCRIPTION is withheld.) An INTERIOR fixture the shot is framed around (a vanity, "
+            + "cabinet, appliance, water heater, window, door) is NOT covered by this exception — "
+            + "describe it normally.\n"
             + "VEHICLE EXCEPTION: for a car or motorcycle, write a DESCRIPTION ONLY when a "
             + "concrete problem is actually VISIBLE — collision or dent, a scratch/scrape, "
             + "cracked or shattered glass, a flat/shredded tire, a fluid leak or puddle, rust, "
@@ -198,6 +254,11 @@ enum ImageClassifier {
             ? subjectDominance(image)
             : .dominant(area: 1, center: CGPoint(x: 0.5, y: 0.5))
         let dominates: Bool = { if case .dominant = dominance { return true } else { return false } }()
+        // A frame with SOMETHING salient in it (dominant or ambiguous) vs. one where
+        // Vision found nothing at all (.none — a blank wall, plain sky). Used to gate
+        // auto-fill: we trust a confident cloud read on any non-empty frame, but still
+        // abstain on a featureless one.
+        let notFeatureless: Bool = { if case .none = dominance { return false } else { return true } }()
         let hint = applyAreaGate ? hint(for: dominance) : nil
         if let cloud = try? await cloudReply(image, hint: hint) {
             // DETAILS and DESCRIPTION are visible observations, independent of
@@ -208,10 +269,38 @@ enum ImageClassifier {
             // no auto-description (2026-08-08). `match`-gated things (carousel,
             // vehicle read, confident preselect) still require a real match.
             details = cloud.details
-            // Only auto-fill a description / preselect a tag when ONE subject clearly
-            // owns the frame. In an ambiguous frame (several roughly-equal objects),
-            // leave the input blank rather than guess a wrong subject.
-            description = dominates ? cloud.description : nil
+            // Auto-fill the description ONLY when one subject clearly owns the frame
+            // AND the model didn't hedge. Leaving it ungated (as 1.0.x did, to avoid a
+            // blank box that "reads as broken") is what produced the wrong sentences on
+            // multi-object shots — a whole facade tagged "Replace the roof", a metal
+            // fence losing to a paver, invented car scratches (reported 2026-09-01). A
+            // wrong pre-fill is worse than an empty box: it authors words the user must
+            // delete and poisons matching. The empty-box worry is a UI problem — the
+            // input shows a "Describe the work" placeholder — not a reason to ship a
+            // guess. Circled regions force `dominates` true (applyAreaGate == false), so
+            // the draw path still auto-fills; the cloud's own "unsure" still leaves this
+            // nil (cloudReply throws), so featureless frames never auto-fill either.
+            // Auto-fill on a CONFIDENT cloud read. The model itself is the abstain
+            // gate: it returns "unsure" (cloudReply throws → we never get here) or
+            // DESCRIPTION "none" for a frame it can't read, hedges category with "?"
+            // (clears isConfident), and the STRUCTURE/VEHICLE prompt rules force "none"
+            // on an intact facade/vehicle with no visible defect. The on-device
+            // saliency check used to ALSO be required (dominates), but it was too
+            // strict for real rooms — a clearly-framed patio door among a plant, couch
+            // and rug reads as "ambiguous", which blocked auto-fill and forced the user
+            // to draw first. So trust the model on any non-featureless frame; a named
+            // visible defect (`defectVisible`) always qualifies. We still abstain when
+            // Vision found nothing salient at all (.none — blank wall/sky) and no
+            // defect was named, so a truly empty shot never authors a guess.
+            // NB: no longer gated on `cloud.isConfident`. A trailing "?" is the model
+            // hedging the CATEGORY slot (e.g. "Windows & Doors?" for a garage door),
+            // NOT the object read — its DESCRIPTION is still good, so a hedged category
+            // must not blank the auto-fill (that left a clearly-read solid door with an
+            // empty box, reported 2026-09-06). The model's own "unsure" (cloudReply
+            // throws) / DESCRIPTION "none" remain the abstain gate; the "?" only keeps
+            // the category tag from being auto-preselected below.
+            let defectVisible = describesVisibleDefect(cloud.details, cloud.description)
+            if notFeatureless || defectVisible { description = cloud.description }
             if let match = cloud.match {
                 matches.append(match)
                 // When the cloud model saw a vehicle it leads DETAILS with the
@@ -238,6 +327,20 @@ enum ImageClassifier {
         let subjectIsAuto = matches.contains { if case .auto = $0 { return true } else { return false } }
         if vehicle == nil, subjectIsAuto { vehicle = detectVehicleType(subject) }
         return Suggestions(matches: matches, confident: confident, details: details, vehicle: subjectIsAuto ? vehicle : nil, description: description)
+    }
+
+    /// Whether the model's visible observations name a concrete, seen defect —
+    /// used to auto-fill the description for a broken subject that doesn't fill the
+    /// frame. Deliberately conservative: only unambiguous damage words (no "break",
+    /// which collides with electrical "breaker"; no "hole"/"flat"/"stain", which are
+    /// too often benign) so an intact fixture is never mistaken for a damaged one.
+    private static func describesVisibleDefect(_ details: String?, _ description: String?) -> Bool {
+        let hay = [details, description].compactMap { $0 }.joined(separator: " ").lowercased()
+        guard !hay.isEmpty else { return false }
+        let cues = ["crack", "broken", "shatter", "dent", "leak", "rust", "rot",
+                    "fog", "chipped", "scratch", "scrape", "damage", "missing",
+                    "warp", "shred", "mold", "corro", "peel", "sag"]
+        return cues.contains { hay.contains($0) }
     }
 
     /// Fraction of the frame a single salient object must exceed to be treated as
@@ -320,11 +423,13 @@ enum ImageClassifier {
                 + "smaller item elsewhere in the frame."
         case let .ambiguous(topArea):
             let pct = Int((topArea * 100).rounded())
-            return "\nSUBJECT HINT (from an on-device detector): NO single object dominates the "
-                + "frame — several objects are of roughly equal size (the largest is only about "
-                + "\(pct)%). If there is no clearly repairable home or vehicle FIXTURE that "
-                + "dominates the shot, answer exactly 'unsure' rather than guessing a minor item "
-                + "(a rug, a cushion, a plant, a small object)."
+            return "\nSUBJECT HINT (from an on-device detector): no single object clearly "
+                + "dominates the frame — several are of roughly equal size (the largest is only "
+                + "about \(pct)%). Still identify the most prominent repairable home or vehicle "
+                + "FIXTURE if one is in view (a window, glass/patio door, vanity, cabinet, "
+                + "appliance, water heater, roof, or vehicle) and describe THAT — do not pick a "
+                + "minor item (a rug, a cushion, a plant, a small object). Answer exactly "
+                + "'unsure' only if there is genuinely no repairable fixture in the frame at all."
         case .none:
             return "\nSUBJECT HINT (from an on-device detector): NO single object stands out in "
                 + "the frame. If there is no clearly repairable home or vehicle FIXTURE that "
@@ -407,31 +512,35 @@ enum ImageClassifier {
     /// bare "unsure" (no usable content at all) — NOT when the category is merely
     /// unmappable, so `details`/`description` survive that case.
     private static func cloudReply(_ image: UIImage, hint: String? = nil) async throws -> CloudReply {
-        guard !hfToken.isEmpty else { throw ClassifyError.noMatch }
-        guard let jpeg = image.downscaled(maxDimension: 512).jpegData(compressionQuality: 0.7),
-              let url = URL(string: "https://router.huggingface.co/v1/chat/completions")
+        guard !ref.isEmpty, !anonKey.isEmpty else { throw ClassifyError.noMatch }
+        // ~1280px long edge (up from 512): Sonnet reads fine detail — a badge, a
+        // crack, panel joints — that a 512px thumbnail blurs away, and the image
+        // still costs only ~1k tokens. JPEG 0.7 keeps the payload small.
+        guard let jpeg = image.downscaled(maxDimension: 1280).jpegData(compressionQuality: 0.7),
+              let url = URL(string: "https://\(ref).supabase.co/functions/v1/classify")
         else { throw ClassifyError.noImage }
 
-        let dataURI = "data:image/jpeg;base64,\(jpeg.base64EncodedString())"
-        let payload: [String: Any] = [
-            "model": model, "max_tokens": 90,
-            "messages": [["role": "user", "content": [
-                ["type": "text", "text": prompt + (hint ?? "")],
-                ["type": "image_url", "image_url": ["url": dataURI]],
-            ]]],
+        var payload: [String: Any] = [
+            "prompt": prompt,
+            "image": jpeg.base64EncodedString(),
+            "media_type": "image/jpeg",
         ]
+        // The prompt stays stable (cached server-side); the per-photo subject hint
+        // rides separately so it never breaks that cache.
+        if let hint, !hint.isEmpty { payload["hint"] = hint }
+
         var req = URLRequest(url: url, timeoutInterval: 30)
         req.httpMethod = "POST"
-        req.setValue("Bearer \(hfToken)", forHTTPHeaderField: "Authorization")
         req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        req.setValue(anonKey, forHTTPHeaderField: "apikey")
+        req.setValue("Bearer \(anonKey)", forHTTPHeaderField: "Authorization")
+        if !appToken.isEmpty { req.setValue(appToken, forHTTPHeaderField: "x-app-token") }
         req.httpBody = try? JSONSerialization.data(withJSONObject: payload)
 
         let (data, resp) = try await URLSession.shared.data(for: req)
         guard (resp as? HTTPURLResponse)?.statusCode == 200,
               let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-              let choices = json["choices"] as? [[String: Any]],
-              let message = choices.first?["message"] as? [String: Any],
-              let content = message["content"] as? String
+              let content = json["content"] as? String
         else { throw ClassifyError.noMatch }
 
         // Model was reachable — trust its verdict, including an explicit "unsure".

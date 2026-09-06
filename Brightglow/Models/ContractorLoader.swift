@@ -36,15 +36,19 @@ enum ContractorLoader {
 
     /// A page of live results plus the token to fetch the next page — lets a
     /// swipe-through view keep loading more contractors while content remains.
+    /// `isAuto` forwards the caller's already-resolved vertical so a keyword-light
+    /// auto query ("vinyl wrap") searches as a shop, not a home "contractor".
     static func fetchLivePage(
         category: String,
         searchQuery: String,
         near coord: CLLocationCoordinate2D,
-        pageToken: String? = nil
+        pageToken: String? = nil,
+        isAuto: Bool? = nil
     ) async -> PlacesService.Page {
         let q = searchQuery.trimmingCharacters(in: .whitespacesAndNewlines)
         if !q.isEmpty {
-            return await PlacesService.fetchPage(searchText: q, near: coord, pageToken: pageToken)
+            return await PlacesService.fetchPage(searchText: q, near: coord,
+                                                 pageToken: pageToken, forceAuto: isAuto)
         } else if let cat = Category(rawValue: category) {
             return await PlacesService.fetchPage(category: cat, near: coord, pageToken: pageToken)
         } else {
@@ -92,7 +96,8 @@ enum ContractorLoader {
         searchQuery: String,
         near coord: CLLocationCoordinate2D,
         photoDetails: String? = nil,
-        vehicle: VehicleFilter? = nil
+        vehicle: VehicleFilter? = nil,
+        fast: Bool = false
     ) async -> PriceTier? {
         // Auto & moto used to return nil here unconditionally — there was no
         // vehicle cost data, so every auto result showed "coming soon". The
@@ -114,6 +119,27 @@ enum ContractorLoader {
         let resolvedVehicle = vehicle
             ?? (isAutoService(category: category, searchQuery: q) ? VehicleFilter.auto : nil)
         return await EstimateService.estimate(category: resolvedCategory, description: description,
-                                              zip: zip, vehicle: resolvedVehicle)
+                                              zip: zip, vehicle: resolvedVehicle, fast: fast)
+    }
+
+    /// Start the estimate EARLY, fire-and-forget — typically the moment a photo is
+    /// classified (and again once the clarify chat refines the job). It runs the
+    /// exact same path as `estimate` (geocode → classify → price), so it warms the
+    /// server's classification + grounded-search caches and this client's cache
+    /// while the user is still in the chat. When the results header later calls
+    /// `estimate` with the same inputs, it's deduped to this task or served from
+    /// cache — the price shows with little or no wait. Best-effort: any failure is
+    /// silently dropped (the results call will simply run normally).
+    static func prefetchEstimate(
+        category: String,
+        searchQuery: String,
+        near coord: CLLocationCoordinate2D,
+        photoDetails: String? = nil,
+        vehicle: VehicleFilter? = nil
+    ) {
+        Task.detached(priority: .utility) {
+            _ = await estimate(category: category, searchQuery: searchQuery, near: coord,
+                               photoDetails: photoDetails, vehicle: vehicle)
+        }
     }
 }

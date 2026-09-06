@@ -17,10 +17,14 @@ import MapKit
 enum EstimateService {
 
     /// A locally-aware price range for a job, or nil if no real data backs one.
+    ///
+    /// Goes through [[EstimateCache]] so a value already fetched (or prefetched on
+    /// capture — see `ContractorLoader.prefetchEstimate`) is returned immediately,
+    /// and a still-in-flight prefetch is awaited rather than duplicated.
     static func estimate(category: String, description: String, zip: String?,
-                         vehicle: VehicleFilter? = nil) async -> PriceTier? {
-        await PricingService.estimate(category: category, description: description,
-                                      zip: zip, vehicle: vehicle)
+                         vehicle: VehicleFilter? = nil, fast: Bool = false) async -> PriceTier? {
+        await EstimateCache.shared.estimate(category: category, description: description,
+                                            zip: zip, vehicle: vehicle, fast: fast)
     }
 
     /// Reverse-geocode a coordinate to a "City, ST" locality string plus its

@@ -12,6 +12,10 @@ struct CameraScreen: View {
             if camera.isAuthorized {
                 CameraPreview(session: camera.session)
                     .ignoresSafeArea()
+                    // Seed the pinch reference from the live zoom — the viewfinder
+                    // opens at the main-wide anchor (not 1.0) on an ultra-wide
+                    // device, so a stale 1.0 here would make the first pinch jump.
+                    .onAppear { zoomAtPinchStart = camera.zoomFactor }
                     // Pinch anywhere on the exposed viewfinder to zoom.
                     .gesture(
                         MagnifyGesture()

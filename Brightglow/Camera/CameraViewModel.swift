@@ -24,8 +24,18 @@ class CameraViewModel: NSObject, ObservableObject {
     /// Vehicle type inferred from the photo (car vs motorcycle) — labels the auto
     /// tags "Car repair" / "Moto repair". nil when no vehicle is recognised.
     @Published var detectedVehicle: VehicleFilter? = nil
+    /// A concise, ready-to-show phrase describing the subject and its problem
+    /// ("Blue Chevrolet Volt with large dents on the front door") — used to
+    /// auto-fill the capture input so the user sees what we understood. nil until
+    /// classified, or when the model couldn't describe it.
+    @Published var detectedDescription: String? = nil
     /// Multiple salient objects (only populated when the frame is ambiguous).
     @Published var detectedObjects: [DetectedObject] = []
+    /// Bumped every time a classification COMPLETES — whole-image or a circled
+    /// region. Lets the draw UI react to a re-read even when the resulting text is
+    /// identical to the last (a plain `detectedDescription` change wouldn't fire),
+    /// so circling always shows fresh feedback. See DrawModeView's draw handling.
+    @Published var classifyGeneration = 0
 
     /// Live pinch-to-zoom factor, 1× = no zoom. Published so the preview's
     /// gesture can pick up where the last pinch left off.
@@ -36,9 +46,16 @@ class CameraViewModel: NSObject, ObservableObject {
     private var configured = false
     /// The active capture device — held so pinch can drive its zoom.
     private var device: AVCaptureDevice?
-    /// Ceiling for pinch. The hardware allows far more, but past ~8× a phone
-    /// camera is upscaling mush — and a photo of a task is what the classifier
-    /// has to read.
+    /// The device zoom factor that corresponds to the standard "1×" wide framing
+    /// the viewfinder opens at. On a phone with an ultra-wide lens the zoom scale
+    /// is anchored to the ULTRA-WIDE (factor 1.0 ≈ the 0.5× wide view), so the
+    /// normal 1× is the switch-over factor to the main lens (typically 2.0);
+    /// pinching below it reaches the ultra-wide for a wider shot. 1.0 on phones
+    /// that only have the wide lens, where zoom-out isn't possible.
+    private var baseZoom: CGFloat = 1
+    /// Tele ceiling for pinch, expressed as a multiple of the standard 1× framing
+    /// (`baseZoom`). The hardware allows far more, but past ~8× a phone camera is
+    /// upscaling mush — and a photo of a task is what the classifier has to read.
     private let maxZoom: CGFloat = 8
 
     override init() {
@@ -103,15 +120,32 @@ class CameraViewModel: NSObject, ObservableObject {
         session.sessionPreset = .photo
 
         guard
-            let device = AVCaptureDevice.default(.builtInWideAngleCamera, for: .video, position: .back),
+            let device = Self.bestBackDevice(),
             let input = try? AVCaptureDeviceInput(device: device),
             session.canAddInput(input)
         else { session.commitConfiguration(); return }
 
         session.addInput(input)
         if session.canAddOutput(output) { session.addOutput(output) }
+        // Opt into the computational-photography quality that IS available to
+        // third-party apps (Deep Fusion / Smart HDR) and capture at the sensor's
+        // full resolution — the default is a flatter, lower-res image. (Night mode
+        // stays Apple-only, so very dark scenes still lag the native camera.)
+        output.maxPhotoQualityPrioritization = .quality
+        if let maxDim = device.activeFormat.supportedMaxPhotoDimensions
+            .max(by: { Int($0.width) * Int($0.height) < Int($1.width) * Int($1.height) }) {
+            output.maxPhotoDimensions = maxDim
+        }
         session.commitConfiguration()
         self.device = device
+        // Anchor "1×" to the main wide lens (the switch-over factor on a device
+        // that also has an ultra-wide), so the viewfinder opens at the same
+        // framing as before while a pinch-out can now dip into the ultra-wide.
+        baseZoom = device.virtualDeviceSwitchOverVideoZoomFactors.first.map { CGFloat($0.doubleValue) } ?? 1
+        if (try? device.lockForConfiguration()) != nil {
+            device.videoZoomFactor = baseZoom
+            device.unlockForConfiguration()
+        }
         zoomFactor = device.videoZoomFactor
 
         DispatchQueue.global(qos: .userInitiated).async {
@@ -121,16 +155,35 @@ class CameraViewModel: NSObject, ObservableObject {
 
     func capturePhoto() {
         let settings = AVCapturePhotoSettings()
+        // Max quality (engages Deep Fusion/Smart HDR when the scene allows) and
+        // full-resolution capture, matching what the output was configured for.
+        settings.photoQualityPrioritization = .quality
+        settings.maxPhotoDimensions = output.maxPhotoDimensions
         output.capturePhoto(with: settings, delegate: self)
     }
 
-    /// Set the pinch zoom, clamped to what the device actually supports (and to
-    /// `maxZoom`). Applied straight to the device, so the preview and the photo
-    /// it captures zoom together — no cropping on our side.
+    /// The back camera to open. Prefer a virtual device that INCLUDES the
+    /// ultra-wide lens, so the user can zoom OUT past the normal wide framing to
+    /// fit a whole subject in one shot — a full fence, a wall of windows, a whole
+    /// car — instead of being stuck shooting up close. Falls back to the plain
+    /// wide lens on phones with no ultra-wide (SE / older), where zoom-out simply
+    /// isn't available and the viewfinder behaves exactly as before.
+    private static func bestBackDevice() -> AVCaptureDevice? {
+        for type in [AVCaptureDevice.DeviceType.builtInTripleCamera, .builtInDualWideCamera] {
+            if let d = AVCaptureDevice.default(type, for: .video, position: .back) { return d }
+        }
+        return AVCaptureDevice.default(.builtInWideAngleCamera, for: .video, position: .back)
+    }
+
+    /// Set the pinch zoom, clamped to what the device actually supports. The floor
+    /// is the device minimum (1.0 on an ultra-wide device — the ~0.5× wide view —
+    /// so the user can zoom OUT below the standard framing); the ceiling is
+    /// `maxZoom`× the standard 1× framing. Applied straight to the device, so the
+    /// preview and the photo it captures zoom together — no cropping on our side.
     func setZoom(_ factor: CGFloat) {
         guard let device else { return }
-        let clamped = min(max(factor, device.minAvailableVideoZoomFactor),
-                          min(maxZoom, device.maxAvailableVideoZoomFactor))
+        let ceiling = min(baseZoom * maxZoom, device.maxAvailableVideoZoomFactor)
+        let clamped = min(max(factor, device.minAvailableVideoZoomFactor), ceiling)
         guard let _ = try? device.lockForConfiguration() else { return }
         device.videoZoomFactor = clamped
         device.unlockForConfiguration()
@@ -160,6 +213,7 @@ class CameraViewModel: NSObject, ObservableObject {
                 self.suggestedMatches = suggestions.matches
                 self.detectedMatch = suggestions.confident
                 self.detectedDetails = suggestions.details
+                self.detectedDescription = suggestions.description
                 // `suggestions.vehicle` is already gated on an auto subject (it's
                 // nil for a home photo even if a car is visible in the background),
                 // so trusting it directly can't flip a home request to the vehicle
@@ -167,6 +221,7 @@ class CameraViewModel: NSObject, ObservableObject {
                 // fallback — no separate whole-image vehicle guess is needed here,
                 // and adding one back would reintroduce the home-photo misroute.
                 self.detectedVehicle = suggestions.vehicle
+                self.classifyGeneration &+= 1
             }
         }
         Task {
@@ -175,11 +230,35 @@ class CameraViewModel: NSObject, ObservableObject {
         }
     }
 
+    /// Re-classify just the region the user circled and replace the detected
+    /// verdict with it. Drawing over an area disambiguates a busy frame — circling
+    /// the cabinets in a shot the whole-frame read called "hardwood floor" should
+    /// flip the auto-description (and the routing) to the cabinets. `rect` is in
+    /// the draw canvas's view space, `viewSize` its size.
+    func reclassifyRegion(_ rect: CGRect, viewSize: CGSize) {
+        guard let image = capturedImage else { return }
+        Task {
+            let s = await ImageClassifier.suggestTrades(image, regionInView: rect, viewSize: viewSize)
+            await MainActor.run {
+                // Only adopt a region read that actually resolved to something — a
+                // blank/too-small crop must not wipe the useful whole-frame guess.
+                guard s.description != nil || s.confident != nil || !s.matches.isEmpty else { return }
+                self.suggestedMatches = s.matches
+                self.detectedMatch = s.confident
+                self.detectedDetails = s.details
+                self.detectedDescription = s.description
+                self.detectedVehicle = s.vehicle
+                self.classifyGeneration &+= 1
+            }
+        }
+    }
+
     func retake() {
         capturedImage = nil
         detectedMatch = nil
         suggestedMatches = []
         detectedDetails = nil
+        detectedDescription = nil
         detectedVehicle = nil
         detectedObjects = []
         showDrawingCanvas = false

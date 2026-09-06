@@ -78,6 +78,17 @@ struct ContractorGalleryScreen: View {
     /// quote so the business is told which vehicle.
     var vehicleNote: String = ""
 
+    /// The vehicle type to segregate work photos by, derived from `vehicleNote` —
+    /// so a Moto business's gallery shows ONLY motorcycle photos (no cars), matching
+    /// the list. nil for home (filters nothing). Passed into every `PhotoFilter.order`.
+    private var photoVehicle: VehicleFilter? {
+        switch vehicleNote {
+        case "Motorcycle": return .moto
+        case "Car":        return .auto
+        default:           return nil
+        }
+    }
+
     /// True when a business owner is previewing their OWN page (from the Settings
     /// editor's "View profile"). It's the same consumer gallery, minus the parts
     /// that only make sense for a customer: no Call / Request-quote footer, and no
@@ -250,6 +261,7 @@ struct ContractorGalleryScreen: View {
             if startReviewsExpanded { sheetDetent = .full }
             await loadContractors()
             totalCount = contractors.count
+            AnalyticsService.track("contractor_viewed", ["count": contractors.count])
         }
         // Screen the current contractor + the next couple ahead of time, so the
         // photo is ready the instant a contractor is surfaced (no load stall).
@@ -618,7 +630,7 @@ struct ContractorGalleryScreen: View {
     private func statusView(spinner: Bool, text: String) -> some View {
         VStack(spacing: 16) {
             if spinner {
-                ProgressView().tint(.white).scaleEffect(1.4)
+                ThinkingOrb(size: 52, color: .white)
             } else {
                 Image(systemName: "checkmark.circle")
                     .font(.system(size: 60))
@@ -678,6 +690,7 @@ struct ContractorGalleryScreen: View {
                                      contractorPhone: contractor.phone)
         // Places returns a display-formatted number ("(415) 555-0132"); tel: URLs
         // only accept digits and a leading +.
+        AnalyticsService.track("call_tapped", ["place_id": contractor.id, "surface": "gallery"])
         let dialable = phone.filter { $0.isNumber || $0 == "+" }
         guard !dialable.isEmpty, let url = URL(string: "tel:\(dialable)") else { return }
         openURL(url)
@@ -744,7 +757,7 @@ struct ContractorGalleryScreen: View {
             }
             // Persisted verdict from a previous launch — reuse, no download.
             if let v = ScreeningStore.shared.get(contractor.id, allowVehicles: allowVehicles) {
-                let ordered = PhotoFilter.order(v.kept, query: orderQuery, capPremises: galleryPremisesCap)
+                let ordered = PhotoFilter.order(v.kept, query: orderQuery, capPremises: galleryPremisesCap, vehicle: photoVehicle)
                 screenedByID[contractor.id] = ordered
                 if ordered.isEmpty && !previewMode {
                     contractors.removeAll { $0.id == contractor.id }
@@ -763,7 +776,7 @@ struct ContractorGalleryScreen: View {
             if let v = await VerdictService.fetch(ids: [contractor.id], allowVehicles: allowVehicles)[contractor.id] {
                 ScreeningStore.shared.save(contractor.id, allowVehicles: allowVehicles,
                                            kept: v.kept, scanned: v.scanned, enriched: v.enriched)
-                let ordered = PhotoFilter.order(v.kept, query: orderQuery, capPremises: galleryPremisesCap)
+                let ordered = PhotoFilter.order(v.kept, query: orderQuery, capPremises: galleryPremisesCap, vehicle: photoVehicle)
                 screenedByID[contractor.id] = ordered
                 if ordered.isEmpty && !previewMode {
                     contractors.removeAll { $0.id == contractor.id }
@@ -784,7 +797,7 @@ struct ContractorGalleryScreen: View {
             let scanned = min(galleryScanLimit, contractor.photos.count)
             ScreeningStore.shared.save(contractor.id, allowVehicles: allowVehicles, kept: kept, scanned: scanned)
             VerdictService.upload(id: contractor.id, allowVehicles: allowVehicles, kept: kept, scanned: scanned)
-            let ordered = PhotoFilter.order(kept, query: orderQuery, capPremises: galleryPremisesCap)
+            let ordered = PhotoFilter.order(kept, query: orderQuery, capPremises: galleryPremisesCap, vehicle: photoVehicle)
             guard !ordered.isEmpty || previewMode else {
                 // No usable work photos → drop the business entirely rather than
                 // showing an empty placeholder. Keep totalCount in step so the
@@ -912,7 +925,7 @@ struct ContractorGalleryScreen: View {
         let allowVehicles = isAutoService(category: category, searchQuery: searchQuery)
         let screened = await PhotoFilter.screen(urls, allowVehicles: allowVehicles,
                                                 limit: urls.count, scanLimit: urls.count)
-        let website = PhotoFilter.order(screened, query: orderQuery, capPremises: galleryPremisesCap)
+        let website = PhotoFilter.order(screened, query: orderQuery, capPremises: galleryPremisesCap, vehicle: photoVehicle)
         guard !website.isEmpty, contractors.contains(where: { $0.id == contractor.id }) else { return }
         let existing = screenedByID[contractor.id] ?? []
         let have = Set(existing)
@@ -967,7 +980,7 @@ struct ContractorGalleryScreen: View {
         // (storefront/office/house-exterior) shots capped so they can't fill the
         // strip. No padding with unscreened photos — quality over hitting a count,
         // so a business with only 4 real work photos shows 4, not 4 + 6 storefronts.
-        let ordered = PhotoFilter.order(kept, query: orderQuery, capPremises: galleryPremisesCap)
+        let ordered = PhotoFilter.order(kept, query: orderQuery, capPremises: galleryPremisesCap, vehicle: photoVehicle)
         guard contractors.contains(where: { $0.id == contractor.id }) else { return }
         if !ordered.isEmpty { screenedByID[contractor.id] = ordered }
     }
@@ -986,7 +999,7 @@ struct ContractorGalleryScreen: View {
             // Re-order only when the tags changed the labels; either way mark the
             // verdict enriched so it isn't re-tagged on every visit.
             if enriched != kept {
-                screenedByID[id] = PhotoFilter.order(enriched, query: orderQuery, capPremises: galleryPremisesCap)
+                screenedByID[id] = PhotoFilter.order(enriched, query: orderQuery, capPremises: galleryPremisesCap, vehicle: photoVehicle)
             }
             ScreeningStore.shared.save(id, allowVehicles: allowVehicles, kept: enriched,
                                        scanned: scanned, enriched: true)
@@ -1079,7 +1092,16 @@ private struct GalleryPhotoView: View {
     /// it just above the collapsed sheet.
     let stripBottomPadding: CGFloat
 
+    /// The photo to open on — the exact one tapped in the list strip. Applied once
+    /// the photos arrive, then held in place by URL as the screen keeps
+    /// reordering/expanding the pool afterwards (see `syncIndex`).
+    let initialIndex: Int
+
     @State private var photoIndex: Int
+    /// Whether `initialIndex` has been applied yet. The screen keeps rewriting
+    /// `photos` after we open (deepen / website-merge / owner-lead), so once the
+    /// tapped photo is shown we anchor to its URL rather than the raw index.
+    @State private var didSeedInitial = false
     /// The photo tapped for full-screen zoom (nil = viewer closed).
     @State private var zoomItem: ZoomItem? = nil
 
@@ -1089,9 +1111,33 @@ private struct GalleryPhotoView: View {
         self.width = width
         self.imageHeight = imageHeight
         self.stripBottomPadding = stripBottomPadding
+        self.initialIndex = initialIndex
         // Clamp so a stale index from the list can never point past the stack.
         let count = photos?.count ?? 0
         _photoIndex = State(initialValue: count > 0 ? min(max(initialIndex, 0), count - 1) : 0)
+    }
+
+    /// Keep the hero on the SAME photo as `photos` changes underneath us. The
+    /// screen deepens the pool, merges website shots, and pins owner photos AFTER
+    /// the gallery opens — all of which reorder (and grow) the array. Anchoring to
+    /// the URL, not a fixed integer, stops the hero from sliding onto whatever now
+    /// sits at the old index — which is what made a photo tapped in the list appear
+    /// to jump back to the first shot.
+    private func syncIndex(_ old: [String]?, _ new: [String]?) {
+        guard let new, !new.isEmpty else { return }
+        // First non-empty fill → land on the exact photo tapped in the list.
+        guard didSeedInitial else {
+            didSeedInitial = true
+            photoIndex = min(max(initialIndex, 0), new.count - 1)
+            return
+        }
+        // Later reorders/expansions → follow the currently-shown photo by URL.
+        if let old, old.indices.contains(photoIndex),
+           let moved = new.firstIndex(of: old[photoIndex]) {
+            if moved != photoIndex { photoIndex = moved }
+        } else if !new.indices.contains(photoIndex) {
+            photoIndex = min(photoIndex, new.count - 1)
+        }
     }
 
     private var shownPhotos: [String] { photos ?? [] }
@@ -1112,7 +1158,10 @@ private struct GalleryPhotoView: View {
                     // placeholder rather than the rejected junk.
                     placeholder
                 } else {
-                    PlacesImage(url: photoURL) { Color.black }
+                    // A neutral loading surface (not solid black) while the full-res
+                    // hero decodes, so an in-flight — or briefly-failed-then-retrying
+                    // — photo reads as loading rather than a broken black screen.
+                    PlacesImage(url: photoURL) { loadingSurface }
                         .scaledToFill()
                         .frame(width: width, height: imageHeight)
                         .clipped()
@@ -1144,6 +1193,9 @@ private struct GalleryPhotoView: View {
                 // viewer, so closing it lands on the photo the user paged to.
                 onIndexChange: { photoIndex = $0 })
         }
+        // Seed the tapped photo once it's available, then keep the hero pinned to
+        // that same photo as the screen reorders/expands the pool behind us.
+        .onChange(of: photos, initial: true) { old, new in syncIndex(old, new) }
     }
 
     private var loadingSurface: some View {
@@ -1181,7 +1233,14 @@ private struct GalleryPhotoView: View {
                     Button {
                         withAnimation(.easeInOut(duration: 0.2)) { photoIndex = i }
                     } label: {
-                        PlacesImage(url: URL(string: s)) { Color.black }
+                        // Render the thumbnail at the list's small width, not the
+                        // stored full-res URL: decoding a 1600px image into a 52×64
+                        // tile (×10) is a needless memory hit that can itself cause
+                        // load failures — and this URL matches what the list already
+                        // fetched, so it's normally a cache hit.
+                        PlacesImage(url: URL(string: PlacesService.photoURL(s, width: PlacesService.listPhotoWidth))) {
+                            loadingSurface
+                        }
                             .scaledToFill()
                             .frame(width: 52, height: 64)
                             .clipped()
@@ -1251,6 +1310,9 @@ private struct PhotoZoomViewer: View {
     @State private var lastOffset: CGSize = .zero
     /// Live downward drag for pull-to-dismiss (only when not zoomed in).
     @State private var dismissOffset: CGFloat = 0
+    /// Live horizontal drag while paging — the strip follows the finger, then
+    /// springs to settle on the next/previous photo (0 when idle).
+    @State private var dragX: CGFloat = 0
 
     private let maxScale: CGFloat = 4
     /// How far into the dismiss pull we are, 0…1 — fades the backdrop and shrinks
@@ -1266,26 +1328,46 @@ private struct PhotoZoomViewer: View {
         _index = State(initialValue: initialIndex)
     }
 
-    private var url: URL? {
-        photos.indices.contains(index) ? URL(string: photos[index]) : nil
+    /// Wrap an index into range so paging loops seamlessly at both ends.
+    private func wrapped(_ i: Int) -> Int {
+        let n = photos.count
+        guard n > 0 else { return 0 }
+        return ((i % n) + n) % n
+    }
+
+    private func photoURL(_ i: Int) -> URL? {
+        photos.isEmpty ? nil : URL(string: photos[wrapped(i)])
     }
 
     var body: some View {
-        ZStack(alignment: .topLeading) {
-            // Backdrop fades as the photo is pulled down, revealing the gallery
-            // beneath and signalling the pending dismiss.
-            Color.black.opacity(1 - dismissProgress * 0.6).ignoresSafeArea()
+        GeometryReader { geo in
+            let w = geo.size.width
+            ZStack(alignment: .topLeading) {
+                // Backdrop fades as the photo is pulled down, revealing the gallery
+                // beneath and signalling the pending dismiss.
+                Color.black.opacity(1 - dismissProgress * 0.6).ignoresSafeArea()
 
-            PlacesImage(url: url) { Color.clear }
-                .scaledToFit()
-                // The dismiss pull shrinks the photo slightly (only when not zoomed).
-                .scaleEffect(scale * pinch * (scale <= 1 ? 1 - dismissProgress * 0.15 : 1))
-                .offset(x: offset.width, y: offset.height + dismissOffset)
+                // A three-photo window (prev · current · next), centered on the
+                // current shot, so a horizontal swipe slides the neighbouring photo
+                // in with the finger instead of a crossfade. Only the middle photo
+                // takes the pinch-zoom / pan; paging is off while zoomed in.
+                HStack(spacing: 0) {
+                    ForEach(-1...1, id: \.self) { slot in
+                        PlacesImage(url: photoURL(index + slot)) { Color.clear }
+                            .scaledToFit()
+                            .frame(width: w)
+                            // The current photo carries the zoom, pan, and the slight
+                            // dismiss-shrink; the neighbours ride along untransformed.
+                            .scaleEffect(slot == 0
+                                         ? scale * pinch * (scale <= 1 ? 1 - dismissProgress * 0.15 : 1)
+                                         : 1)
+                            .offset(slot == 0 ? offset : .zero)
+                    }
+                }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .offset(x: dragX, y: dismissOffset)
                 .ignoresSafeArea()
-                .id(index)
-                .transition(.opacity)
-                .animation(.easeInOut(duration: 0.2), value: index)
+                .contentShape(Rectangle())
                 .gesture(
                     MagnificationGesture()
                         .updating($pinch) { value, state, _ in state = value }
@@ -1302,8 +1384,11 @@ private struct PhotoZoomViewer: View {
                             if scale > 1 {
                                 offset = CGSize(width: lastOffset.width + v.translation.width,
                                                 height: lastOffset.height + v.translation.height)
-                            } else if v.translation.height > 0,
-                                      abs(v.translation.height) > abs(v.translation.width) {
+                            } else if abs(v.translation.width) > abs(v.translation.height) {
+                                // Not zoomed + horizontal-dominant → the strip tracks
+                                // the finger between photos.
+                                dragX = v.translation.width
+                            } else if v.translation.height > 0 {
                                 // Not zoomed + downward-dominant → live pull-to-dismiss.
                                 dismissOffset = v.translation.height
                             }
@@ -1311,20 +1396,25 @@ private struct PhotoZoomViewer: View {
                         .onEnded { v in
                             if scale > 1 { lastOffset = offset; return }
                             let horizontal = abs(v.translation.width) > abs(v.translation.height)
-                            if !horizontal {
-                                // Vertical drag: a far-enough pull or a downward flick
-                                // dismisses; otherwise the photo springs back.
-                                if v.translation.height > 120 || v.predictedEndTranslation.height > 320 {
-                                    onClose()
+                            if horizontal {
+                                // Commit on a far-enough drag OR a quick flick; else
+                                // spring the strip back to the current photo.
+                                let commit = abs(v.translation.width) > w * 0.25
+                                    || abs(v.predictedEndTranslation.width) > w * 0.5
+                                if commit {
+                                    page(v.translation.width < 0 ? 1 : -1, width: w)
                                 } else {
-                                    withAnimation(.easeOut(duration: 0.2)) { dismissOffset = 0 }
+                                    withAnimation(.interpolatingSpring(stiffness: 300, damping: 30)) { dragX = 0 }
                                 }
                                 return
                             }
-                            // Horizontal-dominant swipe pages, same threshold as the gallery.
-                            withAnimation(.easeOut(duration: 0.2)) { dismissOffset = 0 }
-                            guard abs(v.translation.width) > 40 else { return }
-                            page(v.translation.width < 0 ? 1 : -1)   // swipe left → next
+                            // Vertical drag: a far-enough pull or a downward flick
+                            // dismisses; otherwise the photo springs back.
+                            if v.translation.height > 120 || v.predictedEndTranslation.height > 320 {
+                                onClose()
+                            } else {
+                                withAnimation(.easeOut(duration: 0.2)) { dismissOffset = 0 }
+                            }
                         }
                 )
                 .onTapGesture(count: 2) {
@@ -1334,34 +1424,44 @@ private struct PhotoZoomViewer: View {
                     }
                 }
 
-            // Header — only the close (cross) button.
-            Button(action: onClose) {
-                Image(systemName: "xmark")
-                    .font(.system(size: 18, weight: .semibold))
-                    .foregroundStyle(.white)
-                    .frame(width: 44, height: 44)
-                    .background(Circle().fill(.black.opacity(0.35)))
-                    .contentShape(Rectangle())
+                // Header — only the close (cross) button.
+                Button(action: onClose) {
+                    Image(systemName: "xmark")
+                        .font(.system(size: 18, weight: .semibold))
+                        .foregroundStyle(.white)
+                        .frame(width: 44, height: 44)
+                        .background(Circle().fill(.black.opacity(0.35)))
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .padding(.leading, 8)
+                .padding(.top, 8)
             }
-            .buttonStyle(.plain)
-            .padding(.leading, 8)
-            .padding(.top, 8)
         }
     }
 
-    /// Step to the next/previous photo (wraps around) and reset any zoom/pan so
-    /// the new photo opens at its natural fit.
-    private func page(_ dir: Int) {
-        let count = photos.count
-        guard count > 1 else { return }
-        withAnimation(.easeInOut(duration: 0.2)) {
-            index = (index + dir + count) % count
+    /// Slide to the next/previous photo (wraps around). The strip is flung the last
+    /// stretch to where the neighbour already sits, then — with the neighbour now
+    /// centered — `index` advances and `dragX` resets in the same instant, so the
+    /// hand-off is seamless (no snap, no reload flash). Zoom/pan reset for the new
+    /// photo. `dir` is +1 for next (swipe left), -1 for previous.
+    private func page(_ dir: Int, width w: CGFloat) {
+        let n = photos.count
+        guard n > 1 else {
+            withAnimation(.interpolatingSpring(stiffness: 300, damping: 30)) { dragX = 0 }
+            return
+        }
+        withAnimation(.interpolatingSpring(stiffness: 260, damping: 30)) {
+            dragX = -CGFloat(dir) * w
+        } completion: {
+            index = (index + dir + n) % n
             scale = 1
             offset = .zero
             lastOffset = .zero
             dismissOffset = 0
+            dragX = 0
+            onIndexChange(index)
         }
-        onIndexChange(index)
     }
 }
 

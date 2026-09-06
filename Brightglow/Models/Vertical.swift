@@ -52,8 +52,12 @@ struct AutoCategory: Identifiable, Equatable, Hashable {
 /// routine maintenance/oil changes and battery/electrical work (same general
 /// repair shops), per product decision.
 let autoCategoryItems: [AutoCategory] = [
+    // Keywords must be vehicle-SPECIFIC. Generic words a home job uses just as
+    // often ("repair", "maintenance", "motor", "garage") were removed: a bare
+    // "repair the window trim" was matching here on "repair" and routing a home
+    // window to auto shops. Vehicle context ("auto"/"car"/a real part) is required.
     AutoCategory(name: "Repair",               searchQuery: "auto repair and maintenance shop",  motoSearchQuery: "motorcycle repair and maintenance shop", assetName: "fig_auto_repair",
-                 keywords: ["repair", "engine", "mechanic", "brake", "transmission", "motor", "garage", "muffler", "exhaust", "suspension", "oil change", "maintenance", "car", "vehicle", "motorcycle", "automobile", "truck", "sedan", "engine bay"]),
+                 keywords: ["auto repair", "car repair", "engine", "mechanic", "brake", "transmission", "muffler", "exhaust", "suspension", "oil change", "car", "vehicle", "motorcycle", "automobile", "truck", "sedan", "engine bay"]),
     AutoCategory(name: "Tires",                searchQuery: "tire shop",                          motoSearchQuery: "motorcycle tire shop",                   assetName: "fig_auto_tires",
                  keywords: ["tire", "tyre", "wheel", "rim", "flat tire", "tread", "alloy wheel", "puncture"]),
     AutoCategory(name: "Cleaning & Detailing", searchQuery: "car wash and auto detailing",        motoSearchQuery: "motorcycle detailing",                   assetName: "fig_auto_detailing",

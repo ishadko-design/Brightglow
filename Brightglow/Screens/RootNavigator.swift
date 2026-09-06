@@ -8,7 +8,10 @@ struct RootNavigator: View {
         Group {
             if auth.isRestoringSession {
                 SplashView()
-            } else if auth.isSignedIn {
+            } else if !FeatureFlags.accountFeaturesEnabled || auth.isSignedIn {
+                // Consumer-only build: no login wall — the app opens straight to
+                // the main screen. When account features return, an unsigned user
+                // falls through to LoginView as before.
                 MainScreen()
             } else {
                 LoginView()

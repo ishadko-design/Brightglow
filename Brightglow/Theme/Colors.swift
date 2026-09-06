@@ -54,11 +54,6 @@ struct AppColors {
     static let searchBg        = DesignTokens.colorBgSecondary
     static let searchBorder    = DesignTokens.colorGray20
 
-    // ── Shutter button ────────────────────────────────────────────────────────
-    static let shutterBg       = DesignTokens.colorGray20
-    static let shutterBorder   = DesignTokens.colorWhite
-    static let shutterRing     = DesignTokens.colorGray20
-
     // ── Profile icon ──────────────────────────────────────────────────────────
     static let iconBg          = DesignTokens.colorBgSecondary
 

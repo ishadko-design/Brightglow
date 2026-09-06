@@ -88,18 +88,21 @@ struct QuoteRequestScreen: View {
         let e = email.trimmingCharacters(in: .whitespaces)
         return e.contains("@") && e.contains(".") && !e.hasSuffix("@") && !isRelay
     }
-    /// Shown only when the signed-in email needs attention — the screen has no
-    /// email card in the normal case (Figma doesn't show one; it's collected
-    /// at sign-in), so this only ever surfaces to unblock a broken send.
-    private var emailNeedsAttention: Bool { !email.isEmpty && !emailValid }
     /// Send needs the user's own words — a request that's just a category name
     /// (or nothing) tells the business nothing actionable. A photo helps but
     /// isn't required.
     private var hasDescription: Bool {
         !editableRequest.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     }
+    /// True when the request will go out as a person-to-person text (contractor
+    /// has a phone and the device can text). On this path the user's own Messages
+    /// app is the reply channel — the business gets the customer's number — so no
+    /// email is needed or used. Email is only the reply channel on the fallback.
+    private var willText: Bool {
+        contractor?.phone != nil && MFMessageComposeViewController.canSendText()
+    }
     private var canSend: Bool {
-        emailValid && hasDescription && contractor != nil && !sending
+        (willText || emailValid) && hasDescription && contractor != nil && !sending
     }
 
     var body: some View {
@@ -123,10 +126,83 @@ struct QuoteRequestScreen: View {
             }
             if images.isEmpty { images = initialImages }
             resolveLogo()
+            AnalyticsService.track("quote_opened", ["place_id": contractor?.id ?? ""])
         }
     }
 
     // MARK: - Review / consent
+
+    /// Neutral buyer-side coaching, shown as bullets under the request. Purely
+    /// informational — never attached to the outgoing message or sent to a business.
+    private let buyerTips: [String] = [
+        "Get 3 quotes to compare",
+        "Ask for a licence # & insurance",
+        "Give each business the same scope",
+        "Get the quote in writing",
+    ]
+
+    /// Tips list below the request input. Sits at the bottom of the scroll, under
+    /// the sticky footer, so it peeks out and the user can scroll to read it.
+    private var tipsList: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Label("Tips for comparing quotes", systemImage: "lightbulb")
+                .font(.bodySmall)
+                .fontWeight(.semibold)
+                .foregroundStyle(AppColors.textSecondary)
+            ForEach(buyerTips, id: \.self) { tip in
+                HStack(alignment: .top, spacing: 8) {
+                    Text("•")
+                        .foregroundStyle(AppColors.textSecondary)
+                    Text(tip)
+                        .foregroundStyle(.white)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                .font(.bodyLight)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    /// Sticky send footer, overlaid on the scroll. Its background fades from clear
+    /// into the page colour so the tips scroll smoothly underneath it.
+    private var sendFooter: some View {
+        VStack(spacing: 16) {
+            Text("We'll open your Messages app, just tap send there to finish. Msg & data rates may apply")
+                .font(.bodySmall)
+                .foregroundStyle(.white.opacity(0.5))
+                .multilineTextAlignment(.center)
+
+            Button(action: sendRequest) {
+                if sending {
+                    ProgressView().tint(.white)
+                        .frame(maxWidth: .infinity)
+                        .frame(height: 48)
+                } else {
+                    Text("Continue")
+                        .font(.h3)
+                        .foregroundStyle(.white)
+                        .frame(maxWidth: .infinity)
+                        .frame(height: 48)
+                }
+            }
+            .buttonStyle(.gradient)
+            .disabled(!canSend)
+        }
+        .padding(.horizontal, 24)
+        .padding(.top, 20)
+        .padding(.bottom, 32)
+        .background(
+            LinearGradient(
+                stops: [
+                    .init(color: AppColors.bg.opacity(0), location: 0.0),
+                    .init(color: AppColors.bg,            location: 0.35),
+                    .init(color: AppColors.bg,            location: 1.0),
+                ],
+                startPoint: .top, endPoint: .bottom
+            )
+            .ignoresSafeArea(edges: .bottom)
+        )
+    }
 
     private var reviewState: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -156,6 +232,9 @@ struct QuoteRequestScreen: View {
                     businessHeader
                         .frame(maxWidth: .infinity)
                         .padding(.horizontal, 24)
+                        // Breathing room under the title so the smaller logo isn't
+                        // crammed against the top of the scroll area.
+                        .padding(.top, 24)
 
                     VStack(alignment: .leading, spacing: 24) {
                         // Photos — optional. A horizontally scrolling strip once
@@ -168,7 +247,13 @@ struct QuoteRequestScreen: View {
                         // attribution the business receives.
                         requestPill
 
-                        if emailNeedsAttention {
+                        // Collect the reply email inline ONLY on the email-only
+                        // fallback (no phone / can't text), where it's the sole way
+                        // the business can reach the customer. On the text path the
+                        // user's own Messages app carries their number, so the email
+                        // is unused — asking for it there is pointless friction and
+                        // wrongly blocks send (see willText / canSend).
+                        if !willText && !emailValid {
                             emailFixCard
                         }
 
@@ -177,38 +262,19 @@ struct QuoteRequestScreen: View {
                         }
                     }
                     .padding(.horizontal, 16)
+
+                    // Buyer tips — bullet points below the request. Informational
+                    // only (never sent to the business). They sit beneath the sticky
+                    // footer and peek out; the user can scroll to read them all.
+                    tipsList
+                        .padding(.horizontal, 16)
                 }
                 .padding(.top, 8)
-                .padding(.bottom, 24)
+                // Room to scroll the tips out from under the overlaid footer.
+                .padding(.bottom, 160)
             }
-
-            // Send. Tapping this hands off to the user's own Messages app —
-            // the helper sets that expectation so the send arrow there isn't a
-            // surprise, and discloses that an MMS (photos) may incur carrier fees.
-            VStack(spacing: 16) {
-                Text("We'll open your Messages app, just tap send there to finish. Msg & data rates may apply")
-                    .font(.bodySmall)
-                    .foregroundStyle(.white.opacity(0.5))
-                    .multilineTextAlignment(.center)
-
-                Button(action: sendRequest) {
-                    if sending {
-                        ProgressView().tint(.white)
-                            .frame(maxWidth: .infinity)
-                            .frame(height: 48)
-                    } else {
-                        Text("Continue")
-                            .font(.h3)
-                            .foregroundStyle(.white)
-                            .frame(maxWidth: .infinity)
-                            .frame(height: 48)
-                    }
-                }
-                .buttonStyle(.gradient)
-                .disabled(!canSend)
-            }
-            .padding(.horizontal, 24)
-            .padding(.bottom, 32)
+            // The send footer overlays the scroll, so the tips slide underneath it.
+            .overlay(alignment: .bottom) { sendFooter }
         }
         .onChange(of: pickedItems) { _, items in
             guard !items.isEmpty else { return }
@@ -247,6 +313,9 @@ struct QuoteRequestScreen: View {
                         drawingPaths = []
                         drawingIndex = nil
                     },
+                    // No auto-description in the annotation editor — the photo was
+                    // already described at capture time.
+                    autoDescription: .constant(""),
                     paths: $drawingPaths
                 )
             }
@@ -258,6 +327,14 @@ struct QuoteRequestScreen: View {
         .sheet(item: $compose) { payload in
             MessageComposerView(recipient: payload.recipient, body: payload.body, photos: payload.photos) { result in
                 compose = nil
+                // The blue Send INSIDE Messages: the true conversion. .sent means
+                // the text actually went; .cancelled is the abandon we couldn't
+                // see before; .failed is a compose error.
+                AnalyticsService.track("send_result", [
+                    "place_id": contractor?.id ?? "",
+                    "channel": "text",
+                    "outcome": result == .sent ? "sent" : (result == .failed ? "failed" : "cancelled"),
+                ])
                 // Only a real send delivers anything. Cancelling (or a compose
                 // failure) leaves the business with nothing and keeps the user on
                 // the form — no email leg, no "Request sent".
@@ -280,8 +357,9 @@ struct QuoteRequestScreen: View {
 
     /// The recipient block under the "Send your request to" header: the business's
     /// real logo (only when one resolves — no monogram/initials fallback) above its
-    /// name. Figma node 1336:5866: 88×88 logo, r24; name in Poppins Light 17,
-    /// centered; 24pt gap.
+    /// name. Name in Poppins Light 17, centered; 24pt gap. The logo is 44×44 (r12) —
+    /// half the Figma's 88, since resolved marks are often small/low-res and blow up
+    /// badly at full size; smaller keeps a pixelated logo from dominating the screen.
     private var businessHeader: some View {
         VStack(spacing: 24) {
             if let logoURL {
@@ -290,14 +368,14 @@ struct QuoteRequestScreen: View {
                         // On a white backing so dark/transparent marks stay visible
                         // against the dark UI, matching the list-row logo chip.
                         image.resizable().scaledToFill()
-                            .frame(width: 88, height: 88)
+                            .frame(width: 44, height: 44)
                             .background(Color.white)
-                            .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
+                            .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
                     }
                     // No fallback tile: if the resolved logo can't load, the name
                     // alone carries the screen rather than a placeholder square.
                 }
-                .frame(width: 88, height: 88)
+                .frame(width: 44, height: 44)
             }
             Text(contractor?.name ?? "this business")
                 .font(.bodyLight)
@@ -415,7 +493,7 @@ struct QuoteRequestScreen: View {
                 .onSubmit { requestFocused = false }
                 .frame(maxWidth: .infinity, alignment: .leading)
 
-            Text("Sent via Brightglow, brightglow.co/biz")
+            Text("See more jobs like this at brightglow.co/biz")
                 .font(.bodyLight)
                 .foregroundStyle(.white.opacity(0.5))
         }
@@ -527,7 +605,17 @@ struct QuoteRequestScreen: View {
     /// With none attached the lead goes as text only.
     private func sendRequest() {
         guard canSend, let contractor else { return }
-        let photo = images.first
+        // The in-app "Send" CTA was tapped — this OPENS the composer; it does not
+        // yet deliver. The matching `send_result` event records whether the user
+        // then actually sent (the gap between the two is the funnel drop).
+        AnalyticsService.track("send_tapped", [
+            "place_id": contractor.id,
+            "channel": (contractor.phone != nil && MFMessageComposeViewController.canSendText()) ? "text" : "email",
+        ])
+        // Watermark the copy that leaves the app: the LeadBridge record photo (shown
+        // on the /l/<id> reply page) and the email-leg attachment. The MMS copies get
+        // the same mark in the composer's attach loop. On-screen previews stay clean.
+        let photo = images.first?.brightglowWatermarked()
         emailFocused = false
         requestFocused = false
         editingEmail = false
@@ -553,11 +641,11 @@ struct QuoteRequestScreen: View {
             let publicId = LeadBridgeService.newPublicID()
             // Frictionless on a normal lead: the photo's attached to the MMS and the
             // business just replies in Messages — no page to visit. Attribute the
-            // source with the business hub (brightglow.co/biz) where they log in or
-            // claim their profile. (The /l/<id> reply link is reserved for the paywall
-            // moment — the last/over-quota lead — where the extra tap earns its keep
-            // by driving the subscribe.)
-            let body = description + "\n\nSent via Brightglow, brightglow.co/biz"
+            // source with a value-forward CTA to the claim hub (brightglow.co/biz)
+            // where they log in or claim their profile. (The /l/<id> reply link is
+            // reserved for the paywall moment — the last/over-quota lead — where the
+            // extra tap earns its keep by driving the subscribe.)
+            let body = description + "\n\nSee more jobs like this at brightglow.co/biz"
             // One atomic payload → the composer is always built from complete data.
             compose = ComposePayload(
                 recipient: Self.smsTestRecipient.isEmpty ? phone : Self.smsTestRecipient,
@@ -576,11 +664,13 @@ struct QuoteRequestScreen: View {
                     try await submitEmailLead(contractor, description: description, photo: photo)
                     await MainActor.run {
                         sending = false
+                        AnalyticsService.track("send_result", ["place_id": contractor.id, "channel": "email", "outcome": "sent"])
                         withAnimation(.easeInOut(duration: 0.25)) { sent = true }
                     }
                 } catch {
                     await MainActor.run {
                         sending = false
+                        AnalyticsService.track("send_result", ["place_id": contractor.id, "channel": "email", "outcome": "failed"])
                         sendError = "Couldn't send: \(error)"
                     }
                 }
@@ -633,7 +723,7 @@ struct MessageComposerView: UIViewControllerRepresentable {
         var attached = 0
         if MFMessageComposeViewController.canSendAttachments() {
             for (i, image) in photos.enumerated() {
-                guard let data = image.jpegData(compressionQuality: 0.8) else { continue }
+                guard let data = image.brightglowWatermarked().jpegData(compressionQuality: 0.8) else { continue }
                 if vc.addAttachmentData(data, typeIdentifier: "public.jpeg", filename: "request-\(i + 1).jpg") {
                     attached += 1
                 }
@@ -647,12 +737,48 @@ struct MessageComposerView: UIViewControllerRepresentable {
 
     func makeCoordinator() -> Coordinator { Coordinator(onFinish: onFinish) }
 
+
     final class Coordinator: NSObject, MFMessageComposeViewControllerDelegate {
         let onFinish: (MessageComposeResult) -> Void
         init(onFinish: @escaping (MessageComposeResult) -> Void) { self.onFinish = onFinish }
         func messageComposeViewController(_ controller: MFMessageComposeViewController,
                                           didFinishWith result: MessageComposeResult) {
             onFinish(result)
+        }
+    }
+}
+
+extension UIImage {
+    /// Returns a copy with a small "Brightglow.co" mark in the bottom-right corner.
+    /// This is the ONE piece of product attribution the customer can't strip in
+    /// Messages (unlike a body line) — it travels with the MMS attachment itself,
+    /// and points a curious business straight at the site. Applied only to the
+    /// outgoing copy at send time, never to the on-screen preview, so the user
+    /// reviews their own unaltered photo.
+    func brightglowWatermarked() -> UIImage {
+        let text = "Brightglow.co"
+        // Scale the mark to the image so it reads the same on a tiny thumbnail or
+        // a full-res shot; clamp so it never disappears on small images.
+        let fontSize = max(size.width * 0.032, 15)
+        let font = UIFont.systemFont(ofSize: fontSize, weight: .semibold)
+        let attrs: [NSAttributedString.Key: Any] = [
+            .font: font,
+            .foregroundColor: UIColor.white,
+        ]
+        let textSize = (text as NSString).size(withAttributes: attrs)
+        let pad = fontSize * 0.7
+
+        let renderer = UIGraphicsImageRenderer(size: size)
+        return renderer.image { ctx in
+            draw(in: CGRect(origin: .zero, size: size))
+            // A soft dark shadow keeps white legible over light subjects (tile,
+            // porcelain, a white vanity) without a visible plate.
+            ctx.cgContext.setShadow(offset: CGSize(width: 0, height: 1),
+                                    blur: fontSize * 0.5,
+                                    color: UIColor.black.withAlphaComponent(0.55).cgColor)
+            let origin = CGPoint(x: size.width - textSize.width - pad,
+                                 y: size.height - textSize.height - pad)
+            (text as NSString).draw(at: origin, withAttributes: attrs)
         }
     }
 }

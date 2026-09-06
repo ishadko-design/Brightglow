@@ -43,7 +43,18 @@ struct MainScreen: View {
     /// duration of a clarifying chat. The photo establishes the vertical before a
     /// single question is asked, so abandoning the chat must fall back to it — not
     /// to an empty category, which reads downstream as a home search.
-    @State private var clarifyDetectedAuto: AutoCategory? = nil
+    /// The vertical the capture (or the landing chooser) established — the FALLBACK
+    /// when a skipped/failed clarify chat leaves us without a verdict AND the typed
+    /// text doesn't clearly resolve one. Priority is: clarify outcome › clear typed
+    /// text › this photo/chooser signal. Previously only the *auto* verdict survived
+    /// a skip, so a home photo with a generic word like "repair" mis-routed to Auto.
+    /// "" = unknown.
+    @State private var clarifyDetectedVertical: String = ""
+    /// The category the capture identified (home OR auto) — same FALLBACK role as
+    /// `clarifyDetectedVertical`: used only when neither the clarify chat nor clear
+    /// typed text resolved a category, so the photo's read of what's broken isn't
+    /// lost on a skip. "" = no confident read.
+    @State private var clarifyDetectedCategory: String = ""
     @State private var submittedQuery = ""
     /// Photo-derived cost-relevant attributes (size, capacity, material) from
     /// the most recent capture, carried to the contractor list to narrow the
@@ -69,6 +80,11 @@ struct MainScreen: View {
     // results, so the flow never blocks on the chat.
     @State private var chatMessages: [ChatMessage] = []
     @State private var chatQuickReplies: [String] = []
+    /// Speculative next-turn results, one per visible quick-reply, keyed by the chip
+    /// text. Filled in the background while the user reads the current question, so
+    /// tapping a chip shows the next question with no wait. Valid only for the
+    /// current question; cleared whenever the conversation advances or ends.
+    @State private var preloadedTasks: [String: Task<ClarifyService.Reply?, Never>] = [:]
     @State private var chatActive = false
     @State private var chatLoading = false
     /// True once the chat has resolved (or was skipped) and results were shown —
@@ -234,11 +250,10 @@ struct MainScreen: View {
                 // The landing sheet rests at midHeight but can be dragged down to
                 // collapsed (full camera).
                 let restingSheetHeight = sheetDetent == .collapsed ? collapsedHeight : midHeight
-                // The shutter's ring is drawn scaled 1.18× outside its 72pt layout
-                // frame, so its visible edge sits ~7pt below the frame the padding
-                // measures. Counted in, or every gap below reads 7pt tighter than
-                // its number — which is why a nominal 24pt gap looked like contact.
-                let shutterRingOverhang: CGFloat = 7
+                // The shutter (Figma 783-1682) is now a plain 88pt disc with a 6pt
+                // inner stroke — no scaled ring drawn outside the layout frame — so
+                // there is no overhang below the frame the padding measures.
+                let shutterRingOverhang: CGFloat = 0
                 // Both the shutter and the input bar ride up with the keyboard, but
                 // the sheet does not — it ignores the keyboard and stays pinned to
                 // the screen bottom, so its top edge drops to (sheetHeight −
@@ -355,7 +370,7 @@ struct MainScreen: View {
                         }
                         .padding(.horizontal, 16)
                         .padding(.vertical, 8)
-                        .background(alignment: .top) { BlurredHeaderBackground() }
+                        .background(alignment: .top) { BlurredHeaderBackground(style: .light) }
                         Spacer()
                     }
                     .ignoresSafeArea(edges: .bottom)
@@ -391,17 +406,16 @@ struct MainScreen: View {
                                         showCameraHint = false
                                         camera.capturePhoto()
                                     }) {
+                                        // Figma 783-1682 (Frame 36953): 88pt disc, 30%
+                                        // black fill over a light background blur, a 6pt
+                                        // white inner stroke, and a soft drop shadow.
                                         ZStack {
-                                            Circle()
-                                                .fill(AppColors.shutterBg)
-                                            Circle()
-                                                .strokeBorder(AppColors.shutterBorder, lineWidth: 3)
-                                            Circle()
-                                                .strokeBorder(AppColors.shutterRing, lineWidth: 9)
-                                                .scaleEffect(1.18)
+                                            Circle().fill(.ultraThinMaterial)        // background blur
+                                            Circle().fill(Color.black.opacity(0.3))  // fill: black 30%
                                         }
-                                        .frame(width: 72, height: 72)
-                                        .shadow(color: .black.opacity(0.35), radius: 16, x: 0, y: 6)
+                                        .frame(width: 88, height: 88)
+                                        .overlay(Circle().strokeBorder(.white, lineWidth: 6)) // stroke: white 6pt, inside
+                                        .shadow(color: .black.opacity(0.25), radius: 16, x: 0, y: 4)
                                     }
                                 } else {
                                     // Pre-permissions CTA: a denied user is sent to
@@ -418,11 +432,11 @@ struct MainScreen: View {
                                             Circle().fill(.ultraThinMaterial)
                                             Circle().fill(Color.black.opacity(0.3))
                                             Image(systemName: "camera.fill")
-                                                .font(.system(size: 26))
+                                                .font(.system(size: 24, weight: .regular))
                                                 .foregroundStyle(.white)
                                         }
                                         .frame(width: 88, height: 88)
-                                        .overlay(Circle().strokeBorder(Color.white.opacity(0.2), lineWidth: 3))
+                                        .overlay(Circle().strokeBorder(.white, lineWidth: 6))
                                         .shadow(color: .black.opacity(0.25), radius: 16, x: 0, y: 4)
                                     }
                                 }
@@ -592,7 +606,8 @@ struct MainScreen: View {
                             .lineLimit(1...12)
                             .submitLabel(.search)
                             .onSubmit {
-                                if chatActive { sendChatReply(searchText) } else { startClarify() }
+                                if chatActive { sendChatReply(searchText) }
+                                else { startClarify(detectedVertical: Self.verticalKey(for: selectedVertical)) }
                             }
 
                         // Trailing send/skip arrow. During the clarifying chat it's
@@ -608,7 +623,7 @@ struct MainScreen: View {
                                     if hasText { sendChatReply(searchText) }
                                     else { finishChat(nil) }   // skip → results
                                 } else {
-                                    startClarify()
+                                    startClarify(detectedVertical: Self.verticalKey(for: selectedVertical))
                                 }
                             }) {
                                 ZStack {
@@ -776,9 +791,14 @@ struct MainScreen: View {
                 // Once a location resolves (GPS fix or manual ZIP/city), continue
                 // to the destination the user tapped while it was still missing.
                 .onChange(of: locationStore.coordinate?.latitude) { _, _ in
-                    if locationStore.coordinate != nil, let pending = pendingDestination {
-                        pendingDestination = nil
-                        navigate(to: pending)
+                    if let coord = locationStore.coordinate {
+                        // Optional, flag-gated: warm common local jobs' estimates so
+                        // those searches are instant (once per metro per session).
+                        EstimatePrewarmer.warmPopular(near: coord)
+                        if let pending = pendingDestination {
+                            pendingDestination = nil
+                            navigate(to: pending)
+                        }
                     }
                 }
                 .onChange(of: locationStore.authorization) { _, status in
@@ -878,6 +898,20 @@ struct MainScreen: View {
                         let context = Self.clarifyPhotoContext(
                             match: detected ?? camera.suggestedMatches.first,
                             vehicle: detectedVehicle, details: details)
+                        // Kick the price estimate off NOW — before the clarify chat —
+                        // so the server's classification + grounded-search caches are
+                        // warm (or the call already finished) by the time the results
+                        // header asks for it. Best-effort; the results call reuses it.
+                        if let coord = locationStore.coordinate {
+                            let priceQuery = q.isEmpty ? (describe ?? "") : q
+                            ContractorLoader.prefetchEstimate(
+                                category: Self.autoCategory(from: detected)?.name
+                                    ?? Self.categoryKey(from: detected),
+                                searchQuery: priceQuery,
+                                near: coord,
+                                photoDetails: details,
+                                vehicle: detectedVehicle)
+                        }
                         attachedImages = [resultImage]
                         camera.retake()
                         drawnPaths = []
@@ -898,7 +932,9 @@ struct MainScreen: View {
                                 // than dropping into home results.
                                 startClarify(query: q, backdrop: resultImage,
                                              detectedAuto: Self.autoCategory(from: detected),
-                                             detectedVehicle: detectedVehicle)
+                                             detectedVehicle: detectedVehicle,
+                                             detectedVertical: Self.verticalKey(from: detected),
+                                             detectedCategory: Self.categoryKey(from: detected))
                             } else {
                                 switch detected {
                                 case .home(let cat): goSwipe = cat
@@ -1066,22 +1102,61 @@ struct MainScreen: View {
         return nil
     }
 
+    /// The vertical a capture resolved to, as the key ContractorListScreen reads
+    /// ("home" / "auto_moto"), or "" when the photo matched no trade. Lets a home
+    /// photo assert its vertical so a skipped clarify chat can't re-guess it.
+    private static func verticalKey(from match: TradeMatch?) -> String {
+        switch match {
+        case .home: return "home"
+        case .auto: return "auto_moto"
+        case nil:   return ""
+        }
+    }
+
+    /// Same key for a vertical the user picked on the landing chooser, so a typed
+    /// search that skips clarify inherits it. "" when at the top level (unknown).
+    private static func verticalKey(for vertical: Vertical?) -> String {
+        switch vertical {
+        case .home: return "home"
+        case .auto: return "auto_moto"
+        case nil:   return ""
+        }
+    }
+
+    /// The category name a capture resolved to (home Category rawValue or the auto
+    /// category name), or "" when the photo matched no trade — the fallback category
+    /// carried through a skipped clarify.
+    private static func categoryKey(from match: TradeMatch?) -> String {
+        switch match {
+        case .home(let cat):  return cat.rawValue
+        case .auto(let auto): return auto.name
+        case nil:             return ""
+        }
+    }
+
     /// `detectedAuto` / `detectedVehicle` carry what the capture's classifier
     /// already established about the vertical. They're assigned here (rather than
     /// at the call site) so a plain typed search resets them and can't inherit the
     /// vertical from an earlier photo.
     private func startClarify(query: String? = nil, backdrop: UIImage? = nil,
                               detectedAuto: AutoCategory? = nil,
-                              detectedVehicle: VehicleFilter? = nil) {
+                              detectedVehicle: VehicleFilter? = nil,
+                              detectedVertical: String = "",
+                              detectedCategory: String = "") {
         let q = (query ?? searchText).trimmingCharacters(in: .whitespacesAndNewlines)
         guard !q.isEmpty else { return }
         submittedQuery = q
-        clarifyDetectedAuto = detectedAuto
+        // An auto capture implies the auto vertical even when the caller didn't
+        // spell it out; otherwise take whatever vertical was resolved (photo scene
+        // or landing chooser). These are the FALLBACK the route uses only when the
+        // chat resolves nothing and the typed text is unclear (see finishChat).
+        clarifyDetectedVertical = detectedAuto != nil ? "auto_moto" : detectedVertical
+        clarifyDetectedCategory = detectedAuto?.name ?? detectedCategory
         autoInitialVehicle = detectedVehicle
         clarifyTranscript = .empty
         chatDetails = nil
-        chatCategory = ""
-        chatVertical = ""
+        chatCategory = clarifyDetectedCategory
+        chatVertical = clarifyDetectedVertical
         chatSearchTerms = ""
         chatPhotoTerms = ""
         chatPriceable = true
@@ -1091,6 +1166,7 @@ struct MainScreen: View {
             goSearch = true
             return
         }
+        cancelPreloads()
         chatMessages = [ChatMessage(role: "user", content: q)]
         chatQuickReplies = []
         chatCompleted = false
@@ -1116,6 +1192,7 @@ struct MainScreen: View {
     private func advanceChat() {
         chatLoading = true
         chatQuickReplies = []
+        cancelPreloads()
         let turns = chatMessages.map { ClarifyService.Turn(role: $0.role, content: $0.content) }
         // Prefer the full photo context (vehicle + trade + attributes); it already
         // includes the cost details, so fall back to those only when it's absent.
@@ -1124,17 +1201,46 @@ struct MainScreen: View {
             let reply = await ClarifyService.next(messages: turns, photoDetails: details)
             await MainActor.run {
                 chatLoading = false
-                switch reply {
-                case .ask(let question, let quickReplies):
-                    chatMessages.append(ChatMessage(role: "assistant", content: question))
-                    chatQuickReplies = quickReplies
-                case .done(let outcome):
-                    finishChat(outcome)
-                case nil:
-                    finishChat(nil)
-                }
+                applyReply(reply)
             }
         }
+    }
+
+    /// Handle one chat reply (from a live call OR a consumed preload). Shared so
+    /// the speculative-preload path renders a question exactly like a fresh call.
+    private func applyReply(_ reply: ClarifyService.Reply?) {
+        switch reply {
+        case .ask(let question, let quickReplies):
+            chatMessages.append(ChatMessage(role: "assistant", content: question))
+            chatQuickReplies = quickReplies
+            // Speculatively compute the NEXT turn for each chip while the user reads,
+            // so tapping one shows the next question instantly (see sendChatReply).
+            preloadNext(for: quickReplies)
+        case .done(let outcome):
+            finishChat(outcome)
+        case nil:
+            finishChat(nil)
+        }
+    }
+
+    /// Fire a background clarify turn for each quick-reply, as if the user had
+    /// tapped it — so the common path (tap a chip) has its next question ready with
+    /// no wait. Keyed by the chip text and valid only for the current question;
+    /// cleared whenever the conversation advances. "Skip" is its own path and isn't
+    /// preloaded. Cost: a few extra clarify calls per question, most discarded.
+    private func preloadNext(for options: [String]) {
+        cancelPreloads()
+        let base = chatMessages.map { ClarifyService.Turn(role: $0.role, content: $0.content) }
+        let details = photoContext ?? photoDetails
+        for option in options where option.caseInsensitiveCompare("Skip") != .orderedSame {
+            let turns = base + [ClarifyService.Turn(role: "user", content: option)]
+            preloadedTasks[option] = Task { await ClarifyService.next(messages: turns, photoDetails: details) }
+        }
+    }
+
+    private func cancelPreloads() {
+        for (_, task) in preloadedTasks { task.cancel() }
+        preloadedTasks = [:]
     }
 
     /// Move past the current question without showing a bubble. The hidden turn
@@ -1155,6 +1261,25 @@ struct MainScreen: View {
         // Answering a restored conversation makes it live again — the new answer
         // re-runs the match rather than reopening the old results.
         chatCompleted = false
+
+        // If this exact chip was preloaded, use its already-running/finished result
+        // instead of starting a fresh call — the next question then appears with no
+        // wait (or the moment the in-flight preload lands). Typed answers that match
+        // no chip fall through to a normal turn.
+        if let task = preloadedTasks.removeValue(forKey: reply) {
+            cancelPreloads()          // the sibling preloads are now stale
+            chatLoading = true
+            chatQuickReplies = []
+            Task {
+                let r = await task.value
+                await MainActor.run {
+                    chatLoading = false
+                    applyReply(r)
+                }
+            }
+            return
+        }
+
         advanceChat()
     }
 
@@ -1162,6 +1287,7 @@ struct MainScreen: View {
     /// user can start an unrelated search. The only way out of a restored chat
     /// that isn't "answer more" or "reopen results".
     private func dismissChat() {
+        cancelPreloads()
         chatMessages = []
         chatQuickReplies = []
         chatCompleted = false
@@ -1172,7 +1298,8 @@ struct MainScreen: View {
         submittedQuery = ""
         // The abandoned request's vertical goes with it — the next search starts
         // from nothing rather than inheriting this photo's verdict.
-        clarifyDetectedAuto = nil
+        clarifyDetectedVertical = ""
+        clarifyDetectedCategory = ""
         autoInitialVehicle = nil
         // Closing the clarify chat abandons the request, so the photo(s) that
         // seeded it shouldn't linger in the input bar — clear both the camera
@@ -1184,6 +1311,29 @@ struct MainScreen: View {
     /// Finish the chat and open results with whatever the match resolved to. A
     /// nil outcome (network/API failure, or Skip) proceeds on the raw query —
     /// results are shown exactly as if the chat hadn't run.
+    /// The vertical the typed text CLEARLY maps to, or nil when it's too vague to
+    /// tell (so the caller falls back to the photo). Auto wins only on a real
+    /// vehicle signal — the auto keyword list is deliberately vehicle-specific, so
+    /// generic words ("repair", "fix") no longer read as auto — otherwise a home
+    /// trade keyword marks it home.
+    private func textVertical(from query: String) -> String? {
+        let q = query.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !q.isEmpty else { return nil }
+        if AutoCategory.matching(query: q) != nil { return "auto_moto" }
+        if !Category.matching(query: q).isEmpty { return "home" }
+        return nil
+    }
+
+    /// The category the typed text clearly names, or nil when too vague. Same
+    /// vehicle-first / then home-trade resolution as `textVertical`.
+    private func textCategory(from query: String) -> String? {
+        let q = query.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !q.isEmpty else { return nil }
+        if let auto = AutoCategory.matching(query: q) { return auto.name }
+        if let home = Category.matching(query: q).first { return home.rawValue }
+        return nil
+    }
+
     private func finishChat(_ outcome: ClarifyService.ClarifyOutcome?) {
         chatDetails = outcome?.details.isEmpty == false ? outcome?.details : nil
         // A nil/blank category means the chat ended without resolving one — Skip,
@@ -1191,11 +1341,23 @@ struct MainScreen: View {
         // home trade, which is how photographing a motorcycle and abandoning the
         // questions returned house painters. The photo's own verdict outranks a
         // chat that never finished.
+        // Resolve category & vertical by priority: the clarify chat's own verdict
+        // first; then what the user CLEARLY typed (paramount — their explicit
+        // words); then the photo/chooser as a fallback for when the text is vague
+        // or empty. This is what stops "photograph a motorcycle, skip the
+        // questions" from returning house painters, and equally stops a home photo
+        // with an ambiguous word ("repair") from being dragged into auto.
         let resolvedCategory = outcome?.category ?? ""
-        chatCategory = resolvedCategory.isEmpty ? (clarifyDetectedAuto?.name ?? "") : resolvedCategory
-        // Only trust the chat's vertical when the chat actually resolved one; a
-        // photo that already identified a vehicle keeps its own verdict.
-        chatVertical = clarifyDetectedAuto != nil ? "auto_moto" : (outcome?.vertical ?? "")
+        chatCategory = resolvedCategory.isEmpty
+            ? (textCategory(from: submittedQuery) ?? clarifyDetectedCategory)
+            : resolvedCategory
+        // (clarifyDetectedVertical is already "auto_moto" when the capture was a
+        // vehicle, so the photo fallback covers auto and home alike — clear text
+        // still outranks it.)
+        let chatResolvedVertical = (outcome?.vertical).flatMap { $0.isEmpty ? nil : $0 }
+        chatVertical = chatResolvedVertical
+            ?? textVertical(from: submittedQuery)
+            ?? clarifyDetectedVertical
         chatSearchTerms = outcome?.searchTerms ?? ""
         chatPhotoTerms = outcome?.photoTerms ?? ""
         chatPriceable = outcome?.priceable ?? true
@@ -1206,6 +1368,23 @@ struct MainScreen: View {
             summary: outcome?.summary ?? "")
         chatQuickReplies = []
         chatCompleted = true
+        cancelPreloads()
+
+        // Refine the estimate with the chat's resolved job — these are the same
+        // inputs the results header will price on, so this warms the exact cache
+        // key it needs (and the capture-time prefetch already warmed the metro's
+        // grounded search). Home only for the client-exact key; auto still warms
+        // the server caches.
+        if chatPriceable, let coord = locationStore.coordinate {
+            let terms = chatSearchTerms.trimmingCharacters(in: .whitespacesAndNewlines)
+            ContractorLoader.prefetchEstimate(
+                category: chatCategory,
+                searchQuery: terms.isEmpty ? submittedQuery : terms,
+                near: coord,
+                photoDetails: mergedDetails,
+                vehicle: chatVertical == "auto_moto" ? autoInitialVehicle : nil)
+        }
+
         withAnimation(.easeInOut(duration: 0.25)) { chatActive = false }
         searchFocused = false
         goSearch = true

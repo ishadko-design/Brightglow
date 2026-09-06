@@ -39,8 +39,12 @@ enum PricingService {
     ///   is the same phrase for both — and without it a motorcycle request was
     ///   priced as four car tires (~$890) instead of two moto tires (~$440).
     ///   Nil for home categories.
+    /// - Parameter fast: phase-1 request — the server answers instantly with the
+    ///   formula (plus any already-cached grounded number) and skips the web-search
+    ///   await, warming it in the background. The caller then requests again with
+    ///   `fast: false` to swap in the grounded number once it's ready.
     static func estimate(category: String, description: String, zip: String?,
-                         vehicle: VehicleFilter? = nil) async -> PriceTier? {
+                         vehicle: VehicleFilter? = nil, fast: Bool = false) async -> PriceTier? {
         guard isConfigured, !category.isEmpty || !description.isEmpty,
               let url = URL(string: "https://\(ref).supabase.co/functions/v1/pricing")
         else { return nil }
@@ -48,8 +52,13 @@ enum PricingService {
         var body: [String: Any] = ["category": category, "description": description]
         if let zip { body["zip"] = zip }
         if let vehicle { body["vehicle"] = vehicle == .moto ? "moto" : "auto" }
+        if fast { body["fast"] = true }
 
-        var req = URLRequest(url: url, timeoutInterval: 10)
+        // Generous: the server may run a web-grounded estimate (a bounded web
+        // search) before answering. The estimate loads asynchronously into the
+        // results header — nothing blocks on it — so waiting for the better number
+        // costs the user nothing; a cache hit still returns in well under a second.
+        var req = URLRequest(url: url, timeoutInterval: 25)
         req.httpMethod = "POST"
         req.setValue("application/json", forHTTPHeaderField: "Content-Type")
         req.setValue(anonKey, forHTTPHeaderField: "apikey")
@@ -71,7 +80,9 @@ enum PricingService {
                          min: Int(range.all_in_low.rounded()),
                          max: Int(range.all_in_high.rounded()),
                          typical: range.all_in_typical.map { Int($0.rounded()) },
-                         laborOnly: range.labor_only ?? false)
+                         laborOnly: range.labor_only ?? false,
+                         sources: range.sources?.isEmpty == false ? range.sources : nil,
+                         basis: range.basis)
     }
 
     /// Only decodes the success shape; the {error, fallback} shape decodes
@@ -89,6 +100,10 @@ enum PricingService {
             /// catalog, where parts are excluded rather than guessed) — the
             /// header must say so, or the number reads as an all-in price.
             let labor_only: Bool?
+            /// Web-grounded estimates carry the source domains + a one-line basis;
+            /// absent on formula estimates.
+            let sources: [String]?
+            let basis: String?
         }
 
         init(from decoder: Decoder) throws {
