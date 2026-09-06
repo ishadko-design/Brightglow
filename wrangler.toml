@@ -20,7 +20,14 @@ compatibility_date = "2026-07-16"
 # answer unmatched paths itself and short-circuit worker.js, which would kill
 # the /api/* and /chat proxy the portal depends on. "none" lets a non-asset
 # request fall through to the Worker.
+#
+# run_worker_first: the private analytics page IS a real asset (analytics.html),
+# so by default the asset router would serve it directly and skip the Worker —
+# leaving the Basic-Auth gate in worker.js unreachable for the page itself. List
+# its paths here so the Worker runs FIRST and can enforce the login before the
+# HTML is served. Everything else stays assets-first.
 [assets]
 directory = "./site"
 binding = "ASSETS"
 not_found_handling = "none"
+run_worker_first = ["/analytics", "/analytics.html", "/analytics/data"]
