@@ -20,8 +20,54 @@
 
 const LEADBRIDGE = "https://leadbridge-production-4065.up.railway.app";
 
+// Private analytics dashboard (site/analytics.html). The page and its data are
+// gated at the edge by HTTP Basic Auth here — nothing sensitive lives in the
+// page, and the Supabase admin secret is injected server-side on /analytics/data
+// so the browser never holds it. Secrets (set with `wrangler secret put`):
+//   DASH_PASSWORD           — the dashboard login password
+//   ANALYTICS_ADMIN_SECRET  — the Supabase ADMIN_SECRET the analytics fn checks
+const ANALYTICS_FN = "https://qxoseyrlbvblpwqzwvvk.supabase.co/functions/v1/analytics";
+
 function isProxied(pathname) {
   return pathname.startsWith("/api/") || pathname === "/chat" || pathname.startsWith("/chat/");
+}
+
+// Any /analytics path (the HTML and its data endpoint) is behind the login.
+function isAnalytics(pathname) {
+  return pathname === "/analytics" || pathname === "/analytics.html" ||
+         pathname === "/analytics/data";
+}
+
+// Basic Auth: username is ignored, only the password must match DASH_PASSWORD.
+function authOK(request, env) {
+  const h = request.headers.get("Authorization") || "";
+  if (!h.startsWith("Basic ")) return false;
+  let decoded = "";
+  try { decoded = atob(h.slice(6)); } catch { return false; }
+  const pass = decoded.slice(decoded.indexOf(":") + 1);
+  return !!env.DASH_PASSWORD && pass === env.DASH_PASSWORD;
+}
+
+function needsLogin() {
+  return new Response("Authentication required", {
+    status: 401,
+    headers: { "WWW-Authenticate": 'Basic realm="Brightglow Analytics", charset="UTF-8"' },
+  });
+}
+
+// Forward the dashboard's request to the analytics Edge Function, adding the
+// admin secret. Returns the function's JSON verbatim.
+async function analyticsData(request, env) {
+  const body = request.method === "POST" ? await request.text() : '{"days":30}';
+  const resp = await fetch(ANALYTICS_FN, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", "x-admin-secret": env.ANALYTICS_ADMIN_SECRET || "" },
+    body,
+  });
+  return new Response(resp.body, {
+    status: resp.status,
+    headers: { "Content-Type": "application/json", "Cache-Control": "no-store" },
+  });
 }
 
 async function proxy(request, url) {
@@ -54,6 +100,13 @@ export default {
   async fetch(request, env) {
     const url = new URL(request.url);
     if (isProxied(url.pathname)) return proxy(request, url);
+
+    // Gate the analytics dashboard: no valid login → prompt. Then either return
+    // the proxied data, or fall through to serve the (auth'd) HTML page.
+    if (isAnalytics(url.pathname)) {
+      if (!authOK(request, env)) return needsLogin();
+      if (url.pathname === "/analytics/data") return analyticsData(request, env);
+    }
 
     const resp = await env.ASSETS.fetch(request);
 

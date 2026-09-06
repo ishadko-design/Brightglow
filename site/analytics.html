@@ -1,0 +1,181 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>Brightglow · Private Analytics</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<style>
+  :root{
+    --bg:#0f1115; --card:#171a21; --line:#242833; --ink:#e7ebf3; --muted:#8b93a7;
+    --accent:#ffb020; --good:#31c48d; --bad:#f05252; --track:#20242e;
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);padding:28px 22px 60px;max-width:1000px;margin:0 auto}
+  h1{font-size:20px;font-weight:700;margin:0 0 2px;letter-spacing:-.01em}
+  .sub{color:var(--muted);font-size:13px;margin-bottom:22px}
+  .bar{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:22px}
+  select,button{font:inherit;font-size:13px;border-radius:9px;border:1px solid var(--line);
+    background:var(--card);color:var(--ink);padding:9px 11px;outline:none}
+  select:focus{border-color:var(--accent)}
+  button{background:var(--accent);color:#1a1300;border:none;font-weight:600;cursor:pointer;padding:9px 16px}
+  button:disabled{opacity:.5;cursor:default}
+  .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin-bottom:22px}
+  .tile{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:16px 18px}
+  .tile .k{color:var(--muted);font-size:12px;text-transform:uppercase;letter-spacing:.04em}
+  .tile .v{font-size:28px;font-weight:700;margin-top:6px;letter-spacing:-.02em}
+  .tile .n{color:var(--muted);font-size:12px;margin-top:4px}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:18px 20px;margin-bottom:18px}
+  .card h2{font-size:14px;margin:0 0 16px;font-weight:600;color:var(--ink)}
+  .step{display:flex;align-items:center;gap:12px;margin-bottom:10px}
+  .step .lbl{width:140px;font-size:13px;color:var(--muted);flex:none}
+  .step .track{flex:1;background:var(--track);border-radius:6px;height:26px;position:relative;overflow:hidden}
+  .step .fill{position:absolute;inset:0 auto 0 0;background:linear-gradient(90deg,#ffb020,#ff8f3c);border-radius:6px}
+  .step .val{width:118px;text-align:right;font-size:13px;flex:none;font-variant-numeric:tabular-nums}
+  .step .val b{color:var(--ink)} .step .val span{color:var(--muted)}
+  .split{display:grid;grid-template-columns:1fr 1fr;gap:18px}
+  @media(max-width:640px){.split{grid-template-columns:1fr}.step .lbl{width:96px}}
+  table{width:100%;border-collapse:collapse;font-size:13px}
+  td{padding:7px 0;border-bottom:1px solid var(--line);color:var(--muted)}
+  td:last-child{text-align:right;color:var(--ink);font-variant-numeric:tabular-nums}
+  .msg{color:var(--muted);font-size:13px;padding:8px 0}
+  .msg.err{color:var(--bad)}
+  .empty{color:var(--muted);font-size:14px;padding:30px 0;text-align:center;line-height:1.6}
+</style>
+</head>
+<body>
+  <h1>Brightglow Analytics</h1>
+  <div class="sub">Private funnel dashboard · access is gated at the edge; data is fetched live.</div>
+
+  <div class="bar">
+    <select id="days">
+      <option value="7">Last 7 days</option>
+      <option value="30" selected>Last 30 days</option>
+      <option value="90">Last 90 days</option>
+      <option value="365">Last year</option>
+    </select>
+    <button id="load">Refresh</button>
+    <span id="msg" class="msg"></span>
+  </div>
+
+  <div id="view" hidden>
+    <div class="grid" id="tiles"></div>
+
+    <div class="card">
+      <h2>Funnel</h2>
+      <div id="funnel"></div>
+    </div>
+
+    <div class="split">
+      <div class="card">
+        <h2>Send outcomes</h2>
+        <div id="send"></div>
+      </div>
+      <div class="card">
+        <h2>Calls &amp; top businesses</h2>
+        <div id="side"></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>Daily activity</h2>
+      <canvas id="chart" height="110"></canvas>
+    </div>
+  </div>
+
+  <div id="empty" class="empty" hidden></div>
+
+<script>
+const $ = id => document.getElementById(id);
+let chart;
+
+function setMsg(t, err=false){ const m=$("msg"); m.textContent=t; m.className = "msg"+(err?" err":""); }
+function pct(n,d){ return d>0 ? Math.round(n/d*100) : 0; }
+
+async function load(){
+  $("load").disabled=true; setMsg("Loading…");
+  try{
+    // Same-origin: the Worker gates this behind Basic Auth and injects the admin
+    // secret server-side, so no keys ever touch the browser.
+    const res = await fetch("/analytics/data", {
+      method:"POST",
+      headers:{ "Content-Type":"application/json" },
+      body: JSON.stringify({ days:Number($("days").value) }),
+    });
+    if(res.status===401){ setMsg("Unauthorized.", true); $("load").disabled=false; return; }
+    if(!res.ok){ setMsg("Error "+res.status+": "+(await res.text()), true); $("load").disabled=false; return; }
+    render(await res.json());
+    setMsg("Updated "+new Date().toLocaleTimeString());
+  }catch(e){ setMsg("Network error: "+e.message, true); }
+  $("load").disabled=false;
+}
+$("load").onclick = load;
+$("days").onchange = load;
+
+function render(d){
+  const t=d.totals||{};
+  const sends=d.send?.sent||0, taps=t.send_tapped||0;
+
+  // No events yet → friendly empty state instead of a wall of zeros.
+  if((d.range?.events||0) === 0){
+    $("view").hidden=true;
+    const e=$("empty"); e.hidden=false;
+    e.innerHTML = "No events in the last "+d.range.days+" days yet.<br>"+
+      "The dashboard fills once an app build with analytics ships and people use it.";
+    return;
+  }
+  $("empty").hidden=true; $("view").hidden=false;
+
+  $("tiles").innerHTML = [
+    ["Events", d.range.events, `last ${d.range.days} days`],
+    ["Quotes sent", sends, taps? pct(sends,taps)+"% of Send taps":"—"],
+    ["Send taps", taps, taps? pct(sends,taps)+"% completed":"—"],
+    ["Abandoned at Messages", d.send?.cancelled||0, taps? pct(d.send?.cancelled||0,taps)+"% of taps":"—"],
+    ["Calls", d.calls?.total||0, "tel: taps"],
+    ["Results shown", t.results_shown||0, "searches with results"],
+  ].map(([k,v,n])=>`<div class="tile"><div class="k">${k}</div><div class="v">${v??0}</div><div class="n">${n}</div></div>`).join("");
+
+  const f=d.funnel||[]; const top=Math.max(1, f[0]?.count||0);
+  $("funnel").innerHTML = f.map((s,i)=>{
+    const w=Math.round((s.count/top)*100);
+    const prev = i>0? f[i-1].count : null;
+    const conv = prev!=null && prev>0 ? ` <span>${pct(s.count,prev)}%</span>` : "";
+    return `<div class="step"><div class="lbl">${s.stage}</div>
+      <div class="track"><div class="fill" style="width:${w}%"></div></div>
+      <div class="val"><b>${s.count}</b>${conv}</div></div>`;
+  }).join("");
+
+  const s=d.send||{};
+  $("send").innerHTML = `<table>
+    <tr><td>Sent (delivered)</td><td>${s.sent||0}</td></tr>
+    <tr><td>Cancelled in Messages</td><td>${s.cancelled||0}</td></tr>
+    <tr><td>Failed</td><td>${s.failed||0}</td></tr>
+    <tr><td>via Text</td><td>${s.text||0}</td></tr>
+    <tr><td>via Email</td><td>${s.email||0}</td></tr></table>`;
+
+  const c=d.calls||{}, tp=d.topPlaces||[];
+  $("side").innerHTML = `<table>
+    <tr><td>Calls — list</td><td>${c.list||0}</td></tr>
+    <tr><td>Calls — gallery</td><td>${c.gallery||0}</td></tr>
+    ${tp.length? `<tr><td colspan="2" style="color:var(--ink);padding-top:12px">Top businesses by sends</td></tr>`:""}
+    ${tp.map(p=>`<tr><td style="font-family:monospace;font-size:11px">${p.place_id.slice(0,18)}…</td><td>${p.sends}</td></tr>`).join("")}
+  </table>`;
+
+  const days = Object.keys(d.daily||{}).sort();
+  const series = k => days.map(day => (d.daily[day]||{})[k]||0);
+  const cfg = [["results_shown","#8b93a7"],["quote_opened","#ffb020"],["send_tapped","#4f8cff"]];
+  const data = { labels: days, datasets: cfg.map(([k,color])=>({ label:k, data:series(k),
+    borderColor:color, backgroundColor:color, tension:.3, pointRadius:2, borderWidth:2 })) };
+  if(chart) chart.destroy();
+  chart = new Chart($("chart"), { type:"line", data, options:{
+    responsive:true, plugins:{ legend:{ labels:{ color:"#8b93a7", boxWidth:12 } } },
+    scales:{ x:{ ticks:{ color:"#8b93a7", maxTicksLimit:8 }, grid:{ color:"#242833" } },
+             y:{ ticks:{ color:"#8b93a7" }, grid:{ color:"#242833" }, beginAtZero:true } } }});
+}
+
+load();  // auto-load on open (Basic Auth already prompted for the page)
+</script>
+</body>
+</html>
