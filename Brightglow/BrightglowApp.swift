@@ -26,16 +26,6 @@ struct BrightglowApp: App {
                     #if DEBUG
                     print("🔗 onOpenURL: \(url.absoluteString)")
                     #endif
-                    // Analytics self-filter: the owner opens brightglow://analytics-optout
-                    // once on their own device so their testing stops polluting the funnel
-                    // (analytics-optin resumes). Handled before anything else so it never
-                    // falls through to auth/preview routing.
-                    if url.scheme == "brightglow", url.host == "analytics-optout" {
-                        AnalyticsService.setInternal(true); return
-                    }
-                    if url.scheme == "brightglow", url.host == "analytics-optin" {
-                        AnalyticsService.setInternal(false); return
-                    }
                     // A preview deep link (brightglow://preview/<id>) opens the
                     // consumer gallery; a chat deep link (brightglow://chat) opens
                     // the inbox; a Google OAuth callback is the SDK's own. Anything
