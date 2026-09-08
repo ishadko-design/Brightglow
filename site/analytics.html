@@ -43,6 +43,15 @@
   .msg{color:var(--muted);font-size:13px;padding:8px 0}
   .msg.err{color:var(--bad)}
   .empty{color:var(--muted);font-size:14px;padding:30px 0;text-align:center;line-height:1.6}
+  .dev{display:flex;align-items:center;gap:12px;padding:9px 0;border-bottom:1px solid var(--line)}
+  .dev .id{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12px;color:var(--ink);
+    flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .dev .c{color:var(--muted);font-size:12px;font-variant-numeric:tabular-nums;flex:none}
+  .dev .x{font:inherit;font-size:12px;font-weight:600;border-radius:8px;border:1px solid var(--line);
+    background:var(--card);color:var(--ink);padding:6px 12px;cursor:pointer;flex:none}
+  .dev .x.on{background:var(--bad);border-color:var(--bad);color:#fff}
+  .dev.excl .id{color:var(--muted);text-decoration:line-through}
+  .dev .tag{font-size:11px;color:var(--bad);flex:none}
 </style>
 </head>
 <body>
@@ -77,6 +86,11 @@
         <h2>Calls &amp; top businesses</h2>
         <div id="side"></div>
       </div>
+    </div>
+
+    <div class="card">
+      <h2>Devices <span style="color:var(--muted);font-weight:400">· exclude your test devices</span></h2>
+      <div id="devices"></div>
     </div>
 
     <div class="card">
@@ -165,6 +179,24 @@ function render(d){
     ${tp.map(p=>`<tr><td style="font-family:monospace;font-size:11px">${p.place_id.slice(0,18)}…</td><td>${p.impressions||0} → ${p.sends||0}</td></tr>`).join("")}
   </table>`;
 
+  // Devices: every device_id seen in the window, with its event count. Excluded
+  // ones are struck through and DON'T count toward any number above. Click the
+  // button to toggle — the page reloads with the recomputed totals.
+  const dv = d.devices||[];
+  $("devices").innerHTML = dv.length ? dv.map(x=>{
+    const id = x.device_id||"unknown";
+    return `<div class="dev${x.excluded?" excl":""}">
+      <span class="id" title="${id}">${id}</span>
+      ${x.excluded?'<span class="tag">excluded</span>':''}
+      <span class="c">${x.events} event${x.events===1?"":"s"}</span>
+      <button class="x${x.excluded?"":" on"}" data-id="${id}" data-op="${x.excluded?"include":"exclude"}">
+        ${x.excluded?"Re-include":"Exclude"}</button>
+    </div>`;
+  }).join("") : '<div class="msg">No devices yet.</div>';
+  $("devices").querySelectorAll("button.x").forEach(b=>{
+    b.onclick = ()=> toggleDevice(b.dataset.op, b.dataset.id, b);
+  });
+
   const days = Object.keys(d.daily||{}).sort();
   const series = k => days.map(day => (d.daily[day]||{})[k]||0);
   const cfg = [["results_shown","#8b93a7"],["quote_opened","#ffb020"],["send_tapped","#4f8cff"]];
@@ -175,6 +207,19 @@ function render(d){
     responsive:true, plugins:{ legend:{ labels:{ color:"#8b93a7", boxWidth:12 } } },
     scales:{ x:{ ticks:{ color:"#8b93a7", maxTicksLimit:8 }, grid:{ color:"#242833" } },
              y:{ ticks:{ color:"#8b93a7" }, grid:{ color:"#242833" }, beginAtZero:true } } }});
+}
+
+// Exclude / re-include a device, then reload so every number recomputes.
+async function toggleDevice(op, device_id, btn){
+  btn.disabled=true; btn.textContent="…";
+  try{
+    const res = await fetch("/analytics/data", {
+      method:"POST", headers:{ "Content-Type":"application/json" },
+      body: JSON.stringify({ op, device_id }),
+    });
+    if(!res.ok){ setMsg("Error "+res.status+": "+(await res.text()), true); btn.disabled=false; return; }
+    await load();
+  }catch(e){ setMsg("Network error: "+e.message, true); btn.disabled=false; }
 }
 
 load();  // auto-load on open (Basic Auth already prompted for the page)
