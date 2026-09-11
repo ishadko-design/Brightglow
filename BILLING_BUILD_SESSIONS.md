@@ -48,3 +48,30 @@ Last updated: 2026-09-10.
 
 **Net:** the billing/ARL flow is code-complete on the app side. The remaining build is
 Session 2 (LeadBridge backend) + owner activation (Stripe live, env, apply prod migrations).
+
+## Session 2 — DONE (LeadBridge repo, branch `billing-arl-consent-notices`)
+Built on top of the repo's existing checkout/webhook (which already sent the §5 email):
+- `/api/billing/checkout` now REQUIRES `{ renewalConsent:true, email }` and writes a
+  `subscription_consent` row BEFORE the Stripe redirect (proof survives abandonment);
+  `consent_id` rides in checkout metadata.
+- Webhook backfills the consent row with Stripe ids on subscription creation.
+- All account emails de-dupe via `billing_notices` (confirmation/cancellation once per
+  subscription; payment-failed once per invoice) so Stripe retries can't double-send.
+- New emails: payment-failed (B) + cancellation (C), sent on `invoice.payment_failed`
+  and on subscription cancel. All 93 tests pass. NOT pushed/deployed.
+- Known limitation (flagged, out of ARL scope): phone-only businesses (no email on their
+  JWT) are still 403'd at `/checkout` by `requireBusiness` — a separate identity change
+  (Phase 3 phone-tail).
+
+## Owner activation checklist (before this can charge)
+- [ ] Apply app-repo migrations to prod: `20260909000002_lead_business_hidden`,
+      `20260910000000_billing_consent_and_notices`.
+- [ ] Deploy LeadBridge branch `billing-arl-consent-notices` (push → Railway).
+- [ ] Railway env: `STRIPE_SECRET_KEY`, `STRIPE_PRICE_ID`, `STRIPE_WEBHOOK_SECRET`.
+- [ ] Stripe: register webhook `POST /webhooks/stripe` for `checkout.session.completed`,
+      `customer.subscription.{created,updated,deleted}`, `invoice.payment_failed`.
+- [ ] Deploy the app-repo portal branch `biz-portal-tabs-menu` (or merge to main).
+- [ ] Then Stripe LIVE activation.
+
+## Session 3 (next) — end-to-end test in Stripe TEST mode
+Subscribe → §5 email → payment-fail (test card) → cancel; verify consent + notice rows.
