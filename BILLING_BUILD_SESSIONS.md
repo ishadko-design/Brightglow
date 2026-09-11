@@ -32,9 +32,19 @@ Last updated: 2026-09-10.
 **Whole system end-to-end = ~6–8 sessions, ~1.0–1.8M tokens**; calendar set by external gates
 (Twilio, 10DLC, Stripe live, lawyer) more than tokens.
 
-## Session 1 checklist (in progress)
-- [ ] Portal billing UI audited against ARL §17600 (clear+conspicuous terms, affirmative
-      consent, easy cancel, receipt email captured) — see `site/biz/portal.js` renderBilling.
-- [ ] `supabase/functions/search/index.ts`: exclude hidden + non-contactable place_ids.
-- [ ] `MAILING_ADDRESS` / `BUSINESS_POSTAL_ADDRESS` wiring points identified for CAN-SPAM.
-- [ ] Owner handoff list for what session 1 leaves for prod.
+## Session 1 — DONE (app-repo side was largely already in place)
+- [x] Portal billing UI audited vs ARL §17600 — clear+conspicuous auto-renewal terms,
+      affirmative consent checkbox, receipt email capture, one-click cancel via Stripe
+      portal. Intact after the Figma redesign; Billing is always reachable via the menu
+      (the old `billing.enabled` gate was removed). `site/biz/portal.js` renderBilling /
+      unsubscribedHTML / subscribedHTML / startCheckout / openStripePortal.
+- [x] `supabase/functions/search/index.ts` already drops `hidden_at` (paywalled-lapsed)
+      places and attaches contactEmail (Request-quote vs Call). Came with `main`.
+- [x] Consent/notices + soft-delete migrations folded onto the branch.
+- [~] OPTIONAL micro-gap: search doesn't drop *non-contactable* (no phone AND no email)
+      places. Negligible — Places phone coverage ≈99.9%. Left unbuilt unless wanted.
+- [→] `MAILING_ADDRESS`/`BUSINESS_POSTAL_ADDRESS` is a LeadBridge env (CAN-SPAM email
+      footer), not app-repo — handled in Session 2 / owner env.
+
+**Net:** the billing/ARL flow is code-complete on the app side. The remaining build is
+Session 2 (LeadBridge backend) + owner activation (Stripe live, env, apply prod migrations).
