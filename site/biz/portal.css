@@ -46,10 +46,10 @@
   --danger: #ff5a5a;
   --radius: 20px;
   --radius-sm: 12px;
-  /* Text fields, matching the app's main search input (MainScreen) and the
-     native business editor: same 32 radius + 1.5 gray20 border everywhere. */
-  --radius-input: 32px;
-  --input-border: 1.5px solid var(--gray20);
+  /* Text fields, matching the Figma business editor "Regular" input: radius 16,
+     a 1px gray20 hairline, on the bg-secondary fill. */
+  --radius-input: 16px;
+  --input-border: 1px solid var(--gray20);
   /* landing scale unit — mirrors site/styles.css: every Figma px × --s. */
   --s: 1px;
 }
@@ -78,20 +78,25 @@ h2 { font-family: "Lato", sans-serif; font-weight: 800; font-size: 19px; }
 a { color: inherit; }
 
 /* ── top bar ─────────────────────────────────────────────── */
+/* Figma header (Frame 36989): the 402 artboard, pad 16/24, wordmark + Sign out
+   pill. No bottom rule. */
 .topbar {
-  display: flex; align-items: center; justify-content: space-between;
-  padding: 16px 20px;
-  border-bottom: 1px solid var(--gray10);
   position: sticky; top: 0; z-index: 20;
   background: rgba(19, 19, 21, 0.85);
   backdrop-filter: blur(12px);
 }
+.topbar-inner {
+  max-width: 402px; margin: 0 auto;
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 16px 24px;
+}
 .topbar-actions { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
-.brand { display: flex; align-items: center; gap: 10px; text-decoration: none; font-family: "Lato"; font-weight: 700; font-size: 17px; }
+.brand { display: flex; align-items: center; gap: 16px; text-decoration: none; font-family: "Lato"; font-weight: 800; font-size: 20px; letter-spacing: -0.01em; }
 .brand em { color: var(--gray50); font-style: normal; font-weight: 400; }
-.brand .appicon { width: 30px; height: 30px; border-radius: 8px; }
+.brand .appicon { width: 48px; height: 48px; border-radius: 17px; }
 
-.wrap { width: 100%; max-width: 760px; margin: 0 auto; padding: 24px 20px 64px; flex: 1; }
+/* Signed-in content sits on the 402 artboard, matching the Figma frames. */
+.wrap { width: 100%; max-width: 402px; margin: 0 auto; padding: 0 0 64px; flex: 1; }
 
 /* ── cards / generic ─────────────────────────────────────── */
 /* Figma gives every card the same treatment: gray05 at radius 32. This was
@@ -338,16 +343,20 @@ body.portal:has(#authView:not([hidden])):not(:has(#introStep:not([hidden]))) .po
 input[type=text], input[type=email], input[type=tel], input[type=url],
 input[type=number], textarea, select {
   width: 100%;
-  background: var(--bg);
+  /* Figma "Regular" field: bg-secondary fill, gray20 hairline, 16 radius, and a
+     comfortable 16/20 padding so 17px text sits centered in a ~64-tall field. */
+  background: var(--bg-secondary);
   border: var(--input-border);
   border-radius: var(--radius-input);
   color: var(--white);
-  font-family: inherit; font-size: 15px; font-weight: 300;
-  /* Wider side padding than a square field needs — text would otherwise hug the
-     rounded corner at this radius. Vertical stays tight: the pill shape already
-     reads as generous, so tall fields just waste screen. */
-  padding: 10px 18px;
+  font-family: inherit; font-size: 17px; font-weight: 300;
+  padding: 16px 20px;
   transition: border-color .15s ease;
+}
+/* Figma "Regular" field box is 64 tall; single-line inputs center their text, so
+   fix the height and drop vertical padding. Textarea keeps its padded multi-line. */
+input[type=text], input[type=email], input[type=tel], input[type=url], input[type=number] {
+  height: 64px; padding: 0 20px;
 }
 /* Focus: brighten the hairline to white rather than the blue accent, so fields
    stay monochrome like the rest of the UI. */
@@ -356,7 +365,8 @@ input::placeholder, textarea::placeholder { color: var(--gray50); }
 textarea { resize: vertical; }
 select { appearance: none; background-image: none; }
 
-.field-label { display: block; font-size: 13px; color: var(--gray70); margin: 12px 0 4px; }
+/* Field label — Figma "Regular" label: Lato Bold 14, white, 8 above the field. */
+.field-label { display: block; font-family: "Lato", sans-serif; font-weight: 700; font-size: 14px; color: var(--white); margin: 16px 0 8px; }
 .card > .field-label:first-child { margin-top: 0; }
 .check-field { display: flex; align-items: center; gap: 12px; margin-top: 16px; }
 
@@ -386,93 +396,92 @@ select { appearance: none; background-image: none; }
 .ghost-btn.danger { color: #ff5a5a; border-color: rgba(255, 90, 90, 0.5); }
 .ghost-btn.danger:hover { background: rgba(255, 90, 90, 0.12); border-color: #ff5a5a; }
 .ghost-btn:disabled { opacity: 0.6; cursor: default; }
-/* "Preview as customer" — below the stat tiles. The CTA is left-aligned (opens the
-   app on a phone); on desktop an always-visible QR sits centered below it to scan. */
-.preview-row { margin-top: 16px; }
-/* Left-aligned box (shrink-wrapped to the QR), QR centered inside it by the equal
-   padding on all four sides. */
+
+/* Figma "Button Secondary" — the light-gray pill used everywhere (Upload logo,
+   Settings, Delete, Add service, Preview, Delete account). Fill rgba(217,217,217,
+   .20), radius 32, Lato Bold, white. Two sizes: sm (pad 4/16, 14) and lg
+   (pad 16/32, 18). */
+.btn-secondary {
+  display: inline-flex; align-items: center; justify-content: center;
+  background: rgba(217, 217, 217, 0.20); color: var(--white);
+  border: 0; border-radius: 32px; cursor: pointer;
+  font-family: "Lato", sans-serif; font-weight: 700; white-space: nowrap;
+  transition: filter .15s ease, opacity .15s ease;
+}
+.btn-secondary:hover { filter: brightness(1.15); }
+.btn-secondary:disabled { opacity: .6; cursor: default; }
+.btn-secondary.sm { padding: 8px 16px; font-size: 14px; }
+.btn-secondary.lg { padding: 13px 32px; font-size: 18px; }
+
+/* Figma header "Sign out": transparent, 2px white-20 hairline, radius 100. */
+.btn-outline {
+  display: inline-flex; align-items: center; justify-content: center;
+  background: transparent; color: var(--white);
+  border: 2px solid var(--gray20); border-radius: 100px; cursor: pointer;
+  font-family: "Lato", sans-serif; font-weight: 700; font-size: 14px;
+  padding: 12px 24px; white-space: nowrap;
+}
+.btn-outline:hover { background: var(--gray05); }
+
+/* Header icon button — the hamburger (open) and the ✕ (close in the menu). A bare
+   44×44 tap target with a 24px glyph, matching the Figma header icons. */
+.icon-btn {
+  width: 44px; height: 44px; flex-shrink: 0;
+  display: inline-flex; align-items: center; justify-content: center;
+  background: none; border: 0; padding: 0; color: var(--white); cursor: pointer;
+}
+.icon-btn:hover { color: var(--gray70); }
+/* Save + Preview sit side by side, centered, 16px apart (in .save-row). On a phone
+   Preview opens the app; on desktop a QR appears below to scan. */
+.cta-row { display: flex; justify-content: center; align-items: center; gap: 16px; flex-wrap: wrap; }
+.preview-extra { text-align: center; }
 .preview-qr {
-  margin: 12px 0 0; padding: 20px; width: fit-content;
+  margin: 16px auto 0; padding: 20px; width: fit-content;
   background: var(--white); border: 1px solid var(--gray10); border-radius: 16px;
 }
 .preview-qr img { width: 160px; height: 160px; display: block; }
-.preview-hint { margin: 10px 0 0; font-size: 13px; color: var(--gray70); max-width: 280px; line-height: 1.4; }
+.preview-hint { margin: 10px auto 0; font-size: 13px; color: var(--gray70); max-width: 280px; line-height: 1.4; }
 .form-msg { margin-top: 14px; font-size: 14px; color: var(--gray70); min-height: 20px; }
 .form-msg.ok { color: #7ee39b; }
 .form-msg.err { color: var(--danger); }
 
-/* ── dashboard head ──────────────────────────────────────── */
-.dash-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; margin-bottom: 18px; }
-.dash-head h1 { margin-bottom: 4px; }
-/* Flex + gap, or the toggle and the Settings button flow inline and collide. */
-.dash-head-actions { display: flex; align-items: center; gap: 16px; flex-shrink: 0; }
-
-.switch { display: inline-flex; align-items: center; gap: 10px; cursor: pointer; user-select: none; }
-.switch input { position: absolute; opacity: 0; width: 0; height: 0; }
-.switch .track { width: 44px; height: 26px; border-radius: 999px; background: var(--gray20); position: relative; transition: background .18s ease; flex-shrink: 0; }
-.switch .track::after { content: ""; position: absolute; top: 3px; left: 3px; width: 20px; height: 20px; border-radius: 50%; background: var(--white); transition: transform .18s ease; }
-.switch input:checked + .track { background: var(--accent); }
-.switch input:checked + .track::after { transform: translateX(18px); }
-.switch-label { font-size: 13px; color: var(--gray70); }
+/* ── Settings: "Accepting new work" toggle row (Figma 1984:5663 Frame 36992,
+   pad 0/16, gap 16): toggle on the left, label on the right. Sits 24 below the
+   tabs, above the Profile heading. ── */
+.accept-row { display: flex; align-items: center; gap: 16px; margin: 24px 16px 0; cursor: pointer; user-select: none; }
+.accept-row input { position: absolute; opacity: 0; width: 0; height: 0; }
+/* Figma Toggle 64×28, radius 14; ON = green #27c840, knob slid right. */
+.toggle { position: relative; width: 64px; height: 28px; border-radius: 14px; background: var(--gray20); flex-shrink: 0; transition: background .18s ease; }
+.toggle .knob { position: absolute; top: 2px; left: 2px; width: 24px; height: 24px; border-radius: 50%; background: var(--white); transition: transform .18s ease; }
+.accept-row input:checked + .toggle { background: var(--green); }
+.accept-row input:checked + .toggle .knob { transform: translateX(36px); }
+.accept-label { font-family: "Poppins", sans-serif; font-weight: 300; font-size: 17px; color: var(--white); }
 
 /* One scrolling row, like the app's horizontal ScrollView of business chips —
    wrapping onto extra lines pushed the whole dashboard down. */
 .biz-switcher { display: flex; gap: 8px; flex-wrap: nowrap; overflow-x: auto; margin-bottom: 16px; padding-bottom: 4px; }
 
-/* Claim CTA for a phone-matched but unclaimed place (method 1). */
-.claim-banner {
-  display: flex; align-items: center; justify-content: space-between; gap: 16px;
-  flex-wrap: wrap;
-  background: rgba(212, 166, 0, .12);
-  border: 1px solid rgba(212, 166, 0, .35);
-  border-radius: 24px; padding: 16px; margin-bottom: 16px;
-}
-.claim-banner p { margin: 0; flex: 1 1 220px; }
-.claim-banner .primary-btn { white-space: nowrap; }
 .biz-chip { background: var(--surface); border: 1px solid var(--gray20); border-radius: 999px; padding: 8px 16px; font-size: 13px; cursor: pointer; color: var(--gray70); flex-shrink: 0; white-space: nowrap; }
 .biz-chip.is-active { background: var(--accent-soft); border-color: var(--accent); color: var(--white); }
 
 /* ── tabs ─────────────────────────────────────────────────
    The three peer tabs (Figma 1140:2933). Same construction as the app's
    SegmentedTabs: a gray05 capsule track, the active segment a gray20 capsule. */
+/* Figma Tabs (1984:5635): a white-5% capsule track, radius 100, height 40, two
+   equal segments with a 4px gap; the active segment is an rgba(217,217,217,.20)
+   pill at radius 32. Labels Lato Bold 18. */
 .tabs {
   display: grid; grid-template-columns: repeat(2, 1fr); gap: 4px;
   background: var(--gray05); border-radius: 100px;
-  margin: 0 auto 24px; max-width: 370px;
+  margin: 16px auto 0; max-width: 370px; height: 40px;
 }
 .tab {
   font-family: "Lato"; font-weight: 700; font-size: 18px;
   color: var(--gray50); background: none; border: 0; cursor: pointer;
-  height: 40px; border-radius: 100px; transition: background .18s, color .18s;
+  border-radius: 32px; transition: background .18s, color .18s;
 }
 .tab:hover { color: var(--white); }
-.tab.is-active { background: var(--gray20); color: var(--white); }
-
-/* ── stat tiles + readiness ───────────────────────────────
-   Simplified dashboard (Figma 1611:7531): two counts — Views + Leads — then a
-   full-width readiness nudge that disappears once the page is complete. */
-.stat-tiles { display: grid; grid-template-columns: repeat(2, 1fr); gap: 16px; margin-bottom: 16px; }
-.stat-tile, .readiness {
-  background: var(--bg-secondary); border: 1.5px solid var(--gray20);
-  border-radius: 32px; padding: 16px; min-height: 125px;
-  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px;
-}
-.stat-label { font-family: "Lato"; font-weight: 700; font-size: 14px; color: var(--gray50); }
-.stat-value { font-family: "Lato"; font-weight: 800; font-size: 24px; line-height: 1.15; }
-/* Gold while someone is waiting on a reply — the app tints this count the same. */
-.stat-value.is-waiting { color: var(--gold); }
-
-/* The tiles' capsule action. Gray by default, accent for the Requests tile. */
-.tile-btn {
-  font-family: "Lato"; font-weight: 700; font-size: 14px; color: var(--white);
-  background: var(--gray20); border: 0; border-radius: 100px; cursor: pointer;
-  height: 32px; padding: 0 16px; margin-top: 6px;
-}
-.tile-btn.is-primary { background: var(--accent); }
-.tile-btn:hover { filter: brightness(1.15); }
-
-.readiness { margin-bottom: 20px; }
-.readiness-pct { font-family: "Lato"; font-weight: 800; font-size: 24px; }
+.tab.is-active { background: rgba(217, 217, 217, 0.20); color: var(--white); }
 
 /* ── editor / billing views ──────────────────────────────── */
 /* Settings and Billing are separate views pushed over the dashboard, the way the
@@ -483,28 +492,29 @@ select { appearance: none; background-image: none; }
    sized as a real target rather than a 38px icon puck. */
 /* Delete + sign-out sit together at the tail of the editor, as in the app. */
 /* Tail of Settings: a rule, then a centered Delete profile (Figma 1140:1827). */
-.tail-rule { border: 0; border-top: 1px solid var(--gray20); margin: 32px 0 24px; }
-.tail-actions { display: flex; flex-direction: column; align-items: center; gap: 8px; margin-bottom: 24px; }
 
-/* Section heading — the spacing above is what separates Profile / Services /
-   Pictures now that they share one scroll. */
-.section-head { margin: 24px 0 8px; }
-.section-sub { margin: -4px 0 12px; }
+/* Figma section heading ("Profile", "Typical services"): Lato Heavy 24, inset 16. */
+.section-head { margin: 24px 16px 8px; font-size: 24px; line-height: 1.2; }
+.section-sub { margin: -4px 16px 12px; font-family: "Poppins", sans-serif; font-weight: 300; font-size: 14px; line-height: 1.5; color: var(--gray50); }
 #editorView > .section-head:first-of-type { margin-top: 8px; }
+
+/* Editor cards (Figma): white-5% fill, no border, radius 32, pad 24/16, inset 8. */
+#editorView .card,
+.service-card { background: var(--gray05); border: 0; border-radius: 32px; padding: 24px 16px; margin: 0 8px 16px; }
+
+/* Helper copy under logo / pictures (Poppins 300 14, white 50%). */
+.logo-hint { font-family: "Poppins", sans-serif; font-weight: 300; font-size: 14px; line-height: 1.5; color: var(--gray50); }
 
 /* ── services editor ─────────────────────────────────────── */
 /* One card per service — the app's ServiceRowEditor shape: name on its own row,
    min/max side by side, Delete beneath. Not a spreadsheet grid. */
-.service-rows > .service-card + .service-card { margin-top: 12px; }
-.service-rows { display: flex; flex-direction: column; gap: 12px; }
-.service-card { background: var(--gray05); border: 1px solid var(--gray10); border-radius: 32px; padding: 16px; }
+.service-rows { display: flex; flex-direction: column; gap: 0; }
 .service-card > .field-label:first-child { margin-top: 0; }
-.price-pair { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
-.service-card .rm { margin-top: 12px; }
-.service-card .rm:hover { border-color: var(--danger); color: var(--danger); }
-/* Accent capsule, as in the app — not a dashed full-width placeholder. */
-.add-row-btn { margin-top: 16px; background: var(--accent); border: none; color: var(--white); border-radius: 999px; padding: 11px 22px; cursor: pointer; font-family: "Lato"; font-weight: 700; font-size: 14px; }
-.add-row-btn:hover { filter: brightness(1.08); }
+.price-pair { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+/* Figma service foot: Delete pill left, "per hour" checkbox right, 24 above. */
+.service-foot { display: flex; align-items: center; justify-content: space-between; gap: 24px; margin-top: 24px; }
+/* "Add service" pill, left-aligned, inset 16 (Figma Frame 36991 pad 0/16). */
+.add-service-row { margin: 0 16px; }
 
 /* ── photos ──────────────────────────────────────────────── */
 /* Horizontal strip of 112x136 tiles + a trailing add tile — the app's layout. */
@@ -523,62 +533,126 @@ select { appearance: none; background-image: none; }
 .photo-add:hover { border-color: var(--gray50); }
 .photo-cell img { width: 100%; height: 100%; object-fit: cover; display: block; }
 .photo-cell.dragging { opacity: .4; }
-.photo-cell .lead-badge { position: absolute; left: 6px; top: 6px; background: var(--accent); color: #fff; font-size: 10px; font-weight: 700; padding: 2px 7px; border-radius: 999px; font-family: "Lato"; }
-.photo-cell .rm { position: absolute; right: 6px; top: 6px; width: 24px; height: 24px; border-radius: 50%; background: rgba(0,0,0,.6); color: #fff; border: none; cursor: pointer; font-size: 14px; line-height: 1; }
-.upload-btn { display: inline-flex; align-items: center; justify-content: center; gap: 8px; background: var(--surface2); border: 1px solid var(--gray20); border-radius: 999px; padding: 11px 20px; cursor: pointer; font-family: "Lato"; font-weight: 700; font-size: 14px; }
-.upload-btn.wide { width: 100%; }
-.upload-btn:hover { background: var(--gray10); }
+/* Placeholder tile shown while a photo uploads. */
+.photo-cell.is-uploading { display: flex; align-items: center; justify-content: center; cursor: default; }
+.cell-spinner { width: 24px; height: 24px; border: 3px solid var(--gray20); border-top-color: var(--white); border-radius: 50%; animation: spin .8s linear infinite; }
 
-.logo-row { display: flex; gap: 16px; align-items: center; margin-bottom: 8px; }
-.logo-wrap { position: relative; width: 104px; height: 104px; flex-shrink: 0; }
-.logo-preview { width: 104px; height: 104px; border-radius: 16px; background: var(--surface2) center/cover no-repeat; flex-shrink: 0; border: 1px solid var(--gray10); }
+/* Upload progress — a bar + "X of N" counter, shown only while uploading. */
+.upload-progress { margin: 8px 0 0; }
+.upload-bar { height: 6px; background: var(--gray10); border-radius: 999px; overflow: hidden; margin-bottom: 6px; }
+.upload-bar span { display: block; height: 100%; width: 0; background: var(--accent); transition: width .25s ease; }
+.upload-count { font-size: 13px; color: var(--gray70); }
+/* Figma: the remove control is a centered circular ✕ over the photo. */
+.photo-cell .rm {
+  position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+  width: 44px; height: 44px; border-radius: 50%; background: rgba(0,0,0,.45);
+  color: #fff; border: none; cursor: pointer; font-size: 18px; line-height: 1;
+  display: flex; align-items: center; justify-content: center;
+}
+/* Upload logo is a Button-Secondary pill (styled by .btn-secondary); the label
+   only needs to clip its hidden <input>. */
+.upload-btn { position: relative; overflow: hidden; }
+.upload-btn.wide { width: 100%; }
+
+.logo-row { display: flex; gap: 16px; align-items: center; margin-bottom: 0; }
+.logo-wrap { position: relative; width: 80px; height: 80px; flex-shrink: 0; }
+.logo-preview { width: 80px; height: 80px; border-radius: 16px; background: var(--gray05) center/cover no-repeat; flex-shrink: 0; border: 1px solid var(--gray20); }
 .logo-wrap .rm { position: absolute; right: 6px; top: 6px; width: 24px; height: 24px; border-radius: 50%; background: rgba(0,0,0,.6); color: #fff; border: none; cursor: pointer; font-size: 14px; line-height: 1; }
-.logo-actions { display: flex; flex-direction: column; align-items: flex-start; gap: 12px; }
+.logo-actions { display: flex; flex-direction: column; align-items: flex-start; gap: 8px; }
 
 /* ── leads ───────────────────────────────────────────────── */
-.leads-list { display: flex; flex-direction: column; gap: 10px; }
-.lead-card { background: var(--bg); border: 1px solid var(--gray10); border-radius: var(--radius-sm); padding: 14px 16px; display: flex; justify-content: space-between; align-items: center; gap: 14px; }
-.lead-main { min-width: 0; }
-/* Request row, matching the app's BusinessRequestRow: title + "Reply needed"
-   pill + relative time on one line, preview beneath, and the whole row lifted
-   while the customer is waiting. */
-.lead-title-row { display: flex; align-items: center; gap: 8px; margin-bottom: 3px; }
-.lead-title { font-family: "Lato"; font-weight: 700; font-size: 15px; }
-.lead-preview { font-size: 13px; color: var(--gray50); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.lead-preview.is-waiting { color: var(--white); }
-.lead-time { font-size: 12px; color: var(--gray50); margin-left: auto; white-space: nowrap; }
-.lead-card.needs-reply { background: var(--gray05); }
-.lead-pill {
-  display: inline-block; font-family: "Lato"; font-weight: 700; font-size: 11px;
-  padding: 2px 8px; border-radius: 999px;
-  background: var(--gold); color: var(--bg); white-space: nowrap;
-}
-.reply-btn { flex-shrink: 0; }
+/* Request list — Figma "Chats" (1140:2933): 32 below the tabs, standalone gray05
+   cells at radius 16 with 4 between, an avatar + title/time + message glimpse, and
+   a gold dot for a request still awaiting a reply. No "Reply needed" pill, no Open
+   button — the whole cell opens the thread. */
+.leads-list { display: flex; flex-direction: column; gap: 4px; margin-top: 32px; }
+/* Swipe-to-delete row: a red Delete sits behind the cell, revealed by dragging
+   the cell left. The cell is opaque (--surface ≈ gray05 over the page) so the red
+   never bleeds through when closed — see the flag on gray05 vs --surface. */
+.lead-row { position: relative; overflow: hidden; border-radius: 16px; }
+.lead-delete { position: absolute; inset: 0 0 0 auto; width: 88px; border: 0; cursor: pointer;
+  background: var(--danger); color: var(--white); font-family: "Lato"; font-weight: 700; font-size: 15px; }
+.lead-card { display: flex; align-items: center; gap: 12px; background: var(--surface);
+  border: 0; border-radius: 16px; padding: 12px; cursor: pointer; position: relative;
+  touch-action: pan-y; transition: transform .18s ease; }
+.lead-row.open .lead-card { transform: translateX(-88px); }
+.lead-avatar { width: 44px; height: 44px; border-radius: 50%; flex-shrink: 0;
+  background: var(--surface2); display: flex; align-items: center; justify-content: center;
+  font-family: "Lato"; font-weight: 700; font-size: 18px; color: var(--white); text-transform: uppercase; }
+.lead-main { min-width: 0; flex: 1; display: flex; flex-direction: column; gap: 4px; }
+/* Figma list cell: the job (Lato Bold 17) over a timestamp (Poppins 300 14). */
+.lead-title { font-family: "Lato"; font-weight: 700; font-size: 17px; line-height: 1.2;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.lead-sub { font-family: "Poppins"; font-weight: 300; font-size: 14px; color: var(--gray50);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.lead-dot { width: 12px; height: 12px; border-radius: 50%; background: var(--gold); flex-shrink: 0; }
 
-/* ── thread (one conversation, inside Requests) ──────────── */
-.thread-head { display: flex; align-items: center; gap: 14px; padding-bottom: 14px; border-bottom: 1px solid var(--gray10); margin-bottom: 16px; }
-.thread-title { font-family: "Lato"; font-weight: 700; font-size: 16px; }
-.thread-msgs { display: flex; flex-direction: column; gap: 8px; max-height: 46vh; overflow-y: auto; padding: 4px 2px 12px; }
-.bubble { max-width: 76%; padding: 10px 14px; border-radius: 16px; font-size: 14.5px; line-height: 1.45; white-space: pre-wrap; word-break: break-word; }
-/* Theirs (customer → business) left; mine (business → customer) right, accent. */
-.bubble.theirs { align-self: flex-start; background: var(--surface2); border-bottom-left-radius: 5px; }
-.bubble.mine { align-self: flex-end; background: var(--accent); border-bottom-right-radius: 5px; }
-.bubble-time { font-size: 11px; color: var(--gray50); margin-top: 4px; }
-.bubble.mine .bubble-time { color: rgba(255, 255, 255, 0.65); }
+/* ── Open chat — Figma 2020:6841, built element-for-element ──────────────────
+   Header row: back-arrow icon (44×44) + job title (Lato 800/24) + "Send to top
+   5" pill (Button Secondary, r32). Then a guidance subtitle (Poppins 400/14 @
+   60%), the request as a FULL-WIDTH #000 container (r24, Poppins 300/17), and the
+   photos stacked full-width at r16. No card wrapper. */
+.thread-head { display: flex; align-items: center; gap: 8px; margin-bottom: 24px; }
+.thread-back { width: 44px; height: 44px; flex-shrink: 0; display: flex; align-items: center;
+  justify-content: center; padding: 0; background: none; border: none; color: var(--white); cursor: pointer; }
+/* Job title (Headline 3) over a timestamp (Body 2), per the Figma header. */
+.thread-titlewrap { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.thread-title { margin: 0; font-family: "Lato"; font-weight: 800; font-size: 24px;
+  line-height: 1.15; color: var(--white); }
+.thread-time { font-family: "Poppins"; font-weight: 300; font-size: 14px; color: var(--gray50); margin-top: 2px; }
+/* "Send to top 5" — Button Secondary: bg rgba(217,217,217,.20), radius 32. */
+.thread-broadcast { flex-shrink: 0; background: var(--gray20); color: var(--white); border-radius: 32px;
+  padding: 4px 16px; font-family: "Lato"; font-weight: 700; font-size: 14px; white-space: nowrap; cursor: pointer; }
+.thread-sub { margin: 0 16px 16px; font-family: "Poppins"; font-weight: 400; font-size: 14px;
+  line-height: 1.5; color: var(--gray50); }
+/* Request + reply bubbles sit inset 16 (Figma Frame 36985 pad 0/16). */
+.thread-msgs { display: flex; flex-direction: column; gap: 16px; padding: 0 16px; }
+.bubble { padding: 16px; border-radius: 24px; font-family: "Poppins"; font-weight: 300;
+  font-size: 17px; line-height: 1.4; white-space: pre-wrap; word-break: break-word; }
+/* The incoming request (theirs) is a full-width blue-gradient container per the
+   node (#0039F5 → #3959C5); a business reply (mine) is a right-aligned accent
+   bubble. */
+.bubble.theirs { align-self: stretch; background: linear-gradient(232deg, #0039f5 0%, #3959c5 100%); color: var(--white); }
+.bubble.mine { align-self: flex-end; max-width: 82%; background: var(--accent); color: var(--white); }
+/* Customer photos: full-width portrait tiles at radius 32, stacked 44 apart
+   (Figma 2020:6841 Image container 370×449, Frame 37012 gap 44), inset 16. */
+.thread-photos { display: flex; flex-direction: column; gap: 44px; margin: 16px 16px 0; }
+.thread-photo { width: 100%; aspect-ratio: 370 / 449; border-radius: 32px; object-fit: cover; cursor: zoom-in; }
 .thread-empty { color: var(--gray50); font-size: 14px; text-align: center; padding: 20px 0; }
 
 .composer { display: flex; gap: 10px; align-items: flex-end; padding-top: 14px; border-top: 1px solid var(--gray10); }
 .composer textarea { flex: 1; resize: none; }
 .composer .primary-btn { width: auto; flex-shrink: 0; }
 
-/* ── save bar ────────────────────────────────────────────── */
-/* Only shown when an autosave fails — there is no Save button. */
+/* ── save ─────────────────────────────────────────────────── */
+/* Explicit Save (Figma Button_Primary): #0039F5, radius 32, pad 16/32, Lato 18.
+   Edits also autosave; this is the reassurance flush + confirmation. Centered
+   below the editor, above the Delete-account tail. */
+.save-row { display: flex; flex-direction: column; align-items: center; gap: 10px; margin-top: 64px; }
+/* Save → rule → Preview, stacked and centered with airy 64px gaps (Figma
+   1984:5663 tail). The rule spans the 354-wide content, inset 24. */
+.preview-section { display: flex; flex-direction: column; align-items: center; margin-top: 64px; }
+.save-div { align-self: stretch; border: 0; border-top: 1px solid var(--gray20); margin: 0 24px 64px; }
+.save-btn {
+  background: var(--accent); color: var(--white);
+  border: 0; border-radius: 32px;
+  font-family: "Lato", sans-serif; font-weight: 700; font-size: 18px;
+  padding: 13px 32px; cursor: pointer;
+  transition: filter .15s ease, opacity .15s ease;
+}
+.save-btn:hover { filter: brightness(1.08); }
+.save-btn:disabled { opacity: .6; cursor: default; }
+#saveHint { text-align: center; }
+
+/* Shown only when a save fails. */
 .save-bar { position: sticky; bottom: 0; display: flex; align-items: center; justify-content: flex-end; gap: 14px; padding: 14px 0; background: linear-gradient(180deg, transparent, var(--bg) 40%); }
 
 /* ── misc ────────────────────────────────────────────────── */
 /* Each fills half the row with a 24px box, as in the app. */
-.checkbox { display: inline-flex; align-items: center; gap: 10px; flex: 1; font-size: 15px; color: var(--white); cursor: pointer; }
+.checkbox { display: inline-flex; align-items: center; gap: 10px; flex: 1; font-family: "Poppins", sans-serif; font-weight: 300; font-size: 17px; color: var(--white); cursor: pointer; }
 .checkbox input { width: 24px; height: 24px; border-radius: 6px; accent-color: var(--accent); flex-shrink: 0; }
+/* "per hour" hugs the right of the service foot rather than stretching. */
+.checkbox.per-hour { flex: 0 0 auto; }
 .spinner { width: 32px; height: 32px; border: 3px solid var(--gray20); border-top-color: var(--white); border-radius: 50%; animation: spin .8s linear infinite; }
 @keyframes spin { to { transform: rotate(360deg); } }
 
@@ -621,3 +695,29 @@ select { appearance: none; background-image: none; }
 @media (max-width: 560px) {
   .dash-head { flex-direction: column; }
 }
+
+/* ── menu overlay (Figma 2021:10043) ──────────────────────────
+   A full-screen sheet that animates in over the UI: wordmark + ✕ on top, then
+   Sign out / Billing / Delete account as big centered rows, 64 apart, split by
+   white-20% rules. */
+.menu-overlay {
+  position: fixed; inset: 0; z-index: 50;
+  background: var(--bg);
+  display: flex; flex-direction: column;
+  overflow-y: auto;
+  animation: menuIn .22s ease;
+}
+@keyframes menuIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
+.menu-list {
+  width: 100%; max-width: 402px; margin: 64px auto 0;
+  display: flex; flex-direction: column; gap: 64px;
+  padding: 0 24px;
+}
+.menu-item {
+  background: none; border: 0; padding: 0; width: 100%; cursor: pointer;
+  font-family: "Lato", sans-serif; font-weight: 800; font-size: 24px;
+  color: var(--white); text-align: center;
+  transition: color .15s ease;
+}
+.menu-item:hover { color: var(--gray70); }
+.menu-div { border: 0; border-top: 1px solid var(--gray20); margin: 0; }
