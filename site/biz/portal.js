@@ -30,6 +30,7 @@ let businesses = [];      // [{ place_id, name, city, leads: [...] }]
 let current = null;       // the selected business
 let profile = null;       // its business_profiles row (working copy)
 let signedInEmail = "";   // shown in the editor's account section
+let signedInPhone = "";   // E.164 of a phone-verified session; prefills the create form
 let dirty = false;
 let autosaveTimer = null;
 // Edits persist on their own, as they do in the app. Every keystroke would be a
@@ -58,16 +59,38 @@ let pendingPhone = "";
 
 function enterAuth() {
   show($("bootView"), false);
-  show($("dashView"), false);
-  show($("signOutBtn"), false);
-  showIntroStep();
+  show($("menuBtn"), false);
+  closeMenu();
+  applyUnlockIntent();
+  showPhoneStep();
   show($("authView"), true);
+  $("phone").focus();
 }
 
-// The signed-out screen has four panels — the marketing intro, then the three
-// sign-in steps — and only ever one is on screen. `only` names the visible one.
+// Arriving from a paywall "Unlock" CTA (?subscribe=1) means this is an existing
+// business coming back to pay — not a cold visitor claiming a listing. Reframe
+// the sign-in cards from "Claim your business" to a login-to-unlock intent so the
+// heading matches why they're here. Left untouched for the normal claim entry.
+function applyUnlockIntent() {
+  if (!new URLSearchParams(location.search).get("subscribe")) return;
+  const title = "Unlock your leads";
+  const sub = "Sign in with the email or phone your customers reach you on — "
+    + "then you're one tap from subscribing.";
+  ["phoneStep", "emailStep"].forEach((id) => {
+    const card = document.getElementById(id);
+    if (!card) return;
+    const h = card.querySelector(".card-title");
+    const p = card.querySelector("p.muted");
+    if (h) h.textContent = title;
+    if (p) p.textContent = sub;
+  });
+}
+
+// The signed-out screen has three sign-in panels and only ever one is on screen.
+// (The marketing intro/hero is gone — sign-in is the landing.) `only` names the
+// visible one.
 function showStep(only) {
-  ["introStep", "phoneStep", "emailStep", "codeStep"].forEach((id) =>
+  ["phoneStep", "emailStep", "codeStep"].forEach((id) =>
     show($(id), id === only)
   );
   clearAuthMsg();
@@ -78,10 +101,6 @@ function clearAuthMsg() {
   $("authMsg").textContent = "";
   $("code").value = "";
 }
-
-// The intro is the landing hero: its one CTA leads into the phone step. Nothing to
-// submit here, so it stays clean.
-function showIntroStep() { showStep("introStep"); }
 
 function showPhoneStep() { authMethod = "sms"; showStep("phoneStep"); }
 
@@ -108,10 +127,9 @@ $("restartBtn").addEventListener("click", () => {
   else { showPhoneStep(); $("phone").focus(); }
 });
 
-// The intro's CTA opens the phone step; the steps' "Back" links return to it.
-$("startClaimBtn").addEventListener("click", () => { showPhoneStep(); $("phone").focus(); });
-document.querySelectorAll('[data-goto="intro"]').forEach((b) =>
-  b.addEventListener("click", showIntroStep));
+// Phone is the landing step; the email step's "Back" link returns to it.
+document.querySelectorAll('[data-goto="phone"]').forEach((b) =>
+  b.addEventListener("click", () => { showPhoneStep(); $("phone").focus(); }));
 
 // Swap between the phone (primary) and email (alternate) sign-in methods.
 $("useEmailBtn").addEventListener("click", () => { showEmailStep(); $("email").focus(); });
@@ -219,12 +237,10 @@ function authErrorText(error) {
   return raw;
 }
 
-$("signOutBtn").addEventListener("click", signOut);
-
 // ── dashboard load ──────────────────────────────────────────
 // Set just before enterDashboard() when the owner should land in Settings rather
-// than the dashboard — e.g. right after creating a brand-new business, so they go
-// straight to filling in their page instead of an empty dashboard.
+// than Requests — e.g. right after creating a brand-new business, so they go
+// straight to filling in their page instead of an empty request list.
 let landOnEditor = false;
 
 async function enterDashboard() {
@@ -233,6 +249,7 @@ async function enterDashboard() {
 
   const { data: { session } } = await sb.auth.getSession();
   signedInEmail = (session && session.user && session.user.email) || "";
+  signedInPhone = (session && session.user && session.user.phone) || "";
 
   // Phone-verified business: persist ownership (owner_user_id) for every place this
   // number was texted. Best-effort and not awaited-for-visibility — RLS already
@@ -247,7 +264,8 @@ async function enterDashboard() {
   // a null place_id can't be claim-checked, so they're skipped for management.
   const { data: leads, error } = await sb
     .from("leads")
-    .select("id, place_id, business_name, city, status, public_id, created_at, website, messages(direction, body_text, created_at)")
+    .select("id, place_id, business_name, city, status, public_id, created_at, website, user_email_initial, messages(direction, body_text, created_at)")
+    .is("business_hidden_at", null)   // hide requests the business dismissed
     .order("created_at", { ascending: false });
 
   if (error) { fail(error.message); return; }
@@ -306,14 +324,13 @@ async function enterDashboard() {
   }
 
   show($("bootView"), false);
-  show($("signOutBtn"), true);   // signed in — the topbar is the only way out
+  show($("menuBtn"), true);   // signed in — the hamburger holds sign out / billing / delete
   // Landing view: a `?lead=` deep link (from a job email) opened a thread above, so
   // stay on it; a just-created business goes to Settings to fill its page in;
-  // everyone else lands on the Dashboard. Messages/conversations are handled in the
-  // app now, so Chats is no longer a tab — it's reachable only via a lead deep link.
+  // everyone else lands on Requests (the Dashboard is gone).
   if (target) showView("chats");
   else if (landOnEditor) { landOnEditor = false; openEditor(); }
-  else showView("dash");
+  else showView("chats");
   renderSwitcher();
   loadBilling();   // not awaited: the dashboard is usable while this resolves
 }
@@ -350,11 +367,9 @@ async function loadBilling() {
     console.error("billing status failed:", err);
     billing = null;
   }
-  // The tab stays hidden unless the server says billing is switched on, so a
-  // deploy without Stripe env vars simply has no billing UI rather than a
-  // broken one.
-  if (!billing || !billing.enabled) { show($("billingBtn"), false); return; }
-  show($("billingBtn"), true);
+  // Billing lives in the menu unconditionally now — if the status call failed we
+  // just leave `billing` null and openBilling() retries / surfaces an error.
+  if (!billing) return;
   renderBilling();
 
   const params = new URLSearchParams(location.search);
@@ -386,12 +401,18 @@ function renderBilling() {
   el.innerHTML = flash + (billing.subscribed ? subscribedHTML() : unsubscribedHTML());
   const sub = $("subscribeBtn");
   if (sub) {
-    // ARL: the Subscribe button stays disabled until the owner ticks the
-    // consent box, so enrollment can't happen without express affirmative
-    // consent to the auto-renewal terms.
+    // ARL: Subscribe stays disabled until the owner ticks the consent box AND
+    // gives a valid billing email — enrollment can't happen without express
+    // affirmative consent to the auto-renewal terms, and we must not create a
+    // subscription we have no address to send the required §5 confirmation to.
+    // (Businesses can sign in by phone, so signedInEmail is often blank here.)
     const consent = $("renewConsent");
-    consent.addEventListener("change", () => { sub.disabled = !consent.checked; });
+    const email = $("billingEmail");
+    const refresh = () => { sub.disabled = !(consent.checked && validEmail(email.value)); };
+    consent.addEventListener("change", refresh);
+    email.addEventListener("input", refresh);
     sub.addEventListener("click", startCheckout);
+    refresh();   // if the email was prefilled, only the checkbox is left to tick
   }
   const manage = $("manageBtn");
   if (manage) manage.addEventListener("click", openStripePortal);
@@ -442,6 +463,11 @@ function unsubscribedHTML() {
       <span>I agree to the <a href="../business-terms.html">Business Terms</a> and understand this
         subscription renews automatically at $25/month until I cancel.</span>
     </label>
+    <label class="field-label" for="billingEmail">Email for your receipt &amp; billing notices</label>
+    <input type="email" id="billingEmail" autocomplete="email" inputmode="email" maxlength="200"
+           placeholder="you@yourbusiness.com" value="${esc(signedInEmail)}">
+    <p class="fineprint">We'll send your subscription confirmation and any billing notices here.
+      Required — it's how we confirm your renewal terms and cancellation method.</p>
     <button class="primary-btn wide" id="subscribeBtn" disabled>Subscribe</button>`;
 }
 
@@ -471,18 +497,24 @@ function subscribedHTML() {
     </p>`;
 }
 
+// RFC-5322-lite: enough to catch typos and empty submits; the server and Stripe
+// validate for real.
+function validEmail(v) { return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test((v || "").trim()); }
+
 async function startCheckout() {
   const btn = $("subscribeBtn");
   const consent = $("renewConsent");
-  if (!consent || !consent.checked) return;   // belt-and-suspenders: never charge without consent
+  const email = $("billingEmail").value.trim().toLowerCase();
+  if (!consent || !consent.checked || !validEmail(email)) return;   // never charge without consent + a valid email
   btn.disabled = true; btn.textContent = "Opening secure checkout…";
   try {
-    // Send the consent signal so the server can persist a dated record of it —
-    // ARL requires keeping proof of consent for 3 years (1 year post-cancel).
+    // Send consent + the billing email: the server persists a dated consent record
+    // (ARL requires keeping proof 3 years / 1 year post-cancel), keys Stripe Checkout
+    // to this address, and sends the §5 confirmation + billing notices here.
     const resp = await authedFetch("/api/billing/checkout", {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ renewalConsent: true }),
+      body: JSON.stringify({ renewalConsent: true, email }),
     });
     if (!resp.ok) throw new Error(`Couldn't start checkout (${resp.status}).`);
     const { url } = await resp.json();
@@ -514,73 +546,49 @@ async function openStripePortal() {
 // out — the one place it still appears.
 function fail(text) {
   show($("bootView"), false);
-  show($("dashView"), false);
   show($("chatsView"), false);
   show($("tabs"), false);
-  show($("signOutBtn"), true);
+  show($("menuBtn"), true);
   const c = $("authView");
   c.hidden = false;
   c.innerHTML = `<h1>Nothing to manage here</h1><p class="muted">${esc(text)}</p>
     <button class="ghost-btn" onclick="location.reload()" style="margin-top:16px">Reload</button>`;
 }
 
-// No lead- or phone-matched business for this account. Rather than a dead-end
-// "nothing to manage" screen, this is the start of setting a page up: name the
-// business (that's all it takes to create an owned listing — method 6), then land
-// straight in Settings to fill in the rest. See BUSINESS_CLAIM_PLAN.md.
+// No lead- or phone-matched business for this account. Instead of a separate
+// "create your business" gate, drop the owner straight into Settings with an
+// empty draft: they fill the same fields as any business, and the FIRST save
+// mints the listing (create_business, in saveProfile). The number they just
+// verified prefills the phone field. See BUSINESS_CLAIM_PLAN.md.
 function noBusiness() {
+  current = { place_id: null, name: "", city: "", website: "", leads: [], draft: true };
+  businesses = [current];
+  profile = {
+    place_id: null, display_name: "", about: "", website: "",
+    email: signedInEmail || "",          // display-only prefill (not persisted yet)
+    phone: prettyPhone(signedInPhone),
+    services: [{ name: "", price_min: null, price_max: null, unit: "job" }],
+    photos: [], licensed: false, insured: false, accepting_work: true,
+  };
+  dirty = false;
+  renderProfile();
+  renderServices();
+  renderPhotos();
+  renderLeads();
   show($("bootView"), false);
-  show($("dashView"), false);
-  show($("chatsView"), false);
-  show($("editorView"), false);
-  show($("tabs"), false);
-  show($("signOutBtn"), true);
-  const c = $("authView");
-  c.hidden = false;
-  c.innerHTML = `
-    <h1>Set up your business page</h1>
-    <p class="muted">Add your business, then fill in your services, prices, and photos.
-      If a customer already reached you through Brightglow, sign in with that exact
-      number or email to open your existing page instead.</p>
-    <form id="createBizForm" style="margin-top:16px">
-      <input id="newBizName" type="text" placeholder="Business name" autocomplete="organization" required>
-      <input id="newBizWebsite" type="url" placeholder="Website (optional)" autocomplete="url">
-      <input id="newBizPhone" type="tel" placeholder="Business phone (optional)" autocomplete="tel">
-      <button type="submit" class="primary-btn wide" style="margin-top:12px">Continue to your page</button>
-      <p id="createBizMsg" class="form-msg"></p>
-    </form>`;
-  $("createBizForm").addEventListener("submit", createBusiness);
+  show($("authView"), false);
+  show($("menuBtn"), true);
+  openEditor();       // land straight in Settings — the page IS the setup now
+  renderSwitcher();
+  loadBilling();      // not awaited
 }
 
-async function createBusiness(e) {
-  e.preventDefault();
-  const msg = $("createBizMsg");
-  const name = $("newBizName").value.trim();
-  if (!name) return;
-  msg.className = "form-msg"; msg.textContent = "";
-  const btn = e.target.querySelector('button[type="submit"]');
-  btn.disabled = true; btn.textContent = "Adding…";
-  const { data: placeId, error } = await sb.rpc("create_business", {
-    p_name: name,
-    p_website: $("newBizWebsite").value.trim() || null,
-    p_phone: $("newBizPhone").value.trim() || null,
-  });
-  if (error || !placeId) {
-    btn.disabled = false; btn.textContent = "Continue to your page";
-    msg.className = "form-msg err";
-    msg.textContent = error ? error.message : "Couldn't create the business. Try again.";
-    return;
-  }
-  // The new place is owned by you now — reload the list and land in Settings so the
-  // next thing you see is your page, ready to fill in.
-  landOnEditor = true;
-  await enterDashboard();
-}
-
-// A phone-matched but unclaimed place shows a claim CTA (method 1). One tap writes
-// ownership via claim_business(), so profile edits and leads stick to this account.
-function renderClaimBanner() {
-  show($("claimBanner"), !!(current && current.claimable));
+// E.164 (+1XXXXXXXXXX) → "+1 (XXX) XXX-XXXX" for the prefill, so the verified
+// number reads like a phone number (with country code) rather than a raw token.
+// Anything else passes through unchanged.
+function prettyPhone(e164) {
+  const m = String(e164 || "").match(/^\+1(\d{3})(\d{3})(\d{4})$/);
+  return m ? `+1 (${m[1]}) ${m[2]}-${m[3]}` : (e164 || "");
 }
 
 // Claim-first write gate. A place is writable when it's NOT `claimable` — i.e. it
@@ -596,24 +604,7 @@ async function ensureWritable() {
   const { data: ok, error } = await sb.rpc("claim_business", { p_place_id: current.place_id });
   if (error || !ok) { console.error("claim before write failed:", error); return false; }
   current.claimable = false;
-  renderClaimBanner();
   return true;
-}
-
-async function claimCurrentBusiness() {
-  if (!current) return;
-  const btn = $("claimBtn");
-  btn.disabled = true; btn.textContent = "Claiming…";
-  const { data: ok, error } = await sb.rpc("claim_business", { p_place_id: current.place_id });
-  btn.disabled = false; btn.textContent = "Claim this business";
-  if (error || !ok) {
-    alert(error ? ("Claim failed: " + error.message)
-                : "We couldn't verify this business is yours from your phone number. " +
-                  "If it's yours, contact hello@brightglow.co.");
-    return;
-  }
-  current.claimable = false;
-  renderClaimBanner();
 }
 
 // ── business switching ──────────────────────────────────────
@@ -636,6 +627,11 @@ async function selectBusiness(biz) {
     place_id: biz.place_id, display_name: biz.name, website: biz.website,
     services: [], photos: [], licensed: false, insured: false, accepting_work: true,
   };
+  // Prefill the contact fields from the verified identity when the page doesn't
+  // already have one — the number/inbox the owner just signed in with is the
+  // obvious default. (Email is display-only; phone rides through save.)
+  if (!profile.email) profile.email = signedInEmail || "";
+  if (!profile.phone) profile.phone = prettyPhone(signedInPhone);
   // Open one empty service block by default so the pricing section is
   // discoverable rather than a bare "Add" button (mirrors the app). Unnamed rows
   // don't count toward completeness and are dropped on save, so this never
@@ -651,22 +647,19 @@ async function selectBusiness(biz) {
   renderServices();
   renderPhotos();
   renderLeads();
-  renderStats();
   renderSwitcher();
-  renderClaimBanner();
-  updateCompleteness();
 }
 
 // ── profile fields ──────────────────────────────────────────
 function renderProfile() {
-  $("bizName").textContent = profile.display_name || current.name;
-  // Show the "Preview as customer" action once a business is selected — it opens
-  // the app to this place's consumer-facing page (brightglow://preview/<id>).
+  // "Preview as customer" opens the app to this place's consumer page once a
+  // business is selected (brightglow://preview/<id>).
   renderPreviewQr();
-  // bizMeta (city · readiness) is owned by updateCompleteness, which runs after
-  // this and keeps the subtitle in sync as fields are filled in.
+  // Fields in Figma order: Name, Description, Email, Phone number.
   $("displayName").value = profile.display_name || "";
   $("about").value = profile.about || "";
+  $("bizEmail").value = profile.email || "";
+  $("bizPhone").value = profile.phone || "";
   $("licensed").checked = !!profile.licensed;
   $("insured").checked = !!profile.insured;
   $("acceptingWork").checked = profile.accepting_work !== false;
@@ -697,21 +690,28 @@ $("logoRemove").addEventListener("click", () => {
 const isMobile = () => /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
 const previewLink = () => `brightglow://preview/${encodeURIComponent(current.place_id)}`;
 
-// The CTA opens the app on a phone. On desktop the app can't open, so the QR
-// below (rendered by renderPreviewQr) is the path — the button is a no-op there.
-$("previewBtn").addEventListener("click", async () => {
+// The CTA opens the app on a phone via the custom scheme. On desktop the app
+// can't open, so the QR below (rendered by renderPreviewQr) is the path.
+// NOTE: iOS Safari only honors a custom-scheme navigation inside the *synchronous*
+// user-gesture window — an `await` before setting location.href makes iOS silently
+// drop it. So fire the save without awaiting (opening the app doesn't unload this
+// page, so the pending write still lands) and navigate immediately.
+$("previewBtn").addEventListener("click", () => {
   if (!current?.place_id || !isMobile()) return;
-  if (dirty) await saveProfile();
+  if (dirty) saveProfile();
   window.location.href = previewLink();
 });
 
-// Render the deep-link QR under the CTA. Desktop-only — scanning a QR on the same
-// phone you'd tap the button on is pointless, so mobile shows just the CTA.
+// The Preview CTA (next to Save) and its deep-link QR. The button only makes
+// sense once the page exists, so it's hidden for a draft. The QR is desktop-only —
+// scanning a QR on the same phone you'd tap the button on is pointless.
 async function renderPreviewQr() {
-  if (!current?.place_id) { show($("previewRow"), false); return; }
-  show($("previewRow"), true);
-  show($("previewQr"), !isMobile());
-  show($("previewHint"), !isMobile());
+  const hasPlace = !!current?.place_id;
+  // The rule + Preview button + QR live in one section, hidden together for a
+  // draft so the rule never floats over empty space.
+  show($("previewSection"), hasPlace);
+  if (!hasPlace) { show($("previewRow"), false); return; }
+  show($("previewRow"), !isMobile());   // previewRow now wraps just the QR + hint
   if (isMobile()) return;
   try {
     const QRCode = (await import("https://esm.sh/qrcode@1.5.4")).default;
@@ -724,12 +724,14 @@ async function renderPreviewQr() {
 // Bind simple text fields → profile on input. Only the two the app's editor
 // exposes; tagline/phone/website/service_area/license_number/years_in_business
 // are no longer edited here, and their stored values ride through save untouched.
-const FIELD_MAP = { displayName: "display_name", about: "about" };
+// Email maps to profile.email, which is display-only for now — business_profiles
+// has no email column, so it isn't sent in the upsert (see saveProfile). The rest
+// persist normally.
+const FIELD_MAP = { displayName: "display_name", about: "about", bizEmail: "email", bizPhone: "phone" };
 for (const [id, key] of Object.entries(FIELD_MAP)) {
   document.addEventListener("input", (e) => {
     if (e.target.id !== id) return;
     profile[key] = e.target.value;
-    if (id === "displayName") $("bizName").textContent = e.target.value || current.name;
     markDirty(); updateCompleteness();
   });
 }
@@ -744,9 +746,20 @@ function renderServices() {
   wrap.innerHTML = rows.map((s, i) => serviceCardHTML(s, i)).join("");
   wrap.querySelectorAll(".service-card").forEach((card) => {
     const i = +card.dataset.i;
-    card.querySelector(".name-in").addEventListener("input", (e) => { setSvc(i, "name", e.target.value); });
-    card.querySelector(".min-in").addEventListener("input", (e) => { setSvc(i, "price_min", numOrNull(e.target.value)); });
-    card.querySelector(".max-in").addEventListener("input", (e) => { setSvc(i, "price_max", numOrNull(e.target.value)); });
+    card.querySelector(".name-in").addEventListener("input", (e) => { setSvc(i, "name", e.target.value); refreshServiceDeletes(); });
+    // Per-job pricing exposes min + max; hourly collapses to a single rate held
+    // in price_min. Only the fields for the current unit are in the DOM.
+    card.querySelector(".min-in")?.addEventListener("input", (e) => { setSvc(i, "price_min", numOrNull(e.target.value)); refreshServiceDeletes(); });
+    card.querySelector(".max-in")?.addEventListener("input", (e) => { setSvc(i, "price_max", numOrNull(e.target.value)); refreshServiceDeletes(); });
+    card.querySelector(".rate-in")?.addEventListener("input", (e) => { setSvc(i, "price_min", numOrNull(e.target.value)); refreshServiceDeletes(); });
+    // "per hour" swaps the price fields: one rate when hourly, min+max otherwise.
+    card.querySelector(".per-hour-in").addEventListener("change", (e) => {
+      const hourly = e.target.checked;
+      profile.services[i].unit = hourly ? "hour" : "job";
+      if (hourly) profile.services[i].price_max = null;   // hourly is a single rate
+      markDirty();
+      renderServices();   // rebuild so the price field(s) switch
+    });
     card.querySelector(".rm").addEventListener("click", () => {
       profile.services.splice(i, 1);
       // There's always one open service row — deleting the last leaves a fresh
@@ -755,26 +768,48 @@ function renderServices() {
       renderServices(); markDirty(); updateCompleteness();
     });
   });
+  refreshServiceDeletes();
 }
 
-// One card per service, laid out like the app's ServiceRowEditor: the name on
-// its own row, min/max side by side beneath it, then Delete. Not a spreadsheet
-// row. `unit` isn't shown and stays at its "job" default in the model.
+// Deleting the sole empty row just recreates a blank one, so it's a no-op — hide
+// its Delete until the row has content or a second row exists.
+const serviceEmpty = (s) => !((s.name || "").trim()) && s.price_min == null && s.price_max == null;
+function refreshServiceDeletes() {
+  const rows = profile.services || [];
+  const hide = rows.length === 1 && serviceEmpty(rows[0]);
+  document.querySelectorAll("#serviceRows .service-card .rm").forEach((b) => { b.hidden = hide; });
+}
+
+// One card per service (Figma): name field, then price fields, then a row with a
+// Delete pill and a "per hour" checkbox. Hourly shows one "Price per hour" field;
+// per-job shows a min/max pair.
 function serviceCardHTML(s, i) {
+  const priceFields = s.unit === "hour"
+    ? `<div class="price-single">
+        <label class="field-label">Price per hour $</label>
+        <input class="rate-in" type="number" min="0" placeholder="$" value="${s.price_min ?? ""}">
+      </div>`
+    : `<div class="price-pair">
+        <div>
+          <label class="field-label">Price min $</label>
+          <input class="min-in" type="number" min="0" placeholder="$" value="${s.price_min ?? ""}">
+        </div>
+        <div>
+          <label class="field-label">Price max $</label>
+          <input class="max-in" type="number" min="0" placeholder="$" value="${s.price_max ?? ""}">
+        </div>
+      </div>`;
   return `<div class="service-card" data-i="${i}">
     <label class="field-label">Service</label>
     <input class="name-in" type="text" placeholder="Service name" value="${esc(s.name)}">
-    <div class="price-pair">
-      <div>
-        <label class="field-label">Price min $</label>
-        <input class="min-in" type="number" min="0" placeholder="$" value="${s.price_min ?? ""}">
-      </div>
-      <div>
-        <label class="field-label">Price max $</label>
-        <input class="max-in" type="number" min="0" placeholder="$" value="${s.price_max ?? ""}">
-      </div>
+    ${priceFields}
+    <div class="service-foot">
+      <button type="button" class="btn-secondary sm rm">Delete</button>
+      <label class="checkbox per-hour">
+        <input class="per-hour-in" type="checkbox" ${s.unit === "hour" ? "checked" : ""}>
+        <span>per hour</span>
+      </label>
     </div>
-    <button type="button" class="ghost-btn rm">Delete</button>
   </div>`;
 }
 const setSvc = (i, k, v) => { profile.services[i][k] = v; markDirty(); if (k === "name") updateCompleteness(); };
@@ -796,9 +831,8 @@ function renderPhotos() {
   // Tiles then a trailing "+" add tile, mirroring the app's photo strip.
   strip.innerHTML = photos.map((p, i) => `
     <div class="photo-cell" draggable="true" data-i="${i}">
-      ${i === 0 ? '<span class="lead-badge">Leads</span>' : ""}
       <img src="${publicUrl(p)}" alt="" draggable="false">
-      <button class="rm" data-i="${i}" title="Remove">×</button>
+      <button class="rm" data-i="${i}" title="Remove">✕</button>
     </div>`).join("")
     + `<label class="photo-add" for="photoInput" title="Add photos"><span>+</span></label>`;
   strip.querySelectorAll(".rm").forEach((b) => b.addEventListener("click", (e) => {
@@ -829,21 +863,48 @@ function wirePhotoDrag(grid) {
   });
 }
 
+let photoMsgTimer = null;
 $("photoInput").addEventListener("change", async (e) => {
   const files = [...e.target.files];
   e.target.value = "";
   if (!files.length) return;
+  const total = files.length;
+  const strip = $("photoStrip");
+  const addTile = strip.querySelector(".photo-add");
+  // Optimistic placeholder tiles with spinners, so the strip visibly grows the
+  // instant photos are picked — the upload no longer looks like it did nothing.
+  files.forEach(() => {
+    const d = document.createElement("div");
+    d.className = "photo-cell is-uploading";
+    d.innerHTML = '<span class="cell-spinner"></span>';
+    strip.insertBefore(d, addTile);
+  });
+  const prog = $("photoProgress");
+  const fill = prog.querySelector(".upload-bar span");
+  const count = prog.querySelector(".upload-count");
   const msg = $("photoMsg");
-  msg.className = "form-msg"; msg.textContent = `Uploading ${files.length} photo(s)…`;
+  clearTimeout(photoMsgTimer);
+  msg.className = "form-msg"; msg.textContent = "";
+  fill.style.width = "0%"; count.textContent = `Uploading 0 of ${total}…`; prog.hidden = false;
+  let done = 0;
   try {
     for (const file of files) {
       const path = await uploadImage(file);
       (profile.photos ||= []).push(path);
+      done++;
+      fill.style.width = Math.round((done / total) * 100) + "%";
+      count.textContent = `Uploading ${done} of ${total}…`;
     }
-    msg.className = "form-msg ok"; msg.textContent = files.length > 1 ? "Photos added." : "Photo added.";
+    prog.hidden = true;
     renderPhotos(); markDirty(); updateCompleteness();
+    msg.className = "form-msg ok";
+    msg.textContent = total > 1 ? `${total} photos added ✓` : "Photo added ✓";
+    photoMsgTimer = setTimeout(() => { msg.textContent = ""; msg.className = "form-msg"; }, 3000);
   } catch (err) {
-    msg.className = "form-msg err"; msg.textContent = err.message || "Upload failed.";
+    prog.hidden = true;
+    renderPhotos();   // drop the placeholders; keep any that did upload
+    msg.className = "form-msg err";
+    msg.textContent = (err && err.message) || "Upload failed.";
   }
 });
 
@@ -883,25 +944,75 @@ function renderLeads() {
   show($("leadsEmpty"), leads.length === 0);
   list.innerHTML = leads.map((l, i) => {
     const msgs = sortMsgs(l.messages || []);
+    const req = msgs.find((m) => m.direction === "outbound");   // the customer's request
     const last = msgs[msgs.length - 1];
     const waiting = !!last && last.direction === "outbound";
-    // No manual truncation — .lead-preview ellipsises, and slicing escaped HTML
-    // could cut an entity in half.
-    const preview = last ? esc(last.body_text || "") : "New request — no messages yet";
-    return `<div class="lead-card ${waiting ? "needs-reply" : ""}" data-i="${i}">
-      <div class="lead-main">
-        <div class="lead-title-row">
-          <span class="lead-title">${esc(l.city || "New request")}</span>
-          ${waiting ? `<span class="lead-pill">Reply needed</span>` : ""}
-          <span class="lead-time">${fmtRelative((last && last.created_at) || l.created_at)}</span>
+    // Figma list cell: the job title over the request's timestamp.
+    const stamp = fmtStamp((req && req.created_at) || l.created_at);
+    const initial = esc((l.user_email_initial || l.city || "?").slice(0, 1));
+    // Row wraps a red Delete behind the cell; the cell swipes left to reveal it.
+    return `<div class="lead-row" data-i="${i}">
+      <button type="button" class="lead-delete" data-i="${i}">Delete</button>
+      <div class="lead-card">
+        <div class="lead-avatar">${initial}</div>
+        <div class="lead-main">
+          <div class="lead-title">${esc(jobTitle(l))}</div>
+          <div class="lead-sub">${esc(stamp)}</div>
         </div>
-        <div class="lead-preview ${waiting ? "is-waiting" : ""}">${preview}</div>
+        ${waiting ? `<span class="lead-dot"></span>` : ""}
       </div>
-      <button type="button" class="ghost-btn reply-btn">Open</button>
     </div>`;
   }).join("");
-  list.querySelectorAll(".lead-card").forEach((card) =>
-    card.addEventListener("click", () => openThread(leads[+card.dataset.i])));
+  list.querySelectorAll(".lead-row").forEach((row) => wireLeadRow(row, leads));
+}
+
+// Swipe-to-delete on a request row (Figma 1140:2933): drag the cell left to reveal
+// Delete; a plain tap opens the thread. Touch-driven — the business is on mobile.
+const SWIPE_OPEN = -88;
+function wireLeadRow(row, leads) {
+  const i = +row.dataset.i;
+  const card = row.querySelector(".lead-card");
+  let startX = 0, dx = 0, dragging = false, moved = false;
+  card.addEventListener("touchstart", (e) => {
+    startX = e.touches[0].clientX; dragging = true; moved = false; card.style.transition = "none";
+  }, { passive: true });
+  card.addEventListener("touchmove", (e) => {
+    if (!dragging) return;
+    dx = e.touches[0].clientX - startX + (row.classList.contains("open") ? SWIPE_OPEN : 0);
+    dx = Math.max(SWIPE_OPEN, Math.min(0, dx));
+    if (Math.abs(dx) > 6) moved = true;
+    card.style.transform = `translateX(${dx}px)`;
+  }, { passive: true });
+  card.addEventListener("touchend", () => {
+    dragging = false; card.style.transition = ""; card.style.transform = "";
+    row.classList.toggle("open", dx < SWIPE_OPEN / 2);
+  });
+  card.addEventListener("click", () => {
+    if (row.classList.contains("open")) { row.classList.remove("open"); return; }
+    if (moved) { moved = false; return; }
+    openThread(leads[i]);
+  });
+  row.querySelector(".lead-delete").addEventListener("click", (e) => {
+    e.stopPropagation();
+    deleteLead(leads[i], row);
+  });
+}
+
+// Soft-delete: LeadBridge stamps business_hidden_at (service role, after verifying
+// this business owns the lead); we drop the row locally. The customer's thread and
+// the /l page are untouched.
+async function deleteLead(lead, row) {
+  try {
+    const resp = await authedFetch("/api/threads/" + lead.public_id + "/hide", { method: "POST" });
+    if (!resp.ok) throw new Error(`hide failed (${resp.status})`);
+    const idx = (current.leads || []).indexOf(lead);
+    if (idx >= 0) current.leads.splice(idx, 1);
+    row.remove();
+    show($("leadsEmpty"), (current.leads || []).length === 0);
+  } catch (err) {
+    console.error("delete request failed:", err);
+    alert("Couldn't remove that request. Try again, or email hello@brightglow.co.");
+  }
 }
 
 const sortMsgs = (m) => m.slice().sort((a, b) => (a.created_at < b.created_at ? -1 : 1));
@@ -909,15 +1020,37 @@ const sortMsgs = (m) => m.slice().sort((a, b) => (a.created_at < b.created_at ? 
 // ── one conversation ────────────────────────────────────────
 let thread = null;   // the lead whose thread is open
 
+// Figma 2020:6841 title is the JOB (e.g. "Hardwood floor replacement"), not the
+// business name. We have no separate title field, so derive a short one from the
+// customer's request text: drop a common lead-in, take the first sentence, cap it.
+function jobTitle(lead) {
+  const req = (lead.messages || []).find((m) => m.direction === "outbound");
+  let t = (req && req.body_text ? req.body_text : "").trim();
+  if (!t) return lead.business_name || current?.name || "Request";
+  t = t.replace(/^(i(?:'| a)?m looking (?:for|to)|i(?:'|')?d like(?: to)?|i would like(?: to)?|i want(?: to)?|i need(?: to)?|looking (?:for|to)|please|can you|could you|hi[,!. ]+)\s+/i, "");
+  t = t.split(/(?<=[.!?])\s/)[0];               // first sentence
+  t = t.charAt(0).toUpperCase() + t.slice(1);
+  if (t.length > 48) t = t.slice(0, 47).trimEnd() + "…";
+  return t;
+}
+
 async function openThread(lead) {
   thread = lead;
-  $("threadTitle").textContent = lead.business_name || current.name;
-  $("threadSub").textContent = [lead.city, fmtDate(lead.created_at)].filter(Boolean).join(" · ");
+  // Node header title = the job (derived), never the business name; the subhead is
+  // the request's timestamp (Figma 2020:6841).
+  $("threadTitle").textContent = jobTitle(lead);
+  const req = (lead.messages || []).find((m) => m.direction === "outbound");
+  $("threadTime").textContent = fmtStamp((req && req.created_at) || lead.created_at);
+  // Figma 2020:6841 guidance line. The customer texted the business from their own
+  // Messages, so the reply channel is that same SMS thread.
+  $("threadSub").textContent = "Reply in the SMS thread the customer started.";
   $("threadMsg").textContent = "";
+  $("threadPhotos").innerHTML = "";   // clear the previous thread's photos
   show($("leadsCard"), false);
   show($("threadCard"), true);
   renderThread(sortMsgs(lead.messages || []));
   await refreshThread();
+  loadThreadPhotos(lead);   // not awaited — the text shows immediately
 }
 
 function closeThread() {
@@ -943,18 +1076,49 @@ async function refreshThread() {
 
 function renderThread(msgs) {
   const box = $("threadMsgs");
-  if (!msgs.length) {
-    box.innerHTML = `<p class="thread-empty">No messages yet — say hello.</p>`;
-    return;
-  }
+  // Only render messages that actually carry text — an empty body (e.g. a seed
+  // lead, or a photo-only request) must NOT paint an empty bubble, which reads as
+  // a broken screen. If there's no text, leave a placeholder that loadThreadPhotos
+  // clears when a photo lands (a photo-only request then shows just the photo).
   // Direction is stored relative to the CUSTOMER: "outbound" = customer→business
   // (theirs), "inbound" = business→customer (mine). See ChatModels.swift.
-  box.innerHTML = msgs.map((m) => {
+  const shown = (msgs || []).filter((m) => (m.body_text || "").trim());
+  if (!shown.length) {
+    box.innerHTML = `<p class="thread-empty" id="threadEmpty">This request came in without a message.</p>`;
+    return;
+  }
+  box.innerHTML = shown.map((m) => {
     const mine = m.direction === "inbound";
-    return `<div class="bubble ${mine ? "mine" : "theirs"}">${esc(m.body_text || "")}
-      <div class="bubble-time">${fmtTime(m.created_at)}</div></div>`;
+    return `<div class="bubble ${mine ? "mine" : "theirs"}">${esc(m.body_text)}</div>`;
   }).join("");
   box.scrollTop = box.scrollHeight;
+}
+
+// The customer's photo(s), shown as attachments beneath the request (Figma
+// 1140:3329). Attachment bytes are private, so they can't go in a plain <img src>
+// — fetch each through the authenticated /api/attachments/:id endpoint (the same
+// one the app uses) and render the blob. Best-effort: no photo just means no tile.
+async function loadThreadPhotos(lead) {
+  let atts = [];
+  try {
+    const { data } = await sb.from("attachments").select("id").eq("lead_id", lead.id);
+    atts = data || [];
+  } catch { return; }
+  for (const a of atts) {
+    try {
+      const resp = await authedFetch("/api/attachments/" + a.id);
+      if (!resp.ok) continue;
+      const url = URL.createObjectURL(await resp.blob());
+      if (!thread || thread.id !== lead.id) return;   // navigated away
+      const empty = document.getElementById("threadEmpty");
+      if (empty) empty.remove();   // a photo-only request shows just the photo
+      const img = document.createElement("img");
+      img.className = "thread-photo";
+      img.alt = "Photo from the customer";
+      img.src = url;
+      $("threadPhotos").appendChild(img);
+    } catch { /* skip a failed attachment */ }
+  }
 }
 
 // Send through LeadBridge (NOT direct to Postgres): it verifies the Supabase JWT,
@@ -1006,78 +1170,59 @@ function fmtDate(iso) {
   catch { return ""; }
 }
 
-// Named relative time ("yesterday", "3 days ago") to match the app's request
-// rows, which use .relative(presentation: .named). Falls back to a short date
-// past a month, where "34 days ago" stops being useful.
-const RTF = new Intl.RelativeTimeFormat(undefined, { numeric: "auto" });
-function fmtRelative(iso) {
-  if (!iso) return "";
-  const t = new Date(iso).getTime();
-  if (Number.isNaN(t)) return "";
-  const secs = Math.round((t - Date.now()) / 1000);
-  const abs = Math.abs(secs);
-  if (abs < 60) return RTF.format(secs, "second");
-  if (abs < 3600) return RTF.format(Math.round(secs / 60), "minute");
-  if (abs < 86400) return RTF.format(Math.round(secs / 3600), "hour");
-  if (abs < 2592000) return RTF.format(Math.round(secs / 86400), "day");
-  return fmtDate(iso);
+// "MM.DD.YYYY · h:mm AM/PM" — the request-list and thread timestamp (Figma
+// 2020:6841 / 1984:5579 show "10.08.2026 · 5:32 PM").
+function fmtStamp(iso) {
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) return "";
+  const p = (n) => String(n).padStart(2, "0");
+  const date = `${p(d.getMonth() + 1)}.${p(d.getDate())}.${d.getFullYear()}`;
+  const time = d.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" });
+  return `${date} · ${time}`;
 }
 
 // ── completeness meter ──────────────────────────────────────
-// Kept in lockstep with the app's BusinessService.completeness (Swift): the SAME
-// five checks, each worth 20%, so a business sees an identical readiness score on
-// web and mobile. The web-only fields (phone, website, service area, license,
-// tagline, years) deliberately don't count toward readiness — matching the native
-// editor, which doesn't expose them at all.
-function updateCompleteness() {
-  const checks = [
-    !!profile.display_name,
-    !!profile.about,
-    !!profile.logo_path,
-    (profile.photos || []).length > 0,
-    (profile.services || []).some((s) => s.name),
-  ];
-  const done = checks.filter(Boolean).length;
-  const pct = Math.round((done / checks.length) * 100);
-  const label = pct === 100 ? "Page complete" : `${pct}% complete`;
-  // Readiness rides in the header subtitle exactly as it does in the app, and
-  // the nudge card only appears while there's still something left to finish.
-  $("bizMeta").textContent = [current && current.city, label].filter(Boolean).join(" · ");
-  $("readinessPct").textContent = `${pct}%`;
-  show($("readinessCard"), pct < 100);
-}
-
-// The dashboard counts (Figma 1611:7531): Views + Leads. Replies/"needs reply" is
-// gone — conversations are handled in the app now, not this portal.
-function renderStats() {
-  const leads = current.leads || [];
-  $("statRequests").textContent = leads.length;
-  loadViews();
-}
-
-// Trailing-30-day profile views (business_profile_views). Owner-only under RLS,
-// and purely decorative — a failure leaves the tile at 0 rather than surfacing.
-async function loadViews() {
-  const el = $("statViews");
-  if (!el || !current?.place_id) return;
-  const since = new Date(Date.now() - 30 * 864e5).toISOString().slice(0, 10);
-  const { data, error } = await sb
-    .from("business_profile_views")
-    .select("views")
-    .eq("place_id", current.place_id)
-    .gte("day", since);
-  if (error) return;
-  el.textContent = (data || []).reduce((n, r) => n + (r.views || 0), 0);
-}
+// The readiness meter + Views/Leads tiles were dropped with the Dashboard (Figma
+// 1984:5663 has none). Kept as a no-op so the many edit handlers that used to
+// refresh the meter don't each need to stop calling it.
+function updateCompleteness() { /* no readiness UI anymore */ }
 
 // ── save ────────────────────────────────────────────────────
+// Returns "empty" (draft with nothing to create yet — a quiet no-op), true on a
+// successful write, or false on failure. Autosave ignores the result; the Save
+// button uses it to decide what to say.
 async function saveProfile() {
-  if (!current || !profile) return;
+  if (!current || !profile) return false;
   clearTimeout(autosaveTimer);
+
+  // Draft (no place yet): the FIRST real save mints the listing. A name is
+  // required to create; until there is one there's nothing to persist, so a
+  // stray autosave is a quiet no-op rather than an error. Matching to existing
+  // leads already happened at sign-in — a brand-new place starts clean.
+  if (current.draft || !current.place_id) {
+    const name = (profile.display_name || "").trim();
+    if (!name) { dirty = false; return "empty"; }
+    const { data: placeId, error: createErr } = await sb.rpc("create_business", {
+      p_name: name,
+      p_website: (profile.website || "").trim() || null,
+      p_phone: (profile.phone || "").trim() || null,
+    });
+    if (createErr || !placeId) {
+      console.error("create_business failed:", createErr);
+      show($("saveFailed"), true);
+      return false;
+    }
+    current.place_id = placeId;
+    current.name = name;
+    current.draft = false;
+    profile.place_id = placeId;
+    renderPreviewQr();   // there's a place to preview now
+  }
+
   // Claim-first: the business_profiles upsert policy is owns_business(place_id),
   // so a phone-matched place must be claimed before the first save or the write
-  // is rejected by RLS. No-op for lead-matched / already-owned places.
-  if (!(await ensureWritable())) { show($("saveFailed"), true); return; }
+  // is rejected by RLS. No-op for lead-matched / already-owned / just-created places.
+  if (!(await ensureWritable())) { show($("saveFailed"), true); return false; }
   const row = {
     place_id: current.place_id,
     display_name: profile.display_name || null,
@@ -1100,43 +1245,89 @@ async function saveProfile() {
   };
   const { error } = await sb.from("business_profiles").upsert(row, { onConflict: "place_id" });
   if (error) {
-    // A successful autosave says nothing; a failed one has to, since there is no
-    // Save button left to retry from.
-    console.error("autosave failed:", error);
+    console.error("save failed:", error);
     show($("saveFailed"), true);
+    return false;
+  }
+  dirty = false;
+  show($("saveFailed"), false);
+  // reflect into the switcher label
+  current.name = profile.display_name || current.name;
+  renderSwitcher();
+  return true;
+}
+
+// The explicit Save button: flush any pending autosave immediately and confirm.
+// Autosave still runs on its own; this is the "peace of mind" control.
+async function saveNow() {
+  const btn = $("saveBtn");
+  if (!btn) return;
+  clearTimeout(autosaveTimer);
+  btn.disabled = true;
+  btn.textContent = "Saving…";
+  const result = await saveProfile();
+  btn.disabled = false;
+  if (result === "empty") {
+    // Nothing to save yet — a draft with no name. Nudge the one field that unblocks it.
+    btn.textContent = "Save";
+    $("displayName").focus();
+    flashSaveHint("Add a business name to save your page.");
+  } else if (result) {
+    btn.textContent = "Saved ✓";
+    setTimeout(() => { if ($("saveBtn")) $("saveBtn").textContent = "Save"; }, 1600);
   } else {
-    dirty = false;
-    show($("saveFailed"), false);
-    // reflect into the switcher label
-    current.name = profile.display_name || current.name;
-    renderSwitcher();
+    btn.textContent = "Save";   // failure already surfaced via #saveFailed
   }
 }
 
+function flashSaveHint(text) {
+  const el = $("saveHint");
+  if (!el) return;
+  el.textContent = text;
+  el.hidden = false;
+  clearTimeout(flashSaveHint._t);
+  flashSaveHint._t = setTimeout(() => { el.hidden = true; }, 3200);
+}
+
 // ── views + guards ──────────────────────────────────────────
-// Dashboard and Settings are the two peer tabs. Billing is reached from Settings
-// (leaving the strip on Settings), and "chats" is a viewable-but-untabbed thread
-// opened only by a job-email `?lead=` deep link — it keeps the tab strip up so the
-// owner can step back to Dashboard/Settings.
-const TAB_VIEWS = ["chats", "dash", "editor"];
+// Requests and Settings are the two peer tabs. Billing is reached from the menu
+// (a full view with its own back button), so it's not a tab and hides the strip.
+const TAB_VIEWS = ["chats", "editor"];
 
 function showView(name) {
+  closeMenu();
   show($("chatsView"), name === "chats");
-  show($("dashView"), name === "dash");
   show($("editorView"), name === "editor");
   show($("billingView"), name === "billing");
 
-  const active = name === "billing" ? "editor" : name;
   document.querySelectorAll(".tab").forEach((t) => {
-    t.classList.toggle("is-active", t.dataset.view === active);
+    t.classList.toggle("is-active", t.dataset.view === name);
   });
-  show($("tabs"), TAB_VIEWS.includes(name) || name === "billing");
+  show($("tabs"), TAB_VIEWS.includes(name));
   window.scrollTo(0, 0);
 }
 
 function openEditor() {
-  $("signedInAs").textContent = signedInEmail ? `Signed in as ${signedInEmail}` : "";
   showView("editor");
+}
+
+// ── menu overlay ────────────────────────────────────────────
+// The hamburger opens a full-screen sheet (Sign out / Billing / Delete account).
+// It's just an [hidden] toggle; the entrance animation is CSS (menuIn).
+function openMenu() { show($("menuOverlay"), true); }
+function closeMenu() { const el = $("menuOverlay"); if (el) el.hidden = true; }
+
+// Billing lives behind the menu now and is always reachable. If the status call
+// hasn't landed (or failed), retry it before drawing, and surface an error rather
+// than an empty card.
+async function openBilling() {
+  closeMenu();
+  showView("billing");
+  if (!billing) await loadBilling();
+  if (!billing) {
+    $("billingState").innerHTML =
+      `<p class="form-msg err">Couldn't load billing right now. Reload and try again, or email hello@brightglow.co.</p>`;
+  }
 }
 
 async function signOut() {
@@ -1158,7 +1349,7 @@ async function deleteAccount() {
     "won't be able to log in again with this phone or email. Your listing reverts to " +
     "its public info, and customer requests are kept. This cannot be undone."
   )) return;
-  const btn = $("deletePageBtn");
+  const btn = $("menuDelete");
   btn.disabled = true; btn.textContent = "Deleting…";
   try {
     const { data, error } = await sb.functions.invoke("delete-account", { method: "POST" });
@@ -1180,21 +1371,24 @@ async function deleteAccount() {
 }
 
 function wireStaticHandlers() {
-  // The Dashboard / Settings tabs. (The stat tiles no longer carry jump buttons.)
+  // The Requests / Settings tabs.
   document.querySelectorAll("[data-view]").forEach((el) => {
     el.addEventListener("click", () => {
       const target = el.dataset.view;
       if (target === "editor") openEditor(); else showView(target);
     });
   });
-  $("readinessCta").addEventListener("click", openEditor);
-  $("editorBack")?.addEventListener("click", () => showView("dash"));
-  $("billingBtn").addEventListener("click", () => showView("billing"));
-  $("billingBack").addEventListener("click", () => showView("dash"));
-  $("deletePageBtn").addEventListener("click", deleteAccount);
-  $("claimBtn").addEventListener("click", claimCurrentBusiness);
+  // Menu overlay: open from the hamburger, then its three destinations.
+  $("menuBtn").addEventListener("click", openMenu);
+  $("menuClose").addEventListener("click", closeMenu);
+  $("menuSignOut").addEventListener("click", signOut);
+  $("menuBilling").addEventListener("click", openBilling);
+  $("menuDelete").addEventListener("click", deleteAccount);
+  $("billingBack").addEventListener("click", () => showView("chats"));
+  $("saveBtn")?.addEventListener("click", saveNow);
   // Leaving inside the debounce window must not lose the edit. keepalive-style
   // flush: fire the save without awaiting, the same shape as the app's onDisappear.
   window.addEventListener("beforeunload", () => { if (dirty) saveProfile(); });
   $("retrySaveBtn").addEventListener("click", () => saveProfile());
 }
+
