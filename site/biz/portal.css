@@ -87,9 +87,13 @@ a { color: inherit; }
   backdrop-filter: blur(12px);
 }
 .topbar-inner {
-  max-width: 402px; margin: 0 auto;
   display: flex; align-items: center; justify-content: space-between;
   padding: 16px 24px;
+}
+/* Web: the header spans the full width like the consumer landing (its 402px
+   artboard cap only ever matched phones). */
+@media (min-width: 700px) {
+  .topbar-inner { padding: 18px 28px; }
 }
 .topbar-actions { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
 .brand { display: flex; align-items: center; gap: 16px; text-decoration: none; font-family: "Lato"; font-weight: 800; font-size: 20px; letter-spacing: -0.01em; }
@@ -540,7 +544,7 @@ select { appearance: none; background-image: none; }
 .tabs {
   display: grid; grid-template-columns: repeat(2, 1fr); gap: 4px;
   background: var(--gray05); border-radius: 100px;
-  margin: 0 auto 32px; max-width: 100%; height: 40px;
+  margin: 0 16px 32px; max-width: 100%; height: 40px;   /* Figma 1984:5579: 370 wide, 16px inset */
 }
 .tab {
   font-family: "Lato"; font-weight: 700; font-size: 18px;
@@ -636,7 +640,8 @@ select { appearance: none; background-image: none; }
 /* Swipe-to-delete row: a red Delete sits behind the cell, revealed by dragging
    the cell left. The cell is opaque (--surface ≈ gray05 over the page) so the red
    never bleeds through when closed — see the flag on gray05 vs --surface. */
-.lead-row { position: relative; overflow: hidden; border-radius: 16px; background: var(--danger); }
+.lead-row { position: relative; overflow: hidden; border-radius: 16px; background: var(--danger);
+  margin: 0 8px; }   /* Figma 1984:5579: the 386 card sits 8px inset in the 402 row */
 .lead-delete { position: absolute; top: 0; bottom: 0; right: 0; width: 88px; border: 0;
   background: transparent; cursor: pointer;
   color: var(--white); font-family: "Lato"; font-weight: 700; font-size: 15px; }
@@ -657,8 +662,10 @@ select { appearance: none; background-image: none; }
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .lead-sub { font-family: "Poppins"; font-weight: 300; font-size: 14px; color: rgba(255, 255, 255, 0.6);
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-/* Figma 1984:5579: the "new" badge sits on the avatar's bottom-right corner. */
-.lead-dot { position: absolute; right: 8px; bottom: 4px; width: 12px; height: 12px;
+/* Figma 1984:5579: the 12px gold "new" badge straddles the avatar's bottom-right
+   corner — its top-left sits at (34,34) of the 44px thumbnail, so it hangs 2px
+   past the right and bottom edges. */
+.lead-dot { position: absolute; right: -2px; bottom: -2px; width: 12px; height: 12px;
   border-radius: 50%; background: var(--gold); }
 
 /* ── Open chat — Figma 2020:6841, built element-for-element ──────────────────
