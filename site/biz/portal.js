@@ -1519,9 +1519,9 @@ async function signOut() {
   location.reload();
 }
 
-// Permanent account deletion. Releases every business this owner holds (their
-// listing reverts to its public info), removes their profile pages + claims, and
-// deletes the login itself — then signs out for good. The browser's anon key
+// Permanent account deletion. COMPLETELY removes every business this owner
+// holds (places, profiles, claims — nothing remains, not even public info),
+// and deletes the login itself — then signs out for good. The browser's anon key
 // CAN'T delete a Supabase auth user, so the actual removal runs in the
 // `delete-account` Edge Function (service role); here we just invoke it and, on
 // success, drop the local session and reload. Customer requests are preserved

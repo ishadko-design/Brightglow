@@ -765,6 +765,9 @@ select { appearance: none; background-image: none; }
   font-family: "Poppins", sans-serif; font-weight: 400; font-size: 14px; line-height: 1.5;
   color: rgba(255, 255, 255, 0.6); margin: 0 0 24px;
 }
+/* Complete-removal warning: white 100% so the "nothing remains" message
+   can't be missed. */
+.delete-highlight { color: #fff; font-weight: 700; }
 /* Destructive-modal buttons: the SAFE choice is the most highlighted — Cancel is
    a big solid light button. Confirm Deletion stays red but steps back to a red
    outline, so the eye lands on Cancel first. */
