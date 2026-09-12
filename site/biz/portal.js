@@ -841,7 +841,7 @@ function renderPhotos() {
   const photos = profile.photos || [];
   // Tiles then a trailing "+" add tile, mirroring the app's photo strip.
   strip.innerHTML = photos.map((p, i) => `
-    <div class="photo-cell" draggable="true" data-i="${i}">
+    <div class="photo-cell" data-i="${i}">
       <img src="${publicUrl(p)}" alt="" draggable="false">
       <button class="rm" data-i="${i}" title="Remove">✕</button>
     </div>`).join("")
@@ -853,25 +853,80 @@ function renderPhotos() {
   wirePhotoDrag(strip);
 }
 
-function wirePhotoDrag(grid) {
-  let from = null;
-  grid.querySelectorAll(".photo-cell").forEach((cell) => {
-    cell.addEventListener("dragstart", (e) => {
-      from = +cell.dataset.i;
-      cell.classList.add("dragging");
-      if (e.dataTransfer) { e.dataTransfer.effectAllowed = "move"; e.dataTransfer.setData("text/plain", String(from)); }
-    });
-    cell.addEventListener("dragend", () => cell.classList.remove("dragging"));
-    cell.addEventListener("dragover", (e) => e.preventDefault());
-    cell.addEventListener("drop", (e) => {
-      e.preventDefault();
-      const to = +cell.dataset.i;
-      if (from === null || from === to) return;
-      const arr = profile.photos;
-      arr.splice(to, 0, arr.splice(from, 1)[0]);
-      from = null; renderPhotos(); markDirty();
-    });
+function wirePhotoDrag(strip) {
+  // Pointer-based strip interaction. The old HTML5 DnD hijacked the scroll
+  // gesture on desktop (a drag always started a reorder, never a scroll) and
+  // never worked on touch at all. Now:
+  // - a plain drag scrolls the strip (mouse drag; touch keeps native momentum
+  //   scrolling via overflow-x: auto),
+  // - a long-press (450ms) on a tile arms reorder mode: the tile follows the
+  //   pointer and drops into place on release — "drag to reorder", like the app.
+  let press = null;    // {cell, x, y, scroll, timer, pointerId}
+  let reorder = null;  // {cell, from, to}
+
+  const tiles = () => [...strip.querySelectorAll(".photo-cell")];
+  const indexAt = (clientX) => {
+    const r = strip.getBoundingClientRect();
+    const ts = tiles();
+    if (!ts.length) return 0;
+    // tile pitch measured live: second tile's left minus first tile's left
+    const w = ts.length > 1 ? (ts[1].offsetLeft - ts[0].offsetLeft)
+                            : ts[0].getBoundingClientRect().width + 8;
+    const cx = clientX - r.left + strip.scrollLeft;       // content coords
+    return Math.max(0, Math.min(ts.length - 1, Math.floor(cx / w)));
+  };
+
+  strip.addEventListener("pointerdown", (e) => {
+    if (e.target.closest(".rm")) return;                  // remove button: not a drag
+    if (e.pointerType === "mouse" && e.button !== 0) return;
+    const cell = e.target.closest(".photo-cell");
+    press = { cell, x: e.clientX, y: e.clientY, scroll: strip.scrollLeft,
+              pointerId: e.pointerId, timer: 0 };
+    if (cell) {
+      press.timer = setTimeout(() => {
+        if (!press) return;
+        reorder = { cell, from: +cell.dataset.i, to: +cell.dataset.i };
+        cell.classList.add("dragging");
+        strip.style.touchAction = "none";   // the pointer owns the gesture now
+        try { cell.setPointerCapture(press.pointerId); } catch (_) {}
+      }, 450);
+    }
   });
+
+  strip.addEventListener("pointermove", (e) => {
+    if (!press || e.pointerId !== press.pointerId) return;
+    if (reorder) {
+      const dx = e.clientX - press.x;
+      reorder.cell.style.transform = `translateX(${dx}px)`;
+      reorder.cell.style.zIndex = "2";
+      reorder.to = indexAt(e.clientX);
+      return;
+    }
+    const dx = e.clientX - press.x, dy = e.clientY - press.y;
+    if (Math.abs(dx) > 8 && Math.abs(dx) > Math.abs(dy)) {
+      clearTimeout(press.timer); press.timer = 0;   // it's a scroll, not a press
+    }
+    if (!press.timer) strip.scrollLeft = press.scroll - dx;
+  });
+
+  const end = () => {
+    if (press) clearTimeout(press.timer);
+    if (reorder) {
+      const { cell, from, to } = reorder;
+      cell.classList.remove("dragging");
+      cell.style.transform = "";
+      cell.style.zIndex = "";
+      strip.style.touchAction = "";
+      if (to !== from) {
+        const arr = profile.photos;
+        arr.splice(to, 0, arr.splice(from, 1)[0]);
+        renderPhotos(); markDirty(); updateCompleteness();
+      }
+    }
+    press = null; reorder = null;
+  };
+  strip.addEventListener("pointerup", end);
+  strip.addEventListener("pointercancel", end);
 }
 
 let photoMsgTimer = null;

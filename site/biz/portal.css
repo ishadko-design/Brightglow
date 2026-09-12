@@ -39,6 +39,12 @@
   --gray10: rgba(255, 255, 255, 0.1);
   --gray05: rgba(255, 255, 255, 0.05);
   --bg: #131315;
+  /* --card: white 5% pre-composited over --bg (#131315) = #1F1F21, exact.
+     The request card MUST be opaque: it slides over the red delete reveal,
+     and the 95%-transparent gray05 lets the red bleed straight through the
+     card (the all-red-cards bug). Visually identical to gray05 on the
+     dashboard background. FLAGGED: derived value, not in tokens.json. */
+  --card: #1F1F21;
   /* tokens.json `bgSecondary` — the fill Figma gives stat tiles and inputs. */
   --bg-secondary: rgba(19, 19, 21, 0.9);
   --accent: #0039f5;
@@ -521,13 +527,16 @@ select { appearance: none; background-image: none; }
    the red background (16px radius rounds both ends); the card slides left to
    reveal it, with a transparent full-height Delete button sitting on the red.
    No floating pill, no visibility toggling: the red is structural, so a plain
-   tap can never flash it. */
+   tap can never flash it.
+   The card uses --card (white 5% pre-composited over --bg), NOT the transparent
+   gray05: a 95%-transparent card lets the red row bleed straight through it,
+   which is exactly the stuck-all-red bug. Opaque composite, same Figma look. */
 .lead-row { position: relative; overflow: hidden; border-radius: 16px;
   margin: 0 8px; background: var(--danger); }   /* Figma 1984:5579: the 386 card sits 8px inset in the 402 row */
 .lead-delete { position: absolute; top: 0; bottom: 0; right: 0; width: 118px;
   border: 0; background: transparent; cursor: pointer;
   color: var(--white); font-family: "Lato"; font-weight: 700; font-size: 15px; }
-.lead-card { display: flex; align-items: center; gap: 12px; background: var(--gray05);
+.lead-card { display: flex; align-items: center; gap: 12px; background: var(--card);
   border: 0; border-radius: 16px; padding: 14px 12px; cursor: pointer; position: relative;
   z-index: 1;
   touch-action: pan-y; transition: transform .18s ease; }
