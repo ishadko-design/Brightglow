@@ -46,10 +46,11 @@
   --danger: #ff5a5a;
   --radius: 20px;
   --radius-sm: 12px;
-  /* Text fields, matching the Figma business editor "Regular" input: radius 16,
-     a 1px gray20 hairline, on the bg-secondary fill. */
+  /* Text fields, matching the Figma design-system "Regular" input (node
+     351-2043): radius 16, a 1px WHITE hairline, on the bg-secondary fill,
+     padding 20 left / 16 right. */
   --radius-input: 16px;
-  --input-border: 1px solid var(--gray20);
+  --input-border: 1px solid var(--white);
   /* landing scale unit — mirrors site/styles.css: every Figma px × --s. */
   --s: 1px;
 }
@@ -192,17 +193,22 @@ body.portal:has(#authView:not([hidden]) #introStep:not([hidden])) .topbar {
   position: static;
 }
 body.portal:has(#authView:not([hidden])) .brand em { display: none; }
-/* Landing header — FIXED px, pixel-identical to the consumer's .topbar so the
-   logo never jumps when navigating between the two sites (the default portal
-   header stays small so it fits the signed-in actions). */
-body.portal:has(#authView:not([hidden])) .topbar { padding: 16px 20px 0; gap: 16px; }
-body.portal:has(#authView:not([hidden])) .brand { font-weight: 800; font-size: 22px; gap: 10px; letter-spacing: -0.01em; }
-body.portal:has(#authView:not([hidden])) .brand .appicon { width: 40px; height: 40px; border-radius: 10px; }
-@media (min-width: 700px) {
-  body.portal:has(#authView:not([hidden])) .topbar { padding: 20px 28px 0; gap: 20px; }
-  body.portal:has(#authView:not([hidden])) .brand { font-size: 26px; gap: 12px; }
-  body.portal:has(#authView:not([hidden])) .brand .appicon { width: 48px; height: 48px; border-radius: 12px; }
+/* Sign-in header — Figma node 2051-10797: pure black page, header 88 tall with
+   24px side padding, the 48px app icon + wordmark with a 16px gap. In the
+   normal page flow (not sticky), no blur. */
+body.portal:has(#authView:not([hidden])) { background: #000; }
+body.portal:has(#authView:not([hidden])) .topbar {
+  position: static;
+  background: #000;
+  backdrop-filter: none;
 }
+/* .topbar-inner carries the base 16/24 padding; widen it to 20/24 so the header
+   is 88 tall (20 + 48 icon + 20) with 24px sides — exactly the Figma node. */
+body.portal:has(#authView:not([hidden])) .topbar-inner {
+  padding: 20px 24px;
+}
+body.portal:has(#authView:not([hidden])) .brand { font-weight: 800; font-size: 20px; gap: 16px; letter-spacing: -0.01em; }
+body.portal:has(#authView:not([hidden])) .brand .appicon { width: 48px; height: 48px; border-radius: 17px; }
 /* Sign-in form steps (phone / email / code): the card must fit the screen with the
    mobile keyboard up — no page scroll. Top-anchor a compact card and hide the
    footer + tall paddings so the input and button stay above the keyboard on every
@@ -219,7 +225,7 @@ body.portal:has(#authView:not([hidden])):not(:has(#introStep:not([hidden]))) .wr
   display: flex;
   flex-direction: column;
   justify-content: flex-start;
-  padding: 16px 20px 24px;
+  padding: 0 24px;
   min-height: 0;
 }
 body.portal:has(#authView:not([hidden])):not(:has(#introStep:not([hidden]))) .auth-landing {
@@ -314,37 +320,72 @@ body.portal:has(#authView:not([hidden])):not(:has(#introStep:not([hidden]))) .po
 .hm-tile3 { left: calc(50% + 89.75 * var(--s));  top: calc(217 * var(--s));    width: calc(124 * var(--s)); height: calc(165.79 * var(--s)); }
 .hm-tile4 { left: calc(50% + 85.5 * var(--s));   top: calc(504.77 * var(--s)); width: calc(77 * var(--s));  height: calc(103 * var(--s)); }
 
-/* The claim card — same surface as the app's cards; a centred panel per step. */
+/* The sign-in card — Figma node 2051-10797: there is NO card surface. The title,
+   paragraph and 354-wide form sit directly on the black page, centred. */
 .auth-card {
-  max-width: 440px; margin: 0 auto;
-  background: var(--gray05); border: 1px solid var(--gray10);
-  border-radius: var(--radius); padding: 26px 24px;
+  max-width: 354px; margin: 0 auto;
+  background: none; border: none;
+  border-radius: 0; padding: 0;
 }
-.linklike.back { margin: 0 0 12px; text-decoration: none; color: var(--gray50); }
-.linklike.back:hover { color: var(--white); }
-.auth-card .card-title { margin-bottom: 8px; }
-.auth-card p.muted { margin-bottom: 20px; }
-.auth-card label { display: block; font-size: 13px; color: var(--gray70); margin-bottom: 6px; }
+/* Card title — Figma Headline 2 (Lato 800, 24/28.8). 80 below the header, 16
+   above the paragraph; the text starts 16 from the page edge (8 left of the
+   24px form margin). */
+.auth-card .card-title {
+  font-family: "Lato", sans-serif; font-weight: 800;
+  font-size: 24px; line-height: 28.8px; color: var(--white);
+  margin: 80px 0 16px -8px;
+}
+/* Sign-in paragraph — Figma: Poppins 400, 14/21, full white; 40 below it. */
+.auth-card .auth-sub {
+  font-family: "Poppins", sans-serif; font-weight: 400;
+  font-size: 14px; line-height: 21px; color: var(--white);
+  margin: 0 0 40px;
+}
+.auth-card label {
+  display: block;
+  font-family: "Lato", sans-serif; font-weight: 700;
+  font-size: 14px; color: var(--white); margin-bottom: 8px;
+}
 /* Breathing room between a field and its CTA — the button read as glued to the
    input without it. Applies to every field (email AND the 6-digit code). */
 .auth-card form input { margin-bottom: 16px; }
-.auth-landing > .form-msg { max-width: 440px; margin: 10px auto 0; text-align: center; }
+.auth-landing > .form-msg { max-width: 354px; margin: 10px auto 0; text-align: center; }
 
-/* Quiet text button — "Use a different email" restarts the two-step sign-in. */
-.linklike {
-  display: inline-block; margin-top: 14px;
-  background: none; border: none; padding: 0;
-  color: var(--gray70); font-family: inherit; font-size: 14px;
-  text-decoration: underline; cursor: pointer;
+/* Sign-in CTA — Figma node 2051-10797: 52 tall, a 24° blue gradient
+   (#0039F5 → #00218F), radius 32, Lato Bold 17, padding 16/32, and a black
+   25% shadow (0/16/56). */
+.auth-card .primary-btn {
+  height: 52px; padding: 16px 32px; border-radius: 32px;
+  background: linear-gradient(24deg, #0039f5 0%, #00218f 100%);
+  box-shadow: 0 16px 56px rgba(0, 0, 0, 0.25);
+  font-size: 17px;
 }
-.linklike:hover { color: var(--white); }
+.auth-card .primary-btn:hover {
+  transform: none;
+  box-shadow: 0 16px 56px rgba(0, 0, 0, 0.25);
+  filter: brightness(1.12);
+}
+.auth-card .primary-btn:active { transform: none; }
+
+/* Quiet text button — "Use email instead" / "Start over" on the sign-in steps.
+   Figma node 2051-10797: Poppins 500, 14px, white, centred, 16 below the
+   button. No underline. The ← Back variant is left-aligned above the title. */
+.linklike {
+  display: block; margin: 16px auto 0; padding: 0;
+  background: none; border: none;
+  color: var(--white); font-family: "Poppins", sans-serif;
+  font-weight: 500; font-size: 14px;
+  text-decoration: none; text-align: center; cursor: pointer;
+}
+.linklike.back { margin: 0 0 16px; text-align: left; }
 
 /* ── inputs ──────────────────────────────────────────────── */
 input[type=text], input[type=email], input[type=tel], input[type=url],
 input[type=number], textarea, select {
   width: 100%;
-  /* Figma "Regular" field: bg-secondary fill, gray20 hairline, 16 radius, and a
-     comfortable 16/20 padding so 17px text sits centered in a ~64-tall field. */
+  /* Figma design-system "Regular" field (node 351-2043): bg-secondary fill, a
+     1px WHITE hairline, 16 radius, padding 20 left / 16 right, so 17px text
+     sits centered in the 64-tall field. */
   background: var(--bg-secondary);
   border: var(--input-border);
   border-radius: var(--radius-input);
@@ -356,7 +397,7 @@ input[type=number], textarea, select {
 /* Figma "Regular" field box is 64 tall; single-line inputs center their text, so
    fix the height and drop vertical padding. Textarea keeps its padded multi-line. */
 input[type=text], input[type=email], input[type=tel], input[type=url], input[type=number] {
-  height: 64px; padding: 0 20px;
+  height: 64px; padding: 0 16px 0 20px;
 }
 /* Focus: brighten the hairline to white rather than the blue accent, so fields
    stay monochrome like the rest of the UI. */
