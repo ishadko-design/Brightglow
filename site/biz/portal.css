@@ -820,16 +820,16 @@ select { appearance: none; background-image: none; }
 }
 .billing-avatars span:first-child { margin-left: 0; }
 .billing-lead {
-  /* Figma body: Poppins 400 14px, white, 21px line-height. */
+  /* Figma body: Poppins 400 14px, white, 21px line-height. 32px to the button. */
   font-family: "Poppins", sans-serif; font-weight: 400; font-size: 14px;
   line-height: 1.5; color: var(--white);
-  margin: 0 0 24px;
+  margin: 0 0 32px;
 }
 .billing-caption {
-  /* Figma caption under the CTA: Poppins 400 14px, white, centered. */
+  /* Figma caption under the CTA: Poppins 400 14px, white, centered. 32px below button. */
   font-family: "Poppins", sans-serif; font-weight: 400; font-size: 14px;
   line-height: 1.5; color: var(--white); text-align: center;
-  margin: 16px 0 0;
+  margin: 32px 0 0;
 }
 /* Billing background (Figma 2056:12416 "Frame 37003"): amber glow (#ffac36)
    at the top fading into the dark --bg. The Figma layers three gradients
@@ -844,8 +844,8 @@ select { appearance: none; background-image: none; }
   pointer-events: none;
 }
 .billing-cta {
-  /* Figma Subscribe: 52 tall, blue gradient, radius 32, Lato 700 17px. */
-  min-height: 52px; font-size: 17px; margin-top: 24px;
+  /* Figma Subscribe: 52 tall, blue gradient, radius 32, Lato 700 17px. 32px above. */
+  min-height: 52px; font-size: 17px; margin-top: 32px;
 }
 .arl-box {
   /* California ARL §17602: the auto-renewal terms must be clear and
