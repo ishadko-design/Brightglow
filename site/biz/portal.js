@@ -449,7 +449,10 @@ function unsubscribedHTML() {
   const outOfLeads = left === 0;
 
   return `
-    <h2 class="billing-title">Subscribe for unlimited leads</h2>
+    <div class="billing-title-wrap">
+      <h2 class="billing-title">Subscribe for unlimited leads</h2>
+    </div>
+    <div class="billing-body-wrap">
     <div class="billing-avatars" aria-hidden="true">
       <span></span><span></span><span></span><span></span>
     </div>
@@ -477,7 +480,8 @@ function unsubscribedHTML() {
         subscription renews automatically at $25/month until I cancel.</span>
     </label>
     <button class="primary-btn wide billing-cta" id="subscribeBtn" disabled>Subscribe</button>
-    <p class="billing-caption">$25/month for unlimited leads</p>`;
+    <p class="billing-caption">$25/month for unlimited leads</p>
+    </div>`;
 }
 
 function subscribedHTML() {
@@ -488,10 +492,11 @@ function subscribedHTML() {
   const canceling = billing.cancel_at_period_end && !pastDue;
 
   return `
-    <h2 class="billing-title">
-      Subscription <span class="text-active-green">active</span>
+    <div class="billing-title-wrap">
+      <h2 class="billing-title">Subscription <span class="text-active-green">active</span></h2>
       ${pastDue ? `<span class="pill warn">Payment failed</span>` : ``}
-    </h2>
+    </div>
+    <div class="billing-body-wrap">
     ${pastDue
       ? `<p class="form-msg err">
            We couldn't charge your card. You're still receiving leads for now \u2014 update your
@@ -505,7 +510,8 @@ function subscribedHTML() {
       ${pastDue ? `Update card` : `Cancel subscription`}
     </button>
     <p class="billing-caption">Opens your secure Stripe billing page, where you can update your card,
-      download invoices, or cancel \u2014 takes effect at the end of the period you've paid for.</p>`;
+      download invoices, or cancel \u2014 takes effect at the end of the period you've paid for.</p>
+    </div>`;
 }
 
 // RFC-5322-lite: enough to catch typos and empty submits; the server and Stripe

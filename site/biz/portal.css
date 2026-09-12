@@ -435,6 +435,13 @@ select { appearance: none; background-image: none; }
    app pushes BusinessProfileScreen — so there's a back affordance, not a tab. */
 .editor-head { display: flex; align-items: center; gap: 14px; margin-bottom: 8px; }
 .editor-head h1 { font-size: 26px; }
+/* Billing header — Figma 2056:12052/12416: 44px tall, 8px horizontal padding,
+   44px bare-arrow back button, 4px gap, "Billing" Lato 800 24px. */
+#billingView .editor-head { gap: 4px; padding: 0 8px; margin-bottom: 0; min-height: 44px; }
+#billingView .editor-head h1 {
+  font-family: "Lato", sans-serif; font-weight: 800; font-size: 24px;
+  line-height: 1.2; color: var(--white); margin: 0;
+}
 /* Settings on the dashboard header — the app's gear entry point, labelled and
    sized as a real target rather than a 38px icon puck. */
 /* Delete + sign-out sit together at the tail of the editor, as in the app. */
@@ -797,13 +804,17 @@ select { appearance: none; background-image: none; }
 .thread-broadcast { display: none !important; }
 
 /* ── Billing — Figma 2056:12416 (landing) / 2056:12052 (active) ────────── */
+/* Figma 2056:12052/12416: title sits in Frame 36992 with 16px horizontal
+   inset (body/button/caption use 24px). Normal text flow — NOT flex, so the
+   space between "Subscription" and the green "active" stays a regular space. */
+.billing-title-wrap { padding: 0 16px; }
 .billing-title {
   /* h2 token: Lato 800 24px, white. */
   font-family: "Lato", sans-serif; font-weight: 800; font-size: 24px;
   line-height: 1.2; color: var(--white);
   margin: 0 0 16px;
-  display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
 }
+.billing-body-wrap { padding: 0 24px; }
 /* Figma 2056:12052: the word "active" in "Subscription active" is green.
    #27c840 is the node value verbatim — not in design/tokens.json (token gap). */
 .text-active-green { color: #27c840; }
@@ -834,15 +845,16 @@ select { appearance: none; background-image: none; }
 /* Billing background (Figma 2056:12416 "Frame 37003"): amber glow (#ffac36)
    at the top fading into the dark --bg. The Figma layers three gradients
    over a 402x498 frame; this is the visual equivalent in a single layer. */
-#billingView { position: relative; }
+#billingView { position: relative; background: #131315; }
 #billingView::before {
   content: ""; position: absolute; top: 0; left: 0; right: 0; height: 498px;
   background: linear-gradient(to bottom,
     rgba(255, 172, 54, 0.22) 0%,
     rgba(255, 172, 54, 0.06) 45%,
     rgba(19, 19, 21, 0) 100%);
-  pointer-events: none;
+  pointer-events: none; z-index: 0;
 }
+#billingView .editor-head, #billingView .billing-state { position: relative; z-index: 1; }
 .billing-cta {
   /* Figma Subscribe: 52 tall, blue gradient, radius 32, Lato 700 17px. 32px above. */
   min-height: 52px; font-size: 17px; margin-top: 32px;
