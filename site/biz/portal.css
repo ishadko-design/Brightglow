@@ -809,9 +809,9 @@ select { appearance: none; background-image: none; }
    space between "Subscription" and the green "active" stays a regular space. */
 .billing-title-wrap { padding: 0 16px; }
 .billing-title {
-  /* h2 token: Lato 800 24px, white. */
+  /* h2 token: Lato 800 24px, white. Figma: textAlignHorizontal CENTER. */
   font-family: "Lato", sans-serif; font-weight: 800; font-size: 24px;
-  line-height: 1.2; color: var(--white);
+  line-height: 1.2; color: var(--white); text-align: center;
   margin: 0 0 16px;
 }
 .billing-body-wrap { padding: 0 24px; }
@@ -831,9 +831,9 @@ select { appearance: none; background-image: none; }
 }
 .billing-avatars span:first-child { margin-left: 0; }
 .billing-lead {
-  /* Figma body: Poppins 400 14px, white, 21px line-height. 32px to the button. */
+  /* Figma body: Poppins 400 14px, white, 21px line-height. CENTER aligned. 32px to button. */
   font-family: "Poppins", sans-serif; font-weight: 400; font-size: 14px;
-  line-height: 1.5; color: var(--white);
+  line-height: 1.5; color: var(--white); text-align: center;
   margin: 0 0 32px;
 }
 .billing-caption {
@@ -845,16 +845,9 @@ select { appearance: none; background-image: none; }
 /* Billing background (Figma 2056:12416 "Frame 37003"): amber glow (#ffac36)
    at the top fading into the dark --bg. The Figma layers three gradients
    over a 402x498 frame; this is the visual equivalent in a single layer. */
-#billingView { position: relative; background: #131315; }
-#billingView::before {
-  content: ""; position: absolute; top: 0; left: 0; right: 0; height: 498px;
-  background: linear-gradient(to bottom,
-    rgba(255, 172, 54, 0.22) 0%,
-    rgba(255, 172, 54, 0.06) 45%,
-    rgba(19, 19, 21, 0) 100%);
-  pointer-events: none; z-index: 0;
-}
-#billingView .editor-head, #billingView .billing-state { position: relative; z-index: 1; }
+/* Figma 2056:12052/12416: root is solid #131315. Frame 37003 (amber gradient)
+   has visible=False in the node — it must NOT be rendered. */
+#billingView { background: #131315; }
 .billing-cta {
   /* Figma Subscribe: 52 tall, blue gradient, radius 32, Lato 700 17px. 32px above. */
   min-height: 52px; font-size: 17px; margin-top: 32px;
