@@ -193,22 +193,45 @@ body.portal:has(#authView:not([hidden]) #introStep:not([hidden])) .topbar {
   position: static;
 }
 body.portal:has(#authView:not([hidden])) .brand em { display: none; }
-/* Sign-in header — Figma node 2051-10797: pure black page, header 88 tall with
-   24px side padding, the 48px app icon + wordmark with a 16px gap. In the
-   normal page flow (not sticky), no blur. */
-body.portal:has(#authView:not([hidden])) { background: #000; }
+/* Sign-in background — Figma node 2051-10797: pure black plus the amber
+   gradient bloom at the top. */
+body.portal:has(#authView:not([hidden])) {
+  background-color: #000;
+  background-image: linear-gradient(212deg, rgba(255, 172, 54, 0.25) 0%, rgba(8, 8, 11, 0) 40%);
+  background-repeat: no-repeat;
+  background-position: top center;
+  background-size: 100% 600px;
+}
+/* Sign-in header — matches the consumer landing header exactly (Igor's call):
+   static, transparent, full-width; mobile 40px icon / 22px wordmark, desktop
+   (700px+) 48px icon / 26px wordmark like the landing. */
 body.portal:has(#authView:not([hidden])) .topbar {
   position: static;
-  background: #000;
+  background: transparent;
   backdrop-filter: none;
 }
-/* .topbar-inner carries the base 16/24 padding; widen it to 20/24 so the header
-   is 88 tall (20 + 48 icon + 20) with 24px sides — exactly the Figma node. */
 body.portal:has(#authView:not([hidden])) .topbar-inner {
-  padding: 20px 24px;
+  max-width: none;
+  padding: 16px 20px 0;
+  justify-content: flex-start;
 }
-body.portal:has(#authView:not([hidden])) .brand { font-weight: 800; font-size: 20px; gap: 16px; letter-spacing: -0.01em; }
-body.portal:has(#authView:not([hidden])) .brand .appicon { width: 48px; height: 48px; border-radius: 17px; }
+body.portal:has(#authView:not([hidden])) .topbar-actions { display: none; }
+body.portal:has(#authView:not([hidden])) .brand {
+  font-family: "Lato", sans-serif; font-weight: 800;
+  font-size: 22px; letter-spacing: -0.01em;
+}
+body.portal:has(#authView:not([hidden])) .brand-name { gap: 10px; }
+body.portal:has(#authView:not([hidden])) .brand .appicon {
+  width: 40px; height: 40px; border-radius: 10px;
+}
+@media (min-width: 700px) {
+  body.portal:has(#authView:not([hidden])) .topbar-inner { padding: 20px 28px 0; }
+  body.portal:has(#authView:not([hidden])) .brand { font-size: 26px; }
+  body.portal:has(#authView:not([hidden])) .brand-name { gap: 12px; }
+  body.portal:has(#authView:not([hidden])) .brand .appicon {
+    width: 48px; height: 48px; border-radius: 12px;
+  }
+}
 /* Sign-in form steps (phone / email / code): the card must fit the screen with the
    mobile keyboard up — no page scroll. Top-anchor a compact card and hide the
    footer + tall paddings so the input and button stay above the keyboard on every
@@ -225,7 +248,7 @@ body.portal:has(#authView:not([hidden])):not(:has(#introStep:not([hidden]))) .wr
   display: flex;
   flex-direction: column;
   justify-content: flex-start;
-  padding: 0 24px;
+  padding: 0 8px;
   min-height: 0;
 }
 body.portal:has(#authView:not([hidden])):not(:has(#introStep:not([hidden]))) .auth-landing {
@@ -320,36 +343,39 @@ body.portal:has(#authView:not([hidden])):not(:has(#introStep:not([hidden]))) .po
 .hm-tile3 { left: calc(50% + 89.75 * var(--s));  top: calc(217 * var(--s));    width: calc(124 * var(--s)); height: calc(165.79 * var(--s)); }
 .hm-tile4 { left: calc(50% + 85.5 * var(--s));   top: calc(504.77 * var(--s)); width: calc(77 * var(--s));  height: calc(103 * var(--s)); }
 
-/* The sign-in card — Figma node 2051-10797: there is NO card surface. The title,
-   paragraph and 354-wide form sit directly on the black page, centred. */
+/* The sign-in container — Figma node 2051-10797: white 5% fill, 32px radius,
+   no border, padding 24 top/bottom + 16 sides, 386 wide (8px page margins). */
 .auth-card {
-  max-width: 354px; margin: 0 auto;
-  background: none; border: none;
-  border-radius: 0; padding: 0;
+  max-width: 386px; margin: 0 auto;
+  background: rgba(255, 255, 255, 0.05);
+  border: none; border-radius: 32px;
+  padding: 24px 16px;
 }
-/* Card title — Figma Headline 2 (Lato 800, 24/28.8). 80 below the header, 16
-   above the paragraph; the text starts 16 from the page edge (8 left of the
-   24px form margin). */
-.auth-card .card-title {
+/* Sign-in hero — Figma: title Lato 800 24/28.8 centered, paragraph Poppins 400
+   14/21 white 60% centered, 354 wide. 80 below the header, 16 title→para,
+   16 para→container. */
+.auth-hero { max-width: 354px; margin: 80px auto 0; text-align: center; }
+.auth-hero .card-title {
   font-family: "Lato", sans-serif; font-weight: 800;
   font-size: 24px; line-height: 28.8px; color: var(--white);
-  margin: 80px 0 16px -8px;
+  margin: 0 0 16px;
 }
-/* Sign-in paragraph — Figma: Poppins 400, 14/21, full white; 40 below it. */
-.auth-card .auth-sub {
+.auth-hero .auth-sub {
   font-family: "Poppins", sans-serif; font-weight: 400;
-  font-size: 14px; line-height: 21px; color: var(--white);
-  margin: 0 0 40px;
+  font-size: 14px; line-height: 21px; color: rgba(255, 255, 255, 0.6);
+  margin: 0 0 16px;
 }
 .auth-card label {
   display: block;
   font-family: "Lato", sans-serif; font-weight: 700;
   font-size: 14px; color: var(--white); margin-bottom: 8px;
 }
+/* Figma input: white 20% hairline (not the solid-white token). */
+.auth-card input { border-color: rgba(255, 255, 255, 0.2); }
 /* Breathing room between a field and its CTA — the button read as glued to the
    input without it. Applies to every field (email AND the 6-digit code). */
 .auth-card form input { margin-bottom: 16px; }
-.auth-landing > .form-msg { max-width: 354px; margin: 10px auto 0; text-align: center; }
+.auth-landing > .form-msg, .auth-step > .form-msg { max-width: 354px; margin: 10px auto 0; text-align: center; }
 
 /* Sign-in CTA — Figma node 2051-10797: 52 tall, a 24° blue gradient
    (#0039F5 → #00218F), radius 32, Lato Bold 17, padding 16/32, and a black
@@ -368,14 +394,14 @@ body.portal:has(#authView:not([hidden])):not(:has(#introStep:not([hidden]))) .po
 .auth-card .primary-btn:active { transform: none; }
 
 /* Quiet text button — "Use email instead" / "Start over" on the sign-in steps.
-   Figma node 2051-10797: Poppins 500, 14px, white, centred, 16 below the
-   button. No underline. The ← Back variant is left-aligned above the title. */
+   Figma node 2051-10797: Poppins 500, 14px, white, UNDERLINED, centred,
+   16 below the button. The ← Back variant is left-aligned above the hero. */
 .linklike {
   display: block; margin: 16px auto 0; padding: 0;
   background: none; border: none;
   color: var(--white); font-family: "Poppins", sans-serif;
   font-weight: 500; font-size: 14px;
-  text-decoration: none; text-align: center; cursor: pointer;
+  text-decoration: underline; text-align: center; cursor: pointer;
 }
 .linklike.back { margin: 0 0 16px; text-align: left; }
 
