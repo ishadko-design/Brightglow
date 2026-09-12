@@ -13,6 +13,9 @@
 //             reachable at its Railway URL. Serving it here keeps links
 //             on-brand and matches the /chat Universal Link the iOS app already
 //             recognises (ChatRouter.swift), so one URL works on phone and desktop.
+//   /l/*    — the quote-request reply links texted to businesses. Serving them
+//             on brightglow.co instead of the Railway URL keeps the SMS from
+//             looking sketchy; the page itself redirects to /biz?lead=.
 //
 // This proxy holds NO authority of its own: it forwards the caller's
 // Authorization header untouched and LeadBridge verifies that Supabase JWT
@@ -29,7 +32,7 @@ const LEADBRIDGE = "https://leadbridge-production-4065.up.railway.app";
 const ANALYTICS_FN = "https://qxoseyrlbvblpwqzwvvk.supabase.co/functions/v1/analytics";
 
 function isProxied(pathname) {
-  return pathname.startsWith("/api/") || pathname === "/chat" || pathname.startsWith("/chat/");
+  return pathname.startsWith("/api/") || pathname === "/chat" || pathname.startsWith("/chat/") || pathname.startsWith("/l/");
 }
 
 // Any /analytics path (the HTML and its data endpoint) is behind the login.
