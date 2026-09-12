@@ -712,6 +712,39 @@ select { appearance: none; background-image: none; }
 .menu-item:hover { color: var(--gray60); }
 .menu-div { border: 0; border-top: 1px solid var(--gray20); margin: 0; }
 
+/* Destructive confirmation modal (account deletion). Centered card on a dimmed
+   backdrop — the same card treatment as .auth-card (white 5%, radius 32).
+   The confirm is the red --danger (Figma delete red); Cancel stays a quiet
+   underlined text button so the destructive choice carries all the weight. */
+.modal-overlay {
+  position: fixed; inset: 0; z-index: 60;
+  background: rgba(0, 0, 0, 0.6);
+  display: flex; align-items: center; justify-content: center;
+  padding: 24px;
+  animation: menuIn .22s ease;
+}
+.modal-card {
+  width: 100%; max-width: 386px;
+  background: rgba(255, 255, 255, 0.05);
+  border: none; border-radius: 32px;
+  padding: 24px 16px;
+  text-align: center;
+}
+.modal-title {
+  font-family: "Lato", sans-serif; font-weight: 800; font-size: 24px; line-height: 1.2;
+  color: var(--white); margin: 0 0 16px;
+}
+.modal-body {
+  font-family: "Poppins", sans-serif; font-weight: 400; font-size: 14px; line-height: 1.5;
+  color: rgba(255, 255, 255, 0.6); margin: 0 0 24px;
+}
+.danger-btn {
+  background: var(--danger);
+  box-shadow: 0 8px 24px rgba(255, 0, 0, 0.35);
+}
+.danger-btn:hover { transform: translateY(-1px); box-shadow: 0 12px 32px rgba(255, 0, 0, 0.5); }
+.danger-btn:active { transform: translateY(0); }
+
 /* Unified inbox: hide the business switcher chips. */
 .biz-switcher { display: none !important; }
 

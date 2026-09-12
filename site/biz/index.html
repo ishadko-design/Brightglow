@@ -9,7 +9,7 @@
   <meta name="robots" content="noindex">
   <link rel="icon" type="image/png" href="../favicon.png">
   <link rel="apple-touch-icon" href="../apple-touch-icon.png">
-  <link rel="stylesheet" href="portal.css?v=58">
+  <link rel="stylesheet" href="portal.css?v=59">
 </head>
 <body class="portal">
   <header class="topbar">
@@ -329,6 +329,18 @@
     </nav>
   </div>
 
+  <!-- Destructive confirmation for account deletion. A custom modal (not the
+       native confirm()) so the action reads as significant: red "Confirm
+       Deletion" button, quiet Cancel. -->
+  <div id="deleteOverlay" class="modal-overlay" hidden>
+    <div class="modal-card" role="alertdialog" aria-modal="true" aria-labelledby="deleteTitle">
+      <h2 id="deleteTitle" class="modal-title">Delete your account?</h2>
+      <p class="modal-body">This permanently removes your business page and signs you out for good — you won't be able to log in again with this phone or email. Your listing reverts to its public info, and customer requests are kept. This cannot be undone.</p>
+      <button id="deleteConfirm" class="primary-btn danger-btn" type="button">Confirm Deletion</button>
+      <button id="deleteCancel" class="linklike" type="button">Cancel</button>
+    </div>
+  </div>
+
   <footer class="portal-footer">
     <a href="../business-terms.html">Business Terms</a>
     <a href="../terms.html">Terms</a>
@@ -336,6 +348,6 @@
     <span>© 2026 Brightglow Technologies LLC</span>
   </footer>
 
-  <script type="module" src="portal.js?v=23"></script>
+  <script type="module" src="portal.js?v=24"></script>
 </body>
 </html>

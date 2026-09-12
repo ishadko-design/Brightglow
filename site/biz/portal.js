@@ -1504,13 +1504,29 @@ async function signOut() {
 // `delete-account` Edge Function (service role); here we just invoke it and, on
 // success, drop the local session and reload. Customer requests are preserved
 // (they're keyed to the customer, not this owner).
+// Promise-based destructive confirmation. The native confirm() only offers the
+// generic OK/Cancel pair with no styling; this modal makes the action read as
+// significant — red "Confirm Deletion", quiet Cancel. Resolves true on confirm.
+function confirmDeleteAccount() {
+  return new Promise((resolve) => {
+    const overlay = $("deleteOverlay");
+    const done = (value) => {
+      overlay.hidden = true;
+      document.removeEventListener("keydown", onKey);
+      resolve(value);
+    };
+    const onKey = (e) => { if (e.key === "Escape") done(false); };
+    $("deleteConfirm").onclick = () => done(true);
+    $("deleteCancel").onclick = () => done(false);
+    overlay.onclick = (e) => { if (e.target === overlay) done(false); };
+    document.addEventListener("keydown", onKey);
+    overlay.hidden = false;
+    $("deleteCancel").focus();
+  });
+}
+
 async function deleteAccount() {
-  if (!confirm(
-    "Delete your account?\n\n" +
-    "This permanently removes your business page and signs you out for good — you " +
-    "won't be able to log in again with this phone or email. Your listing reverts to " +
-    "its public info, and customer requests are kept. This cannot be undone."
-  )) return;
+  if (!(await confirmDeleteAccount())) return;
   const btn = $("menuDelete");
   btn.disabled = true; btn.textContent = "Deleting…";
   try {
