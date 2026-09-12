@@ -826,6 +826,18 @@ select { appearance: none; background-image: none; }
   line-height: 1.5; color: var(--white); text-align: center;
   margin: 16px 0 0;
 }
+/* Billing background (Figma 2056:12416 "Frame 37003"): amber glow (#ffac36)
+   at the top fading into the dark --bg. The Figma layers three gradients
+   over a 402x498 frame; this is the visual equivalent in a single layer. */
+#billingView { position: relative; }
+#billingView::before {
+  content: ""; position: absolute; top: 0; left: 0; right: 0; height: 498px;
+  background: linear-gradient(to bottom,
+    rgba(255, 172, 54, 0.22) 0%,
+    rgba(255, 172, 54, 0.06) 45%,
+    rgba(19, 19, 21, 0) 100%);
+  pointer-events: none;
+}
 .billing-cta {
   /* Figma Subscribe: 52 tall, blue gradient, radius 32, Lato 700 17px. */
   min-height: 52px; font-size: 17px; margin-top: 24px;
