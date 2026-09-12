@@ -517,19 +517,21 @@ select { appearance: none; background-image: none; }
    transparent, so a red row behind it would bleed straight through (that was the
    all-red-cards bug). Instead the red Delete button hides behind the card and
    is only revealed while dragging / when open. */
+/* Swipe-to-delete: the APPROVED interaction (v47) — the .lead-row itself carries
+   the red background (16px radius rounds both ends); the card slides left to
+   reveal it, with a transparent full-height Delete button sitting on the red.
+   No floating pill, no visibility toggling: the red is structural, so a plain
+   tap can never flash it. */
 .lead-row { position: relative; overflow: hidden; border-radius: 16px;
-  margin: 0 8px; }   /* Figma 1984:5579: the 386 card sits 8px inset in the 402 row */
-.lead-delete { position: absolute; right: 0; top: 50%; transform: translateY(-50%);
-  width: 118px; height: 48px; border: 0; border-radius: 32px;
-  background: var(--danger); cursor: pointer;
-  color: var(--white); font-family: "Lato"; font-weight: 700; font-size: 15px;
-  opacity: 0; visibility: hidden; transition: opacity .18s ease, visibility .18s; }
-.lead-row.open .lead-delete, .lead-row.dragging .lead-delete { opacity: 1; visibility: visible; }
+  margin: 0 8px; background: var(--danger); }   /* Figma 1984:5579: the 386 card sits 8px inset in the 402 row */
+.lead-delete { position: absolute; top: 0; bottom: 0; right: 0; width: 118px;
+  border: 0; background: transparent; cursor: pointer;
+  color: var(--white); font-family: "Lato"; font-weight: 700; font-size: 15px; }
 .lead-card { display: flex; align-items: center; gap: 12px; background: var(--gray05);
   border: 0; border-radius: 16px; padding: 14px 12px; cursor: pointer; position: relative;
   z-index: 1;
   touch-action: pan-y; transition: transform .18s ease; }
-.lead-row.open .lead-card { transform: translateX(-88px); }
+.lead-row.open .lead-card { transform: translateX(-118px); }
 /* Figma 1984:5579: 44px thumbnail, 12px radius. Holds the customer's photo when
    the request has one (popped in async); otherwise the initial placeholder. */
 .lead-avatarwrap { position: relative; width: 44px; height: 44px; flex-shrink: 0; }
@@ -550,7 +552,7 @@ select { appearance: none; background-image: none; }
   border-radius: 50%; background: var(--gold); }
 
 /* ── Open chat — Figma 2020:6841, built element-for-element ──────────────────
-   Header row: 44×44 back-arrow icon (white 20%, r32) + job title (Lato 800/24)
+   Header row: bare 44×44 back-arrow icon (no background) + job title (Lato 800/24)
    over a timestamp (Poppins 300/14 @ 60%), 8px inset, 4px gap. Then the guidance
    line (Poppins 400/14 @ 50%, left-aligned, 16px inset), the request as a
    FIXED 320px blue-gradient container (r24, Poppins 300/17), and the photos stacked at

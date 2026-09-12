@@ -1029,30 +1029,52 @@ async function loadLeadThumbs(leads) {
 
 // Swipe-to-delete on a request row (Figma 1140:2933): drag the cell left to reveal
 // Delete; a plain tap opens the thread. Touch-driven — the business is on mobile.
-const SWIPE_OPEN = -88;
+const SWIPE_OPEN = -118;   // px the card slides to fully reveal the 118px Delete strip
+
+// Swipe-to-delete, rebuilt: the red is structural (the row's own background),
+// so a tap can never flash it. A gesture only counts as a swipe once horizontal
+// movement passes 10px AND dominates vertical movement — plain taps (even jittery
+// ones) always fall through to openThread. Works with touch and mouse-drag.
 function wireLeadRow(row, leads) {
   const i = +row.dataset.i;
   const card = row.querySelector(".lead-card");
-  let startX = 0, dx = 0, dragging = false, moved = false;
-  card.addEventListener("touchstart", (e) => {
-    startX = e.touches[0].clientX; dragging = true; moved = false; card.style.transition = "none";
-    row.classList.add("dragging");
-  }, { passive: true });
-  card.addEventListener("touchmove", (e) => {
-    if (!dragging) return;
-    dx = e.touches[0].clientX - startX + (row.classList.contains("open") ? SWIPE_OPEN : 0);
+  let startX = 0, startY = 0, dx = 0, tracking = false, swiping = false, suppressClick = false;
+
+  const setX = (x) => { card.style.transform = x ? `translateX(${x}px)` : ""; };
+  const onStart = (x, y) => {
+    document.querySelectorAll(".lead-row.open").forEach((r) => { if (r !== row) r.classList.remove("open"); });
+    startX = x; startY = y; dx = 0; tracking = true; swiping = false;
+    card.style.transition = "none";
+  };
+  const onMove = (x, y) => {
+    if (!tracking) return;
+    const nx = x - startX, ny = y - startY;
+    if (!swiping && Math.abs(nx) > 10 && Math.abs(nx) > Math.abs(ny) * 1.5) swiping = true;
+    if (!swiping) return;
+    dx = nx + (row.classList.contains("open") ? SWIPE_OPEN : 0);
     dx = Math.max(SWIPE_OPEN, Math.min(0, dx));
-    if (Math.abs(dx) > 6) moved = true;
-    card.style.transform = `translateX(${dx}px)`;
-  }, { passive: true });
-  card.addEventListener("touchend", () => {
-    dragging = false; card.style.transition = ""; card.style.transform = "";
-    row.classList.remove("dragging");
-    row.classList.toggle("open", dx < SWIPE_OPEN / 2);
-  });
+    setX(dx);
+  };
+  const onEnd = () => {
+    if (!tracking) return;
+    tracking = false; card.style.transition = "";
+    if (swiping) {
+      row.classList.toggle("open", dx < SWIPE_OPEN / 2);
+      suppressClick = true;   // swallow the click that follows a real swipe
+      setTimeout(() => { suppressClick = false; }, 350);
+    }
+    setX("");
+  };
+  card.addEventListener("touchstart", (e) => onStart(e.touches[0].clientX, e.touches[0].clientY), { passive: true });
+  card.addEventListener("touchmove", (e) => onMove(e.touches[0].clientX, e.touches[0].clientY), { passive: true });
+  card.addEventListener("touchend", onEnd);
+  card.addEventListener("touchcancel", () => { tracking = false; card.style.transition = ""; setX(""); });
+  card.addEventListener("mousedown", (e) => { if (e.button === 0) onStart(e.clientX, e.clientY); });
+  window.addEventListener("mousemove", (e) => onMove(e.clientX, e.clientY));
+  window.addEventListener("mouseup", onEnd);
   card.addEventListener("click", () => {
+    if (suppressClick) { suppressClick = false; return; }
     if (row.classList.contains("open")) { row.classList.remove("open"); return; }
-    if (moved) { moved = false; return; }
     openThread(leads[i]);
   });
   row.querySelector(".lead-delete").addEventListener("click", (e) => {
