@@ -1031,6 +1031,7 @@ function wireLeadRow(row, leads) {
   let startX = 0, dx = 0, dragging = false, moved = false;
   card.addEventListener("touchstart", (e) => {
     startX = e.touches[0].clientX; dragging = true; moved = false; card.style.transition = "none";
+    row.classList.add("dragging");
   }, { passive: true });
   card.addEventListener("touchmove", (e) => {
     if (!dragging) return;
@@ -1041,6 +1042,7 @@ function wireLeadRow(row, leads) {
   }, { passive: true });
   card.addEventListener("touchend", () => {
     dragging = false; card.style.transition = ""; card.style.transform = "";
+    row.classList.remove("dragging");
     row.classList.toggle("open", dx < SWIPE_OPEN / 2);
   });
   card.addEventListener("click", () => {
@@ -1160,9 +1162,14 @@ function renderThread(msgs) {
     box.innerHTML = `<p class="thread-empty" id="threadEmpty">This request came in without a message.</p>`;
     return;
   }
+  // The request bubble shows the job summary (Figma 2020:6841 shows the
+  // summary-length text, not the full message); replies keep full text.
+  const summary = jobTitle(thread);
+  const request = shown.find((m) => m.direction !== "inbound");
   box.innerHTML = shown.map((m) => {
     const mine = m.direction === "inbound";
-    return `<div class="bubble ${mine ? "mine" : "theirs"}">${esc(m.body_text)}</div>`;
+    const text = (m === request) ? summary : m.body_text;
+    return `<div class="bubble ${mine ? "mine" : "theirs"}">${esc(text)}</div>`;
   }).join("");
   box.scrollTop = box.scrollHeight;
 }
