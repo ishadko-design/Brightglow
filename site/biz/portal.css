@@ -599,12 +599,12 @@ select { appearance: none; background-image: none; }
 .thread-titlewrap { flex: 1; min-width: 0; display: flex; flex-direction: column; }
 .thread-title { margin: 0; font-family: "Lato"; font-weight: 800; font-size: 24px;
   line-height: 1.15; color: var(--white); }
-.thread-time { font-family: "Poppins"; font-weight: 300; font-size: 14px; color: var(--white); margin-top: 2px; }
+.thread-time { font-family: "Poppins"; font-weight: 300; font-size: 14px; color: var(--gray50); margin-top: 2px; }
 /* "Send to top 5" — Button Secondary: bg rgba(217,217,217,.20), radius 32. */
 .thread-broadcast { flex-shrink: 0; background: var(--gray20); color: var(--white); border-radius: 32px;
   padding: 4px 16px; font-family: "Lato"; font-weight: 700; font-size: 14px; white-space: nowrap; cursor: pointer; }
 .thread-sub { margin: 0 16px 16px; font-family: "Poppins"; font-weight: 400; font-size: 14px;
-  line-height: 1.5; color: var(--white); text-align: center; }
+  line-height: 1.5; color: var(--gray50); }
 /* Request + reply bubbles sit inset 16 (Figma Frame 36985 pad 0/16). */
 .thread-msgs { display: flex; flex-direction: column; gap: 16px; padding: 0 16px; }
 .bubble { padding: 16px; border-radius: 24px; font-family: "Poppins"; font-weight: 300;

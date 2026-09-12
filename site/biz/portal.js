@@ -314,9 +314,12 @@ async function enterDashboard() {
   // lead it's about, so open THAT business on Requests rather than dumping the
   // owner on a generic page and making them hunt for the job.
   const wantLead = new URLSearchParams(location.search).get("lead");
-  await selectBusiness(businesses[0]);
-  if (wantLead) {
-    const lead = allLeads().find((l) => l.public_id === wantLead);
+  const target = wantLead
+    ? businesses.find((b) => b.leads.some((l) => l.public_id === wantLead))
+    : null;
+  await selectBusiness(target || businesses[0]);
+  if (target) {
+    const lead = target.leads.find((l) => l.public_id === wantLead);
     if (lead) await openThread(lead);   // straight into the conversation
   }
 
@@ -606,7 +609,7 @@ async function ensureWritable() {
 // ── business switching ──────────────────────────────────────
 function renderSwitcher() {
   const el = $("bizSwitcher");
-  show(el, false); return;   // chips removed — unified inbox
+  if (businesses.length < 2) { show(el, false); return; }
   el.innerHTML = businesses.map((b, i) =>
     `<button class="biz-chip ${b === current ? "is-active" : ""}" data-i="${i}">${esc(b.name)}</button>`
   ).join("");
@@ -934,17 +937,9 @@ async function uploadImage(file, prefix = "") {
 }
 
 // ── leads / requests ────────────────────────────────────────
-// Unified inbox: all requests across all of the owner's businesses,
-// newest first. The per-business chips are gone.
-function allLeads() {
-  const out = [];
-  for (const b of businesses) for (const l of b.leads || []) out.push(l);
-  out.sort((a, b) => (a.created_at < b.created_at ? 1 : -1));
-  return out;
-}
 function renderLeads() {
   const list = $("leadsList");
-  const leads = allLeads();
+  const leads = current.leads || [];
   show($("leadsEmpty"), leads.length === 0);
   list.innerHTML = leads.map((l, i) => {
     const msgs = sortMsgs(l.messages || []);
@@ -1009,12 +1004,10 @@ async function deleteLead(lead, row) {
   try {
     const resp = await authedFetch("/api/threads/" + lead.public_id + "/hide", { method: "POST" });
     if (!resp.ok) throw new Error(`hide failed (${resp.status})`);
-    for (const b of businesses) {
-      const idx = (b.leads || []).indexOf(lead);
-      if (idx >= 0) { b.leads.splice(idx, 1); break; }
-    }
+    const idx = (current.leads || []).indexOf(lead);
+    if (idx >= 0) current.leads.splice(idx, 1);
     row.remove();
-    show($("leadsEmpty"), allLeads().length === 0);
+    show($("leadsEmpty"), (current.leads || []).length === 0);
   } catch (err) {
     console.error("delete request failed:", err);
     alert("Couldn't remove that request. Try again, or email hello@brightglow.co.");
