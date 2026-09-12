@@ -47,10 +47,10 @@
   --radius: 20px;
   --radius-sm: 12px;
   /* Text fields, matching the Figma design-system "Regular" input (node
-     351-2043): radius 16, a 1px WHITE hairline, on the bg-secondary fill,
-     padding 20 left / 16 right. */
+     351-2043, and 1984:5663): radius 16, a 1px WHITE-20% hairline (stroke
+     opacity 0.2, outside), on the bg-secondary fill, padding 20 left / 16 right. */
   --radius-input: 16px;
-  --input-border: 1px solid var(--white);
+  --input-border: 1px solid rgba(255, 255, 255, 0.2);
   /* landing scale unit — mirrors site/styles.css: every Figma px × --s. */
   --s: 1px;
 }
@@ -481,7 +481,7 @@ select { appearance: none; background-image: none; }
 }
 .btn-secondary:hover { filter: brightness(1.15); }
 .btn-secondary:disabled { opacity: .6; cursor: default; }
-.btn-secondary.sm { padding: 8px 16px; font-size: 14px; }
+.btn-secondary.sm { padding: 4px 16px; font-size: 14px; }
 .btn-secondary.lg { padding: 13px 32px; font-size: 18px; }
 
 /* Figma header "Sign out": transparent, 2px white-20 hairline, radius 100. */
@@ -519,13 +519,14 @@ select { appearance: none; background-image: none; }
 /* ── Settings: "Accepting new work" toggle row (Figma 1984:5663 Frame 36992,
    pad 0/16, gap 16): toggle on the left, label on the right. Sits 24 below the
    tabs, above the Profile heading. ── */
-.accept-row { display: flex; align-items: center; gap: 16px; margin: 24px 16px 0; cursor: pointer; user-select: none; }
+.accept-row { display: flex; align-items: center; gap: 16px; margin: 0 16px; cursor: pointer; user-select: none; }
 .accept-row input { position: absolute; opacity: 0; width: 0; height: 0; }
-/* Figma Toggle 64×28, radius 14; ON = green #27c840, knob slid right. */
+/* Figma Toggle 64×28, radius 14; the knob is a 39×24 white pill (r13) that sits
+   left when off and slides 21px right when on. ON = green #27c840. */
 .toggle { position: relative; width: 64px; height: 28px; border-radius: 14px; background: var(--gray20); flex-shrink: 0; transition: background .18s ease; }
-.toggle .knob { position: absolute; top: 2px; left: 2px; width: 24px; height: 24px; border-radius: 50%; background: var(--white); transition: transform .18s ease; }
+.toggle .knob { position: absolute; top: 2px; left: 2px; width: 39px; height: 24px; border-radius: 13px; background: var(--white); transition: transform .18s ease; }
 .accept-row input:checked + .toggle { background: var(--green); }
-.accept-row input:checked + .toggle .knob { transform: translateX(36px); }
+.accept-row input:checked + .toggle .knob { transform: translateX(21px); }
 .accept-label { font-family: "Poppins", sans-serif; font-weight: 300; font-size: 17px; color: var(--white); }
 
 /* One scrolling row, like the app's horizontal ScrollView of business chips —
@@ -548,7 +549,7 @@ select { appearance: none; background-image: none; }
 }
 .tab {
   font-family: "Lato"; font-weight: 700; font-size: 18px;
-  color: var(--gray50); background: none; border: 0; cursor: pointer;
+  color: rgba(255, 255, 255, 0.6); background: none; border: 0; cursor: pointer;
   border-radius: 32px; transition: background .18s, color .18s;
 }
 .tab:hover { color: var(--white); }
@@ -564,10 +565,11 @@ select { appearance: none; background-image: none; }
 /* Delete + sign-out sit together at the tail of the editor, as in the app. */
 /* Tail of Settings: a rule, then a centered Delete profile (Figma 1140:1827). */
 
-/* Figma section heading ("Profile", "Typical services"): Lato Heavy 24, inset 16. */
-.section-head { margin: 24px 16px 8px; font-size: 24px; line-height: 1.2; }
-.section-sub { margin: -4px 16px 12px; font-family: "Poppins", sans-serif; font-weight: 300; font-size: 14px; line-height: 1.5; color: var(--gray50); }
-#editorView > .section-head:first-of-type { margin-top: 8px; }
+/* Figma section heading ("Profile", "Typical services"): Lato Heavy 24, inset 16,
+   16 below the toggle row, 16 above the card. */
+.section-head { margin: 16px 16px 16px; font-size: 24px; line-height: 1.2; }
+.section-sub { margin: -8px 16px 12px; font-family: "Poppins", sans-serif; font-weight: 300; font-size: 14px; line-height: 1.5; color: var(--gray50); }
+#editorView > .section-head:first-of-type { margin-top: 16px; }
 
 /* Editor cards (Figma): white-5% fill, no border, radius 32, pad 24/16, inset 8. */
 #editorView .card,
@@ -613,21 +615,25 @@ select { appearance: none; background-image: none; }
 .upload-bar { height: 6px; background: var(--gray10); border-radius: 999px; overflow: hidden; margin-bottom: 6px; }
 .upload-bar span { display: block; height: 100%; width: 0; background: var(--accent); transition: width .25s ease; }
 .upload-count { font-size: 13px; color: var(--gray70); }
-/* Figma: the remove control is a centered circular ✕ over the photo. */
+/* Figma: the remove control is a 44×44 white-20% circle, 4px in from the
+   tile's top-right corner. */
 .photo-cell .rm {
-  position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
-  width: 44px; height: 44px; border-radius: 50%; background: rgba(0,0,0,.45);
+  position: absolute; top: 4px; right: 4px;
+  width: 44px; height: 44px; border-radius: 50%; background: rgba(217, 217, 217, 0.20);
   color: #fff; border: none; cursor: pointer; font-size: 18px; line-height: 1;
   display: flex; align-items: center; justify-content: center;
 }
+/* Caption under a field label (Pictures): 16px before the tiles. */
+.field-label + .logo-hint { margin-bottom: 16px; }
 /* Upload logo is a Button-Secondary pill (styled by .btn-secondary); the label
    only needs to clip its hidden <input>. */
 .upload-btn { position: relative; overflow: hidden; }
 .upload-btn.wide { width: 100%; }
 
-.logo-row { display: flex; gap: 16px; align-items: center; margin-bottom: 0; }
+.logo-row { display: flex; gap: 16px; align-items: center; margin-bottom: 16px; }
 .logo-wrap { position: relative; width: 80px; height: 80px; flex-shrink: 0; }
-.logo-preview { width: 80px; height: 80px; border-radius: 16px; background: var(--gray05) center/cover no-repeat; flex-shrink: 0; border: 1px solid var(--gray20); }
+/* Figma: the logo is a bare 80×80 image at radius 16 — no border. */
+.logo-preview { width: 80px; height: 80px; border-radius: 16px; background: var(--gray05) center/cover no-repeat; flex-shrink: 0; }
 .logo-wrap .rm { position: absolute; right: 6px; top: 6px; width: 24px; height: 24px; border-radius: 50%; background: rgba(0,0,0,.6); color: #fff; border: none; cursor: pointer; font-size: 14px; line-height: 1; }
 .logo-actions { display: flex; flex-direction: column; align-items: flex-start; gap: 8px; }
 
@@ -645,8 +651,8 @@ select { appearance: none; background-image: none; }
 .lead-delete { position: absolute; top: 0; bottom: 0; right: 0; width: 88px; border: 0;
   background: transparent; cursor: pointer;
   color: var(--white); font-family: "Lato"; font-weight: 700; font-size: 15px; }
-.lead-card { display: flex; align-items: center; gap: 12px; background: var(--surface);
-  border: 0; border-radius: 16px; padding: 12px; cursor: pointer; position: relative;
+.lead-card { display: flex; align-items: center; gap: 12px; background: rgba(255, 255, 255, 0.05);
+  border: 0; border-radius: 16px; padding: 14px 12px; cursor: pointer; position: relative;
   touch-action: pan-y; transition: transform .18s ease; }
 .lead-row.open .lead-card { transform: translateX(-88px); }
 /* Figma 1984:5579: 44px thumbnail, 12px radius. Holds the customer's photo when
@@ -662,43 +668,45 @@ select { appearance: none; background-image: none; }
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .lead-sub { font-family: "Poppins"; font-weight: 300; font-size: 14px; color: rgba(255, 255, 255, 0.6);
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-/* Figma 1984:5579: the 12px gold "new" badge straddles the avatar's bottom-right
-   corner — its top-left sits at (34,34) of the 44px thumbnail, so it hangs 2px
-   past the right and bottom edges. */
-.lead-dot { position: absolute; right: -2px; bottom: -2px; width: 12px; height: 12px;
+/* Figma 1984:5579: the visible "new" badge is Ellipse 31 — an 8px gold dot
+   sitting exactly in the avatar's bottom-right corner (avatar-relative 36,36).
+   (The 12px ellipse in the node is a hidden cutout, not the rendered dot.) */
+.lead-dot { position: absolute; right: 0; bottom: 0; width: 8px; height: 8px;
   border-radius: 50%; background: var(--gold); }
 
 /* ── Open chat — Figma 2020:6841, built element-for-element ──────────────────
-   Header row: back-arrow icon (44×44) + job title (Lato 800/24) + "Send to top
-   5" pill (Button Secondary, r32). Then a guidance subtitle (Poppins 400/14 @
-   60%), the request as a FULL-WIDTH #000 container (r24, Poppins 300/17), and the
-   photos stacked full-width at r16. No card wrapper. */
-.thread-head { display: flex; align-items: center; gap: 8px; margin-bottom: 24px; }
+   Header row: 44×44 back-arrow icon (white 20%, r32) + job title (Lato 800/24)
+   over a timestamp (Poppins 300/14 @ 60%), 8px inset, 4px gap. Then the guidance
+   line (Poppins 400/14 @ 50%, left-aligned, 16px inset), the request as a
+   FIXED 320px black container (r24, Poppins 300/17), and the photos stacked at
+   r16 with 8px between, inset 16. No card wrapper, no reply composer — the node
+   says to reply in the SMS thread the customer started. */
+.thread-head { display: flex; align-items: center; gap: 4px; margin: 0 8px 24px; }
 .thread-back { width: 44px; height: 44px; flex-shrink: 0; display: flex; align-items: center;
-  justify-content: center; padding: 0; background: none; border: none; color: var(--white); cursor: pointer; }
+  justify-content: center; padding: 0; background: rgba(217, 217, 217, 0.20); border: none;
+  border-radius: 32px; color: var(--white); cursor: pointer; }
 /* Job title (Headline 3) over a timestamp (Body 2), per the Figma header. */
 .thread-titlewrap { flex: 1; min-width: 0; display: flex; flex-direction: column; }
 .thread-title { margin: 0; font-family: "Lato"; font-weight: 800; font-size: 24px;
-  line-height: 1.15; color: var(--white);   white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.thread-time { font-family: "Poppins"; font-weight: 300; font-size: 14px; color: rgba(255,255,255,0.6); margin-top: 2px; }
-/* "Send to top 5" — Button Secondary: bg rgba(217,217,217,.20), radius 32. */
+  line-height: 1.33; color: var(--white);   white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.thread-time { font-family: "Poppins"; font-weight: 300; font-size: 14px; color: rgba(255,255,255,0.6); }
+/* "Send to top 5" — not in the node; hidden. */
 .thread-broadcast { flex-shrink: 0; background: var(--gray20); color: var(--white); border-radius: 32px;
   padding: 4px 16px; font-family: "Lato"; font-weight: 700; font-size: 14px; white-space: nowrap; cursor: pointer; }
-.thread-sub { margin: 0 16px 16px; font-family: "Poppins"; font-weight: 400; font-size: 14px;
-  line-height: 1.5; color: var(--white); text-align: center; }
+.thread-sub { margin: 0 16px 24px; font-family: "Poppins"; font-weight: 400; font-size: 14px;
+  line-height: 1.5; color: rgba(255, 255, 255, 0.5); }
 /* Request + reply bubbles sit inset 16 (Figma Frame 36985 pad 0/16). */
 .thread-msgs { display: flex; flex-direction: column; gap: 16px; padding: 0 16px; }
 .bubble { padding: 16px; border-radius: 24px; font-family: "Poppins"; font-weight: 300;
   font-size: 17px; line-height: 1.4; white-space: pre-wrap; word-break: break-word; }
-/* The incoming request (theirs) is a full-width blue-gradient container per the
-   node (#0039F5 → #3959C5); a business reply (mine) is a right-aligned accent
-   bubble. */
-.bubble.theirs { align-self: stretch; background: linear-gradient(232deg, #0039f5 0%, #3959c5 100%); color: var(--white); }
+/* The incoming request (theirs) is a FIXED 320px black container per the node
+   (layoutSizingHorizontal=FIXED, 320×hug). A business reply (mine) is a
+   right-aligned accent bubble. */
+.bubble.theirs { width: 320px; max-width: 100%; background: #000; color: var(--white); }
 .bubble.mine { align-self: flex-end; max-width: 82%; background: var(--accent); color: var(--white); }
-/* Customer photos: full-width portrait tiles at radius 32, stacked 44 apart
-   (Figma 2020:6841 Image container 370×449, Frame 37012 gap 44), inset 16. */
-.thread-photos { display: flex; flex-direction: column; gap: 44px; margin: 16px 16px 0; }
-.thread-photo { width: 100%; aspect-ratio: 370 / 449; border-radius: 32px; object-fit: cover; cursor: zoom-in; }
+/* Customer photos: 370 wide (16 inset), radius 16, 8px apart (Figma 2020:6841). */
+.thread-photos { display: flex; flex-direction: column; gap: 8px; margin: 8px 16px 0; }
+.thread-photo { width: 100%; aspect-ratio: 370 / 449; border-radius: 16px; object-fit: cover; cursor: zoom-in; }
 .thread-empty { color: var(--gray50); font-size: 14px; text-align: center; padding: 20px 0; }
 
 .composer { display: flex; gap: 10px; align-items: flex-end; padding-top: 14px; border-top: 1px solid var(--gray10); }
@@ -709,7 +717,7 @@ select { appearance: none; background-image: none; }
 /* Explicit Save (Figma Button_Primary): #0039F5, radius 32, pad 16/32, Lato 18.
    Edits also autosave; this is the reassurance flush + confirmation. Centered
    below the editor, above the Delete-account tail. */
-.save-row { display: flex; flex-direction: column; align-items: center; gap: 10px; margin-top: 64px; }
+.save-row { display: flex; flex-direction: column; align-items: center; gap: 10px; margin-top: 32px; }
 /* Save → rule → Preview, stacked and centered with airy 64px gaps (Figma
    1984:5663 tail). The rule spans the 354-wide content, inset 24. */
 .preview-section { display: flex; flex-direction: column; align-items: center; margin-top: 64px; }
@@ -729,8 +737,9 @@ select { appearance: none; background-image: none; }
 .save-bar { position: sticky; bottom: 0; display: flex; align-items: center; justify-content: flex-end; gap: 14px; padding: 14px 0; background: linear-gradient(180deg, transparent, var(--bg) 40%); }
 
 /* ── misc ────────────────────────────────────────────────── */
-/* Each fills half the row with a 24px box, as in the app. */
-.checkbox { display: inline-flex; align-items: center; gap: 10px; flex: 1; font-family: "Poppins", sans-serif; font-weight: 300; font-size: 17px; color: var(--white); cursor: pointer; }
+/* Each fills half the row with a 24px box, as in the app. Figma's Checkbox is a
+   44×44 tap target, so the label keeps 44px height. */
+.checkbox { display: inline-flex; align-items: center; gap: 10px; min-height: 44px; flex: 1; font-family: "Poppins", sans-serif; font-weight: 300; font-size: 17px; color: var(--white); cursor: pointer; }
 .checkbox input { width: 24px; height: 24px; border-radius: 6px; accent-color: var(--accent); flex-shrink: 0; }
 /* "per hour" hugs the right of the service foot rather than stretching. */
 .checkbox.per-hour { flex: 0 0 auto; }

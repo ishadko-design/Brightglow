@@ -9,7 +9,7 @@
   <meta name="robots" content="noindex">
   <link rel="icon" type="image/png" href="../favicon.png">
   <link rel="apple-touch-icon" href="../apple-touch-icon.png">
-  <link rel="stylesheet" href="portal.css?v=51">
+  <link rel="stylesheet" href="portal.css?v=52">
 </head>
 <body class="portal">
   <header class="topbar">
@@ -131,10 +131,9 @@
       </div>
 
       <!-- Open chat — Figma 2020:6841, built element-for-element: a header row
-           (back-arrow icon + job title + "Send to top 5" pill), a guidance
-           subtitle, then the request as a full-width container and the photos
-           stacked full-width. No card wrapper (the node has none). Reads come
-           straight from Supabase under RLS; a reply POSTs to LeadBridge. -->
+           (44×44 back icon + job title over a timestamp), the guidance line,
+           then the request as a fixed 320px black container and the photos
+           stacked below it. No card wrapper. -->
       <div id="threadCard" hidden>
         <div class="thread-head">
           <button type="button" class="thread-back" id="threadBack" aria-label="Back to requests">
@@ -152,8 +151,8 @@
           <span class="thread-broadcast" id="threadBroadcast">Send to top 5</span>
         </div>
         <p class="thread-sub" id="threadSub"></p>
-        <!-- The request as a full-width blue-gradient bubble, then the customer's
-             photos stacked full-width below it (Figma 2020:6841). -->
+        <!-- The request as a fixed 320px black container, then the customer's
+             photos stacked below it (Figma 2020:6841). -->
         <div class="thread-msgs" id="threadMsgs"></div>
         <div class="thread-photos" id="threadPhotos"></div>
         <p class="form-msg" id="threadMsg" aria-live="polite" hidden></p>
@@ -195,7 +194,7 @@
           <input id="displayName" type="text" maxlength="120" placeholder="e.g. Bay Area Plumbing Co.">
 
           <label class="field-label" for="about">Description</label>
-          <textarea id="about" rows="3" maxlength="1200" placeholder="Tell people what your business does"></textarea>
+          <input id="about" type="text" maxlength="1200" placeholder="Tell people what your business does">
 
           <label class="field-label" for="bizEmail">Email</label>
           <input id="bizEmail" type="email" autocomplete="email" inputmode="email" maxlength="200" placeholder="you@yourbusiness.com">
@@ -218,7 +217,7 @@
           <!-- Pictures belong INSIDE the Profile card and BEFORE Typical
                services (Figma 1140:1827, and the app's profileSection). They
                were a separate section after services, which read as swapped. -->
-          <label class="field-label" for="photoInput">Work examples</label>
+          <label class="field-label" for="photoInput">Pictures</label>
           <p class="logo-hint">Show your best relevant work. Drag to reorder.</p>
           <!-- Horizontal strip of tiles ending in a "+" add tile, as in the app —
                not a grid with a separate upload button. The add tile is a <label>
