@@ -433,11 +433,11 @@ select { appearance: none; background-image: none; }
 /* ── editor / billing views ──────────────────────────────── */
 /* Settings and Billing are separate views pushed over the dashboard, the way the
    app pushes BusinessProfileScreen — so there's a back affordance, not a tab. */
-.editor-head { display: flex; align-items: center; gap: 14px; margin-bottom: 8px; }
+.editor-head { display: flex; align-items: center; gap: 14px; margin-bottom: 24px; }
 .editor-head h1 { font-size: 26px; }
 /* Billing header — Figma 2056:12052/12416: 44px tall, 8px horizontal padding,
    44px bare-arrow back button, 4px gap, "Billing" Lato 800 24px. */
-#billingView .editor-head { gap: 4px; padding: 0 8px; margin-bottom: 0; min-height: 44px; }
+#billingView .editor-head { gap: 4px; padding: 0 8px; margin-bottom: 24px; min-height: 44px; }
 #billingView .editor-head h1 {
   font-family: "Lato", sans-serif; font-weight: 800; font-size: 24px;
   line-height: 1.2; color: var(--white); margin: 0;
