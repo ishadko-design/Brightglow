@@ -757,6 +757,8 @@ select { appearance: none; background-image: none; }
   padding: 24px 16px;
   text-align: center;
 }
+/* 16px between the stacked modal buttons (Confirm Deletion / Cancel). */
+.modal-card .primary-btn + .primary-btn { margin-top: 16px; }
 .modal-title {
   font-family: "Lato", sans-serif; font-weight: 800; font-size: 24px; line-height: 1.2;
   color: var(--white); margin: 0 0 16px;
