@@ -489,7 +489,7 @@ function subscribedHTML() {
 
   return `
     <h2 class="billing-title">
-      Subscription active
+      Subscription <span class="text-active-green">active</span>
       ${pastDue ? `<span class="pill warn">Payment failed</span>` : ``}
     </h2>
     ${pastDue

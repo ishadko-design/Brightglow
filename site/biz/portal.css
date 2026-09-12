@@ -804,6 +804,9 @@ select { appearance: none; background-image: none; }
   margin: 0 0 16px;
   display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
 }
+/* Figma 2056:12052: the word "active" in "Subscription active" is green.
+   #27c840 is the node value verbatim — not in design/tokens.json (token gap). */
+.text-active-green { color: #27c840; }
 .billing-avatars {
   /* Figma "Followed-by": four 32px overlapping circles, social proof. */
   display: flex; align-items: center;
