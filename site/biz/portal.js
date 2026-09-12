@@ -309,6 +309,13 @@ async function enterDashboard() {
     return;
   }
 
+  // Unified inbox: merge all leads into the first business so the Requests tab
+  // shows everything together. The chips are hidden via CSS (.biz-switcher).
+  const _all = [];
+  for (const _b of businesses) for (const _l of (_b && _b.leads) || []) _all.push(_l);
+  _all.sort((a, b) => ((a && a.created_at) < (b && b.created_at) ? 1 : -1));
+  businesses[0].leads = _all;
+
 
   // ?lead=<public_id> — the "Claim profile" button in a job email carries the
   // lead it's about, so open THAT business on Requests rather than dumping the
