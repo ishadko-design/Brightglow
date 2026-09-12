@@ -711,7 +711,7 @@ select { appearance: none; background-image: none; }
 .pill.ok { background: rgba(39, 200, 64, .14); color: var(--green); }
 .pill.warn { background: rgba(212, 166, 0, .18); color: var(--gold); }
 
-.primary-btn.wide, .ghost-btn.wide { width: 100%; }
+.primary-btn.wide, .ghost-btn.wide, .btn-secondary.wide { width: 100%; }
 
 /* ── menu overlay (Figma 2021:10043) ──────────────────────────
    A full-screen sheet that animates in over the UI: wordmark + ✕ on top, then
@@ -790,3 +790,59 @@ select { appearance: none; background-image: none; }
 
 /* Figma 2020:6841 — no Send to top 5 button on thread view. */
 .thread-broadcast { display: none !important; }
+
+/* ── Billing — Figma 2056:12416 (landing) / 2056:12052 (active) ────────── */
+.billing-title {
+  /* h2 token: Lato 800 24px, white. */
+  font-family: "Lato", sans-serif; font-weight: 800; font-size: 24px;
+  line-height: 1.2; color: var(--white);
+  margin: 0 0 16px;
+  display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+}
+.billing-avatars {
+  /* Figma "Followed-by": four 32px overlapping circles, social proof. */
+  display: flex; align-items: center;
+  margin: 0 0 16px; padding-left: 8px;
+}
+.billing-avatars span {
+  width: 32px; height: 32px; border-radius: 50%;
+  background: var(--gray20);
+  border: 2px solid #18191b;
+  margin-left: -8px; flex: none;
+}
+.billing-avatars span:first-child { margin-left: 0; }
+.billing-lead {
+  /* Figma body: Poppins 400 14px, white, 21px line-height. */
+  font-family: "Poppins", sans-serif; font-weight: 400; font-size: 14px;
+  line-height: 1.5; color: var(--white);
+  margin: 0 0 24px;
+}
+.billing-caption {
+  /* Figma caption under the CTA: Poppins 400 14px, white, centered. */
+  font-family: "Poppins", sans-serif; font-weight: 400; font-size: 14px;
+  line-height: 1.5; color: var(--white); text-align: center;
+  margin: 16px 0 0;
+}
+.billing-cta {
+  /* Figma Subscribe: 52 tall, blue gradient, radius 32, Lato 700 17px. */
+  min-height: 52px; font-size: 17px; margin-top: 24px;
+}
+.arl-box {
+  /* California ARL §17602: the auto-renewal terms must be clear and
+     conspicuous and in visual proximity to the consent mechanism. The Figma
+     node covers renewal in the checkbox label; this box adds the two
+     disclosures the node omits: the amount charged TODAY and HOW to cancel. */
+  background: var(--gray05);
+  border: 1px solid var(--gray10);
+  border-radius: 16px;
+  padding: 16px;
+  margin: 20px 0;
+  font-size: 14px; line-height: 1.5; color: var(--white);
+}
+.arl-box p { margin: 0 0 8px; }
+.arl-box ul { margin: 0; padding-left: 18px; }
+.arl-box li { margin: 4px 0; }
+/* Billing email field uses the standard .field-label + input styles (Figma
+   "Regular" field: 64 tall, 16 radius, white hairline — already in the
+   design system). Space it from the ARL box. */
+.billing-lead + .field-label { margin-top: 0; }

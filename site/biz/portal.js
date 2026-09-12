@@ -446,26 +446,29 @@ function billingFlash() {
 
 function unsubscribedHTML() {
   const { free_leads_used: used, free_lead_limit: limit, free_leads_remaining: left } = billing;
-  const pct = limit ? Math.min(100, Math.round((used / limit) * 100)) : 0;
   const outOfLeads = left === 0;
 
   return `
-    <h2 class="billing-head">${outOfLeads ? "You're out of free leads" : "Free leads"}</h2>
-    <div class="meter"><span style="width:${pct}%" class="${outOfLeads ? "is-full" : ""}"></span></div>
-    <p class="muted">${used} of ${limit} free leads used${left > 0 ? ` · ${left} left` : ""}</p>
-    <p class="billing-body">
+    <h2 class="billing-title">Subscribe for unlimited leads</h2>
+    <div class="billing-avatars" aria-hidden="true">
+      <span></span><span></span><span></span><span></span>
+    </div>
+    <p class="billing-lead">
       ${outOfLeads
-        ? `New customer requests matched to your business are waiting, but we can't pass them
-           along until you subscribe.`
-        : `After your ${limit} free leads, a subscription keeps customer requests coming.`}
+        ? `You're out of free leads \u2014 new customer requests are waiting, but we can't pass them along until you subscribe.`
+        : `After your ${limit} free leads (${left} left), your business will no longer be shown to potential clients. A subscription keeps customer requests coming.`}
     </p>
-    <div class="price-row"><span class="price">$25</span><span class="muted">/month · unlimited leads</span></div>
-    <div class="renewal-terms">
+    <label class="field-label" for="billingEmail">Email (required)</label>
+    <input type="email" id="billingEmail" autocomplete="email" inputmode="email" maxlength="200"
+           placeholder="you@yourbusiness.com" value="${esc(signedInEmail)}">
+    <p class="fineprint">Email for your receipt &amp; billing notices. We'll send your subscription
+      confirmation and any billing notices here.</p>
+    <div class="arl-box">
       <p><strong>This is an automatically renewing subscription.</strong></p>
       <ul>
         <li>You'll be charged <strong>$25.00</strong> today.</li>
-        <li>It renews automatically for <strong>$25.00 every month</strong>, on this same date, until you cancel.</li>
-        <li><strong>Cancel anytime in one click</strong> from this Billing page — no phone call, no email.</li>
+        <li>It renews automatically for <strong>$25.00 every month</strong>, until you cancel.</li>
+        <li><strong>Cancel anytime in one click</strong> from this Billing page \u2014 no phone call, no email.</li>
       </ul>
     </div>
     <label class="consent" for="renewConsent">
@@ -473,41 +476,36 @@ function unsubscribedHTML() {
       <span>I agree to the <a href="../business-terms.html">Business Terms</a> and understand this
         subscription renews automatically at $25/month until I cancel.</span>
     </label>
-    <label class="field-label" for="billingEmail">Email for your receipt &amp; billing notices</label>
-    <input type="email" id="billingEmail" autocomplete="email" inputmode="email" maxlength="200"
-           placeholder="you@yourbusiness.com" value="${esc(signedInEmail)}">
-    <p class="fineprint">We'll send your subscription confirmation and any billing notices here.
-      Required — it's how we confirm your renewal terms and cancellation method.</p>
-    <button class="primary-btn wide" id="subscribeBtn" disabled>Subscribe</button>`;
+    <button class="primary-btn wide billing-cta" id="subscribeBtn" disabled>Subscribe</button>
+    <p class="billing-caption">$25/month for unlimited leads</p>`;
 }
 
 function subscribedHTML() {
   const renews = billing.current_period_end ? fmtDate(billing.current_period_end) : null;
   const pastDue = billing.needs_payment_update;
   // Scheduled cancellation: still active until the period ends, but the copy
-  // must not say "Renews" — nothing is renewing.
+  // must not say "Renews" \u2014 nothing is renewing.
   const canceling = billing.cancel_at_period_end && !pastDue;
 
   return `
-    <h2 class="billing-head">
-      Subscription <span class="pill ${pastDue ? "warn" : "ok"}">${pastDue ? "Payment failed" : "Active"}</span>
+    <h2 class="billing-title">
+      Subscription active
+      ${pastDue ? `<span class="pill warn">Payment failed</span>` : ``}
     </h2>
     ${pastDue
       ? `<p class="form-msg err">
-           We couldn't charge your card. You're still receiving leads for now — update your
+           We couldn't charge your card. You're still receiving leads for now \u2014 update your
            card to avoid an interruption.
          </p>`
-      : ""}
-    <p class="billing-body">
-      You're on the $25/month plan with unlimited leads.${renews ? (canceling ? ` Cancels ${renews} — you won't be charged again.` : ` Renews ${renews}.`) : ""}
+      : ``}
+    <p class="billing-lead">
+      You\u2019re on the $25/month plan with unlimited leads.${renews ? (canceling ? ` Cancels ${renews} \u2014 you won\u2019t be charged again.` : ` Renews ${renews}.`) : ``}
     </p>
-    <button class="ghost-btn wide" id="manageBtn">
-      ${pastDue ? "Update card" : "Manage or cancel subscription"}
+    <button class="btn-secondary lg wide" id="manageBtn">
+      ${pastDue ? `Update card` : `Cancel subscription`}
     </button>
-    <p class="fineprint">
-      Opens your secure Stripe billing page, where you can update your card, download invoices,
-      or cancel — takes effect at the end of the period you've paid for.
-    </p>`;
+    <p class="billing-caption">Opens your secure Stripe billing page, where you can update your card,
+      download invoices, or cancel \u2014 takes effect at the end of the period you've paid for.</p>`;
 }
 
 // RFC-5322-lite: enough to catch typos and empty submits; the server and Stripe
