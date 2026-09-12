@@ -528,7 +528,12 @@ async function startCheckout() {
       method: "POST",
       body: JSON.stringify({ renewalConsent: true, email }),
     });
-    if (!resp.ok) throw new Error(`Couldn't start checkout (${resp.status}).`);
+    if (!resp.ok) {
+      // TEMP-DIAG (2026-09-12): surface the server's reason for the 400.
+      const data = await resp.json().catch(() => ({}));
+      const detail = data && data.reason ? ': ' + data.reason : '';
+      throw new Error(`Couldn't start checkout (${resp.status}${detail}).`);
+    }
     const { url } = await resp.json();
     location.href = url;      // Stripe-hosted — no card data touches this page
   } catch (err) {
