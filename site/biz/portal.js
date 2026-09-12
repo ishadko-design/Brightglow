@@ -1010,14 +1010,18 @@ function wireLeadRow(row, leads) {
 async function deleteLead(lead, row) {
   try {
     const resp = await authedFetch("/api/threads/" + lead.public_id + "/hide", { method: "POST" });
-    if (!resp.ok) throw new Error(`hide failed (${resp.status})`);
+    if (!resp.ok) {
+      let detail = "";
+      try { detail = " " + JSON.stringify(await resp.json()); } catch (e) {}
+      throw new Error(`hide failed (${resp.status})${detail}`);
+    }
     const idx = (current.leads || []).indexOf(lead);
     if (idx >= 0) current.leads.splice(idx, 1);
     row.remove();
     show($("leadsEmpty"), (current.leads || []).length === 0);
   } catch (err) {
     console.error("delete request failed:", err);
-    alert("Couldn't remove that request. Try again, or email hello@brightglow.co.");
+    alert("Couldn't remove that request (" + err.message + "). Try again, or email hello@brightglow.co.");
   }
 }
 
