@@ -541,6 +541,14 @@ select { appearance: none; background-image: none; }
   z-index: 1;
   touch-action: pan-y; transition: transform .18s ease; }
 .lead-row.open .lead-card { transform: translateX(-118px); }
+/* Reviewed requests: no card background, title de-bolds to Poppins 300 17
+   (Figma 1984:5579 "Variant3"), badge gone. The row stays transparent at rest so
+   the structural red never bleeds through — it only appears mid-swipe (.swiping)
+   and while open, preserving the approved delete reveal. */
+.lead-row.read { background: transparent; }
+.lead-row.read .lead-card { background: transparent; }
+.lead-row.read.swiping, .lead-row.read.open { background: var(--danger); }
+.lead-row.read .lead-title { font-family: "Poppins"; font-weight: 300; }
 /* Figma 1984:5579: 44px thumbnail, 12px radius. Holds the customer's photo when
    the request has one (popped in async); otherwise the initial placeholder. */
 .lead-avatarwrap { position: relative; width: 44px; height: 44px; flex-shrink: 0; }
@@ -554,11 +562,14 @@ select { appearance: none; background-image: none; }
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .lead-sub { font-family: "Poppins"; font-weight: 300; font-size: 14px; color: rgba(255, 255, 255, 0.6);
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-/* Figma 1984:5579: the visible "new" badge is Ellipse 31 — an 8px gold dot
-   sitting exactly in the avatar's bottom-right corner (avatar-relative 36,36).
-   (The 12px ellipse in the node is a hidden cutout, not the rendered dot.) */
-.lead-dot { position: absolute; right: 0; bottom: 0; width: 8px; height: 8px;
-  border-radius: 50%; background: var(--gold); }
+/* Figma 1984:5579 "Unread" badge: Ellipse 32 + Ellipse 31 — a 12px ring with the
+   8px gold dot concentric inside, i.e. the gold dot with a 2px border. The ring
+   is the card color so it separates the dot from the avatar photo; it straddles
+   the avatar's bottom-right corner (outer at -2,-2). */
+.lead-dot { position: absolute; right: -2px; bottom: -2px; width: 12px; height: 12px;
+  border-radius: 50%; background: var(--card); }
+.lead-dot::after { content: ""; position: absolute; left: 2px; top: 2px;
+  width: 8px; height: 8px; border-radius: 50%; background: var(--gold); }
 
 /* ── Open chat — Figma 2020:6841, built element-for-element ──────────────────
    Header row: bare 44×44 back-arrow icon (no background) + job title (Lato 800/24)

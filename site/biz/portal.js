@@ -1013,12 +1013,14 @@ function renderLeads() {
     const req = msgs.find((m) => m.direction === "outbound");   // the customer's request
     // Figma 1984:5579 list cell: the job title over the request's timestamp, and a
     // gold "new" badge on the avatar while any customer message is newer than the
-    // last time the business opened this request.
+    // last time the business opened this request. Reviewed requests lose the card
+    // background, the title de-bolds (Poppins 300 per the Figma "Variant3"), and
+    // the badge is gone.
     const stamp = fmtStamp((req && req.created_at) || l.created_at);
     const initial = esc((l.user_email_initial || l.city || "?").slice(0, 1));
     const unread = hasUnread(l, msgs);
     // Row wraps a red Delete behind the cell; the cell swipes left to reveal it.
-    return `<div class="lead-row" data-i="${i}">
+    return `<div class="lead-row${unread ? "" : " read"}" data-i="${i}">
       <button type="button" class="lead-delete" data-i="${i}">Delete</button>
       <div class="lead-card">
         <div class="lead-avatarwrap">
@@ -1106,13 +1108,15 @@ function wireLeadRow(row, leads) {
     const nx = x - startX, ny = y - startY;
     if (!swiping && Math.abs(nx) > 10 && Math.abs(nx) > Math.abs(ny) * 1.5) swiping = true;
     if (!swiping) return;
-    dx = nx + (row.classList.contains("open") ? SWIPE_OPEN : 0);
+    row.classList.add("swiping");   // read rows are transparent at rest — the red
+    dx = nx + (row.classList.contains("open") ? SWIPE_OPEN : 0);   // reveal only shows mid-gesture
     dx = Math.max(SWIPE_OPEN, Math.min(0, dx));
     setX(dx);
   };
   const onEnd = () => {
     if (!tracking) return;
     tracking = false; card.style.transition = "";
+    row.classList.remove("swiping");
     if (swiping) {
       row.classList.toggle("open", dx < SWIPE_OPEN / 2);
       suppressClick = true;   // swallow the click that follows a real swipe
@@ -1123,7 +1127,7 @@ function wireLeadRow(row, leads) {
   card.addEventListener("touchstart", (e) => onStart(e.touches[0].clientX, e.touches[0].clientY), { passive: true });
   card.addEventListener("touchmove", (e) => onMove(e.touches[0].clientX, e.touches[0].clientY), { passive: true });
   card.addEventListener("touchend", onEnd);
-  card.addEventListener("touchcancel", () => { tracking = false; card.style.transition = ""; setX(""); });
+  card.addEventListener("touchcancel", () => { tracking = false; card.style.transition = ""; row.classList.remove("swiping"); setX(""); });
   card.addEventListener("mousedown", (e) => { if (e.button === 0) onStart(e.clientX, e.clientY); });
   window.addEventListener("mousemove", (e) => onMove(e.clientX, e.clientY));
   window.addEventListener("mouseup", onEnd);
