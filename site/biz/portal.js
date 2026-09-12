@@ -513,7 +513,6 @@ async function startCheckout() {
     // to this address, and sends the §5 confirmation + billing notices here.
     const resp = await authedFetch("/api/billing/checkout", {
       method: "POST",
-      headers: { "content-type": "application/json" },
       body: JSON.stringify({ renewalConsent: true, email }),
     });
     if (!resp.ok) throw new Error(`Couldn't start checkout (${resp.status}).`);
