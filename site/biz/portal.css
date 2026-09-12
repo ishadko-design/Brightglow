@@ -611,7 +611,8 @@ select { appearance: none; background-image: none; }
    the cell left. The cell is opaque (--surface ≈ gray05 over the page) so the red
    never bleeds through when closed — see the flag on gray05 vs --surface. */
 .lead-row { position: relative; overflow: hidden; border-radius: 16px; }
-.lead-delete { position: absolute; inset: 0 0 0 auto; width: 88px; border: 0; cursor: pointer;
+.lead-delete { position: absolute; top: 8px; bottom: 8px; right: 8px; width: 80px; border: 0;
+  border-radius: 999px; cursor: pointer;
   background: var(--danger); color: var(--white); font-family: "Lato"; font-weight: 700; font-size: 15px; }
 .lead-card { display: flex; align-items: center; gap: 12px; background: var(--surface);
   border: 0; border-radius: 16px; padding: 12px; cursor: pointer; position: relative;
