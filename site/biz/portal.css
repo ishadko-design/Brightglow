@@ -341,10 +341,6 @@ select { appearance: none; background-image: none; }
   padding: 9px 16px; cursor: pointer; white-space: nowrap;
 }
 .ghost-btn:hover { background: var(--gray05); }
-/* Destructive (permanent account deletion): red text/border so it never reads as a
-   routine action. Fills red on hover to make the weight of the click obvious. */
-.ghost-btn.danger { color: var(--danger); border-color: rgba(255, 0, 0, 0.5); }
-.ghost-btn.danger:hover { background: rgba(255, 0, 0, 0.12); border-color: var(--danger); }
 .ghost-btn:disabled { opacity: 0.6; cursor: default; }
 
 /* Figma "Button Secondary" — the light-gray pill used everywhere (Upload logo,
@@ -362,6 +358,11 @@ select { appearance: none; background-image: none; }
 .btn-secondary:disabled { opacity: .6; cursor: default; }
 .btn-secondary.sm { padding: 4px 16px; font-size: 14px; min-height: 32px; }
 .btn-secondary.lg { padding: 13px 32px; font-size: 18px; min-height: 48px; }
+/* Figma Preview button: 24px user icon, 10px gap to the label. */
+#previewBtn { gap: 10px; }
+/* Desktop Preview: plain text (the button can't open the app there) above the QR. */
+.preview-label { margin: 0 0 16px; text-align: center;
+  font-family: "Lato", sans-serif; font-weight: 700; font-size: 18px; color: var(--white); }
 
 /* Header icon button — the hamburger (open) and the ✕ (close in the menu). A bare
    44×44 tap target with a 24px glyph, matching the Figma header icons. */
@@ -614,21 +615,23 @@ select { appearance: none; background-image: none; }
 .save-bar { position: sticky; bottom: 0; display: flex; align-items: center; justify-content: flex-end; gap: 14px; padding: 14px 0; background: linear-gradient(180deg, transparent, var(--bg) 40%); }
 
 /* ── misc ────────────────────────────────────────────────── */
-/* Each fills half the row with a 24px box, as in the app. Figma's Checkbox is a
-   44×44 tap target, so the label keeps 44px height. */
-/* Licensed / Insured: the design-system Toggle (node 1984:5663 — 64x28 track,
-   39x24 white knob sliding 21px, green when on), built on the native checkbox
-   so the existing JS (checked / change) keeps working untouched. */
-.checkbox { display: inline-flex; align-items: center; gap: 12px; cursor: pointer;
+/* Licensed / Insured (Figma node 1984:5663 "Checkbox"): a 44px tap target holding
+   a 22.29px box with 5.14px radius. Off = transparent with a white-20% hairline
+   (matches the input borders); on = accent fill + white check. The native input
+   stays for JS/focus; the label does the clicking. Label starts at the frame's
+   edge (0 gap); the box is centered in its 44px, giving an 11px visual gap. */
+.checkbox { position: relative; display: inline-flex; align-items: center; cursor: pointer;
   font-family: "Poppins", sans-serif; font-weight: 300; font-size: 17px; color: var(--white); }
-.checkbox input[type="checkbox"] { appearance: none; -webkit-appearance: none; margin: 0;
-  width: 64px; height: 28px; border-radius: 14px; background: var(--gray20);
-  position: relative; flex-shrink: 0; cursor: pointer; transition: background .18s ease; }
-.checkbox input[type="checkbox"]::after { content: ""; position: absolute; top: 2px; left: 2px;
-  width: 39px; height: 24px; border-radius: 13px; background: var(--white);
-  transition: transform .18s ease; }
-.checkbox input[type="checkbox"]:checked { background: var(--green); }
-.checkbox input[type="checkbox"]:checked::after { transform: translateX(21px); }
+.checkbox input[type="checkbox"] { position: absolute; opacity: 0; pointer-events: none; margin: 0; }
+.checkbox .tickbox { width: 44px; height: 44px; display: inline-flex; align-items: center;
+  justify-content: center; flex-shrink: 0; }
+.checkbox .tickbox .box { width: 22.29px; height: 22.29px; border-radius: 5.14px;
+  border: 1px solid var(--gray20); box-sizing: border-box;
+  display: inline-flex; align-items: center; justify-content: center; }
+.checkbox .tickbox .box svg { opacity: 0; display: block; }
+.checkbox input[type="checkbox"]:checked ~ .tickbox .box { background: var(--accent); border-color: var(--accent); }
+.checkbox input[type="checkbox"]:checked ~ .tickbox .box svg { opacity: 1; }
+.checkbox input[type="checkbox"]:focus-visible ~ .tickbox .box { outline: 2px solid var(--accent); outline-offset: 2px; }
 /* "per hour" hugs the right of the service foot rather than stretching. */
 .checkbox.per-hour { flex: 0 0 auto; }
 .spinner { width: 32px; height: 32px; border: 3px solid var(--gray20); border-top-color: var(--white); border-radius: 50%; animation: spin .8s linear infinite; }

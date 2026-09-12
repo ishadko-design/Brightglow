@@ -9,7 +9,7 @@
   <meta name="robots" content="noindex">
   <link rel="icon" type="image/png" href="../favicon.png">
   <link rel="apple-touch-icon" href="../apple-touch-icon.png">
-  <link rel="stylesheet" href="portal.css?v=53">
+  <link rel="stylesheet" href="portal.css?v=54">
 </head>
 <body class="portal">
   <header class="topbar">
@@ -204,12 +204,16 @@
 
           <!-- Self-declared trust signals, same pair the app shows. -->
           <div class="check-field">
+            <!-- Figma checkbox (node 1984:5663): 44px tap target, 22.29px box,
+                 5.14px radius, accent fill + white check when on. -->
             <label class="checkbox">
               <input type="checkbox" id="licensed">
+              <span class="tickbox" aria-hidden="true"><span class="box"><svg viewBox="0 0 11 9" width="11" height="9"><path d="M1.5 4.6l2.7 2.7L9.5 1.5" fill="none" stroke="#fff" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></span></span>
               <span>Licensed</span>
             </label>
             <label class="checkbox">
               <input type="checkbox" id="insured">
+              <span class="tickbox" aria-hidden="true"><span class="box"><svg viewBox="0 0 11 9" width="11" height="9"><path d="M1.5 4.6l2.7 2.7L9.5 1.5" fill="none" stroke="#fff" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></span></span>
               <span>Insured</span>
             </label>
           </div>
@@ -259,7 +263,10 @@
            (renderPreviewQr), so the rule doesn't float over empty space. -->
       <div class="preview-section" id="previewSection" hidden>
         <hr class="save-div">
-        <button type="button" id="previewBtn" class="btn-secondary lg">Preview as customer</button>
+        <button type="button" id="previewBtn" class="btn-secondary lg"><svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="#fff" aria-hidden="true"><circle cx="12" cy="12" r="11" stroke-width="2"/><circle cx="11.9" cy="9.6" r="3.4" stroke-width="1.7"/><path d="M6.5 19.4Q12 13.5 17.5 19.4" stroke-width="1.7" stroke-linecap="round"/></svg><span>Preview as customer</span></button>
+        <!-- Desktop: the button can't open the app, so it's plain text and the
+             QR below is the action. -->
+        <p class="preview-label" id="previewLabel" hidden>Preview as customer</p>
         <div class="preview-extra" id="previewRow" hidden>
           <div class="preview-qr" id="previewQr">
             <img id="previewQrImg" alt="QR code to preview your page" width="160" height="160">
@@ -329,6 +336,6 @@
     <span>© 2026 Brightglow Technologies LLC</span>
   </footer>
 
-  <script type="module" src="portal.js?v=20"></script>
+  <script type="module" src="portal.js?v=21"></script>
 </body>
 </html>

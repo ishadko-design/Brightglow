@@ -716,7 +716,11 @@ async function renderPreviewQr() {
   // The rule + Preview button + QR live in one section, hidden together for a
   // draft so the rule never floats over empty space.
   show($("previewSection"), hasPlace);
-  if (!hasPlace) { show($("previewRow"), false); return; }
+  if (!hasPlace) { show($("previewRow"), false); show($("previewLabel"), false); return; }
+  // Mobile: the button opens the app. Desktop: plain text + QR (the button
+  // can't open the app there, so it isn't shown).
+  show($("previewBtn"), isMobile());
+  show($("previewLabel"), !isMobile());
   show($("previewRow"), !isMobile());   // previewRow now wraps just the QR + hint
   if (isMobile()) return;
   try {
@@ -813,6 +817,7 @@ function serviceCardHTML(s, i) {
       <button type="button" class="btn-secondary sm rm">Delete</button>
       <label class="checkbox per-hour">
         <input class="per-hour-in" type="checkbox" ${s.unit === "hour" ? "checked" : ""}>
+        <span class="tickbox" aria-hidden="true"><span class="box"><svg viewBox="0 0 11 9" width="11" height="9"><path d="M1.5 4.6l2.7 2.7L9.5 1.5" fill="none" stroke="#fff" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></span></span>
         <span>per hour</span>
       </label>
     </div>
