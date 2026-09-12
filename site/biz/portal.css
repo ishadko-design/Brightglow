@@ -819,9 +819,9 @@ select { appearance: none; background-image: none; }
    #27c840 is the node value verbatim — not in design/tokens.json (token gap). */
 .text-active-green { color: #27c840; }
 .billing-avatars {
-  /* Figma "Followed-by": four 32px overlapping circles, social proof. */
-  display: flex; align-items: center;
-  margin: 0 0 16px; padding-left: 8px;
+  /* Figma "Followed-by": 105x32 group, CENTERED. Title->avatars 16px, avatars->body 16px. */
+  display: flex; align-items: center; justify-content: center;
+  margin: 0 0 16px;
 }
 .billing-avatars span {
   width: 32px; height: 32px; border-radius: 50%;
@@ -842,6 +842,8 @@ select { appearance: none; background-image: none; }
   line-height: 1.5; color: var(--white); text-align: center;
   margin: 32px 0 0;
 }
+/* Landing: button->caption is 16px (Figma 2056:12416). Active: 32px (Figma 2056:12052). */
+.billing-cta + .billing-caption { margin-top: 16px; }
 /* Billing background (Figma 2056:12416 "Frame 37003"): amber glow (#ffac36)
    at the top fading into the dark --bg. The Figma layers three gradients
    over a 402x498 frame; this is the visual equivalent in a single layer. */
