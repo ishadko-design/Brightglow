@@ -264,7 +264,7 @@ async function enterDashboard() {
   // a null place_id can't be claim-checked, so they're skipped for management.
   const { data: leads, error } = await sb
     .from("leads")
-    .select("id, place_id, business_name, city, status, public_id, created_at, website, user_email_initial, messages(direction, body_text, created_at)")
+    .select("id, place_id, business_name, city, status, public_id, created_at, website, user_email_initial, business_last_read_at, messages(direction, body_text, created_at)")
     .is("business_hidden_at", null)   // hide requests the business dismissed
     .order("created_at", { ascending: false });
 
@@ -951,25 +951,75 @@ function renderLeads() {
   list.innerHTML = leads.map((l, i) => {
     const msgs = sortMsgs(l.messages || []);
     const req = msgs.find((m) => m.direction === "outbound");   // the customer's request
-    const last = msgs[msgs.length - 1];
-    const waiting = !!last && last.direction === "outbound";
-    // Figma list cell: the job title over the request's timestamp.
+    // Figma 1984:5579 list cell: the job title over the request's timestamp, and a
+    // gold "new" badge on the avatar while any customer message is newer than the
+    // last time the business opened this request.
     const stamp = fmtStamp((req && req.created_at) || l.created_at);
     const initial = esc((l.user_email_initial || l.city || "?").slice(0, 1));
+    const unread = hasUnread(l, msgs);
     // Row wraps a red Delete behind the cell; the cell swipes left to reveal it.
     return `<div class="lead-row" data-i="${i}">
       <button type="button" class="lead-delete" data-i="${i}">Delete</button>
       <div class="lead-card">
-        <div class="lead-avatar">${initial}</div>
+        <div class="lead-avatarwrap">
+          <div class="lead-avatar" data-lead="${l.id}">${initial}</div>
+          ${unread ? `<span class="lead-dot"></span>` : ""}
+        </div>
         <div class="lead-main">
           <div class="lead-title">${esc(jobTitle(l))}</div>
           <div class="lead-sub">${esc(stamp)}</div>
         </div>
-        ${waiting ? `<span class="lead-dot"></span>` : ""}
       </div>
     </div>`;
   }).join("");
   list.querySelectorAll(".lead-row").forEach((row) => wireLeadRow(row, leads));
+  loadLeadThumbs(leads);   // not awaited — initials show first, photos pop in
+}
+
+// A request counts as unread while any customer message is newer than the last
+// time the business opened it (business_last_read_at, stamped by /read). A null
+// stamp means never opened: any customer message makes it new.
+function hasUnread(lead, msgs) {
+  const readAt = lead.business_last_read_at ? Date.parse(lead.business_last_read_at) : 0;
+  return (msgs || []).some((m) => m.direction === "outbound" && Date.parse(m.created_at) > readAt);
+}
+
+// Thumbnails: the request's photo in the list avatar. Attachment bytes are
+// private, so they can't go in a plain <img src> — fetch the first attachment
+// per lead through the authenticated /api/attachments/:id endpoint (the same one
+// the thread view uses) and render the blob. One attachments query for all
+// visible leads, then one fetch per lead that has a photo; object URLs are
+// cached for the session. Best-effort: no photo just keeps the initial.
+const thumbSeenLeads = new Set();   // lead ids whose attachment lookup ran
+const leadThumbAtt = {};            // lead id -> first attachment id
+const thumbUrls = new Map();        // attachment id -> object URL
+
+async function loadLeadThumbs(leads) {
+  try {
+    const fresh = (leads || []).map((l) => l.id).filter((id) => !thumbSeenLeads.has(id));
+    fresh.forEach((id) => thumbSeenLeads.add(id));
+    if (fresh.length) {
+      const { data } = await sb.from("attachments").select("id,lead_id").in("lead_id", fresh);
+      for (const a of data || []) if (!leadThumbAtt[a.lead_id]) leadThumbAtt[a.lead_id] = a.id;
+    }
+    for (const leadId of Object.keys(leadThumbAtt)) {
+      const attId = leadThumbAtt[leadId];
+      let url = thumbUrls.get(attId);
+      if (!url) {
+        const resp = await authedFetch("/api/attachments/" + attId);
+        if (!resp.ok) continue;
+        url = URL.createObjectURL(await resp.blob());
+        thumbUrls.set(attId, url);
+      }
+      document.querySelectorAll(`.lead-avatar[data-lead="${leadId}"]`).forEach((el) => {
+        if (el.querySelector("img")) return;
+        el.textContent = "";
+        const img = document.createElement("img");
+        img.src = url; img.alt = "";
+        el.appendChild(img);
+      });
+    }
+  } catch (err) { console.error("lead thumbnails failed:", err); }
 }
 
 // Swipe-to-delete on a request row (Figma 1140:2933): drag the cell left to reveal
@@ -1030,14 +1080,21 @@ const sortMsgs = (m) => m.slice().sort((a, b) => (a.created_at < b.created_at ? 
 // ── one conversation ────────────────────────────────────────
 let thread = null;   // the lead whose thread is open
 
-// Figma 2020:6841 title is the JOB (e.g. "Hardwood floor replacement"), not the
-// business name. We have no separate title field, so derive a short one from the
-// customer's request text: drop a common lead-in, take the first sentence, cap it.
+// Figma 1984:5579 titles read as short job summaries ("Replace 1200 sq ft
+// hardwood floor w…"), not raw message text. Derive one from the customer's
+// request: strip the channel prefix the app prepends ("Vehicle: Car "), drop a
+// common lead-in, take the first sentence, cap it.
 function jobTitle(lead) {
   const req = (lead.messages || []).find((m) => m.direction === "outbound");
-  let t = (req && req.body_text ? req.body_text : "").trim();
+  let t = (req && req.body_text ? req.body_text : "").trim().replace(/\s+/g, " ");
   if (!t) return lead.business_name || current?.name || "Request";
-  t = t.replace(/^(i(?:'| a)?m looking (?:for|to)|i(?:'|')?d like(?: to)?|i would like(?: to)?|i want(?: to)?|i need(?: to)?|looking (?:for|to)|please|can you|could you|hi[,!. ]+)\s+/i, "");
+  t = t.replace(/^(vehicle|auto|car|home|house)\s*:\s*(car|vehicle|auto|home|house)?\s*/i, "");
+  let prev;
+  do {
+    prev = t;
+    t = t.replace(/^(i'm looking (for|to)|i am looking (for|to)|i'd like( to)?|i would like( to)?|i want( to)?|i need( to)?|i've got|i have( a| an| some)?|looking (for|to)|please|can you|could you|hi[,!. ]+)\s+/i, "");
+  } while (t !== prev);
+  t = t.replace(/^my\s+/i, "");
   t = t.split(/(?<=[.!?])\s/)[0];               // first sentence
   t = t.charAt(0).toUpperCase() + t.slice(1);
   if (t.length > 48) t = t.slice(0, 47).trimEnd() + "…";
@@ -1061,6 +1118,12 @@ async function openThread(lead) {
   renderThread(sortMsgs(lead.messages || []));
   await refreshThread();
   loadThreadPhotos(lead);   // not awaited — the text shows immediately
+  // Opening marks the request read, clearing the inbox "new" dot (see hasUnread).
+  // Optimistic local stamp so the dot is gone on back-nav; the server call is the
+  // source of truth on next load.
+  lead.business_last_read_at = new Date().toISOString();
+  authedFetch("/api/threads/" + lead.public_id + "/read", { method: "POST" })
+    .catch((e) => console.error("mark read failed:", e));
 }
 
 function closeThread() {
