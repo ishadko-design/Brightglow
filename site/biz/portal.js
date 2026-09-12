@@ -351,6 +351,7 @@ async function enterDashboard() {
 // service-role-only (they hold the Stripe customer id and payment state), so
 // every call here goes through LeadBridge via the same-origin /api proxy.
 let billing = null;
+let billingStatus = null;   // last /api/billing/status failure, surfaced in the error
 
 async function authedFetch(path, options = {}) {
   const { data: { session } } = await sb.auth.getSession();
@@ -370,9 +371,11 @@ async function loadBilling() {
     const resp = await authedFetch("/api/billing/status");
     if (!resp.ok) throw new Error(`status ${resp.status}`);
     billing = await resp.json();
+    billingStatus = null;
   } catch (err) {
     console.error("billing status failed:", err);
     billing = null;
+    billingStatus = err && err.message ? err.message : "failed";
   }
   // Billing lives in the menu unconditionally now — if the status call failed we
   // just leave `billing` null and openBilling() retries / surfaces an error.
@@ -1504,7 +1507,7 @@ async function openBilling() {
   if (!billing) await loadBilling();
   if (!billing) {
     $("billingState").innerHTML =
-      `<p class="form-msg err">Couldn't load billing right now. Reload and try again, or email hello@brightglow.co.</p>`;
+      `<p class="form-msg err">Couldn't load billing right now${billingStatus ? ` (${billingStatus})` : ""}. Reload and try again, or email hello@brightglow.co.</p>`;
   }
 }
 

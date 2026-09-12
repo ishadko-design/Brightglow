@@ -465,13 +465,25 @@ select { appearance: none; background-image: none; }
 .add-service-row { margin: 0 16px; }
 
 /* ── photos ──────────────────────────────────────────────── */
-/* Horizontal strip of 112x136 tiles + a trailing add tile — the app's layout. */
-.photo-strip { display: flex; gap: 8px; overflow-x: auto; padding: 4px 0 12px; }
-.photo-cell { position: relative; width: 112px; height: 136px; flex-shrink: 0; border-radius: 16px; overflow: hidden; background: var(--gray10); cursor: grab; }
+/* Horizontal strip — tiles are sized so ~3.5 show at once, always exposing the
+   edge of the next tile as the scroll affordance (it used to fit exactly 3
+   tiles, which read as the whole set). */
+.photo-strip { display: flex; gap: 8px; overflow-x: auto; padding: 4px 0 12px;
+  scrollbar-width: none; }   /* the peek is the affordance on touch */
+.photo-cell, .photo-add { flex: 0 0 calc((100% - 24px) / 3.5); aspect-ratio: 112 / 136; }
+.photo-cell { position: relative; border-radius: 16px; overflow: hidden; background: var(--gray10); cursor: grab; }
 .photo-add {
   display: flex; align-items: center; justify-content: center;
-  width: 112px; height: 136px; flex-shrink: 0; border-radius: 16px;
+  border-radius: 16px;
   background: var(--gray10); border: 1px solid var(--gray20); cursor: pointer;
+}
+/* Desktop: a thin scrollbar that's always visible while the strip overflows,
+   instead of the overlay bar that only appears mid-scroll. */
+@media (min-width: 700px) {
+  .photo-strip { scrollbar-width: thin; scrollbar-color: var(--gray50) transparent; }
+  .photo-strip::-webkit-scrollbar { height: 6px; }
+  .photo-strip::-webkit-scrollbar-thumb { background: var(--gray50); border-radius: 999px; }
+  .photo-strip::-webkit-scrollbar-track { background: transparent; }
 }
 .photo-add span {
   display: flex; align-items: center; justify-content: center;
