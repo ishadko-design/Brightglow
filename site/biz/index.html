@@ -9,7 +9,7 @@
   <meta name="robots" content="noindex">
   <link rel="icon" type="image/png" href="../favicon.png">
   <link rel="apple-touch-icon" href="../apple-touch-icon.png">
-  <link rel="stylesheet" href="portal.css?v=47">
+  <link rel="stylesheet" href="portal.css?v=48">
 </head>
 <body class="portal">
   <header class="topbar">
@@ -53,54 +53,66 @@
       <!-- Phone claim (primary, and the landing step). The number customers were
            texted is what the business proves possession of — reaches the ~70% we
            have no email for. -->
-      <div id="phoneStep" class="auth-card" hidden>
-        <h2 class="card-title">Sign up</h2>
-        <p class="auth-sub">
-          Enter the phone customers call or text you on. We'll text a 6-digit code —
-          no password. Only that number can manage the page.
-        </p>
-        <form id="phoneForm" novalidate>
-          <label for="phone">Phone number</label>
-          <input id="phone" name="phone" type="tel" autocomplete="tel"
-                 inputmode="tel" placeholder="(415) 555-0132" required>
-          <button type="submit" class="primary-btn" id="sendSmsBtn">Text me code</button>
-        </form>
-        <button type="button" class="linklike" id="useEmailBtn">Use email instead</button>
+      <div id="phoneStep" class="auth-step" hidden>
+        <div class="auth-hero">
+          <h2 class="card-title">Sign up</h2>
+          <p class="auth-sub">
+            Enter the phone customers call or text you on. We'll text a 6-digit code —
+            no password. Only that number can manage the page.
+          </p>
+        </div>
+        <div class="auth-card">
+          <form id="phoneForm" novalidate>
+            <label for="phone">Business phone</label>
+            <input id="phone" name="phone" type="tel" autocomplete="tel"
+                   inputmode="tel" placeholder="(415) 555-0132" required>
+            <button type="submit" class="primary-btn" id="sendSmsBtn">Text me code</button>
+          </form>
+          <button type="button" class="linklike" id="useEmailBtn">Use email instead</button>
+        </div>
       </div>
 
       <!-- Email (alternate) — for a business that would rather use the inbox we
            matched, or whose phone we never recorded. -->
-      <div id="emailStep" class="auth-card" hidden>
+      <div id="emailStep" class="auth-step" hidden>
         <button type="button" class="linklike back" data-goto="phone">← Back</button>
-        <h2 class="card-title">Sign up</h2>
-        <p class="auth-sub">
-          Enter the email where you received your Brightglow request. We'll email a
-          6-digit sign-in code — no password. Only that inbox can manage the page.
-        </p>
-        <form id="authForm" novalidate>
-          <label for="email">Business email</label>
-          <input id="email" name="email" type="email" autocomplete="email"
-                 inputmode="email" placeholder="you@yourbusiness.com" required>
-          <button type="submit" class="primary-btn" id="sendLinkBtn">Send sign-in code</button>
-        </form>
-        <button type="button" class="linklike" id="usePhoneBtn">Use phone instead</button>
+        <div class="auth-hero">
+          <h2 class="card-title">Sign up</h2>
+          <p class="auth-sub">
+            Enter the email where you received your Brightglow request. We'll email a
+            6-digit sign-in code — no password. Only that inbox can manage the page.
+          </p>
+        </div>
+        <div class="auth-card">
+          <form id="authForm" novalidate>
+            <label for="email">Business email</label>
+            <input id="email" name="email" type="email" autocomplete="email"
+                   inputmode="email" placeholder="you@yourbusiness.com" required>
+            <button type="submit" class="primary-btn" id="sendLinkBtn">Send sign-in code</button>
+          </form>
+          <button type="button" class="linklike" id="usePhoneBtn">Use phone instead</button>
+        </div>
       </div>
 
       <!-- Enter the code. Replaces the phone/email step once a code is sent. -->
-      <div id="codeStep" class="auth-card" hidden>
-        <h2 class="card-title">Enter your code</h2>
-        <p class="auth-sub">
-          We sent a 6-digit code to <strong id="codeTarget"></strong>. Enter it below
-          to sign in. It can take a minute to arrive.
-        </p>
-        <form id="codeForm" novalidate>
-          <label for="code">6-digit code</label>
-          <input id="code" name="code" type="text" inputmode="numeric"
-                 autocomplete="one-time-code" pattern="[0-9]*" maxlength="6"
-                 placeholder="123456" required>
-          <button type="submit" class="primary-btn" id="verifyCodeBtn">Verify &amp; sign in</button>
-        </form>
-        <button type="button" class="linklike" id="restartBtn">Start over</button>
+      <div id="codeStep" class="auth-step" hidden>
+        <div class="auth-hero">
+          <h2 class="card-title">Enter your code</h2>
+          <p class="auth-sub">
+            We sent a 6-digit code to <strong id="codeTarget"></strong>. Enter it below
+            to sign in. It can take a minute to arrive.
+          </p>
+        </div>
+        <div class="auth-card">
+          <form id="codeForm" novalidate>
+            <label for="code">6-digit code</label>
+            <input id="code" name="code" type="text" inputmode="numeric"
+                   autocomplete="one-time-code" pattern="[0-9]*" maxlength="6"
+                   placeholder="123456" required>
+            <button type="submit" class="primary-btn" id="verifyCodeBtn">Verify &amp; sign in</button>
+          </form>
+          <button type="button" class="linklike" id="restartBtn">Start over</button>
+        </div>
       </div>
 
       <p id="authMsg" class="form-msg" role="status" aria-live="polite"></p>
