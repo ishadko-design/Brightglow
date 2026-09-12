@@ -558,8 +558,10 @@ select { appearance: none; background-image: none; }
    says to reply in the SMS thread the customer started. */
 .thread-head { display: flex; align-items: center; gap: 4px; margin: 0 8px 24px; }
 .thread-back { width: 44px; height: 44px; flex-shrink: 0; display: flex; align-items: center;
-  justify-content: center; padding: 0; background: rgba(217, 217, 217, 0.20); border: none;
-  border-radius: 32px; color: var(--white); cursor: pointer; }
+  justify-content: center; padding: 0; background: none; border: none;
+  color: var(--white); cursor: pointer; }
+/* The node (2020:6841) shows a bare 24px arrow — no background, here or on any
+   other back button in the portal (billing/auth backs are already transparent). */
 /* Job title (Headline 3) over a timestamp (Body 2), per the Figma header. */
 .thread-titlewrap { flex: 1; min-width: 0; display: flex; flex-direction: column; }
 .thread-title { margin: 0; font-family: "Lato"; font-weight: 800; font-size: 24px;
