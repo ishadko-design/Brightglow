@@ -343,13 +343,15 @@ select { appearance: none; background-image: none; }
 .ghost-btn:hover { background: var(--gray05); }
 .ghost-btn:disabled { opacity: 0.6; cursor: default; }
 
-/* Figma "Button Secondary" — the light-gray pill used everywhere (Upload logo,
-   Settings, Delete, Add service, Preview, Delete account). Fill rgba(217,217,217,
-   .20), radius 32, Lato Bold, white. Two sizes: sm (pad 4/16, 14) and lg
-   (pad 16/32, 18). */
+/* Figma "Button Secondary" (node 1984:5663, 8 instances): fill #D9D9D9 at 20%,
+   BACKGROUND BLUR 64, radius 32, Lato Bold white. Two sizes —
+   sm: text-only, pad 4/16, 14px, 32 tall ("Upload logo", "Delete", "Add service");
+   lg: 24px icon + 10px gap + 18px label, pad 16/32, 48 tall ("Preview as customer").
+   There is no icon-only variant: it is a button, not an icon button. */
 .btn-secondary {
   display: inline-flex; align-items: center; justify-content: center;
   background: rgba(217, 217, 217, 0.20); color: var(--white);
+  -webkit-backdrop-filter: blur(64px); backdrop-filter: blur(64px);
   border: 0; border-radius: 32px; cursor: pointer;
   font-family: "Lato", sans-serif; font-weight: 700; white-space: nowrap;
   transition: filter .15s ease, opacity .15s ease;
@@ -357,9 +359,7 @@ select { appearance: none; background-image: none; }
 .btn-secondary:hover { filter: brightness(1.15); }
 .btn-secondary:disabled { opacity: .6; cursor: default; }
 .btn-secondary.sm { padding: 4px 16px; font-size: 14px; min-height: 32px; }
-.btn-secondary.lg { padding: 13px 32px; font-size: 18px; min-height: 48px; }
-/* Figma Preview button: 24px user icon, 10px gap to the label. */
-#previewBtn { gap: 10px; }
+.btn-secondary.lg { padding: 16px 32px; gap: 10px; font-size: 18px; min-height: 48px; }
 /* Desktop Preview: plain text (the button can't open the app there) above the QR. */
 .preview-label { margin: 0 0 16px; text-align: center;
   font-family: "Lato", sans-serif; font-weight: 700; font-size: 18px; color: var(--white); }
