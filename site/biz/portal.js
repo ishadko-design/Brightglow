@@ -1119,11 +1119,20 @@ function wireLeadRow(row, leads) {
   const onEnd = () => {
     if (!tracking) return;
     tracking = false; card.style.transition = "";
-    row.classList.remove("swiping");
     if (swiping) {
-      row.classList.toggle("open", dx < SWIPE_OPEN / 2);
+      const opened = dx < SWIPE_OPEN / 2;
+      row.classList.toggle("open", opened);
+      if (opened || dx === 0) {
+        row.classList.remove("swiping");   // .open keeps the red; at dx 0 nothing moved
+      } else {
+        // Snapping back: keep the red until the card finishes sliding home, so
+        // the delete layer retreats with the card instead of vanishing early.
+        card.addEventListener("transitionend", () => row.classList.remove("swiping"), { once: true });
+      }
       suppressClick = true;   // swallow the click that follows a real swipe
       setTimeout(() => { suppressClick = false; }, 350);
+    } else {
+      row.classList.remove("swiping");
     }
     setX("");
   };
