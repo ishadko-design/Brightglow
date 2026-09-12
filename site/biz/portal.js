@@ -481,6 +481,9 @@ function unsubscribedHTML() {
 function subscribedHTML() {
   const renews = billing.current_period_end ? fmtDate(billing.current_period_end) : null;
   const pastDue = billing.needs_payment_update;
+  // Scheduled cancellation: still active until the period ends, but the copy
+  // must not say "Renews" — nothing is renewing.
+  const canceling = billing.cancel_at_period_end && !pastDue;
 
   return `
     <h2 class="billing-head">
@@ -493,7 +496,7 @@ function subscribedHTML() {
          </p>`
       : ""}
     <p class="billing-body">
-      You're on the $25/month plan with unlimited leads.${renews ? ` Renews ${renews}.` : ""}
+      You're on the $25/month plan with unlimited leads.${renews ? (canceling ? ` Cancels ${renews} — you won't be charged again.` : ` Renews ${renews}.`) : ""}
     </p>
     <button class="ghost-btn wide" id="manageBtn">
       ${pastDue ? "Update card" : "Manage or cancel subscription"}
