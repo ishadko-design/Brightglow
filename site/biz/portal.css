@@ -725,7 +725,7 @@ select { appearance: none; background-image: none; }
 }
 .modal-card {
   width: 100%; max-width: 386px;
-  background: rgba(255, 255, 255, 0.05);
+  background: var(--card); /* SOLID — the menu behind must not bleed through */
   border: none; border-radius: 32px;
   padding: 24px 16px;
   text-align: center;
@@ -738,11 +738,24 @@ select { appearance: none; background-image: none; }
   font-family: "Poppins", sans-serif; font-weight: 400; font-size: 14px; line-height: 1.5;
   color: rgba(255, 255, 255, 0.6); margin: 0 0 24px;
 }
-.danger-btn {
-  background: var(--danger);
-  box-shadow: 0 8px 24px rgba(255, 0, 0, 0.35);
+/* Destructive-modal buttons: the SAFE choice is the most highlighted — Cancel is
+   a big solid light button. Confirm Deletion stays red but steps back to a red
+   outline, so the eye lands on Cancel first. */
+.light-btn {
+  background: var(--white);
+  color: var(--bg);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
 }
-.danger-btn:hover { transform: translateY(-1px); box-shadow: 0 12px 32px rgba(255, 0, 0, 0.5); }
+.light-btn:hover { transform: translateY(-1px); box-shadow: 0 12px 32px rgba(0, 0, 0, 0.45); }
+.light-btn:active { transform: translateY(0); }
+.danger-btn {
+  background: transparent;
+  color: var(--danger);
+  border: 1px solid var(--danger);
+  box-shadow: none;
+  margin-top: 12px;
+}
+.danger-btn:hover { transform: translateY(-1px); box-shadow: none; background: rgba(255, 0, 0, 0.08); }
 .danger-btn:active { transform: translateY(0); }
 
 /* Unified inbox: hide the business switcher chips. */
