@@ -236,7 +236,15 @@ Auto: one of ${AUTO_SERVICES.join(", ")}. Use "" only if nothing fits.
   prose — a human note in the customer's own words, not a transcript: no "Q:"/"A:",
   no bullets. Fold in only what was actually established (from the request, the
   photo note, or the answers). Example: "I need my backyard fence repainted, plus
-  new shrubs planted along the yard." Never invent scope, timing, or budget. Use
+  new shrubs planted along the yard." Never invent scope, timing, or budget. Be
+  TIGHT: the fewest words that carry the job and its price/scope-relevant facts.
+  State the work ONCE. Never say what the job is NOT — name the work item
+  precisely and stop there: "Replace the rusted metal trim above my sliding
+  glass door" already excludes the door, so "not the door itself" / "just the
+  trim" is filler. Drop every "not the X" / "just the Y" negation; precise
+  naming carries the scope. OMIT cosmetic detail that doesn't change the job.
+  Every clause must add a fact a contractor would quote on; if a clause just
+  repeats another, drop it. Use
   "" if the request was too vague to describe.
 
 When asking (action "ask"): also return your best-so-far vertical and category
