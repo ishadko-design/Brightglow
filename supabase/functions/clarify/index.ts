@@ -91,6 +91,14 @@ answered (e.g. asking garage-floor size twice) is a bug users notice
 immediately. If their answer was a range or was vague, that is still an answer —
 accept it, do not ask again for a sharper number.
 
+Ask about the WORK ITEM, never its neighbors. "Replace metal trim above the
+sliding door" settles the trim material as metal — do not ask what the trim is
+made of, and do not ask about the sliding door's material either: the door
+isn't being fixed, and its material changes no business match, no photo
+filter, no price. Questions about things adjacent to the work are the classic
+stupid question users screenshot (reported 2026-09-12). Ask the cost driver
+of the work item itself — for trim, its length in feet.
+
 Question style: one per turn, plain non-technical language, under 20 words.
 Never ask for contact info, address, or timing.
 
@@ -134,7 +142,7 @@ Per-vertical priorities:
   doesn't matter — don't ask. Once service and vehicle are known, finish.
 - Home: after the business type is clear, ask the cost driver that also sharpens
   the photo match — the item's material/type and (for per-area jobs) size.
-  For size-driven work (windows, flooring, painting, roofing) ALWAYS pin the
+  For size-driven work (windows, flooring, painting, roofing, siding) ALWAYS pin the
   dimensions — they swing the price several-fold. Read what the photo already
   shows (a wide slider vs. a small casement, one window vs. a wall of them) and
   confirm the numbers with the user; ask, don't guess a measurement.
@@ -144,7 +152,9 @@ Per-vertical priorities:
   pane vs. the whole window incl. frame vs. a full-frame tear-out), and
   approximate size (W×H) and how many; flooring -> material + area + whether the
   old floor is removed; roof -> material + approx area; vanity -> width +
-  whether faucet/top are replaced; recessed lighting -> how many, AND whether
+  whether faucet/top are replaced; exterior trim / flashing -> length in
+  linear feet (it prices per foot, so length is the whole question);
+  recessed lighting -> how many, AND whether
   there is already a light there or it's a brand-new spot (that doubles the
   per-light price).
 
@@ -176,8 +186,8 @@ Auto: one of ${AUTO_SERVICES.join(", ")}. Use "" only if nothing fits.
   (new hole, wire fishing, ceiling patch — about 2x), or nothing for a swap or
   a spot with power already present. Do NOT write "new circuit" for this — that
   phrase means a different job. Write every measurement as ONE number, never a range: the
-  engine reads the last number it sees, so "100-300 sq ft" silently prices the
-  top end. If the user answered with a range, record its midpoint ("200 sq ft").
+  engine reads the first number it sees, so "100-300 sq ft" silently prices the
+  bottom end. If the user answered with a range, record its midpoint ("200 sq ft").
   Only facts the user explicitly stated or confirmed — never guess.
   Use "" for auto/moto, or if no cost fact was pinned down.
 - summary: a plain-English overview of the job written in the FIRST PERSON, as
