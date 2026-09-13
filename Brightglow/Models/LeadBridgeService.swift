@@ -6,7 +6,13 @@ import Supabase
 /// Not a secret: this is just the service's public base URL, same nature as
 /// its RELAY_DOMAIN.
 enum LeadBridgeService {
-    static let baseURL = "https://leadbridge-production-4065.up.railway.app"
+    // ⚠️ TEST OVERRIDE — point the app at your LOCAL leadbridge (billing is ON
+    // there, so the paywall actually engages and you get the new /l page)
+    // instead of production. Empty string = production. MUST be "" before ship.
+    private static let testBaseURL = ""   // HTTPS tunnel to local; "" for prod
+    static var baseURL: String {
+        testBaseURL.isEmpty ? "https://leadbridge-production-4065.up.railway.app" : testBaseURL
+    }
 
     enum SubmitError: Error {
         case encodingFailed
@@ -28,9 +34,40 @@ enum LeadBridgeService {
         return "lead_" + String(suffix)
     }
 
-    /// Public web page (no login) where the business sees this request + photo
-    /// and replies into the customer's chat. Built from `publicId`.
-    static func replyURL(publicId: String) -> String { "\(baseURL)/l/\(publicId)" }
+    /// Public web page (no login) where the business sees this request + photo.
+    /// Read-only detail view — the business replies in their own text thread.
+    /// Built from `publicId`. Lives on our own domain (the worker proxies /l/*
+    /// to LeadBridge) so the SMS link says brightglow.co, not a Railway URL.
+    static var replyBaseURL: String {
+        testBaseURL.isEmpty ? "https://brightglow.co" : testBaseURL
+    }
+    static func replyURL(publicId: String) -> String { "\(replyBaseURL)/l/\(publicId)" }
+
+    /// Read-only pre-send quota check: is this business already over its free-lead
+    /// allowance? If so the text should be the thin "details behind the link" form
+    /// (the `/l` page then shows the paywall) rather than the full-detail text.
+    /// Fails OPEN — returns false on any error, timeout, or when billing is off —
+    /// so a network hiccup never blocks a send or downgrades a free lead. Worst
+    /// case a lead goes out full, which is the intended default.
+    static func checkGate(placeId: String, contractorEmail: String) async -> Bool {
+        guard !placeId.isEmpty,
+              var comps = URLComponents(string: "\(baseURL)/api/leads/gate") else { return false }
+        comps.queryItems = [
+            URLQueryItem(name: "place_id", value: placeId),
+            URLQueryItem(name: "contractor_email", value: contractorEmail),
+        ]
+        guard let url = comps.url else { return false }
+        do {
+            let (data, response) = try await URLSession.shared.data(from: url)
+            guard let http = response as? HTTPURLResponse, (200...299).contains(http.statusCode) else {
+                return false
+            }
+            struct GateResponse: Decodable { let over_quota: Bool }
+            return (try? JSONDecoder().decode(GateResponse.self, from: data))?.over_quota ?? false
+        } catch {
+            return false
+        }
+    }
 
     static func submitLead(
         userEmail: String,
@@ -42,18 +79,19 @@ enum LeadBridgeService {
         contractorPhone: String? = nil,
         description: String,
         city: String,
-        photo: UIImage? = nil,
+        photos: [UIImage] = [],
         publicId: String? = nil,
-        notify: Bool = true
+        notify: Bool = true,
+        contactConsent: Bool = false
     ) async throws -> String {
-        // Photo is optional; when there is one, failing to encode it is still
-        // an error rather than a silent text-only send.
-        var jpegData: Data? = nil
-        if let photo {
+        // Photos are optional; when there are any, failing to encode one is still
+        // an error rather than a silent partial send. LeadBridge accepts up to 5.
+        var jpegDatas: [Data] = []
+        for photo in photos.prefix(5) {
             guard let encoded = photo.jpegData(compressionQuality: 0.85) else {
                 throw SubmitError.encodingFailed
             }
-            jpegData = encoded
+            jpegDatas.append(encoded)
         }
 
         let boundary = "Boundary-\(UUID().uuidString)"
@@ -84,10 +122,15 @@ enum LeadBridgeService {
         // but sends no email — the customer's own text is the delivery.
         if let publicId, !publicId.isEmpty { appendField("public_id", publicId) }
         if !notify { appendField("notify", "false") }
+        // Consent record: the customer ticked "the business can text me back" on
+        // the confirmation screen. Stored on the lead as dated proof.
+        if contactConsent { appendField("contact_consent", "true") }
 
-        if let jpegData {
+        // Every attached photo goes as its own `photo` field — multer's
+        // upload.array('photo', 5) collects them into req.files in order.
+        for (i, jpegData) in jpegDatas.enumerated() {
             body.append("--\(boundary)\r\n".data(using: .utf8)!)
-            body.append("Content-Disposition: form-data; name=\"photo\"; filename=\"photo.jpg\"\r\n".data(using: .utf8)!)
+            body.append("Content-Disposition: form-data; name=\"photo\"; filename=\"photo\(i).jpg\"\r\n".data(using: .utf8)!)
             body.append("Content-Type: image/jpeg\r\n\r\n".data(using: .utf8)!)
             body.append(jpegData)
             body.append("\r\n".data(using: .utf8)!)

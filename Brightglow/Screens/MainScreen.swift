@@ -9,6 +9,17 @@ private enum PendingDestination {
     case auto(AutoCategory)
 }
 
+/// A carousel thumbnail the user tapped to draw on. Presented in DrawModeView
+/// as a pure annotation editor (the quote-request pattern): backing out
+/// dismisses with everything intact, submitting writes the annotated photo
+/// back into its carousel slot. Never touches the clarify chat.
+private struct AnnotateTarget: Identifiable {
+    enum Source { case attached(Int); case picked(Int) }
+    let id = UUID()
+    let image: UIImage
+    let source: Source
+}
+
 /// One bubble of the clarifying chat the input pill transforms into.
 private struct ChatMessage: Identifiable, Equatable {
     let id = UUID()
@@ -174,6 +185,13 @@ struct MainScreen: View {
     /// so we route the user to Settings or manual ZIP entry).
     @State private var showLocationNeeded = false
     @State private var drawnPaths: [DrawnPath] = []
+    /// Carousel thumbnail being annotated (tap a thumbnail to draw on it).
+    /// Separate cover from the camera's draw canvas — dismissing it never
+    /// touches the chat, the typed text, or the other photos.
+    @State private var annotateTarget: AnnotateTarget? = nil
+    /// Draw strokes for the annotation editor (kept apart from `drawnPaths`,
+    /// which belongs to the camera-capture canvas).
+    @State private var annotatePaths: [DrawnPath] = []
     /// Mirror of `camera.detectedDescription` for the draw-over input. Kept as a
     /// MainScreen @State (fed by an onChange) and passed to DrawModeView as a
     /// binding, because a value read directly inside the `.fullScreenCover`
@@ -216,6 +234,11 @@ struct MainScreen: View {
     /// as thumbnails above the input bar.
     @State private var pickedItems: [PhotosPickerItem] = []
     @State private var pickedImages: [UIImage] = []
+    /// Whether the photo currently in the drawing canvas came from the library
+    /// picker (true) or the shutter (false). Set at present time; read by the
+    /// canvas's Back action, which keeps a library pick as a strip attachment
+    /// instead of dropping it.
+    @State private var captureWasLibraryPick = false
     /// Live keyboard height — drives the dark fill behind the keyboard so it
     /// covers exactly the keyboard (not the camera/input above it).
     @State private var keyboardHeight: CGFloat = 0
@@ -297,10 +320,17 @@ struct MainScreen: View {
                     // live preview) for the whole conversation instead of snapping
                     // back to the viewfinder.
                     if chatActive, let backdrop = clarifyBackdrop {
-                        Image(uiImage: backdrop)
-                            .resizable()
-                            .scaledToFill()
-                            .frame(width: geo.size.width, height: geo.size.height)
+                        // Full-bleed: fill a safe-area-ignoring container so the photo
+                        // covers the WHOLE screen (edge to edge, top to bottom) behind
+                        // the chat. Sizing to `geo.size` (the safe-area-inset size) and
+                        // then `.ignoresSafeArea()` left it smaller than the screen —
+                        // the live camera showed around it (reported 2026-09-06).
+                        Color.clear
+                            .overlay {
+                                Image(uiImage: backdrop)
+                                    .resizable()
+                                    .scaledToFill()
+                            }
                             .clipped()
                             .ignoresSafeArea()
                             .transition(.opacity)
@@ -404,6 +434,7 @@ struct MainScreen: View {
                                         // back in on the next return to the landing).
                                         hasCapturedThisSession = true
                                         showCameraHint = false
+                                        captureWasLibraryPick = false
                                         camera.capturePhoto()
                                     }) {
                                         // Figma 783-1682 (Frame 36953): 88pt disc, 30%
@@ -569,10 +600,16 @@ struct MainScreen: View {
                           ScrollView(.horizontal, showsIndicators: false) {
                               HStack(spacing: 8) {
                                   ForEach(Array(attachedImages.enumerated()), id: \.offset) { index, image in
-                                      thumbnail(image) { removeAttachedImage(at: index) }
+                                      thumbnail(image,
+                                                onTap: { annotateTarget = AnnotateTarget(image: image, source: .attached(index)) }) {
+                                          removeAttachedImage(at: index)
+                                      }
                                   }
                                   ForEach(Array(pickedImages.enumerated()), id: \.offset) { index, image in
-                                      thumbnail(image) { removePickedImage(at: index) }
+                                      thumbnail(image,
+                                                onTap: { annotateTarget = AnnotateTarget(image: image, source: .picked(index)) }) {
+                                          removePickedImage(at: index)
+                                      }
                                   }
                               }
                               .padding(.horizontal, 4)
@@ -643,7 +680,16 @@ struct MainScreen: View {
                       .animation(.easeInOut(duration: 0.15), value: searchText.isEmpty)
                     }
                     .onChange(of: pickedItems) { _, items in
-                        loadPickedImages(items)
+                        // Snapshot the fresh-pick gate NOW, synchronously:
+                        // loadPickedImages decodes async, and the chat can end
+                        // (skip / last answer) mid-decode. Evaluating the gate
+                        // after the decode let a just-finished chat flip it to
+                        // "fresh", retriggering the fullscreen canvas over the
+                        // results and wiping the Q&A on submit. A pick that
+                        // starts mid-chat always lands in the strip, whenever
+                        // its decode lands.
+                        let freshPick = !chatActive && attachedImages.isEmpty && pickedImages.isEmpty
+                        loadPickedImages(items, freshPick: freshPick)
                     }
                     .padding(.horizontal, 12)
                     .padding(.vertical, 8)
@@ -705,7 +751,10 @@ struct MainScreen: View {
                 }
                 // A brightglow://preview/<place_id> deep link presents the consumer
                 // gallery over the landing. No ownership gate — it's a public view.
-                .onChange(of: previewRouter.placeID) { _, id in
+                // `initial: true` so a link that arrived on a COLD launch (placeID set
+                // by onOpenURL before this view began observing) is still consumed when
+                // the view mounts — otherwise the app just lands on Home.
+                .onChange(of: previewRouter.placeID, initial: true) { _, id in
                     if let id { previewTarget = PreviewTarget(id: id); previewRouter.placeID = nil }
                 }
                 // Ownership resolves asynchronously after sign-in; a link that
@@ -863,6 +912,16 @@ struct MainScreen: View {
                 DrawModeView(
                     image: img,
                     onBack: {
+                        if captureWasLibraryPick, let img = camera.capturedImage {
+                            // Backing out of a library pick keeps the photo as a
+                            // strip attachment instead of dropping it: losing it
+                            // here is what made the next Plus pick look "fresh"
+                            // and retrigger the canvas, orphaning the user's pick.
+                            // pickedItems was left intact above, so the strip
+                            // stays parallel with the selection.
+                            pickedImages = [img]
+                        }
+                        captureWasLibraryPick = false
                         camera.retake()
                         drawnPaths = []
                         attachedImages = []
@@ -898,22 +957,19 @@ struct MainScreen: View {
                         let context = Self.clarifyPhotoContext(
                             match: detected ?? camera.suggestedMatches.first,
                             vehicle: detectedVehicle, details: details)
-                        // Kick the price estimate off NOW — before the clarify chat —
-                        // so the server's classification + grounded-search caches are
-                        // warm (or the call already finished) by the time the results
-                        // header asks for it. Best-effort; the results call reuses it.
-                        if let coord = locationStore.coordinate {
-                            let priceQuery = q.isEmpty ? (describe ?? "") : q
-                            ContractorLoader.prefetchEstimate(
-                                category: Self.autoCategory(from: detected)?.name
-                                    ?? Self.categoryKey(from: detected),
-                                searchQuery: priceQuery,
-                                near: coord,
-                                photoDetails: details,
-                                vehicle: detectedVehicle)
-                        }
+                        // NOTE: the capture-time estimate prefetch was removed to cut
+                        // cost — it fired a paid web-searched estimate on the initial
+                        // query, then the clarify-end refine (see finishClarify) fired
+                        // a SECOND one on the refined job (a different cache key). We
+                        // now estimate ONCE, at clarify end, with the correct job; the
+                        // results header still fetches on demand if the chat is skipped.
                         attachedImages = [resultImage]
                         camera.retake()
+                        // The photo left the picker flow for the canvas; drop the
+                        // picker selection so a later Plus pick starts clean and
+                        // can't resurrect this photo as a duplicate thumbnail.
+                        pickedItems = []
+                        captureWasLibraryPick = false
                         drawnPaths = []
                         DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
                             photoDetails = details
@@ -966,6 +1022,33 @@ struct MainScreen: View {
                     paths: $drawnPaths
                 )
             }
+        }
+        // ── Annotation editor — tap a carousel thumbnail to draw on it. Pure
+        // editor (the quote-request pattern): backing out dismisses with the
+        // chat, the typed text and all photos intact; submitting writes the
+        // annotated photo back into its carousel slot and returns to the chat.
+        .fullScreenCover(item: $annotateTarget) { target in
+            DrawModeView(
+                image: target.image,
+                onBack: {
+                    annotatePaths = []
+                    annotateTarget = nil
+                },
+                onSubmit: { _, resultImage in
+                    switch target.source {
+                    case .attached(let i):
+                        if attachedImages.indices.contains(i) { attachedImages[i] = resultImage }
+                    case .picked(let i):
+                        if pickedImages.indices.contains(i) { pickedImages[i] = resultImage }
+                    }
+                    annotatePaths = []
+                    annotateTarget = nil
+                },
+                // No auto-description here — the photo was already described at
+                // capture time (or was never classified, for a mid-chat pick).
+                autoDescription: .constant(""),
+                paths: $annotatePaths
+            )
         }
     }
 
@@ -1197,8 +1280,12 @@ struct MainScreen: View {
         // Prefer the full photo context (vehicle + trade + attributes); it already
         // includes the cost details, so fall back to those only when it's absent.
         let details = photoContext ?? photoDetails
+        // The chat's photo: the camera capture or a library pick, first one is
+        // the primary. The server reads the work item's attributes off it, so
+        // the chat confirms what the picture shows instead of asking.
+        let chatPhoto = (attachedImages + pickedImages).first
         Task {
-            let reply = await ClarifyService.next(messages: turns, photoDetails: details)
+            let reply = await ClarifyService.next(messages: turns, photoDetails: details, photo: chatPhoto)
             await MainActor.run {
                 chatLoading = false
                 applyReply(reply)
@@ -1232,9 +1319,10 @@ struct MainScreen: View {
         cancelPreloads()
         let base = chatMessages.map { ClarifyService.Turn(role: $0.role, content: $0.content) }
         let details = photoContext ?? photoDetails
+        let chatPhoto = (attachedImages + pickedImages).first
         for option in options where option.caseInsensitiveCompare("Skip") != .orderedSame {
             let turns = base + [ClarifyService.Turn(role: "user", content: option)]
-            preloadedTasks[option] = Task { await ClarifyService.next(messages: turns, photoDetails: details) }
+            preloadedTasks[option] = Task { await ClarifyService.next(messages: turns, photoDetails: details, photo: chatPhoto) }
         }
     }
 
@@ -1303,9 +1391,11 @@ struct MainScreen: View {
         autoInitialVehicle = nil
         // Closing the clarify chat abandons the request, so the photo(s) that
         // seeded it shouldn't linger in the input bar — clear both the camera
-        // capture and library picks.
+        // capture and library picks (selection too, or the next Plus tap would
+        // reopen the picker with the dead photo still checked).
         attachedImages = []
         pickedImages = []
+        pickedItems = []
     }
 
     /// Finish the chat and open results with whatever the match resolved to. A
@@ -1398,9 +1488,14 @@ struct MainScreen: View {
                 // Deliberately says nothing about the estimate: `priceable` is
                 // only known once the chat ENDS, and it's false for auto/moto and
                 // every uncovered category — where the list shows no price at all.
-                Text("Add details")
-                    .font(.h3)
-                    .foregroundStyle(.white)
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Add details")
+                        .font(.h3)
+                        .foregroundStyle(.white)
+                    Text("More details help with a better estimate")
+                        .font(.bodySmall)
+                        .foregroundStyle(.white.opacity(0.5))
+                }
                 Spacer(minLength: 12)
                 // Close (✕) — ends the search and drops the conversation back to
                 // the plain input pill (Figma node 781:3216 header). Works the same
@@ -1624,9 +1719,18 @@ struct MainScreen: View {
 
     /// Decode the picker's selected items. A single picked photo opens the same
     /// full-screen draw-over canvas a camera capture does (circle the problem,
-    /// describe, submit routes by the photo); picking several keeps the
-    /// thumbnail strip, since draw-over is a one-photo flow.
-    private func loadPickedImages(_ items: [PhotosPickerItem]) {
+    /// describe, submit routes by the photo) — but ONLY when the input is
+    /// completely fresh (no chat, no photos yet). Anything already in progress
+    /// (an active clarify chat, photos in the strip) means the pick just joins
+    /// the thumbnail carousel: auto-opening the canvas there hijacked the flow,
+    /// and its presentation cycle wiped the user's typed answers (2026-09-12).
+    /// The fresh-pick gate is snapshotted by the caller synchronously (see the
+    /// onChange above) because the decode is async: a chat that ends mid-decode
+    /// must not flip a mid-chat pick into a "fresh" one and retrigger the canvas
+    /// over the results. Decoding from the full accumulated selection (no
+    /// append/reset dance) also keeps pickedImages parallel to pickedItems, so
+    /// the ✕ buttons and re-picks can't duplicate thumbnails.
+    private func loadPickedImages(_ items: [PhotosPickerItem], freshPick: Bool) {
         Task {
             var images: [UIImage] = []
             for item in items {
@@ -1636,8 +1740,13 @@ struct MainScreen: View {
                 }
             }
             await MainActor.run {
-                if images.count == 1, pickedImages.isEmpty, let image = images.first {
-                    pickedItems = []
+                if images.count == 1, freshPick, let image = images.first {
+                    // Don't reset pickedItems here: the canvas's Back action
+                    // keeps a library pick as a strip attachment, and it needs
+                    // the selection intact to stay parallel with pickedImages.
+                    // The reset moved to the canvas's submit (below), where the
+                    // photo leaves the picker flow for good.
+                    captureWasLibraryPick = true
                     camera.present(image)
                 } else {
                     pickedImages = images
@@ -1647,15 +1756,18 @@ struct MainScreen: View {
     }
 
     /// Remove one thumbnail and keep the picker selection in sync.
-    /// One 56pt rounded thumbnail with an ✕ to detach it.
+    /// One 56pt rounded thumbnail: tap opens it in the annotation editor
+    /// (draw over it), ✕ detaches it. The tap sits on the image itself so the
+    /// ✕ button never triggers it.
     @ViewBuilder
-    private func thumbnail(_ image: UIImage, onRemove: @escaping () -> Void) -> some View {
+    private func thumbnail(_ image: UIImage, onTap: @escaping () -> Void, onRemove: @escaping () -> Void) -> some View {
         ZStack(alignment: .topTrailing) {
             Image(uiImage: image)
                 .resizable()
                 .scaledToFill()
                 .frame(width: 56, height: 56)
                 .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+                .onTapGesture(perform: onTap)
             Button(action: onRemove) {
                 Image(systemName: "xmark.circle.fill")
                     .font(.system(size: 18))

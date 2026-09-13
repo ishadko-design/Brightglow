@@ -46,6 +46,11 @@ struct DrawModeView: View {
     /// needs to SEE the loop, not a bare crop). No-op by default (e.g. the
     /// quote-request editor).
     var onRegionDrawn: (CGRect, CGSize, UIImage) -> Void = { _, _, _ in }
+    /// When false, this is a DRAW-ONLY editor (the "Edit" on the send-request
+    /// screen): the text input is hidden and circling only annotates the photo — it
+    /// does NOT re-classify (the request was already described at capture). Capture
+    /// flow leaves it true (draw + describe).
+    var showsTextInput: Bool = true
     @Binding var paths: [DrawnPath]
 
     @State private var description: String = ""
@@ -79,6 +84,9 @@ struct DrawModeView: View {
                 // also re-classifies that region to disambiguate the description
                 // (see onRegionDrawn).
                 DrawingCanvas(paths: $paths, onSelection: { box in
+                    // Draw-only editor (send-request "Edit"): the stroke is purely an
+                    // annotation baked into the photo — never re-classify, never spin.
+                    guard showsTextInput else { return }
                     // The user already typed their own request — their intention is
                     // set, and the region read would be discarded anyway (we never
                     // overwrite typed text). So don't re-classify or show the spinner;
@@ -101,7 +109,16 @@ struct DrawModeView: View {
                 VStack(spacing: 0) {
                     // Back + Undo — explicitly below the status bar
                     HStack {
-                        Button(action: onBack) {
+                        // In draw-only mode there's no send arrow — Back IS the way to
+                        // finish, so it commits any drawn annotation (bakes strokes into
+                        // the photo) instead of discarding. With no strokes it just exits.
+                        Button(action: {
+                            if !showsTextInput && !paths.isEmpty {
+                                submit(viewSize: geo.size)
+                            } else {
+                                onBack()
+                            }
+                        }) {
                             // Match the gallery header's back control: arrow.left, 18pt semibold.
                             HStack(spacing: 4) {
                                 Image(systemName: "arrow.left")
@@ -155,8 +172,11 @@ struct DrawModeView: View {
                         .opacity(showDrawHint ? 1 : 0)
                         .animation(.easeInOut(duration: 0.4), value: showDrawHint)
 
-                    // Input bar — text field + send.
-                    HStack(spacing: 8) {
+                    // Input bar — text field + send. Draw-only mode (send-request
+                    // "Edit") shows NOTHING here: no field, no send arrow. Circling
+                    // just annotates the photo; the top-left Back commits it and exits.
+                    if showsTextInput {
+                      HStack(spacing: 8) {
                         // Immediate feedback that a circled area is being re-read.
                         if reclassifying {
                             ThinkingOrb(size: 22, color: .white)
@@ -214,21 +234,22 @@ struct DrawModeView: View {
                         .scaleEffect(canSend ? 1 : 0.8)
                         .allowsHitTesting(canSend)
                         .animation(.easeInOut(duration: 0.15), value: canSend)
+                      }
+                      .padding(.horizontal, 16)
+                      .padding(.vertical, 8)
+                      .frame(minHeight: 60)
+                      .background {
+                          ZStack {
+                              Color.clear.background(.ultraThinMaterial)
+                              AppColors.searchBg
+                          }
+                      }
+                      .clipShape(RoundedRectangle(cornerRadius: 32))
+                      .overlay(RoundedRectangle(cornerRadius: 32).stroke(AppColors.searchBorder, lineWidth: 1.5))
+                      .padding(.horizontal, 16)
+                      .padding(.bottom, keyboardHeight > 0 ? keyboardHeight + 16 : safeBottom + 16)
+                      .animation(.easeOut(duration: 0.25), value: keyboardHeight)
                     }
-                    .padding(.horizontal, 16)
-                    .padding(.vertical, 8)
-                    .frame(minHeight: 60)
-                    .background {
-                        ZStack {
-                            Color.clear.background(.ultraThinMaterial)
-                            AppColors.searchBg
-                        }
-                    }
-                    .clipShape(RoundedRectangle(cornerRadius: 32))
-                    .overlay(RoundedRectangle(cornerRadius: 32).stroke(AppColors.searchBorder, lineWidth: 1.5))
-                    .padding(.horizontal, 16)
-                    .padding(.bottom, keyboardHeight > 0 ? keyboardHeight + 16 : safeBottom + 16)
-                    .animation(.easeOut(duration: 0.25), value: keyboardHeight)
                 }
                 .frame(width: geo.size.width, height: geo.size.height)
             }

@@ -1,4 +1,5 @@
 import Foundation
+import UIKit
 
 /// One turn of the clarifying chat via the Supabase `clarify` Edge Function.
 /// Its primary job is to disambiguate toward the right LOCAL BUSINESS: it asks
@@ -48,8 +49,12 @@ enum ClarifyService {
 
     /// Next chat turn. `messages` is the full history (first entry = the
     /// user's original request); `photoDetails` is the vision model's
-    /// extracted attributes, giving the AI the photo context.
-    static func next(messages: [Turn], photoDetails: String?) async -> Reply? {
+    /// extracted attributes, giving the AI the photo context. `photo` is the
+    /// user's actual picture — the server reads the work item's attributes
+    /// (material, size, count, scope) off it directly, so the chat confirms
+    /// instead of interrogating. Downscaled to 768px: plenty for attribute
+    /// reads, small enough for a per-turn upload.
+    static func next(messages: [Turn], photoDetails: String?, photo: UIImage? = nil) async -> Reply? {
         guard isConfigured, !messages.isEmpty,
               let url = URL(string: "https://\(ref).supabase.co/functions/v1/clarify")
         else { return nil }
@@ -58,6 +63,10 @@ enum ClarifyService {
             "messages": messages.map { ["role": $0.role, "content": $0.content] },
         ]
         if let photoDetails, !photoDetails.isEmpty { body["photo_details"] = photoDetails }
+        if let jpeg = photo?.downscaled(maxDimension: 768).jpegData(compressionQuality: 0.7) {
+            body["photo"] = jpeg.base64EncodedString()
+            body["media_type"] = "image/jpeg"
+        }
 
         var req = URLRequest(url: url, timeoutInterval: 25)
         req.httpMethod = "POST"

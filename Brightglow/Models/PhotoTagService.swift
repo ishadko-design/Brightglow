@@ -84,7 +84,7 @@ enum PhotoTagService {
         return photos.map { photo in
             guard let tags = decoded.tags[photo.url], !tags.isEmpty else { return photo }
             let merged = Array(Set(photo.labels + tags.map { $0.lowercased() }))
-            return ScreenedPhoto(url: photo.url, labels: merged)
+            return ScreenedPhoto(url: photo.url, labels: merged, phash: photo.phash)
         }
     }
 

@@ -133,7 +133,8 @@ enum PlacesService {
             contactEmail: place.contactEmail,
             licenseNumber: nil,
             isVerified: (place.businessStatus ?? "OPERATIONAL") == "OPERATIONAL",
-            reviews: reviews(from: place.reviews)
+            reviews: reviews(from: place.reviews),
+            placeTypes: place.types ?? []
         )
     }
 
@@ -249,11 +250,18 @@ enum PlacesService {
                 let photos = min(Double(c.photos.count) / 6.0, 1)
                 let prior = 1 - Double(item.googleIdx) / total
                 let trust = (c.isVerified || c.licenseNumber != nil) ? 1.0 : 0.0
-                let score = 0.30 * proximity
+                // Small/independent operator: a typed handyman, or a highly-rated
+                // business with a small review footprint (the classic one-truck
+                // local). Chains can't fake this — their counts are in the
+                // hundreds. Counterweight to Google's prominence order and the
+                // review-count trust in qualityScore, which both favor bigness.
+                let smallBiz = isSmallOperator(c) ? 1.0 : 0.0
+                let score = 0.32 * proximity
                           + 0.25 * keyword
                           + 0.22 * quality
-                          + 0.10 * photos
-                          + 0.10 * prior
+                          + 0.05 * photos
+                          + 0.05 * prior
+                          + 0.08 * smallBiz
                           + 0.03 * trust
                 return (c, score)
             }
@@ -277,8 +285,19 @@ enum PlacesService {
         guard count > 0 else { return 0.3 }                // unknown → neutral-low
         let m = 4.3, C = 20.0                               // prior mean & strength
         let bayes = (C * m + rating * Double(count)) / (C + Double(count))   // 0…5
-        let trust = min(log10(Double(count) + 1) / 3.0, 1) // ~1000 reviews → 1
+        // Review-count trust saturates fast: ~50 reviews is as trustworthy a
+        // signal as 5,000 for ranking purposes. Beyond that, count must not buy
+        // rank — otherwise chains always outrank better-rated independents.
+        let trust = min(log10(Double(count) + 1) / log10(51.0), 1)
         return 0.7 * (bayes / 5.0) + 0.3 * trust
+    }
+
+    /// True for the small/independent operators the ranking should surface: a
+    /// Google-typed handyman, or a highly-rated business with a small review
+    /// footprint (the classic one-truck local).
+    private static func isSmallOperator(_ c: Contractor) -> Bool {
+        if c.placeTypes.contains("handyman") { return true }
+        return c.rating >= 4.5 && c.reviewCount > 0 && c.reviewCount <= 60
     }
 
     // MARK: - Raw request (backend proxy → Google fallback)
@@ -438,7 +457,12 @@ enum PlacesService {
         var usable = allPhotos.filter { min($0.widthPx ?? 0, $0.heightPx ?? 0) >= 800 }
         if usable.isEmpty { usable = allPhotos }
         let photos = usable.prefix(10).map { photoURL(for: $0.name) }
-        guard !photos.isEmpty else { return nil }
+        // No Google photos: keep the business only when it has a website — the
+        // list screen's website-photo fallback can still produce a real picture,
+        // and drops the business itself when the site yields nothing usable.
+        // Truly photo-less businesses stay out: a listed contractor must show a
+        // real picture.
+        if photos.isEmpty && place.websiteUri == nil { return nil }
 
         return Contractor(
             id: place.id,
@@ -456,7 +480,8 @@ enum PlacesService {
             contactEmail: place.contactEmail,
             licenseNumber: nil,
             isVerified: (place.businessStatus ?? "OPERATIONAL") == "OPERATIONAL",
-            reviews: reviews(from: place.reviews)
+            reviews: reviews(from: place.reviews),
+            placeTypes: place.types ?? []
         )
     }
 
@@ -525,6 +550,16 @@ enum PlacesService {
         else { return nil }
         let name = String(url[start.upperBound..<end.lowerBound])
         return name.isEmpty ? nil : name
+    }
+
+    /// Width embedded in a Places media URL (`maxWidthPx=`), nil when it isn't a
+    /// Places media URL. Lets the photo proxy request the matching rendition so
+    /// a 512px list tile doesn't warm (or load) the 1600px gallery rendition.
+    static func googlePhotoWidth(fromMediaURL url: String) -> Int? {
+        guard googlePhotoName(fromMediaURL: url) != nil,
+              let range = url.range(of: #"maxWidthPx=(\d+)"#, options: .regularExpression)
+        else { return nil }
+        return Int(url[range].dropFirst("maxWidthPx=".count))
     }
 
     /// Re-render an existing photo URL at a different width. Works on Places media

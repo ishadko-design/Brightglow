@@ -38,6 +38,10 @@ enum ContractorLoader {
     /// swipe-through view keep loading more contractors while content remains.
     /// `isAuto` forwards the caller's already-resolved vertical so a keyword-light
     /// auto query ("vinyl wrap") searches as a shop, not a home "contractor".
+    /// The search is always the trade query — plumber jobs search plumbers;
+    /// small-job handyman preference is expressed in ranking (the size-fit
+    /// factor) and pool widening (`fetchHandymanSupplement`), never by
+    /// rerouting the query.
     static func fetchLivePage(
         category: String,
         searchQuery: String,
@@ -54,6 +58,17 @@ enum ContractorLoader {
         } else {
             return await PlacesService.fetchPage(searchText: "home repair", near: coord, pageToken: pageToken)
         }
+    }
+
+    /// Handyman pool-widening for small jobs: one extra "handyman" query whose
+    /// top `count` results merge into the trade query's pool (deduped by place
+    /// id), so the size-fit factor has handymen to score. First page only —
+    /// pagination continues the trade query untouched. Fails open: an empty
+    /// supplement just means no handymen nearby.
+    static func fetchHandymanSupplement(near coord: CLLocationCoordinate2D, count: Int) async -> [Contractor] {
+        guard count > 0 else { return [] }
+        let page = await PlacesService.fetchPage(searchText: "handyman", near: coord, forceAuto: false)
+        return Array(page.contractors.prefix(count))
     }
 
     /// Built-in demo contractors — used only when no location can be resolved

@@ -202,7 +202,7 @@ struct SwipeScreen: View {
             totalCount = contractors.count
         }
         .navigationDestination(isPresented: $showQuote) {
-            QuoteRequestScreen(contractor: selectedContractor, requestSummary: headerTitle)
+            QuoteRequestScreen(contractor: selectedContractor)
         }
     }
 }

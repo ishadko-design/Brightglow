@@ -117,6 +117,11 @@ struct ContractorListScreen: View {
     @State private var scannedCount: [String: Int] = [:]
     /// Captured from the live fetch so the gallery can keep paginating this search.
     @State private var nextPageToken: String? = nil
+    /// How small the pricing engine sized this job against the trade's tiers.
+    /// `.belowFloor`/`.smallBand` both activate the small-job path (handyman
+    /// pool widening + the size-fit score factor); the distinction is kept for
+    /// analytics. `.standard` keeps today's behavior throughout.
+    @State private var jobSize: JobSize = .standard
     @State private var resolvedCoord: CLLocationCoordinate2D? = nil
     @State private var isLoading   = false
     @State private var estimate: PriceTier? = nil
@@ -153,6 +158,12 @@ struct ContractorListScreen: View {
     /// Contractors whose rows have actually scrolled into view — gates photo
     /// loading so an off-screen business costs nothing until the user reaches it.
     @State private var revealedIDs: Set<String> = []
+    /// Contractors whose list-strip photo order is frozen for this session. The
+    /// first ordering a row paints with is the one it keeps: late-arriving
+    /// refinements (rich vision tags, website portfolio photos) still update the
+    /// kept pool, the relevance score, and the cached/shared verdicts for future
+    /// visits — but they must not reshuffle photos the user is already looking at.
+    @State private var stripFrozenIDs: Set<String> = []
     /// Places loaded from a cached/shared verdict that wasn't rich-tagged yet —
     /// enriched once when their row is first revealed (consumed on use), so we
     /// pay the vision cost lazily per scrolled row, not for the whole list at once.
@@ -179,7 +190,7 @@ struct ContractorListScreen: View {
     /// business not present here draws a name monogram (see [[LogoService]]).
     @State private var logoByID: [String: URL] = [:]
     /// How many of the (relevance-ranked) contractors are shown. Starts at the
-    /// best-matching `initialVisibleCount`; "See more" reveals the rest.
+    /// five best-matching; scrolling reveals five more at a time.
     @State private var visibleLimit = initialVisibleCount
     /// True while "See more" is fetching another page from Places.
     @State private var isLoadingMore = false
@@ -268,14 +279,14 @@ struct ContractorListScreen: View {
         return synthetic.contains(typed.lowercased()) ? "" : typed
     }
 
-    /// What the user actually typed, if anything — pre-fills the quote-request text.
+    /// What the user actually typed, if anything.
     ///
     /// An auto GRID-CARD tap carries a synthetic Places query ("tire shop") in
-    /// `searchQuery`; that's routing input, not the user's words, so it must never
-    /// pre-fill the quote. But a typed/clarified auto request ("I need to replace
-    /// tires on the motorcycle") puts the user's ACTUAL words there — those SHOULD
-    /// carry through. So suppress ONLY the synthetic query, not every auto category
-    /// (the same distinction `pricingDescription` makes). Home is untouched.
+    /// `searchQuery`; that's routing input, not the user's words. But a
+    /// typed/clarified auto request ("I need to replace tires on the motorcycle")
+    /// puts the user's ACTUAL words there — those SHOULD carry through. So
+    /// suppress ONLY the synthetic query, not every auto category (the same
+    /// distinction `pricingDescription` makes). Home is untouched.
     private var typedQuery: String {
         let typed = searchQuery.trimmingCharacters(in: .whitespacesAndNewlines)
         guard let auto = autoCategory else { return typed }
@@ -300,12 +311,12 @@ struct ContractorListScreen: View {
         return effectiveSearchQuery.isEmpty ? category : effectiveSearchQuery
     }
 
-    /// Query used solely to decide the "Did similar job" badge — real user intent
+    /// Query used solely for the similar-job ranking signal — real user intent
     /// only: the chat's `photo_terms`, else a chat-refined search (home only, like
     /// `effectiveSearchQuery`), else what the user actually typed. Deliberately
     /// omits the bare-category / synthetic auto-category fallback that `orderQuery`
-    /// uses, so simply opening a category with no input shows no badge (empty →
-    /// `PhotoFilter.matchesQuery` returns false).
+    /// uses, so simply opening a category with no input contributes no job signal
+    /// (empty → every match strength scores 0).
     private var matchQuery: String {
         let terms = photoMatchTerms.trimmingCharacters(in: .whitespacesAndNewlines)
         if !terms.isEmpty { return terms }
@@ -314,41 +325,106 @@ struct ContractorListScreen: View {
         return typedQuery
     }
 
-    /// The rows actually rendered — ranked by match STRENGTH, strongest first,
-    /// then the top of the upstream list. A similar-job match outranks every
-    /// free-signal heuristic in PlacesService's ordering (north star: similar-job
-    /// > proximity > rating), but not all matches are equal: a business that both
-    /// shows the work AND is praised for it should beat one whose only hit is a
-    /// review mention (its photos may not match the ask). So instead of one flat
-    /// "similar" group, businesses sort by `matchRank`, each tier keeping its
-    /// upstream order. Proof arrives progressively — cached/shared verdicts at
-    /// load, then per row as lazy screening completes — so the order refines over
-    /// time (a review-only match climbs to the top tier once its photo is screened
-    /// and confirmed).
+    /// The rows actually rendered — ranked by composite relevance, strongest
+    /// first. Only the five best show initially; scrolling reveals five more at a
+    /// time (`showMore`), so the user meets the strongest candidates first and
+    /// capacity (photo screening, website portfolios) is spent only on rows the
+    /// user actually reaches. Scores refine as photo screening completes — a
+    /// photo-confirmed match climbs without any re-fetch.
     private var visibleContractors: [Contractor] {
-        let ranked = contractors.enumerated()
-            .map { (offset: $0.offset, contractor: $0.element, rank: matchRank($0.element)) }
-            .sorted { $0.rank != $1.rank ? $0.rank > $1.rank : $0.offset < $1.offset }
-            .map(\.contractor)
-        return Array(ranked.prefix(visibleLimit))
+        let total = contractors.count
+        let scored = contractors.enumerated()
+            .map { (offset: $0.offset, contractor: $0.element,
+                    score: relevanceScore($0.element, upstreamIndex: $0.offset, upstreamCount: total)) }
+        // Single score sort — trade match, size fit, and upstream quality
+        // compete in one number, so a 5-star plumber whose reviews name the job
+        // can still outrank a mediocre handyman on a small plumbing job.
+        // Fairness means the same factors for every business on every job: no
+        // tiers, no pre-decided winners.
+        let ranked = scored.sorted {
+            if $0.score != $1.score { return $0.score > $1.score }
+            return $0.offset < $1.offset
+        }
+        return Array(ranked.map(\.contractor).prefix(visibleLimit))
     }
 
-    /// Match strength driving promotion. Two independent proofs, weighted so the
-    /// *work being visible* outranks words about it: +2 for a screened work photo
-    /// of the job, +1 for a review naming it. Both → 3 (leads), photo-only → 2,
-    /// review-only → 1, neither → 0. The review path needs no photo screening, so
-    /// a matching specialist deep in the list still surfaces without our paying to
-    /// screen everything down to it — then rises to the top tier once its row is
-    /// revealed and the photo confirms.
-    private func matchRank(_ c: Contractor) -> Int {
-        let photo = PhotoFilter.matchesQuery(keptPhotos[c.id] ?? [], query: matchQuery) ? 2 : 0
-        let review = PhotoFilter.reviewsMentionJob(c.reviews.map(\.text), query: matchQuery) ? 1 : 0
-        return photo + review
+    /// Licensed-work check for this job, driven by the OTA config. Electrical
+    /// is always licensed-only (life safety). Plumbing/HVAC stay licensed-only
+    /// when the job description names licensed-level work (gas, furnace,
+    /// refrigerant…); without those signals a small job is handyman-appropriate.
+    private var isLicensedSpecialty: Bool {
+        let trade = Category(rawValue: category)
+            ?? Category.matching(query: effectiveSearchQuery).first
+        guard let trade else { return false }
+        let rule = RankingConfigStore.current.licensed[trade.rawValue.lowercased()]
+        if rule?.always == true { return true }
+        guard let signals = rule?.signals, !signals.isEmpty else { return false }
+        return jobMentions(signals)
     }
 
-    /// Single source of truth for the similar-job signal — drives the row's
-    /// "Did similar job" badge. Any proof (photo or review) earns it.
-    private func didSimilarJob(_ c: Contractor) -> Bool { matchRank(c) > 0 }
+    /// Whole-phrase match of any signal against the job description — " gas "
+    /// won't match "gasket".
+    private func jobMentions(_ signals: [String]) -> Bool {
+        let text = " " + pricingDescription.lowercased() + " "
+        return signals.contains { text.contains(" " + $0.lowercased() + " ") }
+    }
+
+    /// True when this search takes the small-job path: the pricing engine sized
+    /// the job at or below the trade's smallest tier and the trade isn't
+    /// licensed for this job. Drives the handyman supplement in `load()` and
+    /// the size-fit factor in `relevanceScore` — one predicate so the candidate
+    /// pool and the ordering never disagree about who the job is for.
+    private var smallJobActive: Bool {
+        RankingConfigStore.current.smallJob.enabled && jobSize != .standard && !isLicensedSpecialty
+    }
+
+    /// Composite relevance score — the single number that decides which five
+    /// lead. Job-specific proof first, upstream quality order as the base: a
+    /// review naming the searched work and a screened work photo of it outrank
+    /// every free-signal heuristic, because they're the only signals that say
+    /// THIS business does THIS job. The upstream Places order (proximity,
+    /// rating quality, small-operator boost — see PlacesService.rankByRelevance)
+    /// carries the rest, so a thin signal set still sorts sensibly. The
+    /// size-fit factor scores whether the business is the right size for this
+    /// job's price — a handyman for a small job — as one competing factor, not
+    /// a pre-decided tier. All four weights are OTA-tunable (`ranking_config`).
+    private func relevanceScore(_ c: Contractor, upstreamIndex: Int, upstreamCount: Int) -> Double {
+        let w = RankingConfigStore.current.weights
+        let reviews = c.reviews.map(\.text)
+        let review = PhotoFilter.reviewMatchStrength(reviews, query: matchQuery)
+        let photo = PhotoFilter.photoMatchStrength(keptPhotos[c.id] ?? [], query: matchQuery, category: category)
+        let upstream = upstreamCount > 1 ? 1 - Double(upstreamIndex) / Double(upstreamCount - 1) : 1
+        let sizeFit = smallJobActive && takesSmallJobs(c) ? 1.0 : 0.0
+        let score = w.reviewMatch * review + w.photoMatch * photo
+            + w.sizeFit * sizeFit + w.upstream * upstream
+        return min(score, 1)
+    }
+
+    /// Single source of truth for the "Takes small jobs" cue: true when the
+    /// business's own profile or its reviewers say it takes on small work.
+    /// One-directional — absence draws no cue, never a negative badge.
+    private func takesSmallJobs(_ c: Contractor) -> Bool {
+        // A handyman IS the small-jobs business model — no review-mining needed.
+        if c.placeTypes.contains("handyman") { return true }
+        if c.name.localizedCaseInsensitiveContains("handyman") { return true }
+        let texts = c.reviews.map(\.text).map { " \($0.lowercased()) " }
+        guard !texts.isEmpty else { return false }
+        // Explicit "no job too small"-style claims: one hit is enough.
+        let strong = ["no job too small", "no job is too small", "small jobs welcome",
+                      "any size job", "any size project"]
+        if strong.contains(where: { s in texts.contains(where: { $0.contains(s) }) }) { return true }
+        // Explicit refusals veto everything — never claim it when a reviewer
+        // says the business turned small work away.
+        let negative = ["too small", "wouldn't take", "would not take",
+                        "only large", "only big", "large jobs only",
+                        "won't do small", "wouldn't do small"]
+        if negative.contains(where: { s in texts.contains(where: { $0.contains(s) }) }) { return false }
+        // Weaker small-work mentions: need two independent hits.
+        let positive = ["small job", "small jobs", "minor repair", "quick fix",
+                        "tiny job", "small repair", "little job"]
+        let hits = texts.reduce(0) { total, text in total + positive.filter { p in text.contains(p) }.count }
+        return hits >= 2
+    }
 
     /// The customer review that best describes the searched job, shown on the row
     /// as the "why" behind a match. Nil when no review mentions it (or on a bare
@@ -402,10 +478,6 @@ struct ContractorListScreen: View {
                 // The effective (auto/moto) query so the gallery paginates the same
                 // search the user is viewing.
                 searchQuery: effectiveSearchQuery,
-                // The user's real words (synthetic auto query already stripped), so
-                // the gallery's own "Request quote" pre-fills the description — it
-                // can't re-derive this from the effective query above.
-                requestSummary: typedQuery,
                 aiResult: aiResult,
                 presetCoordinate: resolvedCoord ?? presetCoordinate,
                 preloadedContractors: contractors,
@@ -427,10 +499,9 @@ struct ContractorListScreen: View {
             // whose row CTA was tapped.
             QuoteRequestScreen(
                 contractor: contractors.first { $0.id == id },
-                requestSummary: typedQuery,
                 initialImages: attachedImages,
-                clarifyTranscript: clarifyTranscript,
-                vehicleNote: quoteVehicleNote
+                vehicleNote: quoteVehicleNote,
+                clarifyTranscript: clarifyTranscript
             )
         }
         // Custom bottom overlay (same as the gallery) so the card is a flush,
@@ -483,11 +554,7 @@ struct ContractorListScreen: View {
                             // the ~4 businesses in view, then more as the user scrolls.
                             photos: revealedIDs.contains(contractor.id) ? screenedByID[contractor.id] : nil,
                             licenseNo: licenseByID[contractor.id]?.licenseNo,
-                            // "Did similar job": the business has a screened work
-                            // photo matching this request (design brief §9). Uses
-                            // `matchQuery` (real user intent only), so a bare category
-                            // browse with no input never shows the badge.
-                            didSimilarJob: didSimilarJob(contractor),
+                            takesSmallJobs: takesSmallJobs(contractor),
                             // The customer's own words about this job — shown as
                             // the "why" when a review names the searched work.
                             matchingReview: matchingReview(contractor),
@@ -741,7 +808,7 @@ struct ContractorListScreen: View {
         goGallery = true
     }
 
-    /// Reveal everything already fetched; if the limit has caught up with the
+    /// Reveal the next five already fetched; if the limit has caught up with the
     /// fetched set, pull the next Places page instead. Photos still load lazily
     /// per row, so revealing rows costs nothing until the user scrolls to them.
     @MainActor
@@ -749,7 +816,7 @@ struct ContractorListScreen: View {
         guard !isLoadingMore else { return }
 
         if contractors.count > visibleLimit {
-            withAnimation(.easeInOut(duration: 0.2)) { visibleLimit = contractors.count }
+            withAnimation(.easeInOut(duration: 0.2)) { visibleLimit += 5 }
             return
         }
 
@@ -766,12 +833,53 @@ struct ContractorListScreen: View {
         guard !fresh.isEmpty else { return }
         withAnimation(.easeInOut(duration: 0.2)) {
             contractors.append(contentsOf: fresh)
-            visibleLimit = contractors.count
+            visibleLimit += 5
         }
         await loadLicenses(for: fresh)
     }
 
     // ── Data loading + progressive photo screening ────────────────────────────
+
+    /// How small a job is relative to its trade's price tiers.
+    private enum JobSize {
+        /// A normal job — today's behavior throughout.
+        case standard
+        /// Inside the trade's smallest tier band (e.g. a $256 trim job in
+        /// carpentry's $150–$400 "Small repair"): handyman-appropriate, so the
+        /// pool widens with handymen and the size-fit factor boosts them —
+        /// trade shops stay in the list as fallback.
+        case smallBand
+        /// Below the trade's smallest tier floor: no trade shop will mobilize,
+        /// so handymen get the same pool widening + size-fit boost; trade
+        /// shops remain only as fallback.
+        case belowFloor
+    }
+
+    /// Sizes the job against the trade's price tiers. `.belowFloor` (typical
+    /// under the smallest tier's floor) and `.smallBand` (typical inside the
+    /// smallest tier, e.g. $256 trim in carpentry's $150–$400 "Small repair")
+    /// both activate the small-job path — handyman pool widening in `load()`
+    /// plus the size-fit factor in `relevanceScore` — for non-licensed trades.
+    /// The search itself is always the trade query; ranking decides who leads.
+    /// Fails open — no estimate, no resolvable trade, an unpriceable category, or
+    /// an auto job keeps today's trade search. The estimate uses the header's
+    /// exact inputs, so the clarify chat's prefetch usually serves it warm — no
+    /// added latency.
+    private func smallJobLevel(near coord: CLLocationCoordinate2D, isAuto: Bool) async -> JobSize {
+        guard !isAuto, priceable else { return .standard }
+        let trade = Category(rawValue: category)
+            ?? Category.matching(query: effectiveSearchQuery).first
+        guard let smallest = trade?.priceTiers.min(by: { $0.min < $1.min }) else { return .standard }
+        guard let tier = await ContractorLoader.estimate(
+            category: category, searchQuery: pricingDescription, near: coord,
+            photoDetails: photoDetails, vehicle: nil, fast: false)
+        else { return .standard }
+        let typical = tier.typical ?? tier.min
+        if typical < smallest.min { return .belowFloor }
+        if typical <= smallest.max { return .smallBand }
+        return .standard
+    }
+
     @MainActor
     private func load() async {
         guard contractors.isEmpty else { return }
@@ -783,8 +891,30 @@ struct ContractorListScreen: View {
         var query = effectiveSearchQuery
         let isAuto = allowsVehiclePhotos(query)
         if let coord = resolved {
+            // The estimate reuses the header's inputs, so the clarify chat's
+            // prefetch usually serves it warm — no added latency. Fails open.
+            // Refresh the OTA ranking config in the background — never blocks the
+            // search; new weights apply to scoring live.
+            Task { await RankingConfigStore.refresh() }
+            jobSize = await smallJobLevel(near: coord, isAuto: isAuto)
+            // The search is always the trade query — plumber jobs search
+            // plumbers. Handyman preference is expressed in ranking (the
+            // size-fit factor), never by rerouting the query.
             var page = await ContractorLoader.fetchLivePage(
                 category: category, searchQuery: query, near: coord, isAuto: isAuto)
+            // Small non-licensed job: widen the pool with handymen so the
+            // size-fit factor has someone to score. Merged deduped, first page
+            // only — pagination continues the trade query untouched.
+            if smallJobActive {
+                let extra = await ContractorLoader.fetchHandymanSupplement(
+                    near: coord, count: RankingConfigStore.current.smallJob.supplementCount)
+                let existing = Set(page.contractors.map(\.id))
+                let fresh = extra.filter { !existing.contains($0.id) }
+                if !fresh.isEmpty {
+                    page = PlacesService.Page(contractors: page.contractors + fresh,
+                                              nextPageToken: page.nextPageToken)
+                }
+            }
             // Zero-result safeguard: a chat-refined query that finds nothing
             // falls back to the user's raw query, so narrowing the search can
             // never blank the results.
@@ -801,9 +931,13 @@ struct ContractorListScreen: View {
                 "category": category,
                 "count": contractors.count,
                 "is_auto": isAuto,
+                "small_job_active": smallJobActive,
                 // Per-business impressions for the list surface: the ids shown
                 // (capped so the payload stays small). Tallied server-side.
                 "place_ids": Array(contractors.prefix(25).map { $0.id }),
+                // `names` runs parallel to `place_ids` so the dashboard can label
+                // each business instead of showing a raw place_id.
+                "names": Array(contractors.prefix(25).map { $0.name }),
             ])
             // Reuse verdicts from a previous launch so businesses screened before
             // show their photos immediately without re-downloading the pool.
@@ -813,8 +947,8 @@ struct ContractorListScreen: View {
                 if !v.kept.isEmpty && PhotoFilter.hasWorkPhoto(v.kept) {
                     // Cached work photos → show them, ordered by the current query.
                     keptPhotos[c.id] = v.kept
-                    screenedByID[c.id] = PhotoFilter.order(v.kept, query: orderQuery,
-                                                           capPremises: stripMaxPremises, vehicle: photoVehicle)
+                    setStripPhotos(c.id, PhotoFilter.order(v.kept, query: orderQuery, category: category,
+                                                           capPremises: stripMaxPremises, vehicle: photoVehicle))
                     scannedCount[c.id] = v.scanned
                     // A verdict cached before rich tagging (or by an older build)
                     // orders only on generic labels — enrich it when its row shows.
@@ -837,8 +971,8 @@ struct ContractorListScreen: View {
                 scannedCount[id] = v.scanned
                 if !v.kept.isEmpty {
                     keptPhotos[id] = v.kept
-                    screenedByID[id] = PhotoFilter.order(v.kept, query: orderQuery,
-                                                         capPremises: stripMaxPremises, vehicle: photoVehicle)
+                    setStripPhotos(id, PhotoFilter.order(v.kept, query: orderQuery, category: category,
+                                                         capPremises: stripMaxPremises, vehicle: photoVehicle))
                     if !v.enriched { needsEnrich.insert(id) }
                 }
                 ScreeningStore.shared.save(id, allowVehicles: allowVehicles,
@@ -853,8 +987,13 @@ struct ContractorListScreen: View {
             // Drop businesses confirmed to have no work photos in their whole pool,
             // so they don't reappear as blank rows on a later visit. A business with
             // its own uploaded photos is exempt — it has something real to show.
+            // So is a business with no Google photos but a website: its row reveal
+            // pulls the site's portfolio, which drops the business itself when
+            // nothing usable comes back. (Businesses WITH Google photos keep
+            // today's behavior exactly.)
             contractors.removeAll { c in
                 ownerPhotosByID[c.id] == nil
+                    && (c.website == nil || !c.photos.isEmpty)
                     && (scannedCount[c.id] ?? 0) >= c.photos.count
                     && (screenedByID[c.id]?.isEmpty ?? true)
             }
@@ -928,15 +1067,21 @@ struct ContractorListScreen: View {
         guard !websiteFetched.contains(contractor.id) else { return }
         websiteFetched.insert(contractor.id)
         let urls = await BusinessPhotoService.fetch(placeId: contractor.id, website: contractor.website)
-        guard !urls.isEmpty, contractors.contains(where: { $0.id == contractor.id }) else { return }
+        guard !urls.isEmpty, contractors.contains(where: { $0.id == contractor.id }) else {
+            if urls.isEmpty { dropIfTrulyPhotoless(contractor) }
+            return
+        }
 
         let allowVehicles = allowsVehiclePhotos(effectiveSearchQuery)
         let screened = await PhotoFilter.screen(urls, allowVehicles: allowVehicles,
                                                 limit: urls.count, scanLimit: urls.count)
-        guard !screened.isEmpty, contractors.contains(where: { $0.id == contractor.id }) else { return }
+        guard !screened.isEmpty, contractors.contains(where: { $0.id == contractor.id }) else {
+            if screened.isEmpty { dropIfTrulyPhotoless(contractor) }
+            return
+        }
 
-        // Add the site's work photos to the kept pool (so `matchRank`/"did similar
-        // job" and the ordering see them), de-duped against what's already there.
+        // Add the site's work photos to the kept pool (so the relevance score
+        // and the ordering see them), de-duped against what's already there.
         let existing = keptPhotos[contractor.id] ?? []
         let have = Set(existing.map(\.url))
         let fresh = screened.filter { !have.contains($0.url) }
@@ -944,8 +1089,8 @@ struct ContractorListScreen: View {
         let merged = fresh + existing
         keptPhotos[contractor.id] = merged
         revealedIDs.insert(contractor.id)
-        screenedByID[contractor.id] = withOwnerLead(contractor.id,
-            PhotoFilter.order(merged, query: orderQuery, capPremises: stripMaxPremises, vehicle: photoVehicle))
+        setStripPhotos(contractor.id, withOwnerLead(contractor.id,
+            PhotoFilter.order(merged, query: orderQuery, category: category, capPremises: stripMaxPremises, vehicle: photoVehicle)))
         // Rich-tag the new photos so specific queries ("bumper", "hardwood") rank them.
         enrichInBackground(contractor.id, kept: merged,
                            scanned: scannedCount[contractor.id] ?? merged.count,
@@ -978,8 +1123,26 @@ struct ContractorListScreen: View {
         for (id, urls) in map {
             ownerPhotosByID[id] = urls
             revealedIDs.insert(id)
-            screenedByID[id] = withOwnerLead(id, screenedByID[id] ?? [])
+            setStripPhotos(id, withOwnerLead(id, screenedByID[id] ?? []))
         }
+    }
+
+    /// Write-once strip assignment — the fix for photos reshuffling while scrolling.
+    /// Before a row is revealed, ordering writes flow freely (cached verdict at
+    /// load, then the reveal-time screen). Once the row has painted, the first
+    /// post-reveal write wins and freezes the strip; later refinements (rich
+    /// vision tags, website portfolio photos arriving late) are dropped for
+    /// display purposes. Those refinements still update `keptPhotos` and the
+    /// cached/shared verdicts at their own call sites, so the gallery, the
+    /// relevance score, and future visits all benefit — only the visible strip
+    /// stays put. Runs on MainActor with the other strip writes: no races.
+    @MainActor
+    private func setStripPhotos(_ id: String, _ urls: [String]) {
+        if revealedIDs.contains(id) {
+            guard !stripFrozenIDs.contains(id) else { return }
+            stripFrozenIDs.insert(id)
+        }
+        screenedByID[id] = urls
     }
 
     /// Prepend a business's owner-uploaded photos ahead of `list`, de-duped. The
@@ -1011,9 +1174,11 @@ struct ContractorListScreen: View {
         ownerPhotosByID = [:]
         scannedCount = [:]
         revealedIDs = []
+        stripFrozenIDs = []
         needsEnrich = []
         websiteFetched = []
         nextPageToken = nil
+        jobSize = .standard
         estimate = nil
         estimating = false
         licenseByID = [:]
@@ -1037,6 +1202,20 @@ struct ContractorListScreen: View {
                                    kept: keptPhotos[id] ?? [], scanned: scannedCount[id] ?? 0)
     }
 
+    /// Delayed drop for businesses the mapping gate let through photo-less on the
+    /// strength of their website: when the site yields no usable picture and
+    /// there is no other photo source (no Google photos, no owner uploads), the
+    /// business leaves the list — a listed contractor must show a real picture.
+    /// No-op for businesses that have any other picture source or already left.
+    @MainActor
+    private func dropIfTrulyPhotoless(_ c: Contractor) {
+        guard contractors.contains(where: { $0.id == c.id }),
+              c.photos.isEmpty,
+              ownerPhotosByID[c.id] == nil
+        else { return }
+        dropPhotolessBusiness(c.id)
+    }
+
     /// Every photo for this business failed to load — drop it from the list so a
     /// listed contractor always shows a real picture. The verdict is reset to
     /// "unprimed" (not "no work photos"), so a later fresh screen — a relaunch or
@@ -1048,6 +1227,8 @@ struct ContractorListScreen: View {
         screenedByID[id] = nil
         keptPhotos[id] = nil
         scannedCount[id] = nil
+        stripFrozenIDs.remove(id)
+        revealedIDs.remove(id)
         let allowVehicles = allowsVehiclePhotos(effectiveSearchQuery)
         ScreeningStore.shared.save(id, allowVehicles: allowVehicles, kept: [], scanned: 0)
     }
@@ -1095,20 +1276,31 @@ struct ContractorListScreen: View {
             if ownerPhotosByID[c.id] != nil {
                 // No Google work photos, but the business uploaded its own — show
                 // those instead of dropping the claimed business.
-                screenedByID[c.id] = withOwnerLead(c.id, [])
+                setStripPhotos(c.id, withOwnerLead(c.id, []))
                 revealedIDs.insert(c.id)
+            } else if c.photos.isEmpty && c.website != nil {
+                // No Google photos at all, but a website is on file: don't drop
+                // yet — the website-photo merge fired on this same reveal may
+                // still supply portfolio shots, and removes the business itself
+                // when the site yields nothing usable.
             } else {
                 // Whole pool was non-work imagery → drop the business rather than
                 // show a blank strip (mirrors the gallery).
                 contractors.removeAll { $0.id == c.id }
+                stripFrozenIDs.remove(c.id)
+                revealedIDs.remove(c.id)
             }
         } else {
             keptPhotos[c.id] = kept
             // Reveal once, ordered so query-matching photos (e.g. the kitchen) lead;
-            // any owner-uploaded photos stay pinned ahead of them.
-            screenedByID[c.id] = withOwnerLead(c.id, PhotoFilter.order(kept, query: orderQuery,
-                                                   capPremises: stripMaxPremises, vehicle: photoVehicle))
-            // Then sharpen the order with rich vision tags in the background.
+            // any owner-uploaded photos stay pinned ahead of them. This first
+            // post-reveal write freezes the strip — later refinements must not
+            // reshuffle it (see setStripPhotos).
+            setStripPhotos(c.id, withOwnerLead(c.id, PhotoFilter.order(kept, query: orderQuery, category: category,
+                                                   capPremises: stripMaxPremises, vehicle: photoVehicle)))
+            // Then sharpen the kept pool (gallery, relevance, shared verdicts)
+            // with rich vision tags in the background — the visible strip keeps
+            // the order it already painted with.
             enrichInBackground(c.id, kept: kept, scanned: scanned, allowVehicles: allowVehicles)
         }
     }
@@ -1145,8 +1337,10 @@ struct ContractorListScreen: View {
             // either way mark the verdict enriched so we don't re-tag every visit.
             if enriched != kept {
                 keptPhotos[id] = enriched
-                screenedByID[id] = withOwnerLead(id, PhotoFilter.order(enriched, query: orderQuery,
-                                                     capPremises: stripMaxPremises, vehicle: photoVehicle))
+                // Display write goes through the freeze: if the strip already
+                // painted, the enriched order only reaches the stored verdicts.
+                setStripPhotos(id, withOwnerLead(id, PhotoFilter.order(enriched, query: orderQuery, category: category,
+                                                     capPremises: stripMaxPremises, vehicle: photoVehicle)))
             }
             ScreeningStore.shared.save(id, allowVehicles: allowVehicles, kept: enriched,
                                        scanned: scanned, enriched: true)
@@ -1159,11 +1353,11 @@ struct ContractorListScreen: View {
 /// How many of the best-matching businesses the list shows before "See more".
 private let initialVisibleCount = 5
 
-/// How far down the ranked list to eagerly screen at load so the similar-job
-/// promotion is settled for the visible window before the user scrolls. A few
-/// beyond `initialVisibleCount` so a match just below the fold can still be
-/// pulled up. Screening below this stays lazy (per-row on reveal).
-private let eagerScreenDepth = 8
+/// How far down the ranked list to eagerly screen at load so the relevance
+/// signals are settled for the visible window before the user scrolls.
+/// Matches `initialVisibleCount` — screening below this stays lazy (per-row on
+/// reveal), which is what keeps the 5-at-a-time paging cheap.
+private let eagerScreenDepth = 5
 
 /// Screening budget per row: scan `stripBatchScan` source photos at a time,
 /// deeper into the pool only if early shots are rejected, keeping up to
@@ -1184,7 +1378,8 @@ private let stripInitialFill = 4
 // MARK: - ContractorListRow
 // One contractor (Figma 908:2558): a name + "Get quote" header row; then (12pt
 // below) a left-aligned metadata line — a quiet single-star rating, review link,
-// and the "Licensed" / "Did similar job" cues as one inline dot-separated text
+// and the "Licensed" / "Takes small jobs" cues as one inline
+// dot-separated text
 // run (no pills); then a fixed 234pt photo mosaic —
 // one large left tile and two stacked right tiles — showing up to 3 of the
 // business's work photos, ordered so the ones most related to the user's request
@@ -1204,10 +1399,10 @@ private struct ContractorListRow: View {
     /// concrete trust signal, versus a bare "Licensed" word.
     let licenseNo: String?
     private var isLicensed: Bool { licenseNo != nil }
-    /// True when this business has a screened work photo matching the request —
-    /// draws the "Did similar job" proof-of-work tag. Absence draws no tag (the
-    /// signal is one-directional, like the licence badge).
-    let didSimilarJob: Bool
+    /// True when the business's profile or reviews say it takes small jobs —
+    /// draws the "Takes small jobs" cue. One-directional: absence draws nothing,
+    /// never a negative badge.
+    let takesSmallJobs: Bool
     /// A customer review naming the searched job, or nil — shown as a quoted
     /// one-liner under the metadata so a match reads in the customer's own words.
     let matchingReview: String?
@@ -1314,11 +1509,11 @@ private struct ContractorListRow: View {
                 .frame(height: 32)
 
                 // Figma 908:2558: metadata is ONE quiet inline line — a small gold
-                // star, then "4.7 • 31 reviews • Licensed • Did similar job", all
+                // star, then "4.7 • 31 reviews • Licensed • Takes small jobs", all
                 // bodySmall at 50% white. No pills. Only "31 reviews" is underlined
                 // (the tappable link to the Google reviews). "Licensed" appears only
                 // against a verified ACTIVE state licence (its absence says nothing);
-                // "Did similar job" only when a screened work photo matches the request.
+                // "Takes small jobs" when the profile or reviews say small work is welcome.
                 HStack(alignment: .center, spacing: 8) {
                     if contractor.reviewCount > 0 {
                         Image(systemName: "star.fill")
@@ -1339,9 +1534,9 @@ private struct ContractorListRow: View {
                         if isLicensed {
                             Text(contractor.reviewCount > 0 ? " • Licensed" : "Licensed")
                         }
-                        if didSimilarJob {
+                        if takesSmallJobs {
                             Text(contractor.reviewCount > 0 || isLicensed
-                                 ? " • Did similar job" : "Did similar job")
+                                 ? " • Takes small jobs" : "Takes small jobs")
                         }
                     }
                     .font(.bodySmall)

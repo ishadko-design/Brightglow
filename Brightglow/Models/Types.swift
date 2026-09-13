@@ -183,6 +183,10 @@ struct Contractor: Codable, Identifiable {
     let isVerified: Bool
     /// Real Google reviews (populated on the live path; empty for the snapshot).
     var reviews: [Review] = []
+    /// Google Places `types` for this business (e.g. "handyman",
+    /// "general_contractor"). Powers the small-operator ranking boost; defaults
+    /// to [] so older cached payloads still decode.
+    var placeTypes: [String] = []
 }
 
 struct AIResult {

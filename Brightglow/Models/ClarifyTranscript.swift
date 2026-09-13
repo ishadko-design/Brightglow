@@ -45,33 +45,30 @@ struct ClarifyTranscript: Equatable {
     /// Nothing was clarified — only the original request (or nothing) is present.
     var isEmpty: Bool { pairs.isEmpty }
 
-    /// The description to send to the business: the user's own words, then the
-    /// AI's readable overview of the clarified job as a secondary description
-    /// under an "Additional details (AI-generated)" label.
+    /// The description to send to the business: the chat's readable overview of
+    /// the clarified job when it produced one (a single paragraph that already
+    /// folds the request together with the clarified answers), otherwise the
+    /// raw conversation — the opening request plus the Q&A pairs as details.
+    /// Either way it's the user's own stated facts, never invented copy.
     ///
-    /// The overview is a single comprehensive paragraph that already folds in the
-    /// clarifying Q&A — the raw questions and answers are never shown. When the
-    /// chat produced no overview (skipped, failed, or an older payload), there's
-    /// nothing trustworthy to add, so just `base` is returned.
+    /// The overview REPLACES the base line rather than being appended to it.
+    /// Appending both is what made the message repeat itself (the request and
+    /// the size stated twice, e.g. "Repaint house 1070sq ft" then "…repainted,
+    /// about 1070 sq ft"). One clean description. The raw Q&A fallback is
+    /// genuinely additive (different content, not a restatement), so there
+    /// appending is correct.
     func augmentedDescription(base: String) -> String {
         let trimmedBase = base.trimmingCharacters(in: .whitespacesAndNewlines)
         let overview = summary.trimmingCharacters(in: .whitespacesAndNewlines)
-        let block: String
-        // "More details:" (not "AI-generated") — the customer sends this message
-        // on their own behalf, and these are the details THEY gave via the quick
-        // clarifying questions, so labelling it as the customer's own extra detail
-        // is both cleaner and accurate.
-        if !overview.isEmpty {
-            block = "Details:\n\(overview)"
-        } else if !pairs.isEmpty {
-            // No overview paragraph was produced — fall back to the raw Q&A the
-            // user actually saw on the review screen, so the message never drops
-            // the clarifying details.
-            let qa = pairs.map { "• \($0.question)\n  \($0.answer)" }.joined(separator: "\n")
-            block = "Details:\n\(qa)"
-        } else {
-            return trimmedBase
-        }
-        return trimmedBase.isEmpty ? block : "\(trimmedBase)\n\n\(block)"
+        if !overview.isEmpty { return overview }
+        // No overview (skipped, failed, or an older payload) — assemble from the
+        // raw conversation. The opening user turn is the request itself; pairs
+        // exclude it, so it has to be picked up separately here.
+        let opening = turns.first(where: { $0.role == "user" })?
+            .content.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        let head = trimmedBase.isEmpty ? opening : trimmedBase
+        if pairs.isEmpty { return head }
+        let qa = pairs.map { "• \($0.question)\n  \($0.answer)" }.joined(separator: "\n")
+        return head.isEmpty ? qa : "\(head)\n\nDetails:\n\(qa)"
     }
 }

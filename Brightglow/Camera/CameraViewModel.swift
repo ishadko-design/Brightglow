@@ -154,6 +154,12 @@ class CameraViewModel: NSObject, ObservableObject {
     }
 
     func capturePhoto() {
+        // Guard: capturing with no active, enabled video connection throws an
+        // NSInvalidArgumentException that crashes the app. This is ALWAYS the case
+        // in the Simulator (no camera hardware), and can briefly happen on a real
+        // device before the session is fully running — so bail cleanly instead.
+        guard let connection = output.connection(with: .video),
+              connection.isActive, connection.isEnabled else { return }
         let settings = AVCapturePhotoSettings()
         // Max quality (engages Deep Fusion/Smart HDR when the scene allows) and
         // full-resolution capture, matching what the output was configured for.
@@ -244,6 +250,14 @@ class CameraViewModel: NSObject, ObservableObject {
         Task {
             let s = await ImageClassifier.suggestTrades(annotated, regionInView: rect, viewSize: viewSize)
             await MainActor.run {
+                // ALWAYS signal completion (bump the generation) so the draw-canvas
+                // spinner clears — even when the read came back empty. Otherwise a
+                // circled region that resolves to nothing (the server now returns
+                // "unsure"/low-recognizability far more often) leaves the spinner
+                // spinning forever with no text. The adopt-guard below still protects
+                // the useful whole-frame guess; DrawModeView keeps existing field text
+                // when the new guess is empty.
+                defer { self.classifyGeneration &+= 1 }
                 // Only adopt a region read that actually resolved to something — a
                 // blank/too-small crop must not wipe the useful whole-frame guess.
                 guard s.description != nil || s.confident != nil || !s.matches.isEmpty else { return }
@@ -252,7 +266,6 @@ class CameraViewModel: NSObject, ObservableObject {
                 self.detectedDetails = s.details
                 self.detectedDescription = s.description
                 self.detectedVehicle = s.vehicle
-                self.classifyGeneration &+= 1
             }
         }
     }

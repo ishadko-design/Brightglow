@@ -7,6 +7,19 @@ import UIKit
 struct ScreenedPhoto: Codable, Hashable {
     let url: String
     let labels: [String]
+    /// 64-bit perceptual hash (pHash) of the screening rendition. Used to drop
+    /// near-duplicate shots ACROSS sources at display time — the Vision-feature
+    /// dedup inside `screen()` only sees a single call's pool, so a website photo
+    /// that duplicates a Google one (or a cached-then-re-added shot) slipped
+    /// through before. Optional: photos from a shared verdict or an older cache
+    /// carry none, and dedup falls back to URL equality for those.
+    var phash: UInt64?
+
+    init(url: String, labels: [String], phash: UInt64? = nil) {
+        self.url = url
+        self.labels = labels
+        self.phash = phash
+    }
 }
 
 /// Screens contractor gallery photos so the card stack shows actual work
@@ -55,6 +68,11 @@ enum PhotoFilter {
         // signage / documents
         "logo", "text", "document", "screenshot", "poster", "sign",
         "signage", "menu", "advertisement", "label",
+        // illustrations / clip-art / cartoons — a drawn mascot is not a work photo
+        // (the pixel-based `isFlatGraphic` gate is the primary catch; these tokens
+        // back it up when Vision confidently recognises the drawing).
+        "illustration", "drawing", "sketch", "cartoon", "comic", "doodle",
+        "caricature", "animation", "graphic",
         // food / animals (clearly off-topic)
         "food", "meal", "drink", "fruit", "animal", "pet", "dog", "cat",
     ]
@@ -108,6 +126,9 @@ enum PhotoFilter {
         let isVehicle: Bool
         let labels: [String]
         var featurePrint: VNFeaturePrintObservation? = nil
+        /// Perceptual hash carried onto the kept `ScreenedPhoto` for cross-source
+        /// dedup (see `ScreenedPhoto.phash` / `deduped`).
+        var phash: UInt64? = nil
     }
     private static let reject = Decision(keep: false, isVehicle: false, labels: [])
 
@@ -116,6 +137,12 @@ enum PhotoFilter {
     /// apart); smaller distance = more alike. Tuned to catch obvious dupes without
     /// merging genuinely different angles of the same job.
     private static let duplicateDistance: Float = 0.32
+
+    /// Hamming distance (out of 64 bits) below which two pHashes read as the same
+    /// shot. Used for cross-source dedup, where the Vision feature print isn't
+    /// available (a cached/website photo). Conservative — catches re-uploads and
+    /// mild re-crops/zooms without merging genuinely different angles.
+    private static let phashThreshold = 8
 
     /// True when the photo looks like a genuine, good-quality work example.
     /// `allowVehicles` keeps car/truck/motorcycle photos (auto & moto work).
@@ -137,6 +164,15 @@ enum PhotoFilter {
         let sharp = laplacianVariance(cg)
         if sharp < minSharpness {
             log(cg, reject: "blurry (sharpness \(Int(sharp)))"); return reject
+        }
+
+        // 2b. Illustration / clip-art gate — a drawn mascot or vector graphic is
+        //     sharp, high-res and trips no face/text/scene gate, so it used to pass
+        //     as a "work photo". Flat art has few distinct colours and large solid
+        //     fills, which a real photograph never does. Cheap pixel stats, run
+        //     before the ML requests so obvious graphics skip them entirely.
+        if isFlatGraphic(cg) {
+            return reject   // isFlatGraphic already logs the reason
         }
 
         let handler = VNImageRequestHandler(cgImage: cg, options: [:])
@@ -203,7 +239,7 @@ enum PhotoFilter {
                 .flatMap { $0.identifier.lowercased().split(whereSeparator: { !$0.isLetter }).map(String.init) }))
         }
         return Decision(keep: true, isVehicle: isVehicle, labels: labels,
-                        featurePrint: featurePrint(cg))
+                        featurePrint: featurePrint(cg), phash: perceptualHash(cg))
     }
 
     /// Perceptual fingerprint of an image (nil if Vision can't produce one),
@@ -225,6 +261,136 @@ enum PhotoFilter {
             }
         }
         return false
+    }
+
+    // MARK: - Flat-graphic (illustration) detection
+
+    /// True when the image reads as a flat illustration / clip-art / cartoon rather
+    /// than a photograph: very few distinct colours, large solid-fill regions, and a
+    /// dominant flat background. A real photo — even of a plain wall — carries
+    /// lighting gradients and sensor/JPEG texture that keep its colour count high
+    /// and its flat-run fraction low, so it clears every threshold. Nearest-neighbour
+    /// downscale (no interpolation) so solid fills stay pure and the signal survives.
+    private static func isFlatGraphic(_ cg: CGImage) -> Bool {
+        let n = 96
+        var px = [UInt8](repeating: 0, count: n * n * 4)
+        let cs = CGColorSpaceCreateDeviceRGB()
+        guard let ctx = CGContext(
+            data: &px, width: n, height: n, bitsPerComponent: 8,
+            bytesPerRow: n * 4, space: cs,
+            bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
+        ) else { return false }   // can't measure → treat as photo (keep)
+        ctx.interpolationQuality = .none
+        ctx.draw(cg, in: CGRect(x: 0, y: 0, width: n, height: n))
+
+        // Quantise to 4 bits/channel; count distinct colours, the dominant share,
+        // and the fraction of pixels sitting inside a solid fill (equal to the
+        // pixel to their right and below).
+        @inline(__always) func quant(_ i: Int) -> UInt16 {
+            (UInt16(px[i] >> 4) << 8) | (UInt16(px[i + 1] >> 4) << 4) | UInt16(px[i + 2] >> 4)
+        }
+        var counts = [UInt16: Int]()
+        var flatRuns = 0
+        for y in 0..<n {
+            for x in 0..<n {
+                let i = (y * n + x) * 4
+                let c = quant(i)
+                counts[c, default: 0] += 1
+                if x + 1 < n, y + 1 < n, quant(i + 4) == c, quant(i + n * 4) == c {
+                    flatRuns += 1
+                }
+            }
+        }
+        let total = n * n
+        let distinctRatio = Double(counts.count) / Double(total)
+        let dominant = Double(counts.values.max() ?? 0) / Double(total)
+        let flatRatio = Double(flatRuns) / Double((n - 1) * (n - 1))
+
+        let flat = distinctRatio < 0.12 && flatRatio > 0.45 && dominant > 0.15
+        if flat {
+            log(cg, reject: "flat graphic (colors \(counts.count), flat \(Int(flatRatio * 100))%, dom \(Int(dominant * 100))%)")
+        }
+        return flat
+    }
+
+    // MARK: - Perceptual hash (pHash) & cross-source dedup
+
+    /// Precomputed DCT basis: `dctCos[u][x] = cos((2x+1)·u·π / 2N)` for N=32.
+    /// Lifts the cosines out of the per-image hot loop.
+    private static let dctCos: [[Double]] = {
+        let n = 32
+        let size = 8
+        var table = [[Double]](repeating: [Double](repeating: 0, count: n), count: size)
+        for u in 0..<size {
+            for x in 0..<n {
+                let angle = (Double(2 * x + 1) * Double(u) * Double.pi) / Double(2 * n)
+                table[u][x] = cos(angle)
+            }
+        }
+        return table
+    }()
+
+    /// 64-bit DCT-based perceptual hash. Downscales to 32×32 grayscale, takes the
+    /// low-frequency 8×8 DCT block, and sets each bit where the coefficient exceeds
+    /// the block's median (excluding DC). Robust to scaling, re-compression and mild
+    /// re-crops — so a Google shot and its website re-upload hash within a few bits.
+    private static func perceptualHash(_ cg: CGImage) -> UInt64? {
+        let n = 32, size = 8
+        var bytes = [UInt8](repeating: 0, count: n * n)
+        let cs = CGColorSpaceCreateDeviceGray()
+        guard let ctx = CGContext(
+            data: &bytes, width: n, height: n, bitsPerComponent: 8,
+            bytesPerRow: n, space: cs, bitmapInfo: CGImageAlphaInfo.none.rawValue
+        ) else { return nil }
+        ctx.interpolationQuality = .high
+        ctx.draw(cg, in: CGRect(x: 0, y: 0, width: n, height: n))
+
+        var coeffs = [Double](repeating: 0, count: size * size)
+        for u in 0..<size {
+            let cu = dctCos[u]
+            for v in 0..<size {
+                let cv = dctCos[v]
+                var sum = 0.0
+                for x in 0..<n {
+                    let cux = cu[x]
+                    let row = x * n
+                    for y in 0..<n {
+                        sum += Double(bytes[row + y]) * cux * cv[y]
+                    }
+                }
+                coeffs[u * size + v] = sum
+            }
+        }
+        let ac = coeffs[1...].sorted()
+        let median = ac[ac.count / 2]
+        var hash: UInt64 = 0
+        for i in 0..<(size * size) where coeffs[i] > median {
+            hash |= (UInt64(1) << UInt64(i))
+        }
+        return hash
+    }
+
+    private static func hamming(_ a: UInt64, _ b: UInt64) -> Int { (a ^ b).nonzeroBitCount }
+
+    /// Drop near-duplicate photos across ALL sources (Google + website + cache),
+    /// keeping the FIRST occurrence — so callers order the pool the way they want it
+    /// shown, then dedup, and the best-ranked of a duplicate pair survives. Exact
+    /// URL repeats go first; then pHash within `phashThreshold`. Photos without a
+    /// pHash (shared-verdict / legacy-cache entries) are kept and only URL-deduped —
+    /// we never drop a photo we can't actually compare.
+    static func deduped(_ photos: [ScreenedPhoto]) -> [ScreenedPhoto] {
+        var kept: [ScreenedPhoto] = []
+        var keptHashes: [UInt64] = []
+        var seenURLs = Set<String>()
+        for photo in photos {
+            guard seenURLs.insert(photo.url).inserted else { continue }
+            if let h = photo.phash {
+                if keptHashes.contains(where: { hamming($0, h) <= phashThreshold }) { continue }
+                keptHashes.append(h)
+            }
+            kept.append(photo)
+        }
+        return kept
     }
 
     // MARK: - Sharpness (variance of the Laplacian)
@@ -308,7 +474,7 @@ enum PhotoFilter {
                     if isNearDuplicate(fp, of: keptPrints) { continue }   // drop near-dupe
                     keptPrints.append(fp)
                 }
-                let photo = ScreenedPhoto(url: displayURL, labels: decision.labels)
+                let photo = ScreenedPhoto(url: displayURL, labels: decision.labels, phash: decision.phash)
                 if allowVehicles && decision.isVehicle { vehicle.append(photo) }
                 else { other.append(photo) }
             }
@@ -399,7 +565,7 @@ enum PhotoFilter {
     /// The list strip passes 1 (a card led with the shopfront twice — one big
     /// storefront tile plus a repeat — instead of the actual work); the gallery
     /// leaves it nil to page through everything.
-    static func order(_ photos: [ScreenedPhoto], query: String,
+    static func order(_ photos: [ScreenedPhoto], query: String, category: String = "",
                       capPremises: Int? = nil, vehicle: VehicleFilter? = nil) -> [String] {
         // Segregate by the Auto ⇄ Moto toggle first: a Moto search must never show
         // a car (even from a shop that services both), and vice-versa.
@@ -407,11 +573,30 @@ enum PhotoFilter {
         let terms = query.lowercased()
             .split { !$0.isLetter }.map(String.init)
             .filter { $0.count > 3 }
+        // Dynamic per-request vocabulary (category + job description): the labels
+        // to search for, generated after classification knows what the user
+        // needs. Empty when the query has no subject term — scoring then falls
+        // back to the raw terms, exactly as before.
+        let visual = visualQuery(category: category, job: query)
+        // Score once per photo (the old code re-scored inside the comparator).
+        let jobScores = photos.map {
+            visual.isEmpty ? matchScore($0.labels, terms)
+                           : conceptMatchScore($0.labels, visual)
+        }
+        // Trade fallback: when the job vocabulary matched nothing at all, prefer
+        // photos showing the trade's kind of work over unrelated interiors.
+        // Pure tiebreak — a real job match always outranks it.
+        let tradeTerms = jobScores.allSatisfy { $0 == 0 }
+            ? tradeFallbackTerms[category.lowercased()] : nil
         let sorted = photos.enumerated()
             .sorted { a, b in
-                let sa = matchScore(a.element.labels, terms)
-                let sb = matchScore(b.element.labels, terms)
+                let sa = jobScores[a.offset], sb = jobScores[b.offset]
                 if sa != sb { return sa > sb }
+                if let tradeTerms {
+                    let ta = matchScore(a.element.labels, tradeTerms)
+                    let tb = matchScore(b.element.labels, tradeTerms)
+                    if ta != tb { return ta > tb }
+                }
                 // Equal query relevance (incl. no query at all) → push premises /
                 // scenery shots below real work photos.
                 let pa = isNonWorkShot(a.element.labels)
@@ -421,10 +606,12 @@ enum PhotoFilter {
             }
             .map(\.element)
 
-        // Scenery never earns a slot: drop it whenever the business has
-        // anything else to show (a scenery-only gallery keeps its photos —
-        // better a bridge than a blank card).
-        var candidates = sorted
+        // Drop cross-source near-duplicates (Google shot re-uploaded on the site,
+        // the same job re-added from cache) now that they're in final display
+        // order, so the best-ranked of a duplicate pair is the one kept. The Vision
+        // dedup in `screen()` only sees a single pool; this is the choke point every
+        // display list flows through, so it catches dups the other sources introduce.
+        var candidates = deduped(sorted)
         if candidates.contains(where: { !isSceneryShot($0.labels) }) {
             candidates.removeAll { isSceneryShot($0.labels) }
         }
@@ -449,6 +636,9 @@ enum PhotoFilter {
     /// toilet bowl" was badging (and promoting) businesses whose only hit was a
     /// non-toilet "bowl" shot (2026-07-18). Length ≤3 words ("new", "fix", "job")
     /// are already dropped by the >3 filter; this covers the ≥4-char ones.
+    /// Positional/spatial words ("above", "below", "near") locate the job but
+    /// never name it — "the ceiling above the garage door" is not a trim job,
+    /// so they must not count as subject terms either (2026-09-13).
     private nonisolated static let nonSubjectTerms: Set<String> = [
         "replace", "replaced", "replacing", "replacement",
         "install", "installed", "installing", "installation",
@@ -457,6 +647,19 @@ enum PhotoFilter {
         "upgrade", "service", "maintenance", "clean", "cleaning",
         "broken", "damaged", "bowl", "unit", "area", "spot",
         "piece", "item", "work", "project", "need", "want",
+        "above", "below", "under", "underneath", "beneath",
+        "front", "back", "side", "sides", "outside", "around",
+        "near", "behind", "beside", "across", "along", "between",
+        // Business words — "roofing contractor" is a roofing job, and no photo
+        // is ever labeled "contractor".
+        "contractor", "contractors", "company", "companies", "business",
+        "service", "services", "professional", "professionals",
+        "specialist", "specialists", "expert", "experts",
+        // Type/state adjectives Vision never emits as labels — "leaky"
+        // describes the problem, not a visible object, so it can only dilute
+        // the denominator ("sliding" is a door type no label names).
+        "leaky", "leaking", "clogged", "cracked", "dripping", "loose",
+        "sliding",
     ]
 
     /// The specific-subject terms of a query — its ≥4-char words minus the
@@ -467,18 +670,147 @@ enum PhotoFilter {
             .filter { $0.count > 3 && !nonSubjectTerms.contains($0) }
     }
 
-    /// True when at least one of these screened photos actually matches the
-    /// user's request — i.e. the business has a work photo of the kind of job
-    /// being searched for. Drives the "Did similar job" trust cue on result cards
-    /// (design brief §9). Unlike `order` (a soft ranking that may lean on any
-    /// term, incl. the work type), the badge is a hard trust claim, so it requires
-    /// a match on a *specific subject* term — not a generic shape or the action
-    /// word — via `subjectTerms`. A query with no such term (a bare/short category
-    /// browse, or a verb-only "renovation") can't establish similarity → false.
-    nonisolated static func matchesQuery(_ photos: [ScreenedPhoto], query: String) -> Bool {
-        let terms = subjectTerms(query)
-        guard !terms.isEmpty else { return false }
-        return photos.contains { matchScore($0.labels, terms) > 0 }
+    // MARK: - Dynamic visual vocabulary
+
+    /// A job-conditioned visual search vocabulary: the labels to search a
+    /// contractor's screened photos for, derived AFTER the request is
+    /// classified — from its category + job description — rather than from raw
+    /// query words.
+    ///
+    /// Apple Vision's labels are generic scene nouns ("roof", "house",
+    /// "siding"); the user's specific trade words ("metal trim", "breaker
+    /// panel") essentially never appear in them, so matching raw query terms
+    /// against labels scores 0 for every photo and the photo signal goes dead
+    /// on specific jobs. The dynamic vocabulary bridges that gap: each subject
+    /// term maps to the visual synonyms Vision actually emits for that thing.
+    struct VisualQuery {
+        /// One concept per subject term: the term plus its visual synonyms. A
+        /// photo matches a concept when ANY of its labels matches ANY of the
+        /// concept's words — synonyms only ever ADD ways to match; they never
+        /// widen the denominator the way appending flat terms would.
+        let concepts: [[String]]
+        var isEmpty: Bool { concepts.isEmpty }
+    }
+
+    /// Visual synonyms: what Apple Vision calls the thing the user named.
+    /// Conservative by design — only near-certain visual equivalents of the
+    /// SAME visible object (a faucet IS a tap; trim IS molding/fascia), never
+    /// loose scene associates — so a synonym can't promote an unrelated photo
+    /// the way the old substring matching once did.
+    private nonisolated static let visualSynonyms: [String: [String]] = [
+        "metal": ["aluminum", "aluminium", "steel", "iron", "copper", "stainless"],
+        "wood": ["lumber", "timber", "plank", "beam"],
+        "wooden": ["wood", "lumber", "timber"],
+        "vinyl": ["plastic", "pvc"],
+        "trim": ["molding", "moulding", "casing", "fascia", "flashing"],
+        "molding": ["trim", "casing", "fascia"],
+        "casing": ["trim", "molding"],
+        "flashing": ["trim", "fascia", "drip"],
+        "fascia": ["trim", "soffit", "eave", "flashing"],
+        "soffit": ["fascia", "eave"],
+        "gutter": ["downspout", "eave"],
+        "downspout": ["gutter", "eave"],
+        "shingle": ["roof", "rooftop", "tile", "slate"],
+        "roofing": ["roof", "rooftop", "shingle"],
+        "roof": ["rooftop", "shingle"],
+        "siding": ["cladding", "wall"],
+        "cladding": ["siding", "wall"],
+        "deck": ["patio", "porch"],
+        "fence": ["gate", "railing"],
+        "door": ["doorway", "gate"],
+        "doorway": ["door"],
+        "window": ["glazing"],
+        "windshield": ["window", "glass"],
+        "glass": ["window", "mirror"],
+        "tire": ["wheel"],
+        "wheel": ["tire", "rim"],
+        "cabinet": ["cupboard", "vanity"],
+        "vanity": ["cabinet", "sink"],
+        "countertop": ["counter"],
+        "counter": ["countertop"],
+        "faucet": ["tap", "spigot"],
+        "tap": ["faucet", "spigot"],
+        "sink": ["basin", "faucet"],
+        "basin": ["sink"],
+        "toilet": ["commode"],
+        "commode": ["toilet"],
+        "shower": ["tub", "bathroom"],
+        "tub": ["bathtub", "shower", "bathroom"],
+        "bathtub": ["tub", "bathroom"],
+        "pipe": ["piping"],
+        "piping": ["pipe"],
+        "drain": ["pipe"],
+        "tile": ["floor", "backsplash"],
+        "backsplash": ["tile"],
+        "floor": ["flooring"],
+        "flooring": ["floor", "tile", "wood"],
+        "drywall": ["wall"],
+        "wall": ["drywall"],
+        "wire": ["wiring", "cable"],
+        "wiring": ["wire", "cable"],
+        "outlet": ["switch"],
+        "switch": ["outlet"],
+        "thermostat": ["hvac"],
+        "furnace": ["hvac", "heater"],
+        "heater": ["furnace", "hvac"],
+        "vent": ["duct"],
+        "duct": ["vent"],
+    ]
+
+    /// Per-trade synonym overlays, keyed by lowercased classify category. The
+    /// same word means different visible things per trade — "panel" is a
+    /// breaker box to an electrician and a body panel to a paint shop — so the
+    /// overlay resolves the word the way THAT trade's photos actually look.
+    /// Applied on top of (never instead of) the global table; a trade-ambiguous
+    /// word with no overlay entry simply gets no synonyms, rather than a wrong
+    /// global one.
+    private nonisolated static let tradeSynonyms: [String: [String: [String]]] = [
+        "electrical": [
+            "panel": ["breaker", "fuse", "box"],
+            "box": ["panel", "breaker"],
+        ],
+    ]
+
+    /// Trade-level visual fallback, keyed by lowercased classify category. When no
+    /// screened photo matches the JOB specifically (every job-vocabulary score 0 —
+    /// the common case for small jobs no portfolio names), `order` prefers photos
+    /// that at least show the trade's kind of work over unrelated interiors: a
+    /// carpentry job leads with the exterior woodwork shot, not a bathroom.
+    /// Deliberately coarse — it only breaks ties the job vocabulary couldn't, and
+    /// never outranks a real job match.
+    private nonisolated static let tradeFallbackTerms: [String: [String]] = [
+        "carpentry": ["wood", "lumber", "timber", "trim", "molding", "deck", "fence", "framing", "cabinet", "exterior", "house", "siding"],
+        "painting": ["paint", "painting", "wall", "exterior", "house"],
+        "roofing": ["roof", "rooftop", "shingle", "gutter", "exterior", "house", "ladder"],
+        "flooring": ["floor", "flooring", "hardwood", "tile", "laminate", "carpet"],
+        "plumbing": ["pipe", "piping", "faucet", "tap", "sink", "toilet", "bathroom"],
+        "electrical": ["wire", "wiring", "panel", "breaker", "outlet", "light", "fixture"],
+        "hvac": ["vent", "duct", "furnace", "heater", "hvac", "thermostat"],
+        "landscaping": ["garden", "yard", "lawn", "patio", "landscape", "tree", "plant"],
+        "windows & doors": ["window", "door", "doorway", "glass", "frame"],
+        "appliances": ["refrigerator", "fridge", "dishwasher", "stove", "oven", "washer", "dryer", "appliance"],
+        "mold & pest control": ["attic", "crawl", "basement"],
+    ]
+
+    /// Builds the dynamic visual vocabulary for one classified request, from
+    /// the category + job description the request produced — the "change the
+    /// labels dynamically" step: the labels we search photos for are generated
+    /// per request, after we know what the user needs.
+    private nonisolated static func visualQuery(category: String, job: String) -> VisualQuery {
+        let overlay = tradeSynonyms[category.lowercased()] ?? [:]
+        let concepts = subjectTerms(job).map { term -> [String] in
+            Array(Set([term] + (visualSynonyms[term] ?? []) + (overlay[term] ?? [])))
+        }
+        return VisualQuery(concepts: concepts)
+    }
+
+    /// Concept-level match: how many of the visual query's concepts the photo's
+    /// labels hit. One concept = one subject term + its visual synonyms; ANY
+    /// synonym hitting ANY label counts the concept as matched.
+    private nonisolated static func conceptMatchScore(_ labels: [String], _ query: VisualQuery) -> Int {
+        query.concepts.reduce(0) { acc, concept in
+            acc + (labels.contains { label in concept.contains { matches(label, $0) } } ? 1 : 0)
+        }
     }
 
     /// Word tokens of a free-text review, for the same subject-term matching the
@@ -488,17 +820,33 @@ enum PhotoFilter {
         text.lowercased().split { !$0.isLetter }.map(String.init)
     }
 
-    /// True when a business's own review text names the searched job's subject —
-    /// a customer describing the same work. Weaker proof than a screened photo,
-    /// but it rides on review text we already fetch (no extra API cost) and lets
-    /// a specialist surface without paying to screen its photos. Same
-    /// `subjectTerms` basis as the photo badge, so both agree on what the job is
-    /// and a generic/action word ("replace", "bowl") can't trip it alone.
-    nonisolated static func reviewsMentionJob(_ reviews: [String], query: String) -> Bool {
+    /// Scored version of the review-job match: the best review's distinct
+    /// subject-term hits as a fraction of the query's subject terms (0…1).
+    /// A continuous ranking signal — a review naming 3 of 4 terms outranks one
+    /// naming 1 — where the old boolean needed a hard 2-term bar to claim a match.
+    nonisolated static func reviewMatchStrength(_ reviews: [String], query: String) -> Double {
         let terms = subjectTerms(query)
-        guard !terms.isEmpty else { return false }
-        let tokens = reviews.flatMap(reviewTokens)
-        return matchScore(tokens, terms) > 0
+        guard !terms.isEmpty else { return 0 }
+        let best = reviews.map { matchScore(reviewTokens($0), terms) }.max() ?? 0
+        return min(Double(best) / Double(terms.count), 1)
+    }
+
+    /// Scored photo-job match against the DYNAMIC visual vocabulary for the
+    /// classified request (category + job description): the best screened
+    /// photo's concept hits as a fraction of the job's subject concepts (0…1).
+    /// Feeds ranking; per-photo display order stays with `order`.
+    ///
+    /// Because the vocabulary is built per request from what the user needs —
+    /// not from raw query words — a "metal trim" job also matches photos Vision
+    /// labeled "flashing" or "fascia", where the old raw-term match scored every
+    /// photo 0. Reviews intentionally stay on raw subject terms: review text is
+    /// already specific language, and synonym-expanding it would reopen the
+    /// false-positive class the 2026-09-13 bar closed.
+    nonisolated static func photoMatchStrength(_ photos: [ScreenedPhoto], query: String, category: String) -> Double {
+        let visual = visualQuery(category: category, job: query)
+        guard !visual.isEmpty, !photos.isEmpty else { return 0 }
+        let best = photos.map { conceptMatchScore($0.labels, visual) }.max() ?? 0
+        return min(Double(best) / Double(visual.concepts.count), 1)
     }
 
     /// Reviews reordered so the one that most specifically names the searched job
@@ -525,13 +873,17 @@ enum PhotoFilter {
     /// something the two screens can match on after the fact.
     ///
     /// Ties keep the lowest index, the same tiebreak `orderReviewsByJob` uses.
+    /// Same 2-term bar the old boolean check used: a quoted review must clear it
+    /// threshold on multi-term queries, so the card never quotes an incidental
+    /// one-word hit as the "why" behind the badge (2026-09-13).
     nonisolated static func mostRelevantReviewIndex(_ reviews: [String], query: String) -> Int? {
         let terms = subjectTerms(query)
         guard !terms.isEmpty else { return nil }
+        let bar = min(2, terms.count)
         var best: (index: Int, score: Int)?
         for (i, text) in reviews.enumerated() {
             let score = matchScore(reviewTokens(text), terms)
-            guard score > 0 else { continue }
+            guard score >= bar else { continue }
             if best == nil || score > best!.score { best = (i, score) }
         }
         return best?.index

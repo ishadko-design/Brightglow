@@ -29,12 +29,6 @@ private struct SheetScrollKey: PreferenceKey {
 struct ContractorGalleryScreen: View {
     var category: String = ""
     var searchQuery: String = ""
-    /// The user's actual request words, resolved by the list (which knows to strip
-    /// a synthetic auto grid-card query). Passed straight to the quote screen so it
-    /// pre-fills the description — `searchQuery` here is the effective/auto query
-    /// used for pagination, which for an auto category is synthetic and must not
-    /// pre-fill the quote text. Empty falls back to deriving from `searchQuery`.
-    var requestSummary: String = ""
     var aiResult: AIResult? = nil
     /// When set (manual ZIP/city or an already-resolved fix), used instead of GPS.
     var presetCoordinate: CLLocationCoordinate2D? = nil
@@ -147,28 +141,6 @@ struct ContractorGalleryScreen: View {
         Task { await BusinessService.recordView(placeId: placeId) }
     }
 
-    /// What the user actually typed, if anything. Auto categories arrive with a
-    /// synthetic Places query ("auto repair and maintenance shop") in
-    /// `searchQuery` — that's routing input, not the user's words, so it never
-    /// pre-fills the quote-request text.
-    private var typedQuery: String {
-        let q = searchQuery.trimmingCharacters(in: .whitespacesAndNewlines)
-        if autoCategoryItems.contains(where: {
-            $0.searchQuery.caseInsensitiveCompare(q) == .orderedSame
-                || $0.motoSearchQuery.caseInsensitiveCompare(q) == .orderedSame
-        }) { return "" }
-        return q
-    }
-
-    /// Request text to pre-fill the quote screen: the list's already-resolved
-    /// `requestSummary` (the user's real words, synthetic query stripped) when it
-    /// gave us one, else derived from `searchQuery`. The list feeds the gallery the
-    /// effective/auto query for pagination, so re-deriving here alone would drop the
-    /// user's words on an auto request.
-    private var quoteRequestText: String {
-        requestSummary.isEmpty ? typedQuery : requestSummary
-    }
-
     /// Term source for photo ordering — the typed query, else the category, so a
     /// plain category browse still leads with its best-matching photos.
     private var orderQuery: String {
@@ -273,12 +245,12 @@ struct ContractorGalleryScreen: View {
                 // A business previewing its own page must not count as a view.
                 if !previewMode {
                     recordView(placeId: id)
-                    AnalyticsService.track("impression", ["place_id": id, "surface": "gallery"])
+                    AnalyticsService.track("impression", ["place_id": id, "surface": "gallery", "name": topContractor?.name ?? ""])
                 }
             }
         }
         .navigationDestination(isPresented: $showQuote) {
-            QuoteRequestScreen(contractor: selectedContractor, requestSummary: quoteRequestText, initialImages: attachedImages, clarifyTranscript: clarifyTranscript, vehicleNote: vehicleNote)
+            QuoteRequestScreen(contractor: selectedContractor, initialImages: attachedImages, vehicleNote: vehicleNote, clarifyTranscript: clarifyTranscript)
         }
         // Custom bottom overlay (not a system `.sheet`) so the card is a flush,
         // full-width bottom sheet rather than iOS 26's inset floating card.
@@ -466,10 +438,15 @@ struct ContractorGalleryScreen: View {
         func money(_ v: Double) -> String {
             "$" + (Self.priceFormatter.string(from: NSNumber(value: v)) ?? String(Int(v)))
         }
-        // Per-hour pricing shows a compact "/h"; everything else (per-job, the
-        // default) shows no unit at all — a bare "$200 – $800".
+        // Per-hour pricing is a single rate, shown as "$200/h" — never a range or a
+        // "From" (the web editor stores the rate in priceMin). Per-job (the default)
+        // shows a bare range like "$200 – $800", no unit.
         let perHour = service.unit.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() == "hour"
-        let suffix = perHour ? "/h" : ""
+        if perHour {
+            guard let rate = service.priceMin ?? service.priceMax else { return nil }
+            return "\(money(rate))/h"
+        }
+        let suffix = ""
         switch (service.priceMin, service.priceMax) {
         case let (lo?, hi?) where hi > lo: return "\(money(lo)) – \(money(hi))\(suffix)"
         case let (lo?, _?):                return "\(money(lo))\(suffix)"   // equal min/max
@@ -760,7 +737,7 @@ struct ContractorGalleryScreen: View {
             }
             // Persisted verdict from a previous launch — reuse, no download.
             if let v = ScreeningStore.shared.get(contractor.id, allowVehicles: allowVehicles) {
-                let ordered = PhotoFilter.order(v.kept, query: orderQuery, capPremises: galleryPremisesCap, vehicle: photoVehicle)
+                let ordered = PhotoFilter.order(v.kept, query: orderQuery, category: category, capPremises: galleryPremisesCap, vehicle: photoVehicle)
                 screenedByID[contractor.id] = ordered
                 if ordered.isEmpty && !previewMode {
                     contractors.removeAll { $0.id == contractor.id }
@@ -779,7 +756,7 @@ struct ContractorGalleryScreen: View {
             if let v = await VerdictService.fetch(ids: [contractor.id], allowVehicles: allowVehicles)[contractor.id] {
                 ScreeningStore.shared.save(contractor.id, allowVehicles: allowVehicles,
                                            kept: v.kept, scanned: v.scanned, enriched: v.enriched)
-                let ordered = PhotoFilter.order(v.kept, query: orderQuery, capPremises: galleryPremisesCap, vehicle: photoVehicle)
+                let ordered = PhotoFilter.order(v.kept, query: orderQuery, category: category, capPremises: galleryPremisesCap, vehicle: photoVehicle)
                 screenedByID[contractor.id] = ordered
                 if ordered.isEmpty && !previewMode {
                     contractors.removeAll { $0.id == contractor.id }
@@ -800,7 +777,7 @@ struct ContractorGalleryScreen: View {
             let scanned = min(galleryScanLimit, contractor.photos.count)
             ScreeningStore.shared.save(contractor.id, allowVehicles: allowVehicles, kept: kept, scanned: scanned)
             VerdictService.upload(id: contractor.id, allowVehicles: allowVehicles, kept: kept, scanned: scanned)
-            let ordered = PhotoFilter.order(kept, query: orderQuery, capPremises: galleryPremisesCap, vehicle: photoVehicle)
+            let ordered = PhotoFilter.order(kept, query: orderQuery, category: category, capPremises: galleryPremisesCap, vehicle: photoVehicle)
             guard !ordered.isEmpty || previewMode else {
                 // No usable work photos → drop the business entirely rather than
                 // showing an empty placeholder. Keep totalCount in step so the
@@ -928,7 +905,7 @@ struct ContractorGalleryScreen: View {
         let allowVehicles = isAutoService(category: category, searchQuery: searchQuery)
         let screened = await PhotoFilter.screen(urls, allowVehicles: allowVehicles,
                                                 limit: urls.count, scanLimit: urls.count)
-        let website = PhotoFilter.order(screened, query: orderQuery, capPremises: galleryPremisesCap, vehicle: photoVehicle)
+        let website = PhotoFilter.order(screened, query: orderQuery, category: category, capPremises: galleryPremisesCap, vehicle: photoVehicle)
         guard !website.isEmpty, contractors.contains(where: { $0.id == contractor.id }) else { return }
         let existing = screenedByID[contractor.id] ?? []
         let have = Set(existing)
@@ -983,7 +960,7 @@ struct ContractorGalleryScreen: View {
         // (storefront/office/house-exterior) shots capped so they can't fill the
         // strip. No padding with unscreened photos — quality over hitting a count,
         // so a business with only 4 real work photos shows 4, not 4 + 6 storefronts.
-        let ordered = PhotoFilter.order(kept, query: orderQuery, capPremises: galleryPremisesCap, vehicle: photoVehicle)
+        let ordered = PhotoFilter.order(kept, query: orderQuery, category: category, capPremises: galleryPremisesCap, vehicle: photoVehicle)
         guard contractors.contains(where: { $0.id == contractor.id }) else { return }
         if !ordered.isEmpty { screenedByID[contractor.id] = ordered }
     }
@@ -1002,7 +979,7 @@ struct ContractorGalleryScreen: View {
             // Re-order only when the tags changed the labels; either way mark the
             // verdict enriched so it isn't re-tagged on every visit.
             if enriched != kept {
-                screenedByID[id] = PhotoFilter.order(enriched, query: orderQuery, capPremises: galleryPremisesCap, vehicle: photoVehicle)
+                screenedByID[id] = PhotoFilter.order(enriched, query: orderQuery, category: category, capPremises: galleryPremisesCap, vehicle: photoVehicle)
             }
             ScreeningStore.shared.save(id, allowVehicles: allowVehicles, kept: enriched,
                                        scanned: scanned, enriched: true)
