@@ -32,3 +32,8 @@ verify_jwt = false
 # calls, and the function additionally requires a real user (not the anon key).
 [functions.delete-account]
 verify_jwt = false
+
+# Clarify chat: authenticated (app passes the user JWT); prompt v45 adds the
+# no-redundant-negation rule to the summary.
+[functions.clarify]
+verify_jwt = true
