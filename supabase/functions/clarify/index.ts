@@ -16,10 +16,16 @@
 // price, and stops the instant the match is confident — 1 question for a clear
 // job, up to HARD_CEILING for an ambiguous multi-service one.
 //
-// POST { messages: [{role: "user"|"assistant", content}], photo_details? }
+// POST { messages: [{role: "user"|"assistant", content}], photo_details?,
+//         photo? (base64 image), media_type? }
 //   -> { action: "ask",  question, quick_replies, vertical, category }
 //   -> { action: "done", vertical, category, search_terms, photo_terms,
 //                        details, summary, priceable }
+//
+// `photo` lets the model SEE the user's picture: it takes the work item from
+// the user's words and reads the item's attributes (material, size, count,
+// scope) off the image itself, confirming instead of interrogating. Older
+// clients send only the `photo_details` text note and work exactly as before.
 //
 // Deploy:   supabase functions deploy clarify
 // Secrets:  ANTHROPIC_API_KEY (shared with `pricing`; unset -> 503, client
@@ -34,6 +40,7 @@ import {
 } from "../pricing/pricingEngine.ts";
 import { GENERIC_REPLIES, normalizeQuickReplies } from "./quickReplies.ts";
 import { repeatsPriorQuestion } from "./repeatsPriorQuestion.ts";
+import { buildModelMessages, sanitizePhoto } from "./photoMessage.ts";
 
 const APP_TOKEN = Deno.env.get("APP_TOKEN") ?? "";
 const ANTHROPIC_API_KEY = Deno.env.get("ANTHROPIC_API_KEY") ?? "";
@@ -115,12 +122,35 @@ and a question with no options strands the user at a keyboard.
 Add "Not sure" as the last option whenever a homeowner plausibly wouldn't know.
 Keep each label under 4 words so it fits a chip.
 
-TRUST THE PHOTO: when the request carries a "(Visible in the user's photo: …)"
-note, treat every attribute it states as ALREADY ESTABLISHED and never ask what
-it answers. If it names a car, truck, or motorcycle (or any make/model), the
-vehicle type is settled — do NOT ask car-vs-motorcycle. If it names the make,
-model, material, size, or capacity, do not re-ask those. Fold a known make/model
-into search_terms and photo_terms (e.g. "silver Honda Civic bumper").
+TRUST THE PHOTO — AND USE IT AS AN INPUT. The user's photo is attached to
+their first message, next to their words: read the two together, because the
+photo answers questions you'd otherwise have to ask.
+- The WORK ITEM comes from the user's WORDS — never from what dominates the
+  photo. The photo may center on a different fixture (a door behind the trim
+  being replaced, a wall around a window) — do not switch subjects to it.
+  Read the attributes OF THE WORK ITEM from the photo.
+- Answer material, size, count, and scope from the photo YOURSELF when they're
+  visible — don't ask the user what you can see. Judge sizes against reference
+  objects in the frame (a standard door is ~80 in tall, a brick course ~3 in)
+  and mark every visual estimate with "~".
+- CONFIRM, don't interrogate. When the photo answers a cost driver, fold it
+  into a confirmation rather than an open question: "About 7 ft of metal trim
+  above the door — right?" with quick replies like "Yes", "Longer", "Shorter".
+  Ask a genuinely open question only when neither the words nor the photo can
+  answer it.
+- A confirmed estimate becomes a settled fact and may enter \`details\`; an
+  unconfirmed visual guess never does. The user's explicit answers always beat
+  your read of the photo — if they correct you, take their number and move on.
+- When the photo cannot show it (inside a wall, under a panel, future scope),
+  ask — one question, about the work item's cost driver.
+
+When the request ALSO carries a "(Visible in the user's photo: …)" text note
+(older app versions send only the note), treat every attribute it states as
+ALREADY ESTABLISHED and never ask what it answers. If it names a car, truck, or
+motorcycle (or any make/model), the vehicle type is settled — do NOT ask
+car-vs-motorcycle. If it names the make, model, material, size, or capacity, do
+not re-ask those. Fold a known make/model into search_terms and photo_terms
+(e.g. "silver Honda Civic bumper").
 
 Decide the VERTICAL first:
 - "home" — repair/improvement to a house or yard: ${HOME_CATEGORIES.join(", ")}.
@@ -352,6 +382,12 @@ Deno.serve(async (req) => {
     };
   }
 
+  // The attached photo (when the app sends one) rides on the first user
+  // message as an image block, so the model reads the work item's attributes
+  // off the picture itself. Absent or invalid -> text note alone, as before.
+  const photo = sanitizePhoto(payload.photo, payload.media_type);
+  const modelMessages = buildModelMessages(messages, photo);
+
   const asked = messages.filter((m) => m.role === "assistant").length;
   const remaining = Math.max(0, HARD_CEILING - asked);
 
@@ -380,7 +416,7 @@ Deno.serve(async (req) => {
       thinking: { type: "disabled" },
       system: systemPrompt(mustFinish ? 0 : remaining),
       output_config: { format: { type: "json_schema", schema: SCHEMA } },
-      messages,
+      messages: modelMessages,
     });
     const text = response.content.find((b) => b.type === "text")?.text ?? "";
     return JSON.parse(text);
