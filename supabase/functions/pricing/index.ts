@@ -49,7 +49,7 @@ import {
   calculateComposedRange,
   CATEGORY_GENERAL,
   AUTO_CATEGORIES,
-  classifyJobType,
+  classifyWithCategoryFallback,
   detectScopeAddOns,
   detectVehicle,
   fetchEPCIRaw,
@@ -252,7 +252,12 @@ Deno.serve(async (req) => {
   // filter first, then the model, then this word list as a last resort.
   const keywordVehicle = vehicle ?? detectVehicle(description);
   const classifyText = keywordVehicle === "moto" ? stripVehicleWords(description) : description;
-  let entry = classifyJobType(category, classifyText, [], null, keywordVehicle);
+  // Wrong-category requests get a second chance without the category before
+  // the LLM runs: "replace the dishwasher" under HVAC, a downspout repair
+  // under Plumbing, a door repair under Electrical. Only fires when the
+  // categorized result is general/null (would otherwise decline), and only
+  // ever returns a specific entry — see classifyWithCategoryFallback.
+  let entry = classifyWithCategoryFallback(category, classifyText, [], keywordVehicle);
 
   // LLM classification for every real typed description — primary, not just
   // a fallback for keyword misses. Keywords alone are confidently wrong on

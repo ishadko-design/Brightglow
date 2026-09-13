@@ -665,7 +665,11 @@ export const JOB_TYPE_TAXONOMY: JobTypeEntry[] = [
   { job_type: "plumbing.burst_pipe", category: "Plumbing", keywords: ["burst pipe", "pipe burst", "frozen pipe", "frozen pipes", "pipe cracked", "cracked pipe", "water spraying", "emergency plumber", "pipe leaking behind wall"], trade: "plumbing", itemId: "burst-pipe-repair", unit: "each", defaultQuantity: 1, priority: 1 },
   { job_type: "plumbing.tankless_water_heater", category: "Plumbing", keywords: ["tankless", "on-demand water heater"], trade: "plumbing", itemId: "tankless-water-heater-install", unit: "project", defaultQuantity: 1, priority: 1 },
   { job_type: "plumbing.fixture", category: "Plumbing", keywords: ["faucet", "toilet", "sink", "fixture"], trade: "plumbing", itemId: "fixture-install", unit: "each", defaultQuantity: 1, notIfContains: ["dripping", "drips", "keeps running", "running toilet", "wont stop", "won't stop", "leaking at base", "wax ring", "wobbles", "rocking", "cartridge", "flapper", "fill valve", "repair"] },
-  { job_type: "plumbing.pipe_repair", category: "Plumbing", keywords: ["leak", "clog", "drain"], trade: "plumbing", itemId: "pipe-repair", unit: "project", defaultQuantity: 1 },
+  // "downspout" is roof drainage, not a plumbing pipe — a leaking downspout
+  // under Plumbing mispriced as pipe_repair $150-1041 (live cache 2026-09).
+  // Vetoed here so the request falls through to the category fallback, which
+  // reaches roofing.gutter_repair.
+  { job_type: "plumbing.pipe_repair", category: "Plumbing", keywords: ["leak", "clog", "drain"], notIfContains: ["downspout"], trade: "plumbing", itemId: "pipe-repair", unit: "project", defaultQuantity: 1 },
   { job_type: "plumbing.repipe", category: "Plumbing", keywords: ["repipe", "repiping"], trade: "plumbing", itemId: "whole-house-repipe-pex", unit: "sq ft", defaultQuantity: 1500 },
   { job_type: "plumbing.sewer_line", category: "Plumbing", keywords: ["sewer"], trade: "plumbing", itemId: "sewer-line-replacement", unit: "linear foot", defaultQuantity: 50 },
 
@@ -716,7 +720,11 @@ export const JOB_TYPE_TAXONOMY: JobTypeEntry[] = [
   // "vent" alone belongs to HVAC — these are all multi-word for that reason.
   { job_type: "appliances.dryer_vent", category: "Appliances", keywords: ["dryer vent", "vent cleaning", "lint buildup", "lint trap", "clean the vent"], trade: "appliance", itemId: "dryer-vent-cleaning", unit: "each", defaultQuantity: 1, priority: 1 },
   { job_type: "appliances.oven_range_repair", category: "Appliances", keywords: ["oven repair", "repair oven", "fix oven", "fix my oven", "oven not heating", "oven won't heat", "oven wont heat", "stove repair", "fix stove", "stove not working", "range not heating", "burner not working", "burner won't light", "burner wont light", "cooktop repair", "oven won't turn on", "oven wont turn on"], trade: "appliance", itemId: "oven-range-repair", unit: "each", defaultQuantity: 1, priority: 1 },
-  { job_type: "appliances.range_install", category: "Appliances", keywords: ["install range", "install a range", "range install", "install stove", "install a stove", "stove install", "new stove", "install cooktop", "install a cooktop", "install oven", "install an oven", "install wall oven", "replace stove", "replace the stove"], trade: "appliance", itemId: "range-oven-install", unit: "each", defaultQuantity: 1 },
+  // Bare nouns added 2026-09-12: real requests say "replace the electric
+  // range", never "range install" (live cache 2026-09, LLM null → declined).
+  // Repair phrasings still win via oven_range_repair's priority 1; "hood" is
+  // vetoed because a range hood is a different job that must keep declining.
+  { job_type: "appliances.range_install", category: "Appliances", keywords: ["install range", "install a range", "range install", "install stove", "install a stove", "stove install", "new stove", "install cooktop", "install a cooktop", "install oven", "install an oven", "install wall oven", "replace stove", "replace the stove", "range", "stove", "cooktop", "oven"], notIfContains: ["hood"], trade: "appliance", itemId: "range-oven-install", unit: "each", defaultQuantity: 1 },
   { job_type: "appliances.washer_dryer_install", category: "Appliances", keywords: ["install washer", "install a washer", "install dryer", "install a dryer", "install washing machine", "washer dryer hookup", "washer hookup", "dryer hookup", "hook up washer", "hook up dryer", "hook up the washer", "hook up the dryer"], trade: "appliance", itemId: "washer-dryer-install", unit: "each", defaultQuantity: 1, priority: 1 },
   { job_type: "appliances.microwave_install", category: "Appliances", keywords: ["microwave"], trade: "appliance", itemId: "otr-microwave-install", unit: "each", defaultQuantity: 1 },
 
@@ -1371,6 +1379,11 @@ const WORD_BOUNDARY_TERMS = new Set([
   // category stem to narrow the pool, "replace the crown molding" classified as
   // paintless dent repair on a car (2026-07-22).
   "ding", "dings",
+  // "door" stem hijacked "doorbell not working" into Windows & Doors before
+  // the global keyword scan could reach electrical.doorbell (live cache
+  // 2026-09). No entry uses bare "door"/"doors" as a keyword — only the
+  // category stem does — so bounding it changes nothing else.
+  "door", "doors",
 ]);
 
 /** Does `text` contain `term`, respecting word boundaries where required? */
@@ -1402,6 +1415,80 @@ function longestKeywordMatch(
     }
   }
   return best;
+}
+
+/** An entry's strongest claim on this text as (priority, keyword length),
+ *  mirroring longestKeywordMatch's ranking, or null when vetoed or nothing
+ *  matches. Lets the fallback stages compare apples-to-apples. */
+function entryMatchScore(
+  entry: JobTypeEntry,
+  text: string,
+  excludeWithinCategoryOnly: boolean,
+): { priority: number; length: number } | null {
+  if (entry.notIfContains?.some((w) => termMatches(text, w))) return null;
+  const priority = entry.priority ?? 0;
+  let bestLen = 0;
+  for (const kw of entry.keywords) {
+    if (excludeWithinCategoryOnly && WITHIN_CATEGORY_ONLY.has(kw)) continue;
+    if (!termMatches(text, kw)) continue;
+    if (kw.length > bestLen) bestLen = kw.length;
+  }
+  return bestLen > 0 ? { priority, length: bestLen } : null;
+}
+
+// Category-fallback classification (2026-09-12).
+//
+// Real requests often arrive under the wrong category — the app's category
+// guess or the user's own tap doesn't match the work ("replace the
+// dishwasher" browsed under HVAC, a downspout repair under Plumbing, a door
+// repair under Electrical). The categorized path then lands on the
+// category-general entry and the request declines, even though the taxonomy
+// holds the exact job (seen live in classification_cache, 2026-09).
+//
+// So when the categorized result is general (or null) and a category WAS
+// sent, retry without it: first the normal no-category path (stem-aware —
+// the same behavior as a bare typed search), then a stem-ignoring
+// full-taxonomy scan, because an incidental stem ("already plumbed") can
+// hijack the narrowed pool. The stronger claim wins, scored the same way
+// longestKeywordMatch ranks.
+//
+// Only fires on requests that would otherwise decline, and only ever returns
+// a specific entry — a specific categorized result is never overridden, and
+// bare (category-less) searches keep their exact current behavior.
+export function classifyWithCategoryFallback(
+  category: string,
+  description: string,
+  photoAttributes: string[] = [],
+  vehicle: Vehicle | null = null,
+): JobTypeEntry | null {
+  const primary = classifyJobType(category, description, photoAttributes, null, vehicle);
+  // No category to be wrong about, or the category gave a real answer.
+  if (!category || (primary && primary.keywords.length > 0)) return primary;
+  const text = [description, ...photoAttributes].join(", ").toLowerCase();
+  // Stage 1: drop the possibly-wrong category — bare-search behavior.
+  const s1 = classifyJobType("", description, photoAttributes, null, vehicle);
+  const s1Specific = s1 && s1.keywords.length > 0 ? s1 : null;
+  const score1 = s1Specific ? entryMatchScore(s1Specific, text, false) : null;
+  // Stage 2: an incidental stem narrowed the pool to the wrong trade — scan
+  // everything, the way a stemless bare search does.
+  const pool = vehicle === "moto"
+    ? JOB_TYPE_TAXONOMY
+    : JOB_TYPE_TAXONOMY.filter((e) => !e.motoOnly);
+  const s2 = longestKeywordMatch(pool, text, true);
+  const score2 = s2 ? entryMatchScore(s2, text, true) : null;
+  // The stronger claim wins; a stem-hijacked stage 1 ("already plumbed"
+  // routing a dishwasher to plumbing.fixture) loses to the full scan.
+  if (
+    score2 &&
+    (!score1 ||
+      score2.priority > score1.priority ||
+      (score2.priority === score1.priority && score2.length > score1.length))
+  ) {
+    return s2;
+  }
+  // Nothing better found: keep the primary (a general entry declines the
+  // same way null does downstream, so behavior here is unchanged).
+  return s1Specific ?? primary;
 }
 
 // Spelled-out counts up to twelve → digits, as their own words only, so
