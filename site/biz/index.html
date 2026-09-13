@@ -1,3 +1,7 @@
+<!-- RECOVERY 2026-09-12: a stale local `npx wrangler deploy` overwrote the live
+     site with v50/v31 files after the auto-deploy had already shipped v79/v34.
+     This commit only triggers the deploy-site workflow to restore the correct
+     build. Site deploys run ONLY via the GitHub Action — never from a laptop. -->
 <!doctype html>
 <html lang="en">
 <head>
