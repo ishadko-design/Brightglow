@@ -1101,10 +1101,12 @@ async function loadLeadThumbs(leads) {
 
 // Swipe-to-delete on a request row (Figma 1140:2933): drag the cell left to reveal
 // Delete; a plain tap opens the thread. Touch-driven — the business is on mobile.
-const SWIPE_OPEN = -118;   // px the card slides to fully reveal the 118px Delete strip
+const SWIPE_OPEN = -134;   // px the card slides: 118px Delete pill + 16px gap (Figma 1140:2933)
 
-// Swipe-to-delete, rebuilt: the red is structural (the row's own background),
-// so a tap can never flash it. A gesture only counts as a swipe once horizontal
+// Swipe-to-delete, rebuilt: a small rounded Delete pill (Figma 1140:2933) is
+// revealed behind the sliding card; the cell itself never turns red, and the
+// pill stays hidden until a swipe starts, so a tap can never flash it. A gesture
+// only counts as a swipe once horizontal
 // movement passes 10px AND dominates vertical movement — plain taps (even jittery
 // ones) always fall through to openThread. Works with touch and mouse-drag.
 function wireLeadRow(row, leads) {
@@ -1162,7 +1164,10 @@ function wireLeadRow(row, leads) {
   });
   row.querySelector(".lead-delete").addEventListener("click", (e) => {
     e.stopPropagation();
-    deleteLead(leads[i], row);
+    const btn = e.currentTarget;
+    if (btn.disabled) return;   // hide request already in flight — one tap deletes
+    btn.disabled = true;
+    deleteLead(leads[i], row).finally(() => { btn.disabled = false; });
   });
 }
 

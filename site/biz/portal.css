@@ -559,26 +559,31 @@ select { appearance: none; background-image: none; }
    which is exactly the stuck-all-red bug. Opaque composite, same Figma look. */
 .lead-row { position: relative; overflow: hidden; border-radius: 16px;
   margin: 0 8px; background: transparent; }   /* Figma 1984:5579: the 386 card sits 8px inset in the 402 row */
-/* The red delete layer lives on the row behind the card. It must never show at
+/* The Delete pill lives on the row behind the card. It must never show at
    rest — not even as an antialiased fringe at the card's rounded corners — so it
    only appears once a swipe starts (.swiping) or the row is open. */
-.lead-row.swiping, .lead-row.open { background: var(--danger); }
-.lead-delete { position: absolute; top: 0; bottom: 0; right: 0; width: 118px;
-  border: 0; background: transparent; cursor: pointer;
-  color: var(--white); font-family: "Lato"; font-weight: 700; font-size: 15px; }
+/* Figma 1140:2933 swiped state: the cell does NOT turn red. A small rounded
+   Delete pill (118x48, r32, --danger) sits at the row's right edge, vertically
+   centered. Hidden (opacity + pointer-events) until a swipe reveals it, so a
+   plain tap can never flash it. touch-action: manipulation kills any tap delay. */
+.lead-delete { position: absolute; right: 0; top: 50%; transform: translateY(-50%);
+  width: 118px; height: 48px; border: 0; border-radius: 32px;
+  background: var(--danger); cursor: pointer; touch-action: manipulation;
+  color: var(--white); font-family: "Lato"; font-weight: 700; font-size: 18px;
+  display: flex; align-items: center; justify-content: center;
+  opacity: 0; pointer-events: none; transition: opacity .18s ease; }
+.lead-row.swiping .lead-delete, .lead-row.open .lead-delete { opacity: 1; pointer-events: auto; }
 .lead-card { display: flex; align-items: center; gap: 12px; background: var(--card);
   border: 0; border-radius: 16px; padding: 14px 12px; cursor: pointer; position: relative;
   z-index: 1;
   touch-action: pan-y; transition: transform .18s ease; }
-.lead-row.open .lead-card { transform: translateX(-118px); }
+.lead-row.open .lead-card { transform: translateX(-134px); }   /* 118 pill + 16 gap (Figma 1140:2933) */
 /* Reviewed requests: no card background, title de-bolds to Poppins 300 17
    (Figma 1984:5579 "Variant3"), badge gone. The Delete button behind the card
    stays invisible at rest — with a transparent card it would otherwise ghost
    through — and appears only once the swipe reveals it. */
 .lead-row.read .lead-card { background: transparent; }
 .lead-row.read .lead-title { font-family: "Poppins"; font-weight: 300; }
-.lead-row.read .lead-delete { opacity: 0; pointer-events: none; transition: opacity .18s ease; }
-.lead-row.read.swiping .lead-delete, .lead-row.read.open .lead-delete { opacity: 1; pointer-events: auto; }
 /* Figma 1984:5579: 44px thumbnail, 12px radius. Holds the customer's photo when
    the request has one (popped in async); otherwise the initial placeholder. */
 .lead-avatarwrap { position: relative; width: 44px; height: 44px; flex-shrink: 0; }
