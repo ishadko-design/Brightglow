@@ -63,6 +63,16 @@ const CASES: Case[] = [
   { base: "clogged drain", detailed: "clogged drain asap this weekend", lever: "after-hours premium" },
   // Scope words, not sizes.
   { base: "replace windows", detailed: "replace windows, glass only", lever: "replacement scope" },
+  // 2026-09-11: stating the extent must change the price by an order of
+  // magnitude, not a rounding error. "repair rotted siding" alone is a
+  // localized patch (carpentry.wood_rot); "… , 200 sq ft" is large-area work
+  // (carpentry.siding_replace, per sq ft). Before the fix the area was
+  // silently ignored and both priced identically.
+  {
+    base: "repair rotted siding",
+    detailed: "repair rotted siding, 200 sq ft",
+    lever: "siding area",
+  },
 ];
 
 Deno.test("a detail the clarifying chat collects moves the price", () => {

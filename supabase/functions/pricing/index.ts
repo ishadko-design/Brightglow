@@ -34,6 +34,7 @@ import { createClient } from "jsr:@supabase/supabase-js@2";
 import {
   buildClassifierPool,
   classifyWithLLM,
+  type ClassifiedJob,
   type Classification,
 } from "./llmClassifier.ts";
 import {
@@ -58,8 +59,9 @@ import {
   stripVehicleWords,
   type EPCIItem,
   type InsufficientDataResult,
+  type JobTypeEntry,
 } from "./pricingEngine.ts";
-import { estimateInHouse } from "./estimatePipeline.ts";
+import { estimateInHouse, estimateJobsInHouse } from "./estimatePipeline.ts";
 
 const ANTHROPIC_API_KEY = Deno.env.get("ANTHROPIC_API_KEY") ?? "";
 const APP_TOKEN = Deno.env.get("APP_TOKEN") ?? "";
@@ -125,8 +127,9 @@ function classificationCacheKey(category: string, description: string): string {
   return `${category}:${norm}`.slice(0, 300);
 }
 
-/** Semantic classification with a 24h cache. Returns the taxonomy job_type AND
- *  the vehicle, both from one call. Nulls mean "keyword result stands" — the
+/** Semantic classification with a 24h cache. Returns the taxonomy job types
+ *  (one per distinct job in the request — see llmClassifier.ts) AND the
+ *  vehicle, all from one call. Empty jobs mean "keyword result stands" — the
  *  classifier degrades, never hard-fails. "none" outcomes are cached like hits
  *  so unmatchable text costs one call, not one per retry. */
 async function classifyLLMCached(
@@ -138,12 +141,18 @@ async function classifyLLMCached(
   if (db) {
     try {
       const { data } = await db.from("classification_cache")
-        .select("job_type, vehicle, vertical, created_at").eq("cache_key", key).maybeSingle();
+        .select("job_type, jobs, vehicle, vertical, created_at").eq("cache_key", key).maybeSingle();
       if (data && Date.now() - new Date(data.created_at as string).getTime() < TTL_MS) {
         const v = data.vehicle;
         const vert = data.vertical;
+        // New shape (jobs JSON) wins; pre-multi-job rows carry one job_type.
+        const jobs: ClassifiedJob[] = Array.isArray(data.jobs)
+          ? (data.jobs as ClassifiedJob[]).filter((j) => j && typeof j.jobType === "string")
+          : typeof data.job_type === "string" && data.job_type
+          ? [{ jobType: data.job_type as string, detail: "" }]
+          : [];
         return {
-          jobType: data.job_type as string | null,
+          jobs,
           vehicle: v === "auto" || v === "moto" ? v : null,
           vertical: vert === "home" || vert === "auto" ? vert : null,
         };
@@ -151,14 +160,19 @@ async function classifyLLMCached(
     } catch (_) { /* ignore, fall through to a live call */ }
   }
 
-  const pool = buildClassifierPool(JOB_TYPE_TAXONOMY, CATEGORY_GENERAL, category);
+  // The pool is the WHOLE taxonomy, not the tapped category's slice: a request
+  // can span trades ("repair the siding and fix the roof"), and filtering to
+  // the category silently dropped every cross-trade job (2026-09-11 — the
+  // siding half of a siding+roof request priced $0). The tapped category
+  // travels as a prompt hint instead.
+  const pool = buildClassifierPool(JOB_TYPE_TAXONOMY, CATEGORY_GENERAL, "");
   let result: Classification;
   try {
-    result = await classifyWithLLM(pool, description, ANTHROPIC_API_KEY);
+    result = await classifyWithLLM(pool, description, ANTHROPIC_API_KEY, category || undefined);
   } catch (err) {
     // Not cached: a transient API failure shouldn't pin "no match" for 24h.
     console.error("pricing: LLM classification failed", err);
-    return { jobType: null, vehicle: null, vertical: null };
+    return { jobs: [], vehicle: null, vertical: null };
   }
   console.log("pricing: llm-classified", JSON.stringify({ category, description, ...result }));
 
@@ -166,7 +180,8 @@ async function classifyLLMCached(
     try {
       await db.from("classification_cache").upsert({
         cache_key: key,
-        job_type: result.jobType,
+        job_type: result.jobs[0]?.jobType ?? null,
+        jobs: result.jobs,
         vehicle: result.vehicle,
         vertical: result.vertical,
         created_at: new Date().toISOString(),
@@ -175,6 +190,24 @@ async function classifyLLMCached(
   }
 
   return result;
+}
+
+/** The LLM's per-job detail must be grounded in the request: non-empty and
+ *  sharing at least two significant words with it. A hallucinated scope would
+ *  price numbers the user never stated; when the detail fails this check the
+ *  job falls back to the full description (the pre-multi-job behavior). */
+function validJobDetail(detail: string, description: string): boolean {
+  const d = detail.trim();
+  if (d.length < 8) return false;
+  const sig = (s: string) =>
+    new Set(s.toLowerCase().split(/[^a-z0-9]+/).filter((w) => w.length > 3));
+  const dw = sig(d);
+  const sw = sig(description);
+  let shared = 0;
+  for (const w of dw) {
+    if (sw.has(w) && ++shared >= 2) return true;
+  }
+  return false;
 }
 
 Deno.serve(async (req) => {
@@ -236,31 +269,55 @@ Deno.serve(async (req) => {
   const trimmedDesc = description.trim();
   let llmVehicle: "auto" | "moto" | null = null;
   let llmVertical: "home" | "auto" | null = null;
+  // Multi-job: the classifier may return several jobs, each validated and
+  // priced separately below. Empty = "none", the keyword result stands.
+  let llmJobs: Array<{ entry: JobTypeEntry; description: string }> = [];
   if (ANTHROPIC_API_KEY && trimmedDesc.length >= 3) {
     const llm = await classifyLLMCached(category, trimmedDesc);
-    if (llm.jobType) {
-      const generalEntries = Object.values(CATEGORY_GENERAL)
-        .filter((e): e is NonNullable<typeof e> => e !== null);
-      const picked = [...JOB_TYPE_TAXONOMY, ...generalEntries]
-        .find((e) => e.job_type === llm.jobType);
+    const generalEntries = Object.values(CATEGORY_GENERAL)
+      .filter((e): e is NonNullable<typeof e> => e !== null);
+    const universe = [...JOB_TYPE_TAXONOMY, ...generalEntries];
+    const seen = new Set<string>();
+    for (const job of llm.jobs) {
+      if (!job.jobType || seen.has(job.jobType)) continue;
+      const picked = universe.find((e) => e.job_type === job.jobType);
+      if (!picked) continue;
+      // A general entry ("some other carpentry work") is not a job — pricing
+      // it would be a guess, and letting it through would poison the sum via
+      // decline-all. The prompt tells the model to omit unclassifiable parts;
+      // this enforces it when the model doesn't.
+      if (picked.keywords.length === 0) continue;
       // notIfContains is a hard veto on the entry, not a keyword-matcher
       // tiebreak — the model picks "install solar" for "solar panel repair"
       // just as readily as the keywords did, and that entry prices a whole
-      // 20-panel array. Fall back to the keyword result (usually the
-      // category-general bucket, which then declines).
-      const vetoed = picked?.notIfContains?.some((w) =>
-        trimmedDesc.toLowerCase().includes(w)
+      // 20-panel array. Vetoed jobs are dropped, not priced.
+      const detail = validJobDetail(job.detail, trimmedDesc) ? job.detail.trim() : trimmedDesc;
+      const vetoed = picked.notIfContains?.some((w) =>
+        detail.toLowerCase().includes(w)
       );
-      entry = (picked && !vetoed ? picked : null) ?? entry;
+      if (vetoed) continue;
+      seen.add(job.jobType);
+      llmJobs.push({ entry: picked, description: detail });
     }
+    // One LLM job keeps the exact historical path: entry override, full
+    // description. Only genuinely multi-job requests take the new path.
+    if (llmJobs.length === 1) entry = llmJobs[0].entry;
     llmVehicle = llm.vehicle;
     llmVertical = llm.vertical;
   }
-  if (entry) {
+  if (llmJobs.length > 1) {
+    console.log("pricing: classified multi", JSON.stringify({
+      category,
+      description,
+      jobs: llmJobs.map((j) => ({ job_type: j.entry.job_type, detail: j.description })),
+    }));
+  } else if (entry) {
     console.log("pricing: classified", JSON.stringify({ category, description, job_type: entry.job_type }));
   }
 
-  if (!entry) {
+  // A multi-job LLM result stands on its own — the keyword layer finding
+  // nothing must not veto it.
+  if (llmJobs.length <= 1 && !entry) {
     // The backlog for the mapping layer: every description that reached us
     // and classified to nothing (visible in `supabase functions logs pricing`).
     console.log("pricing: unclassified", JSON.stringify({ category, description }));
@@ -283,14 +340,23 @@ Deno.serve(async (req) => {
     : null) ?? llmVertical;
 
   if (!EPCI_ENABLED) {
-    const r = estimateInHouse({
-      category,
-      description,
-      zip,
-      vehicle: vehicleResolved,
-      vertical: verticalResolved,
-      entryOverride: entry,
-    });
+    // Multi-job requests price each job separately and sum (see
+    // estimateJobsInHouse); anything else keeps the historical single path.
+    const r = llmJobs.length > 1
+      ? estimateJobsInHouse(llmJobs, {
+        category,
+        zip,
+        vehicle: vehicleResolved,
+        vertical: verticalResolved,
+      })
+      : estimateInHouse({
+        category,
+        description,
+        zip,
+        vehicle: vehicleResolved,
+        vertical: verticalResolved,
+        entryOverride: entry,
+      });
     if (r.kind === "insufficient") {
       console.log(`pricing: ${r.reason}`, JSON.stringify({ category, description, job_type: r.entry?.job_type ?? null }));
       const result: InsufficientDataResult = { error: "Insufficient data", fallback: "Get 3 bids" };

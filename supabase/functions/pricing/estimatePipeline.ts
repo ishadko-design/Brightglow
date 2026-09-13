@@ -36,6 +36,8 @@ import {
   classifyJobType,
   detectScopeAddOns,
   detectVehicle,
+  maybeSmallTrim,
+  maybeUpgradeSiding,
   resolveJobComponents,
   resolveQuantity,
   stripVehicleWords,
@@ -71,6 +73,8 @@ export type EstimateResult =
     entry: JobTypeEntry;
     quantity: number;
     isDefaulted: boolean;
+    /** Per-job ranges when this estimate combined several jobs. */
+    jobBreakdown?: Array<{ jobType: string; low: number; typical: number; high: number }>;
   }
   | {
     /** Auto & moto only — hours x local billed rate, parts excluded. */
@@ -102,6 +106,14 @@ export function estimateInHouse(input: EstimateInput): EstimateResult {
     classifyJobType(category, classifyText, [], input.vertical ?? null, vehicle);
   if (!entry) return { kind: "insufficient", reason: "unclassified", entry: null };
   if (vehicle === "moto") entry = applyMotoVariant(entry);
+  // Extent routing: a localized-patch entry is wrong when the description
+  // asserts a real area (see maybeUpgradeSiding). Runs on both paths — the
+  // keyword classifier and an LLM override alike.
+  entry = maybeUpgradeSiding(entry, description);
+  // Small-end extent routing: a small linear trim/flashing/fascia/siding
+  // section prices per linear foot, not as a flat project (see
+  // maybeSmallTrim). Same shared spot, same both-paths coverage.
+  entry = maybeSmallTrim(entry, description);
 
   const trimmedDesc = description.trim();
   const { quantity, isDefaulted } = resolveQuantity(entry, description);
@@ -206,5 +218,107 @@ export function estimateInHouse(input: EstimateInput): EstimateResult {
     entry,
     quantity,
     isDefaulted,
+  };
+}
+
+/** One priced job inside a multi-job request: the entry the classifier chose
+ *  for it plus the request's own words describing it (the LLM's `detail`,
+ *  falling back to the full description). Each job is priced in isolation so
+ *  its quantities resolve from its own numbers, not a sibling job's. */
+export interface JobRequest {
+  entry: JobTypeEntry;
+  description: string;
+}
+
+export interface JobsCommon {
+  category: string;
+  zip?: string;
+  vehicle?: Vehicle | null;
+  vertical?: Vertical | null;
+}
+
+const CONFIDENCE_RANK = { low: 0, med: 1, high: 2 } as const;
+
+/** Everything after the "Regional avg" / "Regional avg for X" prefix — the
+ *  per-job qualifiers ("incl. …", scope, tier) merged into the combined label. */
+function labelSuffix(label: string): string {
+  const rest = label.replace(/^Regional avg(?: for [^—]+)?\s*/, "");
+  return rest.replace(/^—\s*/, "");
+}
+
+/** Prices several distinct jobs from one request and combines them.
+ *
+ *  Added 2026-09-11: the pipeline priced exactly one job_type per request, so
+ *  "repair the siding and fix the roof" priced ONE half and silently dropped
+ *  the other — the $250–470 estimate on a two-job request. Each job is now
+ *  classified separately (with its own detail text) and the ranges are summed.
+ *
+ *  Decline-all on any failure: a partial sum would present as the whole price,
+ *  and a number we can't stand behind is worse than none. A single job
+ *  delegates to estimateInHouse untouched, so existing behavior is identical.
+ */
+export function estimateJobsInHouse(jobs: JobRequest[], common: JobsCommon): EstimateResult {
+  if (jobs.length === 1) {
+    return estimateInHouse({
+      ...common,
+      description: jobs[0].description,
+      entryOverride: jobs[0].entry,
+    });
+  }
+  const results = jobs.map((j) =>
+    estimateInHouse({ ...common, description: j.description, entryOverride: j.entry })
+  );
+
+  const insufficient = results.find((r) => r.kind === "insufficient");
+  if (insufficient) {
+    return {
+      kind: "insufficient",
+      reason: insufficient.kind === "insufficient" ? insufficient.reason : "no_items",
+      entry: insufficient.entry ?? null,
+    };
+  }
+
+  const ranges = results.filter((r) => r.kind === "range");
+  const labors = results.filter((r) => r.kind === "labor");
+  // A labor-only figure (Auto & moto) is a different kind of number than an
+  // all-in contractor price — the two can't be summed honestly.
+  if (ranges.length > 0 && labors.length > 0) {
+    return { kind: "insufficient", reason: "no_items", entry: jobs[0].entry };
+  }
+
+  if (labors.length > 0) {
+    const ls = labors as Extract<EstimateResult, { kind: "labor" }>[];
+    return {
+      kind: "labor",
+      low: ls.reduce((s, r) => s + r.low, 0),
+      typical: ls.reduce((s, r) => s + r.typical, 0),
+      high: ls.reduce((s, r) => s + r.high, 0),
+      label: `Typical labor only across ${ls.length} jobs. Parts extra.`,
+      entry: jobs[0].entry,
+    };
+  }
+
+  const rs = ranges as Extract<EstimateResult, { kind: "range" }>[];
+  const confidence = rs
+    .map((r) => r.confidence)
+    .sort((a, b) => CONFIDENCE_RANK[a] - CONFIDENCE_RANK[b])[0];
+  const suffixes = rs.map((r) => labelSuffix(r.label)).filter((s) => s.length > 0);
+  return {
+    kind: "range",
+    low: rs.reduce((s, r) => s + r.low, 0),
+    typical: rs.reduce((s, r) => s + r.typical, 0),
+    high: rs.reduce((s, r) => s + r.high, 0),
+    confidence,
+    label: `Regional avg (${rs.length} jobs combined)` +
+      (suffixes.length > 0 ? ` — ${suffixes.join("; ")}` : ""),
+    entry: jobs[0].entry,
+    quantity: rs[0].quantity,
+    isDefaulted: rs.some((r) => r.isDefaulted),
+    jobBreakdown: rs.map((r) => ({
+      jobType: r.entry.job_type,
+      low: r.low,
+      typical: r.typical,
+      high: r.high,
+    })),
   };
 }

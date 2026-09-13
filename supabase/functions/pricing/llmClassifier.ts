@@ -29,29 +29,47 @@ export function buildClassifierPool(
   return category ? pool.filter((e) => e.category === category) : pool;
 }
 
-export function buildSystemPrompt(pool: JobTypeEntry[]): string {
+export function buildSystemPrompt(pool: JobTypeEntry[], categoryHint?: string): string {
   const lines = pool.map((e) => {
     const hint = e.keywords.length > 0
       ? `e.g. ${e.keywords.join(", ")}`
       : `general ${e.category.toLowerCase()} work, when nothing more specific fits`;
-    return `- ${e.job_type} (${e.category}; ${hint})`;
+    const guidance = e.guidance ? ` ${e.guidance}` : "";
+    return `- ${e.job_type} (${e.category}; ${hint}).${guidance}`;
   });
   return [
-    "You classify a free-text service request into one job type from a fixed",
+    "You classify a free-text service request into job types from a fixed",
     "taxonomy, for a local cost estimate. Requests cover both home trades and",
     "vehicle work (cars and motorcycles).",
     "",
     "Rules:",
-    '- Pick the single job type that best matches the work described.',
-    "- When several fit, pick the most specific: a material- or item-specific",
-    '  entry beats a generic "replacement" or "general" one ("replace asphalt',
-    '  shingle roof" is the shingle entry, not the generic roof replacement —',
-    "  specific entries price by size and give tighter estimates).",
-    '- Answer "none" when the request does not clearly fit any listed job',
-    "  type — never force a fit. A wrong match displays a wrong price, which",
-    "  is worse than showing no price.",
+    "- A request can describe MORE THAN ONE distinct job (\"repair the siding",
+    '  and fix the roof\' is two jobs: the siding job and the roof job). Split',
+    "  it: return one entry per distinct job, each with the job_type that best",
+    '  matches THAT job and a "detail" field quoting the words of the request',
+    "  that describe that job (a contiguous quote when possible, otherwise a",
+    "  faithful near-quote — never invent details the request did not state).",
+    "- Order jobs as the request lists them. Never merge two trades into one",
+    "  entry, and never split one job into two.",
+    "- A single-job request returns a single entry.",
+    '- When several types fit one job, pick the most specific: a material- or',
+    '  item-specific entry beats a generic "replacement" or "general" one',
+    '  ("replace asphalt shingle roof" is the shingle entry, not the generic',
+    "  roof replacement — specific entries price by size and give tighter",
+    "  estimates).",
+    '- Answer with an empty jobs list when the request does not clearly fit',
+    "  any listed job type — never force a fit. A wrong match displays a",
+    "  wrong price, which is worse than showing no price.",
     '- Match on the work, not incidental words ("water pooling under the',
     '  dishwasher" is a plumbing leak, not an appliance job).',
+    ...(categoryHint
+      ? [
+        "",
+        `The user browsed the "${categoryHint}" category — prefer its entries`,
+        "when the work fits, but the request may span trades; classify what",
+        "the work actually is.",
+      ]
+      : []),
     "",
     "Report the vertical: \"auto\" for anything about a car, truck or",
     'motorcycle; "home" for property work; "none" if genuinely unclear. This',
@@ -79,9 +97,25 @@ export function buildSchema(pool: JobTypeEntry[]): Record<string, unknown> {
   return {
     type: "object",
     properties: {
-      job_type: {
-        type: "string",
-        enum: [...pool.map((e) => e.job_type), "none"],
+      jobs: {
+        type: "array",
+        maxItems: 3,
+        items: {
+          type: "object",
+          properties: {
+            job_type: {
+              type: "string",
+              enum: [...pool.map((e) => e.job_type), "none"],
+            },
+            detail: {
+              type: "string",
+              description:
+                "The words of the request describing this job, quoted contiguously when possible.",
+            },
+          },
+          required: ["job_type", "detail"],
+          additionalProperties: false,
+        },
       },
       vehicle: {
         type: "string",
@@ -92,14 +126,22 @@ export function buildSchema(pool: JobTypeEntry[]): Record<string, unknown> {
         enum: ["home", "auto", "none"],
       },
     },
-    required: ["job_type", "vehicle", "vertical"],
+    required: ["jobs", "vehicle", "vertical"],
     additionalProperties: false,
   };
 }
 
-export interface Classification {
-  /** Pool job_type, or null for "none"/unknown — keyword result stands. */
+export interface ClassifiedJob {
+  /** Pool job_type, or null for "none"/unknown — that job is dropped. */
   jobType: string | null;
+  /** The request's own words describing this job; priced in isolation. */
+  detail: string;
+}
+
+export interface Classification {
+  /** One entry per distinct job in the request, in listed order. Empty means
+   *  "none" — the keyword result stands. */
+  jobs: ClassifiedJob[];
   /** Vehicle the text implies, or null when it says nothing. */
   vehicle: "auto" | "moto" | null;
   /** Which taxonomy the request belongs to, or null when unclear. Keeps a car
@@ -107,22 +149,41 @@ export interface Classification {
   vertical: "home" | "auto" | null;
 }
 
-/** Parses the model's JSON reply. Anything malformed degrades to nulls, which
- *  mean "keyword result stands" — the classifier never hard-fails a request. */
+/** Parses the model's JSON reply. Anything malformed degrades to no jobs,
+ *  which means "keyword result stands" — the classifier never hard-fails a
+ *  request. */
 export function parseClassification(
   text: string | undefined,
   pool: JobTypeEntry[],
 ): Classification {
-  const empty: Classification = { jobType: null, vehicle: null, vertical: null };
+  const empty: Classification = { jobs: [], vehicle: null, vertical: null };
   if (!text) return empty;
   try {
     const o = JSON.parse(text) as {
+      jobs?: unknown;
       job_type?: unknown;
       vehicle?: unknown;
       vertical?: unknown;
     };
+    // Backwards tolerance: the pre-multi-job schema returned a single job_type.
+    const rawJobs = Array.isArray(o.jobs)
+      ? o.jobs
+      : o.job_type !== undefined
+      ? [{ job_type: o.job_type, detail: "" }]
+      : [];
+    const jobs: ClassifiedJob[] = [];
+    for (const j of rawJobs) {
+      if (typeof j !== "object" || j === null) continue;
+      const jt = (j as { job_type?: unknown }).job_type;
+      const detail = (j as { detail?: unknown }).detail;
+      jobs.push({
+        jobType: pool.some((e) => e.job_type === jt) ? jt as string : null,
+        detail: typeof detail === "string" ? detail : "",
+      });
+      if (jobs.length >= 3) break;
+    }
     return {
-      jobType: pool.some((e) => e.job_type === o.job_type) ? o.job_type as string : null,
+      jobs,
       vehicle: o.vehicle === "auto" || o.vehicle === "moto" ? o.vehicle : null,
       vertical: o.vertical === "home" || o.vertical === "auto" ? o.vertical : null,
     };
@@ -135,13 +196,14 @@ export async function classifyWithLLM(
   pool: JobTypeEntry[],
   description: string,
   apiKey: string,
+  categoryHint?: string,
 ): Promise<Classification> {
-  if (pool.length === 0 || !apiKey) return { jobType: null, vehicle: null, vertical: null };
+  if (pool.length === 0 || !apiKey) return { jobs: [], vehicle: null, vertical: null };
   const client = new Anthropic({ apiKey, timeout: 15_000, maxRetries: 1 });
   const response = await client.messages.create({
     model: "claude-opus-4-8",
-    max_tokens: 300,
-    system: buildSystemPrompt(pool),
+    max_tokens: 600,
+    system: buildSystemPrompt(pool, categoryHint),
     output_config: { format: { type: "json_schema", schema: buildSchema(pool) } },
     messages: [{ role: "user", content: `Request: ${description}` }],
   });

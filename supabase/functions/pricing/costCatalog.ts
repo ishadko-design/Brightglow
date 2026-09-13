@@ -515,6 +515,18 @@ export const COST_CATALOG: CostCatalogEntry[] = [
   { itemId: "fence-repair", trade: "framing", description: "Fence repair — posts, pickets, rails, leaning sections", unit: "linear foot", soc: CARPENTER, laborHours: b(0.16, 0.28, 0.45), materials: b(6, 13, 26), setup: { hours: b(1.1, 2, 3.4), materials: b(25, 55, 120) } },
   // sanity: exterior wood rot repair $100–500 localized (trim, sill, siding)
   { itemId: "wood-rot-repair", trade: "framing", description: "Exterior wood rot repair — trim, sill, siding, fascia", unit: "project", soc: CARPENTER, laborHours: b(1.3, 2.8, 5.5), materials: b(30, 90, 240) },
+  // sanity: small exterior trim/flashing section $150–500 all-in (Thumbtack /
+  // HomeAdvisor 2026: minor siding/trim repairs). Added 2026-09-12: a 7-ft
+  // metal strip above a door priced $460–1.6k as a wood-rot project because
+  // the taxonomy had no per-foot trim item and project-priced entries ignore
+  // stated sizes (see maybeSmallTrim).
+  { itemId: "exterior-trim-repair", trade: "framing", description: "Small exterior trim / flashing / fascia section replacement", unit: "linear foot", soc: CARPENTER, laborHours: b(0.08, 0.15, 0.25), materials: b(2, 4, 7), setup: { hours: b(0.6, 1.0, 1.8), materials: b(10, 25, 50) } },
+  // sanity: wood siding replacement $6–15 per sq ft installed (HomeAdvisor /
+  // Angi 2026: $6,000–23,000 whole-house). Labor covers removal of the failed
+  // boards, weather barrier touch-up and install; setup covers demo + disposal.
+  // Added 2026-09-11: the taxonomy had no scalable siding job, so 200 sq ft of
+  // severely deteriorated siding priced as a $250–470 localized patch.
+  { itemId: "wood-siding-replace", trade: "framing", description: "Wood siding replacement, per sq ft", unit: "sq ft", soc: CARPENTER, laborHours: b(0.05, 0.08, 0.12), materials: b(2.5, 4.0, 6.5), setup: { hours: b(4, 6, 10), materials: b(120, 200, 350) } },
   // sanity: trim / baseboard replacement $0.50–6 per linear foot
   { itemId: "trim-carpentry", trade: "framing", description: "Baseboard, casing and trim replacement (carpentry)", unit: "linear foot", soc: CARPENTER, laborHours: b(0.02, 0.04, 0.075), materials: b(1.1, 2.2, 4.2), setup: { hours: b(0.8, 1.5, 2.6), materials: b(18, 40, 90) } },
   // sanity: closet / wall shelving install $150-800 labor (HomeGuide $200-1,600

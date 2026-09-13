@@ -140,7 +140,13 @@ const REFERENCE: Record<string, Ref> = {
   // Carpentry repairs — Angi / HomeGuide / Fixr 2026
   "fence-repair": { low: 15, high: 45 },
   "wood-rot-repair": { low: 100, high: 500 },
+  // wood-siding-replace anchor kept out of the catalog's source set
+  // (HomeGuide) — This Old House 2026.
+  "wood-siding-replace": { low: 6, high: 15 },
   "trim-carpentry": { low: 2, high: 8 },
+  // exterior-trim-repair anchor kept out of the catalog's source set
+  // (Thumbtack) — HomeAdvisor 2026.
+  "exterior-trim-repair": { low: 15, high: 40 },
   "shelving-install": { low: 150, high: 800 },
   "bathroom-vanity-installation": { low: 150, high: 500 },
   "stock-cabinets-installed": { low: 200, high: 500 },

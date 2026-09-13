@@ -627,6 +627,11 @@ export interface JobTypeEntry {
   /** Only a candidate for a motorcycle — see classifyJobType. Keeps a car
    *  request off the bike service items (a car "tune up" is not a moto one). */
   motoOnly?: boolean;
+  /** One-line disambiguation shown to the LLM classifier for entries that are
+   *  easy to confuse (a localized patch vs. a large-area job on the same
+   *  material). Rendered into the classifier prompt after the keyword hints;
+   *  the keyword matcher ignores it. */
+  guidance?: string;
 }
 
 // One flagship job per category that EPCI prices well, plus a per-category
@@ -783,7 +788,19 @@ export const JOB_TYPE_TAXONOMY: JobTypeEntry[] = [
   // has to veto it or "fix my deck" quotes new construction; the three repair
   // entries below carry priority 1 so they win outright when both match.
   { job_type: "carpentry.fence", category: "Carpentry", keywords: ["fence", "fence repair", "fence post", "leaning fence", "fence panel", "gate repair", "broken fence"], trade: "framing", itemId: "fence-repair", unit: "linear foot", defaultQuantity: 24, priority: 1 },
-  { job_type: "carpentry.wood_rot", category: "Carpentry", keywords: ["wood rot", "dry rot", "rotted trim", "rotten trim", "rotted siding", "rotted sill", "fascia rot", "soffit rot", "fascia", "soffit", "soffit falling", "fascia board", "rotting wood"], trade: "framing", itemId: "wood-rot-repair", unit: "project", defaultQuantity: 1, priority: 1 },
+  { job_type: "carpentry.wood_rot", category: "Carpentry", keywords: ["wood rot", "dry rot", "rotted trim", "rotten trim", "rotted siding", "rotted sill", "fascia rot", "soffit rot", "fascia", "soffit", "soffit falling", "fascia board", "rotting wood"], trade: "framing", itemId: "wood-rot-repair", unit: "project", defaultQuantity: 1, priority: 1,
+    guidance: "LOCALIZED patch only: a few boards, a trim piece, a sill or a fascia section — no area stated, or only a few sq ft. When the request states a siding area (tens to hundreds of sq ft), says entire/whole house, all siding, or severe/extensive deterioration, that is carpentry.siding_replace instead." },
+  { job_type: "carpentry.exterior_trim", category: "Carpentry", keywords: ["metal trim", "metal siding", "siding trim", "exterior trim", "drip edge", "metal fascia"], trade: "framing", itemId: "exterior-trim-repair", unit: "linear foot", defaultQuantity: 8, priority: 1,
+    notIfContains: ["interior", "baseboard", "casing", "crown molding"],
+    guidance: "SMALL exterior trim/flashing/fascia/metal-siding sections with a stated run under ~12 ft — a metal strip above a door or window, a fascia section, drip edge. NOT whole-house or large-area siding (carpentry.siding_replace), NOT wood-rot remediation (carpentry.wood_rot), NOT interior trim (carpentry.trim)." },
+  // Large-area siding work, per sq ft. Added 2026-09-11: "repair severely
+  // deteriorated wood siding (200 sq ft)" classified as carpentry.wood_rot —
+  // a 2-hour patch entry — because the taxonomy had no scalable siding job,
+  // and the multi-job request's roof half was priced while the siding half
+  // was silently dropped. Extent words or a stated sq-ft area route here;
+  // maybeUpgradeSiding() enforces it on the keyword path too.
+  { job_type: "carpentry.siding_replace", category: "Carpentry", keywords: ["replace siding", "siding replacement", "new siding", "re-side", "replace all siding", "whole house siding", "entire house siding", "all siding"], trade: "framing", itemId: "wood-siding-replace", unit: "sq ft", defaultQuantity: 1000, priority: 1,
+    guidance: "LARGE-AREA siding work priced per sq ft: hundreds of sq ft, entire/whole house, all siding, severe or extensive deterioration, or an explicit sq-ft figure next to siding. NOT a small patch — a few boards or a trim piece is carpentry.wood_rot." },
   { job_type: "carpentry.trim", category: "Carpentry", keywords: ["baseboard", "baseboards", "casing", "crown molding", "molding", "trim work", "install trim"], trade: "framing", itemId: "trim-carpentry", unit: "linear foot", defaultQuantity: 120, priority: 1 },
   { job_type: "carpentry.shelving", category: "Carpentry", keywords: ["shelving", "install shelves", "install shelf", "closet shelf", "closet shelves", "floating shelf", "floating shelves", "shelf install", "closet organizer"], trade: "framing", itemId: "shelving-install", unit: "project", defaultQuantity: 1, priority: 1 },
   { job_type: "carpentry.deck", category: "Carpentry", keywords: ["deck"], trade: "deck", itemId: "pressure-treated-installed", unit: "sq ft", defaultQuantity: 300, notIfContains: ["fix", "repair", "rot", "rotten", "rotted", "refinish", "resurface", "restain", "re-stain", "stain", "seal", "sand", "some boards", "few boards", "replace boards", "deck board", "loose", "wobbly", "squeak", "railing", "baluster", "baby proof", "babyproof", "baby-proof", "child proof", "childproof"] },
@@ -813,14 +830,16 @@ export const JOB_TYPE_TAXONOMY: JobTypeEntry[] = [
   { job_type: "roofing.metal", category: "Roofing", keywords: ["metal roof", "standing seam"], trade: "roofing", itemId: "metal-roofing-installed", unit: "sq ft", defaultQuantity: 1700, priority: 1 },
   { job_type: "roofing.flat", category: "Roofing", keywords: ["flat roof", "tpo", "epdm", "torch down", "membrane", "rolled roofing"], trade: "roofing", itemId: "roof-replacement-total", unit: "project", defaultQuantity: 1 },
   { job_type: "roofing.replacement", category: "Roofing", keywords: ["replace", "replacement", "new roof", "reroof"], trade: "roofing", itemId: "roof-replacement-total", unit: "project", defaultQuantity: 1 },
-  { job_type: "roofing.repair", category: "Roofing", keywords: ["repair", "patch", "leak"], trade: "roofing", itemId: "roof-repair-patch", unit: "sq ft", defaultQuantity: 50 },
+  { job_type: "roofing.repair", category: "Roofing", keywords: ["repair", "patch", "leak"], trade: "roofing", itemId: "roof-repair-patch", unit: "sq ft", defaultQuantity: 50,
+    guidance: "Roof repair over a STATED AREA (tens to hundreds of sq ft, e.g. '300 sq ft damaged'). A few missing or damaged shingles with no large area stated is roofing.shingle_repair." },
   { job_type: "roofing.gutter", category: "Roofing", keywords: ["gutter"], trade: "roofing", itemId: "gutter-install-aluminum", unit: "linear foot", defaultQuantity: 150, notIfContains: ["clean", "cleaning", "clogged", "overflowing", "repair", "sagging", "leaking seam", "downspout"] },
   // Roofing maintenance. These outrank the install and whole-roof entries,
   // which otherwise catch "gutter" and "shingle" and quote a reroof for a few
   // missing tabs (2026-07-23).
   { job_type: "roofing.gutter_cleaning", category: "Roofing", keywords: ["gutter cleaning", "clean gutters", "clean the gutters", "clogged gutter", "gutters overflowing", "gutters full"], trade: "roofing", itemId: "gutter-cleaning", unit: "project", defaultQuantity: 1, priority: 1 },
   { job_type: "roofing.gutter_repair", category: "Roofing", keywords: ["gutter repair", "repair gutter", "sagging gutter", "gutter leaking", "downspout", "gutter seam"], trade: "roofing", itemId: "gutter-repair", unit: "project", defaultQuantity: 1, priority: 1 },
-  { job_type: "roofing.shingle_repair", category: "Roofing", keywords: ["missing shingle", "missing shingles", "blown off", "shingles came off", "damaged shingle", "damaged shingles", "shingle repair", "replace a few shingles", "lost shingles"], trade: "roofing", itemId: "shingle-repair", unit: "project", defaultQuantity: 1, priority: 1 },
+  { job_type: "roofing.shingle_repair", category: "Roofing", keywords: ["missing shingle", "missing shingles", "blown off", "shingles came off", "damaged shingle", "damaged shingles", "shingle repair", "replace a few shingles", "lost shingles"], trade: "roofing", itemId: "shingle-repair", unit: "project", defaultQuantity: 1, priority: 1,
+    guidance: "SMALL localized shingle fix: a few missing/damaged shingles, no large area stated. When the request states a damaged area in sq ft (tens to hundreds), that is roofing.repair instead." },
   { job_type: "roofing.flashing", category: "Roofing", keywords: ["flashing", "chimney leak", "step flashing", "pipe boot", "vent boot"], trade: "roofing", itemId: "flashing-repair", unit: "project", defaultQuantity: 1, priority: 1 },
   { job_type: "roofing.inspection", category: "Roofing", keywords: ["roof inspection", "inspect the roof", "inspect my roof", "roof certification", "roof condition"], trade: "roofing", itemId: "roof-inspection", unit: "project", defaultQuantity: 1, priority: 1 },
   { job_type: "roofing.tarp", category: "Roofing", keywords: ["roof tarp", "tarp the roof", "emergency tarp", "cover the roof", "roof leaking now"], trade: "roofing", itemId: "roof-tarp", unit: "project", defaultQuantity: 1, priority: 1 },
@@ -1240,6 +1259,91 @@ export function classifyJobType(
     ? TAXONOMY.filter((entry) => stemmed.includes(entry.category))
     : TAXONOMY;
   return longestKeywordMatch(pool, text, stemmed.length === 0);
+}
+
+// Extent routing for siding work, enforced on BOTH classification paths.
+//
+// carpentry.wood_rot and carpentry.exterior_trim are small-job models (a patch
+// entry and a per-foot trim entry): the right entries for "rotted fascia
+// board" and a 7-ft metal strip, and the wrong ones for "severely deteriorated
+// wood siding (200 sq ft)", which the taxonomy previously had no scalable
+// entry for. When the description asserts siding work at a real area — an
+// explicit sq-ft figure of 100+ next to siding, or extent words like
+// entire/whole house, all siding, severe/extensive deterioration — the per-sq-ft
+// carpentry.siding_replace entry prices it. Below 100 sq ft (or with no area
+// and no extent words) the small entries stand: "repair 5 sq ft of rotted
+// siding" is genuinely a small job.
+//
+// Reported live 2026-09-11: 200 sq ft of severely deteriorated siding priced
+// as a $250–470 patch because nothing in the pipeline read the extent.
+const SIDING_EXTENT_WORDS =
+  /\b(entire|whole)\s+(house|home)\b|\ball\b.{0,20}\bsiding\b|\bsiding\b.{0,20}\ball\b|\bseverely\b|\bextensively\b/i;
+
+export function maybeUpgradeSiding(
+  entry: JobTypeEntry,
+  description: string,
+): JobTypeEntry {
+  if (entry.job_type !== "carpentry.wood_rot" && entry.job_type !== "carpentry.exterior_trim") {
+    return entry;
+  }
+  if (!/\bsiding\b/i.test(description)) return entry;
+  const areaMatch = description.match(
+    /(\d[\d,]*)\s*(?:sq\s*\.?\s*ft|square\s*feet|\bsf\b)/i,
+  );
+  const largeArea = areaMatch && parseInt(areaMatch[1].replace(/,/g, ""), 10) >= 100;
+  if (!largeArea && !SIDING_EXTENT_WORDS.test(description)) return entry;
+  const upgraded = JOB_TYPE_TAXONOMY.find((e) => e.job_type === "carpentry.siding_replace");
+  return upgraded ?? entry;
+}
+
+// Extent routing, small end: the mirror of maybeUpgradeSiding.
+//
+// carpentry.wood_rot is project-priced and deliberately ignores any size the
+// user stated (see resolveQuantity), so a 7-ft metal trim strip above a door
+// priced like a 5-hour rot remediation — reported live 2026-09-12 as
+// $460–$1.6k for a ~$300 job. When the request describes a small linear
+// trim/flashing/fascia/siding section — a stated run under SMALL_TRIM_FT with
+// no large-area signals — the per-linear-foot carpentry.exterior_trim entry
+// prices it instead. One rule covers the whole class (metal trim above a
+// door, fascia sections, drip edge); no per-micro-job taxonomy entries.
+//
+// The guard is deliberately narrow, because dimensions are ambiguous:
+//  - trim/fascia/flashing/drip edge are inherently linear pieces, so a small
+//    run alone is enough ("replace 8 ft of rotted fascia");
+//  - bare "siding" needs the strip-height signal too ("a few inches tall",
+//    "strip"), or an 8-ft-TALL siding patch would misroute;
+//  - large-area signals (SIDING_EXTENT_WORDS) always win;
+//  - a small AREA (≤ 6 sq ft) of a linear piece also routes — it is the same
+//    small job described differently.
+const SMALL_TRIM_FT = 12;
+
+export function maybeSmallTrim(
+  entry: JobTypeEntry,
+  description: string,
+): JobTypeEntry {
+  if (entry.job_type === "carpentry.exterior_trim") return entry;
+  if (entry.job_type !== "carpentry.wood_rot" && entry.job_type !== "carpentry.siding_replace") {
+    return entry;
+  }
+  // Large-area signals always win — never downgrade real siding work.
+  if (SIDING_EXTENT_WORDS.test(description)) return entry;
+  const m = description.match(
+    /(\d+(?:\.\d+)?)\s*(sq\s*\.?\s*ft|square\s*feet|\bsf\b|linear\s*f(?:oo|ee)?t|\blf\b|\bft\b)/i,
+  );
+  if (!m) return entry;
+  const v = parseFloat(m[1]);
+  const isArea = /sq|square|^sf$/i.test(m[2]);
+  const linearPiece = /\b(trim|fascia|flashing|drip\s*edge)\b/i.test(description);
+  const stripHeight =
+    /few\s+inch|couple\s+of\s+inch|\bstrip\b|\d+(?:\.\d+)?\s*inch/i.test(description);
+  if (isArea) {
+    if (v > 6) return entry;
+  } else {
+    if (!(v > 0 && v < SMALL_TRIM_FT)) return entry;
+  }
+  if (!linearPiece && !stripHeight) return entry;
+  const trim = JOB_TYPE_TAXONOMY.find((e) => e.job_type === "carpentry.exterior_trim");
+  return trim ?? entry;
 }
 
 // Terms whose bare form appears INSIDE unrelated words — "tire" sits in

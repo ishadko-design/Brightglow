@@ -419,4 +419,50 @@ export const GROUND_TRUTH: GroundTruthCase[] = [
     source: "PGN / Kawasaki-forum shop quotes 2026",
     vertical: "auto",
   },
+
+  // === EXTENT-DRIVEN CLASSIFICATION, added 2026-09-11 ======================
+  // Live failure: "repair severely deteriorated wood siding (200 sq ft)" priced
+  // as carpentry.wood_rot, a $100–500 localized patch — the taxonomy had no
+  // scalable siding job, the extent went unread, and the request's roof half
+  // was silently dropped (single job_type per request). Held out from the
+  // build sources (HomeGuide); the first case's source is This Old House 2026.
+  {
+    query: "siding replacement for house, 1200 sq ft",
+    category: "Carpentry",
+    expectJobType: "carpentry.siding_replace",
+    low: 7200,
+    high: 18000,
+    source: "This Old House 2026 ($6–15/sq ft wood siding replacement)",
+    vertical: "home",
+  },
+  // Roof REPAIR over a stated area prices by the square foot — a distinct job
+  // from both a full shingle replacement and a localized shingle patch.
+  {
+    query: "repair damaged asphalt shingle roofing, about 300 sq ft",
+    category: "Roofing",
+    expectJobType: "roofing.repair",
+    low: 500,
+    high: 2200,
+    source: "Thumbtack / Homewyse 2026 (roof repair per sq ft)",
+    vertical: "home",
+  },
+
+  // === SMALL-END EXTENT ROUTING, added 2026-09-12 ===========================
+  // Live failure: "Replace the metal siding above the sliding door" (6-7 ft,
+  // a few inches tall) priced $460–$1.6k as a carpentry.wood_rot project —
+  // project-priced entries ignore stated sizes, and the taxonomy had no
+  // per-foot small-trim item. Small linear trim/flashing/fascia sections now
+  // route to carpentry.exterior_trim (see maybeSmallTrim). Wide: a 7-ft
+  // repair's real spread is dominated by trip charges, so only gross error
+  // is meaningful here.
+  {
+    query: "replace the metal trim above the sliding door, 7 ft wide",
+    category: "Carpentry",
+    expectJobType: "carpentry.exterior_trim",
+    low: 150,
+    high: 500,
+    wide: true,
+    source: "Thumbtack / HomeAdvisor 2026 (minor siding/trim repair)",
+    vertical: "home",
+  },
 ];

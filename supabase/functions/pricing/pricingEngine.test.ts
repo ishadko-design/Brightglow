@@ -13,6 +13,8 @@ import {
   detectScopeAddOns,
   fetchMaterialFloorRaw,
   formatDisplayText,
+  JOB_TYPE_TAXONOMY,
+  maybeSmallTrim,
   normalizeScope,
   resolveQuantity,
   type JobScope,
@@ -433,4 +435,54 @@ Deno.test("fixture removal attaches to a lighting swap, not to a replaced outlet
   // The jobTypes gate: "replace" is shared, but an outlet is not a fixture.
   const outlet = classifyJobType("Electrical", "replace outlet")!;
   assertEquals(detectScopeAddOns(outlet, "replace outlet"), []);
+});
+
+Deno.test("maybeSmallTrim routes the reported 7-ft metal strip to per-foot trim pricing", () => {
+  const woodRot = JOB_TYPE_TAXONOMY.find((e) => e.job_type === "carpentry.wood_rot")!;
+  const desc =
+    "Replace the metal siding above the sliding door\n\nDetails:\n6-7 ft wide, a few inch tall";
+  assertEquals(maybeSmallTrim(woodRot, desc).job_type, "carpentry.exterior_trim");
+});
+
+Deno.test("maybeSmallTrim fires on inherently linear pieces without a height signal", () => {
+  const woodRot = JOB_TYPE_TAXONOMY.find((e) => e.job_type === "carpentry.wood_rot")!;
+  assertEquals(
+    maybeSmallTrim(woodRot, "replace 8 ft of rotted fascia").job_type,
+    "carpentry.exterior_trim",
+  );
+  assertEquals(
+    maybeSmallTrim(woodRot, "replace the drip edge, about 10 lf").job_type,
+    "carpentry.exterior_trim",
+  );
+});
+
+Deno.test("maybeSmallTrim never downgrades real siding work", () => {
+  const woodRot = JOB_TYPE_TAXONOMY.find((e) => e.job_type === "carpentry.wood_rot")!;
+  // Large area: the extent upgrade (not this rule) owns it.
+  assertEquals(
+    maybeSmallTrim(woodRot, "repair severely deteriorated wood siding (200 sq ft)").job_type,
+    "carpentry.wood_rot",
+  );
+  // Ambiguous: a linear size on bare "siding" with no strip signal is a
+  // patch of unknown height, not a trim strip.
+  assertEquals(
+    maybeSmallTrim(woodRot, "replace siding, 8 ft section").job_type,
+    "carpentry.wood_rot",
+  );
+  // Extent words always win.
+  assertEquals(
+    maybeSmallTrim(woodRot, "replace all siding on the house, 6 ft sample").job_type,
+    "carpentry.wood_rot",
+  );
+  // No size at all: nothing to route on.
+  assertEquals(
+    maybeSmallTrim(woodRot, "replace the metal siding above the door").job_type,
+    "carpentry.wood_rot",
+  );
+});
+
+Deno.test("maybeSmallTrim is a no-op off the siding/rot entries", () => {
+  const trim = JOB_TYPE_TAXONOMY.find((e) => e.job_type === "carpentry.trim")!;
+  const desc = "replace 8 ft of baseboard trim";
+  assertEquals(maybeSmallTrim(trim, desc).job_type, "carpentry.trim");
 });
