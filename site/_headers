@@ -6,3 +6,10 @@
 
 /.well-known/apple-app-site-association
   Content-Type: application/json
+
+# Deploys must go live immediately: never cache pages, markup, or code — not at
+# the edge, not in the browser. (The ?v= cache-busters on CSS/JS are a second
+# layer, but index.html is served by path: a cached copy keeps pointing at old
+# ?v= files across deploys, which is exactly the "regressed" symptom.)
+/*
+  Cache-Control: no-store
