@@ -58,6 +58,18 @@ const CASES: Case[] = [
   },
   {
     category: "",
+    description: "Replace metal trim above sliding door",
+    expect: "carpentry.exterior_trim",
+    why: "the 'door' stem narrowed the pool to Windows & Doors and hid the priority-1 'metal trim' keyword — a 7-ft trim priced as a $1.4k-$4.3k door replacement (live 2026-09-12)",
+  },
+  {
+    category: "Windows & Doors",
+    description: "Replace metal trim above sliding door",
+    expect: "carpentry.exterior_trim",
+    why: "trim veto on sliding_door declines the miscategorized pool, then the fallback reroutes to the trim entry",
+  },
+  {
+    category: "",
     description: "doorbell not working",
     expect: "electrical.doorbell",
     why: "'door' stem hijacked it to Windows & Doors; needs the stem-ignoring stage",
@@ -113,6 +125,24 @@ const CASES: Case[] = [
     description: "fix my roof",
     expect: null,
     why: "bare vague search still declines — behavior unchanged",
+  },
+  {
+    category: "",
+    description: "replace the sliding door",
+    expect: "windows_doors.sliding_door",
+    why: "a real door replacement still prices as a door — the trim veto only fires on trim work",
+  },
+  {
+    category: "Windows & Doors",
+    description: "replace the sliding door",
+    expect: "windows_doors.sliding_door",
+    why: "categorized door replacement is unaffected by the trim veto",
+  },
+  {
+    category: "",
+    description: "my roof is leaking",
+    expect: "roofing.repair",
+    why: "p1 pre-scan only fires on priority >= 1; 'leak' is p0 so the stem path is untouched",
   },
   {
     category: "Plumbing",

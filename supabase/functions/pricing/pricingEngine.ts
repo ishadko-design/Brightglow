@@ -878,7 +878,12 @@ export const JOB_TYPE_TAXONOMY: JobTypeEntry[] = [
   { job_type: "windows_doors.casement_window", category: "Windows & Doors", keywords: ["casement"], trade: "windows", itemId: "casement-window-replacement", unit: "each", defaultQuantity: 1 },
   { job_type: "windows_doors.egress_window", category: "Windows & Doors", keywords: ["egress"], trade: "windows", itemId: "egress-window-installation", unit: "each", defaultQuantity: 1 },
   { job_type: "windows_doors.french_door", category: "Windows & Doors", keywords: ["french door"], trade: "doors", itemId: "french-door-installation", unit: "pair", defaultQuantity: 1 },
-  { job_type: "windows_doors.sliding_door", category: "Windows & Doors", keywords: ["sliding door", "patio door", "sliding glass"], trade: "doors", itemId: "sliding-patio-door", unit: "each", defaultQuantity: 1, notIfContains: ["broken", "cracked", "foggy", "fogged", "stuck", "wont open", "won't open", "wont close", "won't close", "wont latch", "won't latch", "sticking", "sagging", "repair", "adjust", "hinge"] },
+  { job_type: "windows_doors.sliding_door", category: "Windows & Doors", keywords: ["sliding door", "patio door", "sliding glass"], trade: "doors", itemId: "sliding-patio-door", unit: "each", defaultQuantity: 1, notIfContains: ["broken", "cracked", "foggy", "fogged", "stuck", "wont open", "won't open", "wont close", "won't close", "wont latch", "won't latch", "sticking", "sagging", "repair", "adjust", "hinge",
+    // The work is the TRIM, not the door: "replace metal trim above sliding
+    // door" is a trim job (carpentry.exterior_trim), not a door replacement.
+    // Vetoing lets the category-fallback reroute it instead of pricing a
+    // 7-ft trim as a $1.4k-$4.3k door swap (live 2026-09-12).
+    "trim", "flashing", "fascia", "drip edge"] },
   { job_type: "windows_doors.exterior_door", category: "Windows & Doors", keywords: ["exterior door", "entry door", "front door"], trade: "doors", itemId: "exterior-door-steel", unit: "each", defaultQuantity: 1, notIfContains: ["broken", "cracked", "foggy", "fogged", "stuck", "wont open", "won't open", "wont close", "won't close", "wont latch", "won't latch", "sticking", "sagging", "repair", "adjust", "hinge"] },
   { job_type: "windows_doors.interior_door", category: "Windows & Doors", keywords: ["interior door", "closet door", "bedroom door"], trade: "doors", itemId: "interior-door-hollow-core", unit: "each", defaultQuantity: 1, notIfContains: ["broken", "cracked", "foggy", "fogged", "stuck", "wont open", "won't open", "wont close", "won't close", "wont latch", "won't latch", "sticking", "sagging", "repair", "adjust", "hinge"] },
   { job_type: "windows_doors.garage_door", category: "Windows & Doors", keywords: ["garage door"], trade: "doors", itemId: "garage-door-single", unit: "each", defaultQuantity: 1, notIfContains: ["spring", "cable", "wont open", "won't open", "off track", "opener", "repair", "broken"] },
@@ -1257,7 +1262,24 @@ export function classifyJobType(
   // entry even when no job keyword matches.
   const stemmed = Object.keys(CATEGORY_STEMS)
     .filter((cat) => CATEGORY_STEMS[cat].some((s) => termMatches(text, s)));
-  if (stemmed.length === 1) return classifyJobType(stemmed[0], description, photoAttributes, null, vehicle);
+  if (stemmed.length === 1) {
+    const inCategory = classifyJobType(stemmed[0], description, photoAttributes, null, vehicle);
+    // A specific in-category result stands — the stem did its job ("build a
+    // new deck" → carpentry.deck, "my roof is leaking" → roofing.repair).
+    if (inCategory && inCategory.keywords.length > 0) return inCategory;
+    // The stemmed category declines: the stem may reflect a mere location
+    // reference, not the work itself. "Replace metal trim above sliding door"
+    // stems to Windows & Doors ("door"), which hid the Carpentry trim entry
+    // and priced a 7-ft trim as a full sliding-door replacement —
+    // $1.4k–$4.3k live on 2026-09-12. A priority-1 keyword elsewhere is a
+    // high-precision job identifier ("metal trim") and outranks the stem —
+    // but only as a rescue for the decline, never over a real in-category
+    // answer: a bare "deck" is p1 in Painting's deck_stain and must not steal
+    // a new-deck build.
+    const precise = longestKeywordMatch(TAXONOMY, text, true);
+    if (precise && (precise.priority ?? 0) >= 1) return precise;
+    return inCategory;
+  }
 
   // No stem (or several) — scan job keywords, longest match wins as the
   // most specific ("water heater" beats "heater"-less generics). With no
