@@ -773,11 +773,17 @@ struct QuoteRequestScreen: View {
             // reply into the in-app chat — the fallback for when MMS strips the
             // attachment, and the bridge that keeps the conversation on Brightglow.
             let publicId = LeadBridgeService.newPublicID()
-            // Personalized text: names the business and the job so it doesn't read
-            // like a promo blast. The full description is in the SMS; the photos
-            // and reply box live behind the /l link.
-            let body = "Hi! I found you on Brightglow and I'd like a quote. "
-                + "The details and photos are here: \(LeadBridgeService.replyURL(publicId: publicId))"
+            // Personalized text: names the business and the one-line job so it
+            // doesn't read like a promo blast, and ends with a concrete
+            // low-friction ask. Photos live behind the /l link.
+            let smsJob = description.components(separatedBy: .newlines).first?
+                .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+            let smsJobLine = smsJob.count > 100
+                ? String(smsJob.prefix(100)).trimmingCharacters(in: .whitespacesAndNewlines) + "\u{2026}"
+                : smsJob
+            let body = "Hi \(contractor.name)! I'd like a quote for: \(smsJobLine). "
+                + "Photos and details here: \(LeadBridgeService.replyURL(publicId: publicId)) - via Brightglow.co. "
+                + "If you can take this on, just reply to this text."
             compose = ComposePayload(
                 recipient: Self.smsTestRecipient.isEmpty ? phone : Self.smsTestRecipient,
                 body: body,
