@@ -6,8 +6,8 @@ import Supabase
 /// Row id=1 of the `ranking_config` table (public read). The app refreshes it
 /// in the background on every search, caches it in UserDefaults, and falls
 /// back to `fallback` when offline or unconfigured — so factor weights,
-/// small-job pool widening, and licensed-trade rules retune from the Supabase
-/// dashboard with no App Store release.
+/// small-job pool widening, licensed-trade rules, and draft behavior retune
+/// from the Supabase dashboard with no App Store release.
 struct RankingConfig: Codable {
     struct Weights: Codable {
         /// Job-specific proof: reviews naming the searched work.
@@ -34,10 +34,21 @@ struct RankingConfig: Codable {
         var always: Bool? = nil
         var signals: [String]? = nil
     }
+    /// OTA-tunable draft behavior for the quote-request screen.
+    struct Draft: Codable {
+        /// Keep the edited request text after a successful send, so the user
+        /// can send the same text to other contractors without re-editing.
+        var persistOnSend: Bool = true
+        /// Only restore the draft when the clarify transcript matches the one
+        /// it was saved for. Prevents a stale draft from leaking into a new
+        /// request (new clarify session).
+        var scopeToTranscript: Bool = true
+    }
 
     var version: Int = 1
     var weights: Weights = Weights()
     var smallJob: SmallJob = SmallJob()
+    var draft: Draft = Draft()
     var licensed: [String: LicensedRule] = [
         "electrical": LicensedRule(always: true),
         "plumbing": LicensedRule(signals: ["gas"]),

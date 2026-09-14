@@ -159,15 +159,21 @@ struct QuoteRequestScreen: View {
         }
         .onAppear {
             // Restore the draft if the user went back and returned; the draft
-            // takes precedence over the transcript pre-fill — but only for the
-            // same request (same clarify session). A new transcript means a new
-            // request, so the old draft is discarded.
+            // takes precedence over the transcript pre-fill. OTA-tunable via
+            // ranking_config.draft: scopeToTranscript limits restoration to the
+            // same clarify session; persistOnSend (checked on send) controls
+            // whether the draft survives a successful send.
             if editableRequest.isEmpty {
                 let draftKey = "draftRequest"
                 let transcriptKey = "draftRequestTranscript"
-                let currentTranscript = clarifyTranscript.augmentedDescription(base: "")
-                let savedTranscript = UserDefaults.standard.string(forKey: transcriptKey) ?? ""
-                if currentTranscript == savedTranscript,
+                let draftConfig = RankingConfigStore.current.draft
+                let transcriptMatches: Bool = {
+                    guard draftConfig.scopeToTranscript else { return true }
+                    let current = clarifyTranscript.augmentedDescription(base: "")
+                    let saved = UserDefaults.standard.string(forKey: transcriptKey) ?? ""
+                    return current == saved
+                }()
+                if transcriptMatches,
                    let draft = UserDefaults.standard.string(forKey: draftKey), !draft.isEmpty {
                     editableRequest = draft
                 }
@@ -451,9 +457,14 @@ struct QuoteRequestScreen: View {
                     if result == .failed { sendError = "Couldn't open Messages. Try again." }
                     return
                 }
-                // Text sent with a verified link. The draft is kept so the user
-                // can send the same (edited) text to other contractors. It's
-                // discarded only when a new clarify session starts (see onAppear).
+                // Text sent with a verified link. OTA-tunable via
+                // ranking_config.draft.persistOnSend: when true (default) the
+                // draft is kept so the user can send the same (edited) text to
+                // other contractors; when false it's cleared (legacy behavior).
+                if !RankingConfigStore.current.draft.persistOnSend {
+                    UserDefaults.standard.removeObject(forKey: "draftRequest")
+                    UserDefaults.standard.removeObject(forKey: "draftRequestTranscript")
+                }
                 withAnimation(.easeInOut(duration: 0.25)) { sent = true }
             }
         }
