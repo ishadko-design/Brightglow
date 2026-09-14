@@ -843,9 +843,15 @@ select { appearance: none; background-image: none; }
 .billing-avatars span {
   width: 32px; height: 32px; border-radius: 50%;
   background: var(--gray20);
+  background-size: cover;
+  background-position: center;
   border: 2px solid #18191b;
   margin-left: -8px; flex: none;
 }
+.billing-avatars span:nth-child(1) { background-image: url("../media/billing-avatars/avatar-1.png"); }
+.billing-avatars span:nth-child(2) { background-image: url("../media/billing-avatars/avatar-2.png"); }
+.billing-avatars span:nth-child(3) { background-image: url("../media/billing-avatars/avatar-3.png"); }
+.billing-avatars span:nth-child(4) { background-image: url("../media/billing-avatars/avatar-4.png"); }
 .billing-avatars span:first-child { margin-left: 0; }
 .billing-lead {
   /* Figma body: Poppins 400 14px, white, 21px line-height. CENTER aligned. 32px to button. */
