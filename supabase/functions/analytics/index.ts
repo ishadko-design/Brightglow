@@ -123,6 +123,9 @@ Deno.serve(async (req) => {
   const calls = { list: 0, gallery: 0 };
   const placeSends: Record<string, number> = {};
   const placeImpressions: Record<string, number> = {};   // per-business impressions
+  const placeOpens: Record<string, number> = {};          // per-business link opens
+  const senderSends: Record<string, number> = {};         // per-customer-device sends
+  const senderOpens: Record<string, number> = {};         // per-customer-device opens
   let impressionsTotal = 0;
 
   for (const r of rows) {
@@ -154,7 +157,18 @@ Deno.serve(async (req) => {
       if (outcome === "sent") {
         const pid = String(r.props?.place_id ?? "");
         if (pid) placeSends[pid] = (placeSends[pid] ?? 0) + 1;
+        const did = String(r.props?.device_id ?? "");
+        if (did) senderSends[did] = (senderSends[did] ?? 0) + 1;
       }
+    }
+    // Link opens are stamped server-side by LeadBridge with the lead's place_id
+    // and the sending customer's device id (sender_device_id is null for leads
+    // created by older app versions).
+    if (r.event === "link_opened") {
+      const pid = String(r.props?.place_id ?? "");
+      if (pid) placeOpens[pid] = (placeOpens[pid] ?? 0) + 1;
+      const sdid = String(r.props?.sender_device_id ?? "");
+      if (sdid) senderOpens[sdid] = (senderOpens[sdid] ?? 0) + 1;
     }
     if (r.event === "call_tapped") {
       const surface = String(r.props?.surface ?? "");
@@ -173,15 +187,40 @@ Deno.serve(async (req) => {
     { stage: "Sent (delivered)", event: "send_result:sent", count: send.sent },
   ];
 
-  // Top businesses: merge impressions + sends so each row shows reach → conversion.
-  const placeIds = new Set([...Object.keys(placeImpressions), ...Object.keys(placeSends)]);
+  // Business names for the per-business table: leads carry the matched
+  // business_name keyed by place_id (service role bypasses RLS).
+  const placeNames: Record<string, string> = {};
+  {
+    const { data, error } = await db.from("leads").select("place_id, business_name").not("place_id", "is", null);
+    if (!error) for (const r of (data ?? []) as { place_id: string; business_name: string | null }[]) {
+      if (r.place_id && r.business_name && !placeNames[r.place_id]) placeNames[r.place_id] = r.business_name;
+    }
+  }
+
+  // Top businesses: merge impressions + sends + opens so each row shows
+  // reach → sent → opened.
+  const placeIds = new Set([...Object.keys(placeImpressions), ...Object.keys(placeSends), ...Object.keys(placeOpens)]);
   const topPlaces = [...placeIds]
     .map((place_id) => ({
       place_id,
+      name: placeNames[place_id] ?? null,
       impressions: placeImpressions[place_id] ?? 0,
       sends: placeSends[place_id] ?? 0,
+      opens: placeOpens[place_id] ?? 0,
     }))
-    .sort((a, b) => b.impressions - a.impressions || b.sends - a.sends)
+    .sort((a, b) => b.sends - a.sends || b.impressions - a.impressions || b.opens - a.opens)
+    .slice(0, 15);
+
+  // Per-customer-device sent → opened. Devices that only appear on one side
+  // still show (the other side reads 0) so the ratio is never silently dropped.
+  const senderIds = new Set([...Object.keys(senderSends), ...Object.keys(senderOpens)]);
+  const topSenders = [...senderIds]
+    .map((device_id) => ({
+      device_id,
+      sends: senderSends[device_id] ?? 0,
+      opens: senderOpens[device_id] ?? 0,
+    }))
+    .sort((a, b) => b.sends - a.sends || b.opens - a.opens)
     .slice(0, 15);
 
   return json({
@@ -192,6 +231,7 @@ Deno.serve(async (req) => {
     calls: { ...calls, total: calls.list + calls.gallery },
     impressions: { total: impressionsTotal, businesses: Object.keys(placeImpressions).length },
     topPlaces,
+    topSenders,
     devices,
     daily,
   });

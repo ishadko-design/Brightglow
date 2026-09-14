@@ -37,3 +37,9 @@ verify_jwt = false
 # no-redundant-negation rule to the summary.
 [functions.clarify]
 verify_jwt = true
+
+# Private funnel dashboard backend: the Cloudflare Worker calls it server-side
+# with x-admin-secret and no user JWT, so verification must stay off. The
+# function enforces ADMIN_SECRET itself and fails closed without one.
+[functions.analytics]
+verify_jwt = false

@@ -177,12 +177,16 @@ function render(d){
     <tr><td>via Text</td><td>${s.text||0}</td></tr>
     <tr><td>via Email</td><td>${s.email||0}</td></tr></table>`;
 
-  const c=d.calls||{}, tp=d.topPlaces||[];
+  const c=d.calls||{}, tp=d.topPlaces||[], ts=d.topSenders||[];
+  const rate=(o,sn)=> sn? Math.round(100*o/sn)+"% opened":"—";
   $("side").innerHTML = `<table>
     <tr><td>Calls — list</td><td>${c.list||0}</td></tr>
     <tr><td>Calls — gallery</td><td>${c.gallery||0}</td></tr>
-    ${tp.length? `<tr><td style="color:var(--ink);padding-top:12px">Top businesses</td><td style="color:var(--muted);padding-top:12px">impr → sent</td></tr>`:""}
-    ${tp.map(p=>`<tr><td style="font-family:monospace;font-size:11px">${p.place_id.slice(0,18)}…</td><td>${p.impressions||0} → ${p.sends||0}</td></tr>`).join("")}
+    ${tp.length? `<tr><td style="color:var(--ink);padding-top:12px">Top businesses</td><td style="color:var(--muted);padding-top:12px">impr → sent → opened</td></tr>`:""}
+    ${tp.map(p=>{const nm=p.name||(p.place_id||"").slice(0,18)+"…";
+      return `<tr><td title="${p.place_id||""}">${nm}</td><td>${p.impressions||0} → ${p.sends||0} → ${p.opens||0} (${rate(p.opens||0,p.sends||0)})</td></tr>`;}).join("")}
+    ${ts.length? `<tr><td style="color:var(--ink);padding-top:12px">Per customer</td><td style="color:var(--muted);padding-top:12px">sent → opened</td></tr>`:""}
+    ${ts.map(t=>`<tr><td style="font-family:monospace;font-size:11px" title="${t.device_id||""}">${(t.device_id||"unknown").slice(0,8)}</td><td>${t.sends||0} → ${t.opens||0} (${rate(t.opens||0,t.sends||0)})</td></tr>`).join("")}
   </table>`;
 
   // Devices: every device_id seen in the window, with its event count. Excluded
