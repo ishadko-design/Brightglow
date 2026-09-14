@@ -771,7 +771,11 @@ struct QuoteRequestScreen: View {
             // Personalized text: names the business and the job so it doesn't read
             // like a promo blast. The full description is in the SMS; the photos
             // and reply box live behind the /l link.
-            let body = "Hi \(contractor.name)! I'd like a quote for: \(description). "
+            // Ask boilerplate: appended unless the user already asked in their own words.
+            let lowerDesc = description.lowercased()
+            let alreadyAsked = lowerDesc.contains("how much") || lowerDesc.contains("can you") || lowerDesc.contains("thank")
+            let askSuffix = alreadyAsked ? "" : " Can you do this, and how much would it cost? Thank you!"
+            let body = "Hi \(contractor.name)! I'd like a quote for: \(description).\(askSuffix) "
                 + "Photos and details here: \(LeadBridgeService.replyURL(publicId: publicId)) - via Brightglow.co"
             compose = ComposePayload(
                 recipient: Self.smsTestRecipient.isEmpty ? phone : Self.smsTestRecipient,
