@@ -653,32 +653,18 @@ struct QuoteRequestScreen: View {
 
     private var sentState: some View {
         VStack(spacing: 0) {
-            // Header: back + "Request sent". (The "Send to top 5" pill in the
-            // node is a hidden layer — visible=false — so it stays out.)
-            HStack(spacing: 4) {
-                Button(action: { dismiss() }) {
-                    Image(systemName: "arrow.left")
-                        .font(.system(size: 18, weight: .semibold))
-                        .foregroundStyle(.white)
-                        .frame(width: 44, height: 44)
-                        .contentShape(Rectangle())
-                }
-                Text("Request sent")
-                    .font(.h2)
-                    .foregroundStyle(.white)
-                Spacer()
-            }
-            .padding(.horizontal, 8)
-            .frame(height: 44)
-
             // Illustration: 206×202 paper-plane artwork, centered in its
-            // 220-tall slot (Figma "Sent message-il").
+            // 220-tall slot (Figma "Sent message-il"). The top padding absorbs
+            // the removed 44pt header so the composition stays put — this is a
+            // dismissible full-screen confirmation, not a navigation page, so
+            // it carries no header bar. (The "Send to top 5" pill in the node
+            // is a hidden layer — visible=false — so it stays out.)
             Image("fig_request_sent")
                 .resizable()
                 .aspectRatio(contentMode: .fit)
                 .frame(width: 206, height: 202)
                 .frame(height: 220)
-                .padding(.top, 106)
+                .padding(.top, 150)
 
             // Title + body.
             VStack(spacing: 16) {
@@ -689,6 +675,8 @@ struct QuoteRequestScreen: View {
                     .font(.bodyLight)
                     .foregroundStyle(.white)
                     .multilineTextAlignment(.center)
+                    // Wrap, never truncate: long business names must read in full.
+                    .lineLimit(nil)
             }
             .padding(.horizontal, 24)
             .padding(.top, 32)
