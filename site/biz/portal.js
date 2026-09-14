@@ -1203,7 +1203,6 @@ async function deleteLead(lead, row) {
       try { detail = " " + JSON.stringify(await resp.json()); } catch (e) {}
       throw new Error(`hide failed (${resp.status})${detail}`);
     }
-    showToast("Request deleted.");
   } catch (err) {
     // Revert the optimistic removal — put the row back.
     console.error("delete request failed:", err);
