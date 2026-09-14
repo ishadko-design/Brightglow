@@ -157,8 +157,9 @@ function render(d){
   const f=d.funnel||[]; const top=Math.max(1, f[0]?.count||0);
   // "Link opened" is stamped server-side by the /l page's JS beacon
   // (LeadBridge writes a link_opened analytics event on first open). Appended
-  // here so the funnel needs no Edge Function redeploy.
-  if(t.link_opened) f.push({ stage:"Link opened", count:t.link_opened });
+  // here so the funnel needs no Edge Function redeploy. Always shown, even at
+  // zero, so the stage is visible before the first open lands.
+  f.push({ stage:"Link opened", count:t.link_opened||0 });
   $("funnel").innerHTML = f.map((s,i)=>{
     const w=Math.round((s.count/top)*100);
     const prev = i>0? f[i-1].count : null;
