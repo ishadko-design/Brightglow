@@ -136,25 +136,29 @@ struct QuoteRequestScreen: View {
         ZStack {
             AppColors.bg.ignoresSafeArea()
             if sent { sentState } else { reviewState }
-            // The lead save after the Messages send: visible progress so a
-            // slow or failed save never reads as "nothing happened".
-            if savingLead {
-                Color.black.opacity(0.6).ignoresSafeArea()
-                VStack(spacing: 16) {
-                    ProgressView()
-                        .tint(.white)
-                        .scaleEffect(1.4)
-                    Text("Saving your request…")
-                        .font(.bodyLight)
-                        .foregroundStyle(.white)
-                }
-            }
+            // The lead save runs in the background; no blocking overlay.
+            // savingLead only disables the Continue button while the save is in flight.
         }
         .navigationBarBackButtonHidden(true)
         .toolbar(.hidden, for: .navigationBar)
         .enableSwipeBack()
         .preferredColorScheme(.dark)
+        .onDisappear {
+            // Save the draft so if the user goes back, the text is preserved.
+            let draftKey = "draftRequest_\(contractor?.id ?? "none")"
+            if !editableRequest.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                UserDefaults.standard.set(editableRequest, forKey: draftKey)
+            }
+        }
         .onAppear {
+            // Restore the draft if the user went back and returned; the draft
+            // takes precedence over the transcript pre-fill.
+            if editableRequest.isEmpty {
+                let draftKey = "draftRequest_\(contractor?.id ?? "none")"
+                if let draft = UserDefaults.standard.string(forKey: draftKey), !draft.isEmpty {
+                    editableRequest = draft
+                }
+            }
             if email.isEmpty { email = auth.user?.email ?? "" }
             // Pre-fill the description from the clarify transcript: the user's
             // own request plus the answers they gave (or the chat's overview).
@@ -433,6 +437,9 @@ struct QuoteRequestScreen: View {
                             await MainActor.run {
                                 savingLead = false
                                 pendingPayload = nil
+                                // Clear the draft on successful save.
+                                let draftKey = "draftRequest_\(contractor?.id ?? "none")"
+                                UserDefaults.standard.removeObject(forKey: draftKey)
                                 withAnimation(.easeInOut(duration: 0.25)) { sent = true }
                             }
                         } catch {
