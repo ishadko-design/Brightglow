@@ -1089,17 +1089,20 @@ function renderLeads() {
     const stamp = fmtStamp((req && req.created_at) || l.created_at);
     const initial = esc((l.user_email_initial || l.city || "?").slice(0, 1));
     const unread = hasUnread(l, msgs);
-    // A locked (over-quota) request shows a lock avatar — never the customer's
-    // photo — and tapping it routes to Billing instead of the thread.
+    // A locked (over-quota) request looks like a regular unread row — customer
+    // photo thumbnail and all — with a red lock badge on the avatar. Tapping
+    // routes to Billing instead of the thread (openThread guard).
     const locked = !!l._locked;
+    const lockBadge = locked
+      ? `<span class="lead-lockbadge" aria-label="Locked — subscribe to view"><svg viewBox="0 0 24 24" width="11" height="11" fill="none" aria-hidden="true"><rect x="5.5" y="10.5" width="13" height="9.5" rx="2.5" fill="#fff"/><path d="M8.5 10.5V8a3.5 3.5 0 0 1 7 0v2.5" stroke="#fff" stroke-width="2.4" stroke-linecap="round"/></svg></span>`
+      : "";
     // Row wraps a red Delete behind the cell; the cell swipes left to reveal it.
     return `<div class="lead-row${unread ? "" : " read"}${locked ? " locked" : ""}" data-i="${i}">
       <button type="button" class="lead-delete" data-i="${i}">Delete</button>
       <div class="lead-card">
         <div class="lead-avatarwrap">
-          ${locked
-            ? `<div class="lead-avatar lead-locked" aria-label="Locked — subscribe to view"></div>`
-            : `<div class="lead-avatar" data-lead="${l.id}">${initial}</div>`}
+          <div class="lead-avatar" data-lead="${l.id}">${initial}</div>
+          ${lockBadge}
           ${unread ? `<span class="lead-dot"></span>` : ""}
         </div>
         <div class="lead-main">
@@ -1133,7 +1136,7 @@ const thumbUrls = new Map();        // attachment id -> object URL
 
 async function loadLeadThumbs(leads) {
   try {
-    const fresh = (leads || []).filter((l) => !l._locked).map((l) => l.id).filter((id) => !thumbSeenLeads.has(id));
+    const fresh = (leads || []).map((l) => l.id).filter((id) => !thumbSeenLeads.has(id));
     fresh.forEach((id) => thumbSeenLeads.add(id));
     if (fresh.length) {
       const { data } = await sb.from("attachments").select("id,lead_id").in("lead_id", fresh);

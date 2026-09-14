@@ -606,12 +606,14 @@ select { appearance: none; background-image: none; }
 .lead-dot::after { content: ""; position: absolute; left: 2px; top: 2px;
   width: 8px; height: 8px; border-radius: 50%; background: var(--gold); }
 
-/* Paywall: an over-quota request renders locked — the card goes red and the
-   avatar becomes a red lock instead of the customer's photo/initial.
-   Tapping the row routes to Billing via the openThread() guard. */
-.lead-row.locked .lead-card { background: rgba(255, 0, 0, 0.12); }
-.lead-avatar.lead-locked { background: var(--danger); }
-.lead-avatar.lead-locked::after { content: "\U0001F512"; font-size: 20px; }
+/* Paywall: an over-quota request looks like a regular unread row — customer
+   photo thumbnail, normal card — plus a small red lock badge on the avatar.
+   Tapping the row routes to Billing via the openThread() guard; the thread
+   itself never opens. */
+.lead-lockbadge { position: absolute; right: -4px; top: -4px; width: 20px; height: 20px;
+  border-radius: 50%; background: var(--danger); display: flex; align-items: center;
+  justify-content: center; box-shadow: 0 1px 4px rgba(0, 0, 0, 0.45); }
+.lead-lockbadge svg { display: block; }
 
 /* ── Open chat — Figma 2020:6841, built element-for-element ──────────────────
    Header row: bare 44×44 back-arrow icon (no background) + job title (Lato 800/24)
