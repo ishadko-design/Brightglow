@@ -89,12 +89,12 @@ struct QuoteRequestScreen: View {
     /// Set the moment a photo is picked; cleared when the photo is edited.
     @State private var preuploadIds: [UUID?] = []
 
-    /// Draft key scoped to THIS business. A global key leaked text across
-    /// different requests — the draft must die when you start a new request
-    /// to a different business, but survive going back on the same one.
-    private var draftKey: String {
-        "draftRequest_\(contractor?.id ?? "none")"
-    }
+    /// Per-screen-instance draft key. A global or business-scoped key leaked
+    /// text across different requests — the draft must live only for this
+    /// specific presentation of the screen. Going back preserves the view (and
+    /// its @State), so the draft survives. A new request creates a new view
+    /// with a new key, starting fresh.
+    private let draftKey: String = "draftRequest_v2_\(UUID().uuidString)"
     /// The business's hosted logo, resolved once on appear (LogoService). Only a
     /// real, resolved logo is ever shown — there's deliberately no monogram
     /// fallback here (an initials tile reads as a fake mark on a screen that's all
@@ -161,10 +161,13 @@ struct QuoteRequestScreen: View {
             }
         }
         .onAppear {
-            // One-time: kill the old global draft key (pre-fix versions saved
-            // here, leaking text across businesses). Safe to leave — no-op
-            // once the key is gone.
-            UserDefaults.standard.removeObject(forKey: "draftRequest")
+            // One-time: kill ALL v1 draft keys (the global "draftRequest" and
+            // every per-business "draftRequest_<id>"). Pre-fix builds leaked
+            // text across requests; these keys must never resurface.
+            let defaults = UserDefaults.standard
+            for key in defaults.dictionaryRepresentation().keys where key.hasPrefix("draftRequest") && !key.hasPrefix("draftRequest_v2_") {
+                defaults.removeObject(forKey: key)
+            }
             // Restore the draft if the user went back and returned; the draft
             // takes precedence over the transcript pre-fill.
             if editableRequest.isEmpty {
