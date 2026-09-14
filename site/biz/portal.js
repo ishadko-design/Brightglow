@@ -265,7 +265,7 @@ async function enterDashboard() {
   // a null place_id can't be claim-checked, so they're skipped for management.
   const { data: leads, error } = await sb
     .from("leads")
-    .select("id, place_id, business_name, city, status, public_id, created_at, website, user_email_initial, business_last_read_at, messages(direction, body_text, created_at)")
+    .select("id, place_id, business_name, city, status, public_id, created_at, website, user_email_initial, business_last_read_at, job_title, messages(direction, body_text, created_at)")
     .is("business_hidden_at", null)   // hide requests the business dismissed
     .order("created_at", { ascending: false });
 
@@ -1298,6 +1298,10 @@ let thread = null;   // the lead whose thread is open
 // request: strip the channel prefix the app prepends ("Vehicle: Car "), drop a
 // common lead-in, take the first sentence, cap it.
 function jobTitle(lead) {
+  // The app's clarify LLM names the job in a few words ("metal trim
+  // replacement") — prefer it so the title doesn't duplicate the request text
+  // 1:1. Older leads carry none; fall back to deriving from the description.
+  if (lead.job_title && String(lead.job_title).trim()) return String(lead.job_title).trim();
   const req = (lead.messages || []).find((m) => m.direction === "outbound");
   let t = (req && req.body_text ? req.body_text : "").trim().replace(/\s+/g, " ");
   if (!t) return lead.business_name || current?.name || "Request";
