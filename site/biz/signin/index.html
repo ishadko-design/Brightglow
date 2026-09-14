@@ -1,0 +1,359 @@
+<!-- RECOVERY 2026-09-12: a stale local `npx wrangler deploy` overwrote the live
+     site with v50/v31 files after the auto-deploy had already shipped v79/v34.
+     This commit only triggers the deploy-site workflow to restore the correct
+     build. Site deploys run ONLY via the GitHub Action — never from a laptop. -->
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, interactive-widget=resizes-content">
+  <title>Brightglow for Business — manage your page</title>
+  <meta name="description" content="Claim and manage your Brightglow business page — your services and prices, photos of your work, and the job requests customers send you.">
+  <meta name="theme-color" content="#131315">
+  <meta name="robots" content="noindex">
+  <link rel="icon" type="image/png" href="../../favicon.png">
+  <link rel="apple-touch-icon" href="../../apple-touch-icon.png">
+  <link rel="stylesheet" href="portal.css?v=79">
+</head>
+<body class="portal">
+  <header class="topbar">
+    <div class="topbar-inner">
+      <a class="brand" href="../../index.html">
+        <img class="appicon" src="../../media/appicon.png" alt="">
+        <span>Brightglow</span>
+      </a>
+      <div class="topbar-actions">
+        <!-- Figma header (1984:5579): the wordmark + a hamburger. Sign out,
+             Billing and Delete account all live behind it now (#menuOverlay). -->
+        <button id="menuBtn" class="icon-btn" aria-label="Menu" hidden>
+          <svg viewBox="0 0 24 24" width="24" height="24" fill="none" aria-hidden="true">
+            <path d="M3 6h18M3 12h18M3 18h18" stroke="currentColor"
+                  stroke-width="2" stroke-linecap="round"/>
+          </svg>
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <main class="wrap">
+    <!-- Two peer tabs (Figma 1984:5663), landing on Requests. There's no Dashboard
+         anymore — its "Accepting new work" toggle moved into Settings, and its
+         stats/readiness were dropped. Requests lists every customer request;
+         opening one drills into its thread. Hidden until there's a business. -->
+    <nav class="tabs" id="tabs" hidden>
+      <button type="button" class="tab is-active" data-view="chats">Requests</button>
+      <button type="button" class="tab" data-view="editor">Settings</button>
+    </nav>
+    <!-- Boot / loading: spinner only, no card container. -->
+    <section id="bootView" class="center">
+      <div class="spinner" aria-label="Loading"></div>
+    </section>
+
+    <!-- Signed-out: the three sign-in steps (phone → code, or email → code). Only
+         one panel shows at a time (showStep in portal.js). There's no marketing
+         hero — sign-in is the landing. NOTE: fail() overwrites this section's
+         innerHTML with a plain message, so #authView must tolerate simple content. -->
+    <section id="authView" class="auth-landing" hidden>
+      <!-- Phone claim (primary, and the landing step). The number customers were
+           texted is what the business proves possession of — reaches the ~70% we
+           have no email for. -->
+      <div id="phoneStep" class="auth-step" hidden>
+        <div class="auth-hero">
+          <h2 class="card-title">Sign up</h2>
+          <p class="auth-sub">
+            Enter the phone customers call or text you on. We'll text a 6-digit code —
+            no password. Only that number can manage the page.
+          </p>
+        </div>
+        <div class="auth-card">
+          <form id="phoneForm" novalidate>
+            <label for="phone">Business phone</label>
+            <input id="phone" name="phone" type="tel" autocomplete="tel"
+                   inputmode="tel" placeholder="(415) 555-0132" required>
+            <button type="submit" class="primary-btn" id="sendSmsBtn">Text me code</button>
+          </form>
+          <button type="button" class="linklike" id="useEmailBtn">Use email instead</button>
+        </div>
+      </div>
+
+      <!-- Email (alternate) — for a business that would rather use the inbox we
+           matched, or whose phone we never recorded. -->
+      <div id="emailStep" class="auth-step" hidden>
+        <div class="auth-hero">
+          <h2 class="card-title">Sign up</h2>
+          <p class="auth-sub">
+            Enter the email where you received your Brightglow request. We'll email a
+            6-digit sign-in code — no password. Only that inbox can manage the page.
+          </p>
+        </div>
+        <div class="auth-card">
+          <form id="authForm" novalidate>
+            <label for="email">Business email</label>
+            <input id="email" name="email" type="email" autocomplete="email"
+                   inputmode="email" placeholder="you@yourbusiness.com" required>
+            <button type="submit" class="primary-btn" id="sendLinkBtn">Send sign-in code</button>
+          </form>
+          <button type="button" class="linklike" id="usePhoneBtn">Use phone instead</button>
+        </div>
+      </div>
+
+      <!-- Enter the code. Replaces the phone/email step once a code is sent. -->
+      <div id="codeStep" class="auth-step" hidden>
+        <div class="auth-hero">
+          <h2 class="card-title">Enter your code</h2>
+          <p class="auth-sub">
+            We sent a 6-digit code to <strong id="codeTarget"></strong>. Enter it below
+            to sign in. It can take a minute to arrive.
+          </p>
+        </div>
+        <div class="auth-card">
+          <form id="codeForm" novalidate>
+            <label for="code">6-digit code</label>
+            <input id="code" name="code" type="text" inputmode="numeric"
+                   autocomplete="one-time-code" pattern="[0-9]*" maxlength="6"
+                   placeholder="123456" required>
+            <button type="submit" class="primary-btn" id="verifyCodeBtn">Verify &amp; sign in</button>
+          </form>
+          <button type="button" class="linklike" id="restartBtn">Start over</button>
+        </div>
+      </div>
+
+      <p id="authMsg" class="form-msg" role="status" aria-live="polite"></p>
+    </section>
+
+    <!-- REQUESTS — the landing tab (Figma 1984:5579). The requests list and the
+         open conversation. -->
+    <section id="chatsView" hidden>
+      <!-- Business switcher (only shown when >1 claimed business). It lives here,
+           at the top of Requests, since switching business swaps which requests
+           are shown. -->
+      <div id="bizSwitcher" class="biz-switcher" hidden></div>
+      <div id="leadsCard">
+        <div id="leadsList" class="leads-list"></div>
+        <p id="leadsEmpty" class="muted center-text" hidden>No requests yet. New customer requests matched to your business show up here.</p>
+      </div>
+
+      <!-- Open chat — Figma 2020:6841, built element-for-element: a header row
+           (44×44 back icon + job title over a timestamp), the guidance line,
+           then the request as a fixed 320px blue-gradient container and the photos
+           stacked below it. No card wrapper. -->
+      <div id="threadCard" hidden>
+        <div class="thread-head">
+          <button type="button" class="thread-back" id="threadBack" aria-label="Back to requests">
+            <svg viewBox="0 0 24 24" width="24" height="24" fill="none" aria-hidden="true">
+              <path d="M20 12H4M4 12l7-7M4 12l7 7" stroke="currentColor" stroke-width="2"
+                    stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+          </button>
+          <!-- Job title over a timestamp (Figma 2020:6841 header: Headline 3 +
+               Body 2). -->
+          <div class="thread-titlewrap">
+            <h2 class="thread-title" id="threadTitle"></h2>
+            <span class="thread-time" id="threadTime"></span>
+          </div>
+          <span class="thread-broadcast" id="threadBroadcast">Send to top 5</span>
+        </div>
+        <p class="thread-sub" id="threadSub"></p>
+        <!-- The request as a fixed 320px blue-gradient container, then the customer's
+             photos stacked below it (Figma 2020:6841). -->
+        <div class="thread-msgs" id="threadMsgs"></div>
+        <div class="thread-photos" id="threadPhotos"></div>
+        <p class="form-msg" id="threadMsg" aria-live="polite" hidden></p>
+      </div>
+    </section>
+
+    <!-- EDITOR — the app's Settings screen (BusinessProfileScreen) as its own
+         view, with the same field set and nothing beyond it. -->
+    <section id="editorView" hidden>
+      <!-- Accepting new work — moved here from the (now-removed) Dashboard, sitting
+           under the tabs above Profile (Figma 1984:5663: toggle left, label right). -->
+      <label class="accept-row">
+        <input type="checkbox" id="acceptingWork">
+        <span class="toggle" aria-hidden="true"><span class="knob"></span></span>
+        <span class="accept-label">Accepting new work</span>
+      </label>
+
+      <!-- No page title here: the active "Settings" tab already labels this view. -->
+      <h2 class="section-head">Profile</h2>
+        <div class="card">
+          <!-- Logo: 104px preview, then button above caption — the app's layout. -->
+          <div class="logo-row">
+            <div class="logo-wrap">
+              <div class="logo-preview" id="logoPreview" aria-hidden="true"></div>
+              <button class="rm" id="logoRemove" title="Remove logo" hidden>×</button>
+            </div>
+            <div class="logo-actions">
+              <label class="btn-secondary sm upload-btn">
+                Upload logo
+                <input id="logoInput" type="file" accept="image/png,image/jpeg,image/webp" hidden>
+              </label>
+              <p class="logo-hint">Square works best. PNG or JPG.</p>
+            </div>
+          </div>
+
+          <!-- Fields in Figma order: Name, Description, Email, Phone number. The
+               verified phone prefills (noBusiness → prettyPhone); all ride save. -->
+          <label class="field-label" for="displayName">Name</label>
+          <input id="displayName" type="text" maxlength="120" placeholder="e.g. Bay Area Plumbing Co.">
+
+          <label class="field-label" for="about">Description</label>
+          <input id="about" type="text" maxlength="1200" placeholder="Tell people what your business does">
+
+          <label class="field-label" for="bizEmail">Email</label>
+          <input id="bizEmail" type="email" autocomplete="email" inputmode="email" maxlength="200" placeholder="you@yourbusiness.com">
+
+          <label class="field-label" for="bizPhone">Phone number</label>
+          <input id="bizPhone" type="tel" autocomplete="tel" inputmode="tel" maxlength="20" placeholder="+1 (555) 000-0000">
+
+          <!-- Self-declared trust signals, same pair the app shows. -->
+          <div class="check-field">
+            <!-- Figma checkbox (node 1984:5663): 44px tap target, 22.29px box,
+                 5.14px radius, accent fill + white check when on. -->
+            <label class="checkbox">
+              <input type="checkbox" id="licensed">
+              <span class="tickbox" aria-hidden="true"><span class="box"><svg viewBox="0 0 11 9" width="11" height="9"><path d="M1.5 4.6l2.7 2.7L9.5 1.5" fill="none" stroke="#fff" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></span></span>
+              <span>Licensed</span>
+            </label>
+            <label class="checkbox">
+              <input type="checkbox" id="insured">
+              <span class="tickbox" aria-hidden="true"><span class="box"><svg viewBox="0 0 11 9" width="11" height="9"><path d="M1.5 4.6l2.7 2.7L9.5 1.5" fill="none" stroke="#fff" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></span></span>
+              <span>Insured</span>
+            </label>
+          </div>
+
+          <!-- Pictures belong INSIDE the Profile card and BEFORE Typical
+               services (Figma 1140:1827, and the app's profileSection). They
+               were a separate section after services, which read as swapped. -->
+          <label class="field-label" for="photoInput">Pictures</label>
+          <p class="logo-hint">Show your best relevant work. Drag to reorder.</p>
+          <!-- Horizontal strip of tiles ending in a "+" add tile, as in the app —
+               not a grid with a separate upload button. The add tile is a <label>
+               for the input, so it opens the picker without any JS. -->
+          <div id="photoStrip" class="photo-strip"></div>
+          <input id="photoInput" type="file" accept="image/png,image/jpeg,image/webp" multiple hidden>
+          <!-- Upload progress: a bar + "X of N" counter, shown only while uploading. -->
+          <div id="photoProgress" class="upload-progress" hidden>
+            <div class="upload-bar"><span></span></div>
+            <span class="upload-count" aria-live="polite"></span>
+          </div>
+          <p id="photoMsg" class="form-msg" role="status" aria-live="polite"></p>
+        </div>
+
+      <!-- No outer card here: Figma 1140:1827 puts the caption directly under the
+           heading, makes EACH service its own card, and leaves "Add service"
+           standalone below them. Wrapping the lot in one card (as this did) reads
+           as a single panel instead of a list. -->
+      <h2 class="section-head">Typical services</h2>
+      <p class="section-sub">Get more leads with transparent price ranges.</p>
+      <div id="serviceRows" class="service-rows"></div>
+      <div class="add-service-row">
+        <button type="button" class="btn-secondary sm" id="addServiceBtn">Add service</button>
+      </div>
+
+      <!-- Save (Figma Button_Primary): edits still autosave in the background, so
+           this is the "peace of mind" flush + confirmation, not the only way to
+           save. For a brand-new page the first Save also creates the listing. -->
+      <!-- Save (Figma Button_Primary), then a rule, then Preview — stacked and
+           centered (Figma 1984:5663 tail). Edits also autosave; Save is the
+           reassurance flush + confirmation. Delete account is in the menu now. -->
+      <div class="save-row">
+        <button type="button" class="save-btn" id="saveBtn">Save</button>
+        <p class="form-msg" id="saveHint" role="status" aria-live="polite" hidden></p>
+      </div>
+
+      <!-- Preview opens the app to this place's consumer page (or a QR on
+           desktop). The whole section is hidden until the page exists
+           (renderPreviewQr), so the rule doesn't float over empty space. -->
+      <div class="preview-section" id="previewSection" hidden>
+        <hr class="save-div">
+        <button type="button" id="previewBtn" class="btn-secondary lg"><svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="#fff" aria-hidden="true"><circle cx="12" cy="12" r="11" stroke-width="2"/><circle cx="11.9" cy="9.6" r="3.4" stroke-width="1.7"/><path d="M6.5 19.4Q12 13.5 17.5 19.4" stroke-width="1.7" stroke-linecap="round"/></svg><span>Preview as customer</span></button>
+        <!-- Desktop: the button can't open the app, so it's plain text and the
+             QR below is the action. -->
+        <p class="preview-label" id="previewLabel" hidden>Preview as customer</p>
+        <div class="preview-extra" id="previewRow" hidden>
+          <div class="preview-qr" id="previewQr">
+            <img id="previewQrImg" alt="QR code to preview your page" width="160" height="160">
+          </div>
+          <p class="preview-hint" id="previewHint">Scan with your phone's camera to open your page in the Brightglow app.</p>
+        </div>
+      </div>
+
+      <!-- Shown only when a save (autosave or manual) fails. -->
+      <div class="save-bar" id="saveFailed" hidden>
+        <span class="muted">Couldn't save your changes.</span>
+        <button type="button" class="ghost-btn" id="retrySaveBtn">Retry</button>
+      </div>
+    </section>
+
+    <!-- BILLING — its own view, reached from the header. Stays hidden until the
+         server reports billing is configured (GET /api/billing/status → enabled).
+         State is per business EMAIL, not per claimed page, so it's the same
+         whichever business is selected in the switcher. -->
+    <section id="billingView" hidden>
+      <div class="editor-head">
+        <button type="button" class="thread-back" id="billingBack" aria-label="Back">
+          <svg viewBox="0 0 24 24" width="24" height="24" fill="none" aria-hidden="true">
+            <path d="M20 12H4M4 12l7-7M4 12l7 7" stroke="currentColor" stroke-width="2"
+                  stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        </button>
+        <h1>Billing</h1>
+      </div>
+      <div class="billing-state" id="billingState">
+        <div class="spinner" aria-label="Loading"></div>
+      </div>
+    </section>
+  </main>
+
+  <!-- MENU (Figma 2021:10043): a full-screen overlay that animates in over the
+       UI. Wordmark + close (✕) on top, then the three destinations. Sign out and
+       Delete account keep their existing behavior; Billing opens the Stripe-backed
+       subscribe / manage flow. -->
+  <div id="menuOverlay" class="menu-overlay" hidden>
+    <header class="topbar">
+      <div class="topbar-inner">
+        <span class="brand">
+          <img class="appicon" src="../../media/appicon.png" alt="">
+          <span>Brightglow</span>
+        </span>
+        <div class="topbar-actions">
+          <button id="menuClose" class="icon-btn" aria-label="Close menu">
+            <svg viewBox="0 0 24 24" width="24" height="24" fill="none" aria-hidden="true">
+              <path d="M6 6l12 12M18 6L6 18" stroke="currentColor"
+                    stroke-width="2" stroke-linecap="round"/>
+            </svg>
+          </button>
+        </div>
+      </div>
+    </header>
+    <nav class="menu-list">
+      <button type="button" class="menu-item" id="menuSignOut">Sign out</button>
+      <hr class="menu-div">
+      <button type="button" class="menu-item" id="menuBilling">Billing</button>
+      <hr class="menu-div">
+      <button type="button" class="menu-item" id="menuDelete">Delete account</button>
+    </nav>
+  </div>
+
+  <!-- Destructive confirmation for account deletion. A custom modal (not the
+       native confirm()) so the action reads as significant: red "Confirm
+       Deletion" button, quiet Cancel. -->
+  <div id="deleteOverlay" class="modal-overlay" hidden>
+    <div class="modal-card" role="alertdialog" aria-modal="true" aria-labelledby="deleteTitle">
+      <h2 id="deleteTitle" class="modal-title">Delete your account?</h2>
+      <p class="modal-body">This permanently deletes your business from Brightglow — <strong class="delete-highlight">your page, listing, photos, and all data are completely removed. Nothing remains, not even public info.</strong> You won't be able to log in again with this phone or email. This cannot be undone.</p>
+      <button id="deleteConfirm" class="primary-btn danger-btn" type="button">Confirm Deletion</button>
+      <button id="deleteCancel" class="primary-btn light-btn" type="button">Cancel</button>
+    </div>
+  </div>
+
+  <footer class="portal-footer">
+    <a href="../../business-terms.html">Business Terms</a>
+    <a href="../../terms.html">Terms</a>
+    <a href="mailto:hello@brightglow.co">hello@brightglow.co</a>
+    <span>© 2026 Brightglow Technologies LLC</span>
+  </footer>
+
+  <script type="module" src="portal.js?v=37"></script>
+</body>
+</html>
