@@ -781,7 +781,7 @@ struct QuoteRequestScreen: View {
             // Personalized text: names the business and the job so it doesn't read
             // like a promo blast. The full description is in the SMS; the photos
             // and reply box live behind the /l link.
-            let body = "Hi! I'd like a quote for \(description). "
+            let body = "Hi! I'd like a quote. "
                 + "See details and photos here: \(LeadBridgeService.replyURL(publicId: publicId)) - via Brightglow.co"
             compose = ComposePayload(
                 recipient: Self.smsTestRecipient.isEmpty ? phone : Self.smsTestRecipient,
