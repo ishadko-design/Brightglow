@@ -44,6 +44,10 @@ enum ClarifyService {
         /// prose combination of the request and the confirmed answers. Empty when
         /// the chat couldn't describe the request (or an older payload lacks it).
         let summary: String
+        /// 3-5 word job title from the clarify LLM ("metal trim replacement"),
+        /// used as the {job} teaser in the outbound SMS. Empty when the chat
+        /// couldn't name the request (or an older payload lacks it).
+        let jobTitle: String
         let priceable: Bool
     }
 
@@ -93,6 +97,7 @@ enum ClarifyService {
                 photoTerms: decoded.photo_terms ?? "",
                 details: decoded.details ?? "",
                 summary: decoded.summary ?? "",
+                jobTitle: decoded.job_title ?? "",
                 // Both verticals are priced now: the cost catalog gained the
                 // five Auto & moto categories 2026-07-20. This used to default
                 // auto to false, which was the second of two gates keeping
@@ -113,6 +118,7 @@ enum ClarifyService {
         let photo_terms: String?
         let details: String?
         let summary: String?
+        let job_title: String?
         let priceable: Bool?
     }
 }

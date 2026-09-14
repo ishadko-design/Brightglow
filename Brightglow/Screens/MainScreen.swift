@@ -1459,7 +1459,8 @@ struct MainScreen: View {
         // AI overview, not just the one-line query.
         clarifyTranscript = ClarifyTranscript(
             turns: chatMessages.map { ClarifyService.Turn(role: $0.role, content: $0.content) },
-            summary: outcome?.summary ?? "")
+            summary: outcome?.summary ?? "",
+            jobTitle: outcome?.jobTitle ?? "")
         chatQuickReplies = []
         chatCompleted = true
         cancelPreloads()

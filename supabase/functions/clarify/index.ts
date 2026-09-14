@@ -246,9 +246,14 @@ Auto: one of ${AUTO_SERVICES.join(", ")}. Use "" only if nothing fits.
   Every clause must add a fact a contractor would quote on; if a clause just
   repeats another, drop it. Use
   "" if the request was too vague to describe.
+- job_title: 3-5 words naming the job as a plain noun phrase, the kind a
+  customer would put in "I'd like a quote for: …". E.g. "metal trim
+  replacement", "dented car bumper repair", "tankless water heater install".
+  Name the work item precisely — no location, no brand, no period, no quotes.
+  Use "" if the request was too vague to name.
 
 When asking (action "ask"): also return your best-so-far vertical and category
-(use "" if not yet known); leave search_terms, photo_terms, details, summary as "".
+(use "" if not yet known); leave search_terms, photo_terms, details, summary, job_title as "".
 
 The pricing engine covers these home jobs — for home requests, aim toward them
 and note each one's pricing unit (the quantity worth clarifying):
@@ -272,10 +277,12 @@ const SCHEMA = {
     photo_terms: { type: "string" },
     details: { type: "string" },
     summary: { type: "string" },
+    job_title: { type: "string" },
   },
   required: [
     "action", "question", "quick_replies",
     "vertical", "category", "search_terms", "photo_terms", "details", "summary",
+    "job_title",
   ],
   additionalProperties: false,
 } as const;
@@ -417,6 +424,7 @@ Deno.serve(async (req) => {
     photo_terms?: string;
     details?: string;
     summary?: string;
+    job_title?: string;
   };
   // Sonnet is markedly faster than Opus for this lightweight per-turn routing
   // task and just as accurate against the fixed schema. `mustFinish` forces the
@@ -525,6 +533,7 @@ Deno.serve(async (req) => {
       ? (parsed.details ?? "")
       : vehicleSizeToken(parsed.details ?? ""),
     summary: parsed.summary ?? "",
+    job_title: parsed.job_title ?? "",
     priceable: isPriceable(vertical, category),
   });
 });

@@ -15,6 +15,9 @@ struct ClarifyTranscript: Equatable {
     /// combining the request with the confirmed answers into one readable note
     /// for the business. Empty when the chat didn't produce one.
     var summary: String = ""
+    /// 3-5 word job title from the clarify LLM ("metal trim replacement").
+    /// Empty when the chat was skipped or couldn't name the request.
+    var jobTitle: String = ""
 
     static let empty = ClarifyTranscript(turns: [])
 

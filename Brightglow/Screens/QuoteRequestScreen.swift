@@ -144,19 +144,34 @@ struct QuoteRequestScreen: View {
         .enableSwipeBack()
         .preferredColorScheme(.dark)
         .onDisappear {
-            // Save the draft so if the user goes back, the text is preserved.
+            // Preserve the in-progress text while moving between contractors
+            // in the same session. The #dogfood test keyword is never saved —
+            // it's a per-send control typed manually. A session fingerprint
+            // (clarify transcript + photo count) is saved alongside: the draft
+            // restores only for the same session. A new session — new pictures,
+            // a from-scratch request — gets no stale text.
             let draftKey = "draftRequest"
-            if !editableRequest.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                UserDefaults.standard.set(editableRequest, forKey: draftKey)
+            let fingerprintKey = "draftRequestFingerprint"
+            let draftText = strippingTestKeyword(editableRequest)
+            if !draftText.isEmpty {
+                UserDefaults.standard.set(draftText, forKey: draftKey)
+                UserDefaults.standard.set(sessionFingerprint(), forKey: fingerprintKey)
             }
         }
         .onAppear {
-            // Restore the draft if the user went back and returned; the draft
-            // takes precedence over the transcript pre-fill.
+            // Restore the draft only when its session fingerprint matches this
+            // session. Anything else means the session ended or a new request
+            // started: the stale draft is deleted, never restored.
             if editableRequest.isEmpty {
                 let draftKey = "draftRequest"
-                if let draft = UserDefaults.standard.string(forKey: draftKey), !draft.isEmpty {
-                    editableRequest = draft
+                let fingerprintKey = "draftRequestFingerprint"
+                let saved = UserDefaults.standard.string(forKey: fingerprintKey) ?? ""
+                if !saved.isEmpty, saved == sessionFingerprint(),
+                   let draft = UserDefaults.standard.string(forKey: draftKey), !draft.isEmpty {
+                    editableRequest = strippingTestKeyword(draft)
+                } else {
+                    UserDefaults.standard.removeObject(forKey: draftKey)
+                    UserDefaults.standard.removeObject(forKey: fingerprintKey)
                 }
             }
             if email.isEmpty { email = auth.user?.email ?? "" }
@@ -437,9 +452,8 @@ struct QuoteRequestScreen: View {
                             await MainActor.run {
                                 savingLead = false
                                 pendingPayload = nil
-                                // Clear the draft on successful save.
-                                let draftKey = "draftRequest"
-                                UserDefaults.standard.removeObject(forKey: draftKey)
+                                // The draft stays: the session isn't over — he may send
+                                // the same text to the next contractor.
                                 withAnimation(.easeInOut(duration: 0.25)) { sent = true }
                             }
                         } catch {
@@ -720,6 +734,24 @@ struct QuoteRequestScreen: View {
             .padding(.top, 4)
     }
 
+    /// The #dogfood keyword routes a lead to Bright Test Plumbing and is stripped
+    /// server-side before storage. It's a per-send test control Igor types
+    /// manually — it must never leak into the outgoing SMS or persist in the
+    /// draft.
+    private func strippingTestKeyword(_ text: String) -> String {
+        text.replacingOccurrences(of: "(?i)#dogfood\\b", with: "", options: .regularExpression)
+            .replacingOccurrences(of: "\\s+", with: " ", options: .regularExpression)
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    /// Identifies one request session: the clarify transcript (derived from the
+    /// photos + chat) plus the starting photo count. Moving back and forth
+    /// between contractors shares it; new pictures or a from-scratch request
+    /// don't.
+    private func sessionFingerprint() -> String {
+        clarifyTranscript.augmentedDescription(base: "") + "|photos:\(initialImages.count)"
+    }
+
     /// contractorEmail is hardcoded to the Brightglow test inbox — real
     /// contractor-email sourcing (business_enrichment) isn't built yet, so
     /// this can't reach contractor.name's actual business.
@@ -776,12 +808,30 @@ struct QuoteRequestScreen: View {
             // Personalized text: names the business and the one-line job so it
             // doesn't read like a promo blast, and ends with a concrete
             // low-friction ask. Photos live behind the /l link.
-            let smsJob = description.components(separatedBy: .newlines).first?
-                .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-            let smsJobLine = smsJob.count > 100
-                ? String(smsJob.prefix(100)).trimmingCharacters(in: .whitespacesAndNewlines) + "\u{2026}"
-                : smsJob
-            let body = "Hi \(contractor.name)! I'd like a quote for: \(smsJobLine). "
+            // {job} is the clarify LLM's 3-5 word job title ("metal trim
+            // replacement") — short enough that the business must tap the link
+            // for details (the tap is what we track). Falls back to a short
+            // teaser of the description when there's no title (clarify skipped
+            // or failed). The #dogfood test keyword is stripped: it's a routing
+            // control for the lead record, never part of the message.
+            let smsJob: String = {
+                let titled = strippingTestKeyword(clarifyTranscript.jobTitle)
+                if !titled.isEmpty { return titled }
+                let firstLine = strippingTestKeyword(
+                    description.components(separatedBy: .newlines).first?
+                        .trimmingCharacters(in: .whitespacesAndNewlines) ?? "")
+                guard firstLine.count > 40 else { return firstLine }
+                let head = String(firstLine.prefix(40))
+                if let space = head.lastIndex(of: " ") {
+                    return String(head[..<space]).trimmingCharacters(in: .whitespacesAndNewlines) + "\u{2026}"
+                }
+                return head.trimmingCharacters(in: .whitespacesAndNewlines) + "\u{2026}"
+            }()
+            let jobClause: String = {
+                guard !smsJob.isEmpty else { return "." }
+                return " for: \(smsJob)" + (smsJob.hasSuffix("\u{2026}") ? "" : ".")
+            }()
+            let body = "Hi \(contractor.name)! I'd like a quote\(jobClause) "
                 + "Photos and details here: \(LeadBridgeService.replyURL(publicId: publicId)) - via Brightglow.co. "
                 + "If you can take this on, just reply to this text."
             compose = ComposePayload(
