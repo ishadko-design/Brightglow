@@ -41,6 +41,12 @@ struct QuoteRequestScreen: View {
     @State private var sent = false
     @State private var sending = false
     @State private var sendError: String? = nil
+    /// True while the lead record is being saved after the Messages send.
+    /// The SMS is already out at this point — this gates the /l reply link.
+    @State private var savingLead = false
+    /// The payload whose lead save is in flight or failed, so a failure can
+    /// be retried with the SAME publicId (the link already in the sent SMS).
+    @State private var pendingPayload: ComposePayload? = nil
     #if DEBUG
     /// Test-mode switch (debug builds only): when ON, the lead files under the
     /// dedicated Bright Test Plumbing business instead of the real contractor.
@@ -123,13 +129,26 @@ struct QuoteRequestScreen: View {
         contractor?.phone != nil && Self.deviceCanText
     }
     private var canSend: Bool {
-        (willText || emailValid) && hasDescription && contractor != nil && !sending
+        (willText || emailValid) && hasDescription && contractor != nil && !sending && !savingLead
     }
 
     var body: some View {
         ZStack {
             AppColors.bg.ignoresSafeArea()
             if sent { sentState } else { reviewState }
+            // The lead save after the Messages send: visible progress so a
+            // slow or failed save never reads as "nothing happened".
+            if savingLead {
+                Color.black.opacity(0.6).ignoresSafeArea()
+                VStack(spacing: 16) {
+                    ProgressView()
+                        .tint(.white)
+                        .scaleEffect(1.4)
+                    Text("Saving your request…")
+                        .font(.bodyLight)
+                        .foregroundStyle(.white)
+                }
+            }
         }
         .navigationBarBackButtonHidden(true)
         .toolbar(.hidden, for: .navigationBar)
@@ -262,7 +281,38 @@ struct QuoteRequestScreen: View {
 
 
                         if let sendError {
-                            warning(sendError)
+                            if pendingPayload != nil {
+                                // Lead-save failure after the SMS went out: prominent,
+                                // with a retry that reuses the same publicId (the link
+                                // already in the sent text). Not a small warning —
+                                // this is the state Igor hit as "nothing happened".
+                                VStack(alignment: .leading, spacing: 12) {
+                                    Text(sendError)
+                                        .font(.bodyLight)
+                                        .foregroundStyle(.white)
+                                    Button(action: retryLeadSave) {
+                                        if savingLead {
+                                            ProgressView().tint(.white)
+                                                .frame(maxWidth: .infinity)
+                                                .frame(height: 48)
+                                        } else {
+                                            Text("Try again")
+                                                .font(.h3)
+                                                .foregroundStyle(.white)
+                                                .frame(maxWidth: .infinity)
+                                                .frame(height: 48)
+                                        }
+                                    }
+                                    .buttonStyle(.gradient)
+                                    .disabled(savingLead)
+                                }
+                                .padding(16)
+                                .background(AppColors.searchBg)
+                                .clipShape(RoundedRectangle(cornerRadius: 20))
+                                .overlay(RoundedRectangle(cornerRadius: 20).stroke(AppColors.starFilled, lineWidth: 1))
+                            } else {
+                                warning(sendError)
+                            }
                         }
                     }
                     .padding(.horizontal, 16)
@@ -361,16 +411,24 @@ struct QuoteRequestScreen: View {
                 // Awaited, not fire-and-forget: if the lead isn't recorded the
                 // reply link 404s, so "Request sent" waits for the save. A
                 // failure surfaces as an error instead of vanishing into try?.
+                // savingLead shows progress; the payload is kept for retry.
                 if let contractor {
+                    pendingPayload = payload
+                    savingLead = true
+                    sendError = nil
                     Task {
                         do {
                             try await submitEmailLead(contractor, description: payload.description, photos: payload.uploadPhotos,
                                                       publicId: payload.publicId, notify: false)
                             await MainActor.run {
+                                savingLead = false
+                                pendingPayload = nil
                                 withAnimation(.easeInOut(duration: 0.25)) { sent = true }
                             }
                         } catch {
+                            print("❌ lead save failed: \(error)")
                             await MainActor.run {
+                                savingLead = false
                                 sendError = "Text sent, but the request link couldn't be saved. Please try again."
                             }
                         }
@@ -710,14 +768,11 @@ struct QuoteRequestScreen: View {
             // reply into the in-app chat — the fallback for when MMS strips the
             // attachment, and the bridge that keeps the conversation on Brightglow.
             let publicId = LeadBridgeService.newPublicID()
-            // Always the same generic text: the job details and photo live behind
-            // the /l link, never in the SMS. The link opens a read-only detail page
-            // while the business is on its free leads, and the paywall teaser once
-            // it's over — so the lead's value is gated on the link, not the message.
-            // The photo is still uploaded to the server (payload.photo) so it shows
-            // on that page; it's just not attached to the MMS.
-            let body = "Hi — I found you on Brightglow and I'd like a quote. "
-                + "The details and a photo are here: \(LeadBridgeService.replyURL(publicId: publicId))"
+            // Personalized text: names the business and the job so it doesn't read
+            // like a promo blast. The full description is in the SMS; the photos
+            // and reply box live behind the /l link.
+            let body = "Hi \(contractor.name)! I'd like a quote for: \(description). "
+                + "Photos and details here: \(LeadBridgeService.replyURL(publicId: publicId)) - via Brightglow.co"
             compose = ComposePayload(
                 recipient: Self.smsTestRecipient.isEmpty ? phone : Self.smsTestRecipient,
                 body: body,
@@ -744,6 +799,31 @@ struct QuoteRequestScreen: View {
                         AnalyticsService.track("send_result", ["place_id": contractor.id, "channel": "email", "outcome": "failed"])
                         sendError = "Couldn't send: \(error)"
                     }
+                }
+            }
+        }
+    }
+
+    /// Retries the lead save after a failure, reusing the SAME publicId so the
+    /// link already in the sent SMS resolves. Never re-opens Messages.
+    private func retryLeadSave() {
+        guard let payload = pendingPayload, let contractor, !savingLead else { return }
+        savingLead = true
+        sendError = nil
+        Task {
+            do {
+                try await submitEmailLead(contractor, description: payload.description, photos: payload.uploadPhotos,
+                                          publicId: payload.publicId, notify: false)
+                await MainActor.run {
+                    savingLead = false
+                    pendingPayload = nil
+                    withAnimation(.easeInOut(duration: 0.25)) { sent = true }
+                }
+            } catch {
+                print("❌ lead save retry failed: \(error)")
+                await MainActor.run {
+                    savingLead = false
+                    sendError = "Text sent, but the request link couldn't be saved. Please try again."
                 }
             }
         }
