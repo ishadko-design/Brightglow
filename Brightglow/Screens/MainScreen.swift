@@ -1047,6 +1047,10 @@ struct MainScreen: View {
                 // No auto-description here — the photo was already described at
                 // capture time (or was never classified, for a mid-chat pick).
                 autoDescription: .constant(""),
+                // Draw-only: the chat already has the text — this editor is
+                // purely for circling. Hide the text input entirely (it would
+                // override the chat). Back + Undo with auto-save on exit.
+                showsTextInput: false,
                 paths: $annotatePaths
             )
         }
