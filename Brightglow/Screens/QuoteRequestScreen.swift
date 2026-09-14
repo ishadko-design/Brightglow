@@ -88,13 +88,6 @@ struct QuoteRequestScreen: View {
     /// yet uploaded or upload failed — falls back to inline at submit time).
     /// Set the moment a photo is picked; cleared when the photo is edited.
     @State private var preuploadIds: [UUID?] = []
-
-    /// Per-screen-instance draft key. A global or business-scoped key leaked
-    /// text across different requests — the draft must live only for this
-    /// specific presentation of the screen. Going back preserves the view (and
-    /// its @State), so the draft survives. A new request creates a new view
-    /// with a new key, starting fresh.
-    private let draftKey: String = "draftRequest_v2_\(UUID().uuidString)"
     /// The business's hosted logo, resolved once on appear (LogoService). Only a
     /// real, resolved logo is ever shown — there's deliberately no monogram
     /// fallback here (an initials tile reads as a fake mark on a screen that's all
@@ -155,22 +148,16 @@ struct QuoteRequestScreen: View {
         .preferredColorScheme(.dark)
         .onDisappear {
             // Save the draft so if the user goes back, the text is preserved.
-            // Scoped to this business — a new request elsewhere starts fresh.
+            let draftKey = "draftRequest"
             if !editableRequest.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                 UserDefaults.standard.set(editableRequest, forKey: draftKey)
             }
         }
         .onAppear {
-            // One-time: kill ALL v1 draft keys (the global "draftRequest" and
-            // every per-business "draftRequest_<id>"). Pre-fix builds leaked
-            // text across requests; these keys must never resurface.
-            let defaults = UserDefaults.standard
-            for key in defaults.dictionaryRepresentation().keys where key.hasPrefix("draftRequest") && !key.hasPrefix("draftRequest_v2_") {
-                defaults.removeObject(forKey: key)
-            }
             // Restore the draft if the user went back and returned; the draft
             // takes precedence over the transcript pre-fill.
             if editableRequest.isEmpty {
+                let draftKey = "draftRequest"
                 if let draft = UserDefaults.standard.string(forKey: draftKey), !draft.isEmpty {
                     editableRequest = draft
                 }
@@ -455,6 +442,7 @@ struct QuoteRequestScreen: View {
                     return
                 }
                 // Text sent with a verified link. Clear the draft.
+                let draftKey = "draftRequest"
                 UserDefaults.standard.removeObject(forKey: draftKey)
                 withAnimation(.easeInOut(duration: 0.25)) { sent = true }
             }
