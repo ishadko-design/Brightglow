@@ -1162,12 +1162,19 @@ function wireLeadRow(row, leads) {
     if (row.classList.contains("open")) { row.classList.remove("open"); return; }
     openThread(leads[i]);
   });
-  row.querySelector(".lead-delete").addEventListener("click", (e) => {
-    e.stopPropagation();
-    const btn = e.currentTarget;
-    if (btn.disabled) return;   // hide request already in flight — one tap deletes
-    btn.disabled = true;
-    deleteLead(leads[i], row).finally(() => { btn.disabled = false; });
+  const delBtn = row.querySelector(".lead-delete");
+  const doDelete = (e) => {
+    if (e) e.stopPropagation();
+    if (delBtn.disabled) return;   // hide request already in flight — one tap deletes
+    delBtn.disabled = true;
+    deleteLead(leads[i], row).finally(() => { delBtn.disabled = false; });
+  };
+  delBtn.addEventListener("click", doDelete);
+  // iOS Safari: click can be swallowed when touch handlers are nearby (button
+  // shows :active but click never fires). Handle touchend directly.
+  delBtn.addEventListener("touchend", (e) => {
+    e.preventDefault();   // prevent the (possibly swallowed) click from double-firing
+    doDelete(e);
   });
 }
 
@@ -1176,7 +1183,14 @@ function wireLeadRow(row, leads) {
 // the /l page are untouched.
 async function deleteLead(lead, row) {
   try {
-    const resp = await authedFetch("/api/threads/" + lead.public_id + "/hide", { method: "POST" });
+    const ctrl = new AbortController();
+    const timeout = setTimeout(() => ctrl.abort(), 15000);
+    let resp;
+    try {
+      resp = await authedFetch("/api/threads/" + lead.public_id + "/hide", { method: "POST", signal: ctrl.signal });
+    } finally {
+      clearTimeout(timeout);
+    }
     if (!resp.ok) {
       let detail = "";
       try { detail = " " + JSON.stringify(await resp.json()); } catch (e) {}
