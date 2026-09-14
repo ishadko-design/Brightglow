@@ -475,7 +475,13 @@ enum ImageClassifier {
         let detailsText = parts.count > 1 ? parts[1] : ""
         let details: String? = (detailsText.isEmpty || detailsText.lowercased() == "none") ? nil : detailsText
         let descriptionText = parts.count > 2 ? parts[2] : ""
-        let description: String? = (descriptionText.isEmpty || descriptionText.lowercased() == "none") ? nil : descriptionText
+        // Never surface template words: if the model echoed "DESCRIPTION" (with optional
+        // punctuation) as the field value, treat it as no description — it must never
+        // appear in the UI (reported 2026-09-13, user-facing).
+        let descLower = descriptionText.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+            .trimmingCharacters(in: CharacterSet(charactersIn: ":.-_"))
+        let isTemplateWord = headerWords.contains(descLower)
+        let description: String? = (descriptionText.isEmpty || descLower == "none" || isTemplateWord) ? nil : descriptionText
         // 4th field — the recognizability read. Absent (older shape) → default high.
         let confidenceText = parts.count > 3 ? parts[3].lowercased() : ""
         let recognizability = Recognizability(rawValue: confidenceText) ?? .high
