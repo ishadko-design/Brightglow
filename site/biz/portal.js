@@ -1182,6 +1182,13 @@ function wireLeadRow(row, leads) {
 // this business owns the lead); we drop the row locally. The customer's thread and
 // the /l page are untouched.
 async function deleteLead(lead, row) {
+  // Optimistic: remove from UI immediately so Delete feels instant.
+  const idx = (current.leads || []).indexOf(lead);
+  const nextSibling = row.nextSibling;
+  const parent = row.parentNode;
+  if (idx >= 0) current.leads.splice(idx, 1);
+  row.remove();
+  show($("leadsEmpty"), (current.leads || []).length === 0);
   try {
     const ctrl = new AbortController();
     const timeout = setTimeout(() => ctrl.abort(), 15000);
@@ -1196,13 +1203,14 @@ async function deleteLead(lead, row) {
       try { detail = " " + JSON.stringify(await resp.json()); } catch (e) {}
       throw new Error(`hide failed (${resp.status})${detail}`);
     }
-    const idx = (current.leads || []).indexOf(lead);
-    if (idx >= 0) current.leads.splice(idx, 1);
-    row.remove();
-    show($("leadsEmpty"), (current.leads || []).length === 0);
+    showToast("Request deleted.");
   } catch (err) {
+    // Revert the optimistic removal — put the row back.
     console.error("delete request failed:", err);
-    alert("Couldn't remove that request (" + err.message + "). Try again, or email hello@brightglow.co.");
+    if (idx >= 0) current.leads.splice(idx, 0, lead);
+    if (parent) parent.insertBefore(row, nextSibling);
+    show($("leadsEmpty"), false);
+    alert("Could not delete this request. Please try again.");
   }
 }
 
