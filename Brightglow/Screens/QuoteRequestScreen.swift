@@ -832,7 +832,7 @@ struct QuoteRequestScreen: View {
                 return " for: \(smsJob)" + (smsJob.hasSuffix("\u{2026}") ? "" : ".")
             }()
             let body = "Hi \(contractor.name)! I'd like a quote\(jobClause) "
-                + "Photos and details here: \(LeadBridgeService.replyURL(publicId: publicId)) - via Brightglow.co. "
+                + "Photos and details here: \(LeadBridgeService.replyURL(publicId: publicId)) "
                 + "If you can take this on, just reply to this text."
             compose = ComposePayload(
                 recipient: Self.smsTestRecipient.isEmpty ? phone : Self.smsTestRecipient,
