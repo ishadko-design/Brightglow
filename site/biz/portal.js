@@ -1313,7 +1313,7 @@ async function openThread(lead) {
   $("threadTime").textContent = fmtStamp((req && req.created_at) || lead.created_at);
   // Figma 2020:6841 guidance line. The customer texted the business from their own
   // Messages, so the reply channel is that same SMS thread.
-  $("threadSub").textContent = "Reply in the SMS thread the customer started.";
+  $("threadSub").innerHTML = "<strong>Reply in the SMS thread</strong> where you received the request, it\u2019s started by a customer.";
   $("threadMsg").textContent = "";
   $("threadPhotos").innerHTML = "";   // clear the previous thread's photos
   show($("leadsCard"), false);
