@@ -271,6 +271,18 @@ async function enterDashboard() {
 
   if (error) { fail(error.message); return; }
 
+  // Link-open tracking: the /l page's JS beacon stamps leads.link_opened_at
+  // when a contractor actually opens the SMS link in a real browser
+  // (preview fetchers don't run JS). Separate fail-open query so a missing
+  // column — pre-migration — can never break the requests list.
+  try {
+    const { data: opened } = await sb.from("leads")
+      .select("id, link_opened_at")
+      .is("business_hidden_at", null);
+    const openedById = new Map((opened || []).map((r) => [r.id, r.link_opened_at]));
+    for (const l of leads || []) l.link_opened_at = openedById.get(l.id) || null;
+  } catch (err) { console.error("link-opened fetch failed:", err); }
+
   // Dismissed requests still occupy paywall positions — the /l gate counts
   // every lead row for the place, hidden or not — so fetch just their keys
   // for exact position parity. Never displayed; a failure here fails open.
@@ -1107,7 +1119,7 @@ function renderLeads() {
         </div>
         <div class="lead-main">
           <div class="lead-title">${esc(jobTitle(l))}</div>
-          <div class="lead-sub">${esc(stamp)}</div>
+          <div class="lead-sub">${esc(stamp)}${l.link_opened_at ? " · Opened" : ""}</div>
         </div>
       </div>
     </div>`;
