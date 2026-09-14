@@ -427,46 +427,21 @@ struct QuoteRequestScreen: View {
                     "channel": "text",
                     "outcome": result == .sent ? "sent" : (result == .failed ? "failed" : "cancelled"),
                 ])
-                // Only a real send delivers anything. Cancelling (or a compose
-                // failure) leaves the business with nothing and keeps the user on
-                // the form — no email leg, no "Request sent".
+                // Only a real send delivers anything. The lead was already
+                // saved before the composer opened (so the /l link was live
+                // when the text went out and iMessage could build the preview).
+                // Cancelling (or a compose failure) retracts that save —
+                // otherwise the business sees a request the customer never sent.
                 guard result == .sent else {
+                    Task { await LeadBridgeService.deleteLead(publicId: payload.publicId) }
+                    pendingPayload = nil
                     if result == .failed { sendError = "Couldn't open Messages. Try again." }
                     return
                 }
-                // The text went — record the lead with the SAME id used in the
-                // reply link (so /l/<id> resolves), but notify:false: the user's
-                // own text is the delivery, so LeadBridge sends no email here.
-                // Awaited, not fire-and-forget: if the lead isn't recorded the
-                // reply link 404s, so "Request sent" waits for the save. A
-                // failure surfaces as an error instead of vanishing into try?.
-                // savingLead shows progress; the payload is kept for retry.
-                if let contractor {
-                    pendingPayload = payload
-                    savingLead = true
-                    sendError = nil
-                    Task {
-                        do {
-                            try await submitEmailLead(contractor, description: payload.description, photos: payload.uploadPhotos,
-                                                      publicId: payload.publicId, notify: false)
-                            await MainActor.run {
-                                savingLead = false
-                                pendingPayload = nil
-                                // The draft stays: the session isn't over — he may send
-                                // the same text to the next contractor.
-                                withAnimation(.easeInOut(duration: 0.25)) { sent = true }
-                            }
-                        } catch {
-                            print("❌ lead save failed: \(error)")
-                            await MainActor.run {
-                                savingLead = false
-                                sendError = "Text sent, but the request link couldn't be saved. Please try again."
-                            }
-                        }
-                    }
-                } else {
-                    withAnimation(.easeInOut(duration: 0.25)) { sent = true }
-                }
+                pendingPayload = nil
+                // The draft stays: the session isn't over — he may send
+                // the same text to the next contractor.
+                withAnimation(.easeInOut(duration: 0.25)) { sent = true }
             }
             .ignoresSafeArea()
         }
@@ -770,9 +745,10 @@ struct QuoteRequestScreen: View {
             sendError = "Test mode off: change the recipient to your own number in the Messages app."
         }
 #endif
-        // The in-app "Send" CTA was tapped — this OPENS the composer; it does not
-        // yet deliver. The matching `send_result` event records whether the user
-        // then actually sent (the gap between the two is the funnel drop).
+        // The in-app "Send" CTA was tapped — on the text path this SAVES the
+        // lead first, then opens the composer; it does not yet deliver. The
+        // matching `send_result` event records whether the user then actually
+        // sent (the gap between the two is the funnel drop).
         AnalyticsService.track("send_tapped", [
             "place_id": contractor.id,
             "channel": (contractor.phone != nil && Self.deviceCanText) ? "text" : "email",
@@ -796,9 +772,13 @@ struct QuoteRequestScreen: View {
 
         if let phone = contractor.phone, Self.deviceCanText {
             // Primary: person-to-person text with the photo, composed in the
-            // user's own Messages app. The lead record is NOT created here — it
-            // fires from the composer's completion ONLY when the user actually
-            // sends, so cancelling delivers nothing and shows no success.
+            // user's own Messages app. The lead record IS created here —
+            // before the composer opens — so the /l link is guaranteed live
+            // when the message is sent. (iMessage builds the link preview
+            // sender-side around send time by fetching the URL, and never
+            // retries: if the lead isn't saved yet the fetch 404s and the
+            // message goes out as a bare link.) Cancelling the composer
+            // retracts the lead, so the business never sees a phantom request.
             //
             // Mint the lead id up front so the reply link can go in the message
             // body: it points at a page that shows the photo and lets the business
@@ -834,7 +814,7 @@ struct QuoteRequestScreen: View {
             let body = "Hi \(contractor.name)! I'd like a quote\(jobClause) "
                 + "Photos and details here: \(LeadBridgeService.replyURL(publicId: publicId)) "
                 + "If you can take this on, just reply to this text."
-            compose = ComposePayload(
+            let payload = ComposePayload(
                 recipient: Self.smsTestRecipient.isEmpty ? phone : Self.smsTestRecipient,
                 body: body,
                 photos: [],
@@ -842,6 +822,29 @@ struct QuoteRequestScreen: View {
                 description: description,
                 publicId: publicId
             )
+            // Awaited save before the composer opens (see above): the
+            // Continue button shows progress meanwhile. A failure surfaces
+            // here — the composer never opens with a dead link.
+            pendingPayload = payload
+            sending = true
+            Task {
+                do {
+                    try await submitEmailLead(contractor, description: payload.description,
+                                              photos: payload.uploadPhotos,
+                                              publicId: payload.publicId, notify: false)
+                    await MainActor.run {
+                        sending = false
+                        pendingPayload = nil
+                        compose = payload
+                    }
+                } catch {
+                    print("❌ pre-compose lead save failed: \(error)")
+                    await MainActor.run {
+                        sending = false
+                        sendError = "Couldn't save your request. Please try again."
+                    }
+                }
+            }
         } else {
             // No phone or the device can't text (e.g. iPad without iMessage) —
             // email is the only channel, so await it and surface any failure.
@@ -865,8 +868,9 @@ struct QuoteRequestScreen: View {
         }
     }
 
-    /// Retries the lead save after a failure, reusing the SAME publicId so the
-    /// link already in the sent SMS resolves. Never re-opens Messages.
+    /// Retries the pre-compose lead save, then opens the composer. Reuses the
+    /// SAME publicId (idempotent — a 409 from the first attempt counts as
+    /// success, so a lost response can't strand the retry).
     private func retryLeadSave() {
         guard let payload = pendingPayload, let contractor, !savingLead else { return }
         savingLead = true
@@ -878,13 +882,13 @@ struct QuoteRequestScreen: View {
                 await MainActor.run {
                     savingLead = false
                     pendingPayload = nil
-                    withAnimation(.easeInOut(duration: 0.25)) { sent = true }
+                    compose = payload
                 }
             } catch {
                 print("❌ lead save retry failed: \(error)")
                 await MainActor.run {
                     savingLead = false
-                    sendError = "Text sent, but the request link couldn't be saved. Please try again."
+                    sendError = "Couldn't save your request. Please try again."
                 }
             }
         }

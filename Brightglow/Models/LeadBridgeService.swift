@@ -162,12 +162,30 @@ enum LeadBridgeService {
             throw SubmitError.requestFailed(status: -1, body: "no response")
         }
         guard (200...299).contains(http.statusCode) else {
+            // 409 = a lead with this app-minted publicId already exists: the
+            // earlier save landed but its response was lost. The lead is
+            // there, so treat the retry as success instead of stranding it.
+            if http.statusCode == 409, let publicId { return publicId }
             throw SubmitError.requestFailed(status: http.statusCode, body: String(data: data, encoding: .utf8) ?? "")
         }
 
         struct LeadResponse: Decodable { let public_id: String }
         let decoded = try JSONDecoder().decode(LeadResponse.self, from: data)
         return decoded.public_id
+    }
+
+    /// Retracts a lead by its public id. Best-effort and non-throwing: used
+    /// when the user cancels the SMS composer after the pre-compose save, so
+    /// the business never sees a request that was never sent.
+    static func deleteLead(publicId: String) async {
+        guard let url = URL(string: "\(baseURL)/api/leads/\(publicId)") else { return }
+        var req = URLRequest(url: url)
+        req.httpMethod = "DELETE"
+        do {
+            _ = try await URLSession.shared.data(for: req)
+        } catch {
+            print("⚠️ lead retract failed: \(error)")
+        }
     }
 
     /// Records a phone-tap engagement so a call meters toward the business's free
