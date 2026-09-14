@@ -83,7 +83,8 @@ enum LeadBridgeService {
         publicId: String? = nil,
         notify: Bool = true,
         contactConsent: Bool = false,
-        deviceId: String? = nil
+        deviceId: String? = nil,
+        jobTitle: String? = nil
     ) async throws -> String {
         // Photos are optional; when there are any, failing to encode one is still
         // an error rather than a silent partial send. LeadBridge accepts up to 5.
@@ -130,6 +131,11 @@ enum LeadBridgeService {
         // stamps it onto the link_opened analytics event so the dashboard can
         // ratio opens per customer. Best-effort; older servers ignore it.
         if let deviceId, !deviceId.isEmpty { appendField("sender_device_id", deviceId) }
+        // The clarify LLM's 3-5 word job title ("metal trim replacement").
+        // LeadBridge stores it on the lead and renders it as the request
+        // title on the /l page and /biz portal. Omitted when clarify was
+        // skipped or failed — older servers ignore unknown fields anyway.
+        if let jobTitle, !jobTitle.isEmpty { appendField("job_title", jobTitle) }
 
         // Every attached photo goes as its own `photo` field — multer's
         // upload.array('photo', 5) collects them into req.files in order.

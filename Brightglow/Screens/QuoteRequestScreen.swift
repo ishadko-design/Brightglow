@@ -897,6 +897,11 @@ struct QuoteRequestScreen: View {
     private func submitEmailLead(_ contractor: Contractor, description: String, photos: [UIImage],
                                  publicId: String? = nil, notify: Bool = true) async throws {
         let consent = true   // tapping Continue is the agreement (see the footer disclosure)
+        // The LLM's short job title (same one the SMS uses), so the /l page
+        // and /biz portal can title the request without duplicating the
+        // description 1:1. Nil when clarify was skipped/failed.
+        let title = strippingTestKeyword(clarifyTranscript.jobTitle)
+        let leadJobTitle: String? = title.isEmpty ? nil : title
         // Test mode (smsTestRecipient set — local test builds only): the SMS
         // already goes to the test number, so the lead record must follow it.
         // Without this the record keeps the selected REAL business's identity
@@ -923,6 +928,7 @@ struct QuoteRequestScreen: View {
             photos: photos,
             publicId: publicId,
             notify: notify,
+            jobTitle: leadJobTitle,
             contactConsent: consent,
             deviceId: AnalyticsService.deviceID
         )
