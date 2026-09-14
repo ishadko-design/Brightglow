@@ -606,6 +606,14 @@ select { appearance: none; background-image: none; }
 .lead-dot::after { content: ""; position: absolute; left: 2px; top: 2px;
   width: 8px; height: 8px; border-radius: 50%; background: var(--gold); }
 
+/* Paywall: an over-quota request renders locked — the card dims and the avatar
+   shows a lock instead of the customer's photo/initial (the /l teaser keeps
+   request content behind the paywall the same way). Tapping routes to Billing
+   via the openThread() guard. */
+.lead-row.locked .lead-card { opacity: .55; }
+.lead-avatar.lead-locked { background: var(--gray20); }
+.lead-avatar.lead-locked::after { content: "\U0001F512"; font-size: 20px; }
+
 /* ── Open chat — Figma 2020:6841, built element-for-element ──────────────────
    Header row: bare 44×44 back-arrow icon (no background) + job title (Lato 800/24)
    over a timestamp (Poppins 300/14 @ 60%), 8px inset, 4px gap. Then the guidance
