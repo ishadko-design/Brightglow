@@ -164,6 +164,16 @@ struct QuoteRequestScreen: View {
             if editableRequest.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                 editableRequest = clarifyTranscript.augmentedDescription(base: "")
             }
+            // Append the ask boilerplate to the visible text field unless the
+            // user already asked in their own words. They can edit or delete it.
+            let trimmedReq = editableRequest.trimmingCharacters(in: .whitespacesAndNewlines)
+            if !trimmedReq.isEmpty {
+                let lowerReq = trimmedReq.lowercased()
+                let alreadyAsked = lowerReq.contains("how much") || lowerReq.contains("can you") || lowerReq.contains("thank") || lowerReq.contains("estimate")
+                if !alreadyAsked {
+                    editableRequest = trimmedReq + " Can you take this on? Please reply with your estimate and availability. Thank you!"
+                }
+            }
             if images.isEmpty { images = initialImages }
             resolveLogo()
             AnalyticsService.track("quote_opened", ["place_id": contractor?.id ?? ""])
@@ -771,11 +781,8 @@ struct QuoteRequestScreen: View {
             // Personalized text: names the business and the job so it doesn't read
             // like a promo blast. The full description is in the SMS; the photos
             // and reply box live behind the /l link.
-            // Ask boilerplate: appended unless the user already asked in their own words.
-            let lowerDesc = description.lowercased()
-            let alreadyAsked = lowerDesc.contains("how much") || lowerDesc.contains("can you") || lowerDesc.contains("thank") || lowerDesc.contains("estimate")
-            let askSuffix = alreadyAsked ? "" : " Can you take this on? Please reply with your estimate and availability. Thank you!"
-            let body = "Hi \(contractor.name)! I'd like a quote for: \(description).\(askSuffix) "
+            let body = "Hi \\(contractor.name)! I'd like a quote for: \\(description). "
+                + "Photos and details here: \\(LeadBridgeService.replyURL(publicId: publicId)) - via Brightglow.co"
                 + "Photos and details here: \(LeadBridgeService.replyURL(publicId: publicId)) - via Brightglow.co"
             compose = ComposePayload(
                 recipient: Self.smsTestRecipient.isEmpty ? phone : Self.smsTestRecipient,
