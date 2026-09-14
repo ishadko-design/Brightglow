@@ -171,7 +171,7 @@ struct QuoteRequestScreen: View {
                 let lowerReq = trimmedReq.lowercased()
                 let alreadyAsked = lowerReq.contains("how much") || lowerReq.contains("can you") || lowerReq.contains("thank") || lowerReq.contains("estimate")
                 if !alreadyAsked {
-                    editableRequest = trimmedReq + " Can you take this on? Please reply with your estimate and availability. Thank you!"
+                    editableRequest = trimmedReq + " Can you take this on? How much would it cost? Thank you!"
                 }
             }
             if images.isEmpty { images = initialImages }
