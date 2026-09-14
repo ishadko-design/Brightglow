@@ -777,7 +777,6 @@ struct QuoteRequestScreen: View {
 
     /// Retries the lead save after a failure, reusing the SAME publicId so the
     /// link already in the sent SMS resolves. Never re-opens Messages.
-    private 
 
     /// Records the lead server-side (chat thread + reply page). With `notify:true`
     /// (no phone) it also emails the business as the delivery channel; with
