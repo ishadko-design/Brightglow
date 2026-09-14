@@ -148,12 +148,17 @@ function render(d){
     ["Quotes sent", sends, taps? pct(sends,taps)+"% of Send taps":"—"],
     ["Send taps", taps, taps? pct(sends,taps)+"% completed":"—"],
     ["Abandoned at Messages", d.send?.cancelled||0, taps? pct(d.send?.cancelled||0,taps)+"% of taps":"—"],
+    ["Links opened", t.link_opened||0, sends? pct(t.link_opened||0,sends)+"% of sent":"—"],
     ["Calls", d.calls?.total||0, "tel: taps"],
     ["Results shown", t.results_shown||0, "searches with results"],
     ["Events", d.range.events, `last ${d.range.days} days`],
   ].map(([k,v,n])=>`<div class="tile"><div class="k">${k}</div><div class="v">${v??0}</div><div class="n">${n}</div></div>`).join("");
 
   const f=d.funnel||[]; const top=Math.max(1, f[0]?.count||0);
+  // "Link opened" is stamped server-side by the /l page's JS beacon
+  // (LeadBridge writes a link_opened analytics event on first open). Appended
+  // here so the funnel needs no Edge Function redeploy.
+  if(t.link_opened) f.push({ stage:"Link opened", count:t.link_opened });
   $("funnel").innerHTML = f.map((s,i)=>{
     const w=Math.round((s.count/top)*100);
     const prev = i>0? f[i-1].count : null;
@@ -199,7 +204,7 @@ function render(d){
 
   const days = Object.keys(d.daily||{}).sort();
   const series = k => days.map(day => (d.daily[day]||{})[k]||0);
-  const cfg = [["results_shown","#8b93a7"],["quote_opened","#ffb020"],["send_tapped","#4f8cff"]];
+  const cfg = [["results_shown","#8b93a7"],["quote_opened","#ffb020"],["send_tapped","#4f8cff"],["link_opened","#31c48d"]];
   const data = { labels: days, datasets: cfg.map(([k,color])=>({ label:k, data:series(k),
     borderColor:color, backgroundColor:color, tension:.3, pointRadius:2, borderWidth:2 })) };
   if(chart) chart.destroy();
