@@ -381,6 +381,10 @@ async function loadBilling() {
   // just leave `billing` null and openBilling() retries / surfaces an error.
   if (!billing) return;
   renderBilling();
+  // Billing loads after the first renderLeads (it's not awaited at boot), so the
+  // lock state wasn't known when the list first drew. Re-render now that we know
+  // the quota, so over-quota rows show as locked without a manual refresh.
+  if (current && current.leads) renderLeads();
 
   const params = new URLSearchParams(location.search);
 
@@ -1023,6 +1027,7 @@ function renderLeads() {
   const list = $("leadsList");
   const leads = current.leads || [];
   show($("leadsEmpty"), leads.length === 0);
+  const locked = lockedLeadIds(leads);
   list.innerHTML = leads.map((l, i) => {
     const msgs = sortMsgs(l.messages || []);
     const req = msgs.find((m) => m.direction === "outbound");   // the customer's request
@@ -1034,17 +1039,22 @@ function renderLeads() {
     const stamp = fmtStamp((req && req.created_at) || l.created_at);
     const initial = esc((l.user_email_initial || l.city || "?").slice(0, 1));
     const unread = hasUnread(l, msgs);
+    // Over-quota, unpaid requests stay in the list but are locked — tapping one
+    // routes to the paywall instead of the thread (see openThread). Stamp _locked
+    // so the tap handlers and deep links agree with what's drawn here.
+    const isLocked = locked.has(l.id);
+    l._locked = isLocked;
     // Row wraps a red Delete behind the cell; the cell swipes left to reveal it.
-    return `<div class="lead-row${unread ? "" : " read"}" data-i="${i}">
+    return `<div class="lead-row${unread ? "" : " read"}${isLocked ? " locked" : ""}" data-i="${i}">
       <button type="button" class="lead-delete" data-i="${i}">Delete</button>
       <div class="lead-card">
         <div class="lead-avatarwrap">
           <div class="lead-avatar" data-lead="${l.id}">${initial}</div>
-          ${unread ? `<span class="lead-dot"></span>` : ""}
+          ${isLocked ? `<span class="lead-lock" aria-hidden="true">🔒</span>` : (unread ? `<span class="lead-dot"></span>` : "")}
         </div>
         <div class="lead-main">
           <div class="lead-title">${esc(jobTitle(l))}</div>
-          <div class="lead-sub">${esc(stamp)}</div>
+          <div class="lead-sub">${isLocked ? "Locked — subscribe to view" : esc(stamp)}</div>
         </div>
       </div>
     </div>`;
@@ -1059,6 +1069,41 @@ function renderLeads() {
 function hasUnread(lead, msgs) {
   const readAt = lead.business_last_read_at ? Date.parse(lead.business_last_read_at) : 0;
   return (msgs || []).some((m) => m.direction === "outbound" && Date.parse(m.created_at) > readAt);
+}
+
+// Which requests are behind the paywall. Mirrors the /l gate EXACTLY (see
+// landing.js placeGateForLead): per place, the oldest `free_lead_limit` leads
+// are free forever; everything newer is locked until the business subscribes.
+// No lock when billing is disabled or the business is subscribed (fail-open —
+// the same choice the server gate makes). Returns a Set of locked lead ids.
+function lockedLeadIds(leads) {
+  const locked = new Set();
+  if (!billing || billing.enabled === false || billing.subscribed) return locked;
+  const limit = billing.free_lead_limit || 3;
+  const byPlace = new Map();
+  for (const l of leads || []) {
+    const key = l.place_id || "";
+    if (!byPlace.has(key)) byPlace.set(key, []);
+    byPlace.get(key).push(l);
+  }
+  for (const group of byPlace.values()) {
+    // Ascending (created_at, id) — the same deterministic order the server counts
+    // by, so the client and the /l gate agree on which links are the free ones.
+    group.sort((a, b) => {
+      const ca = a.created_at || "", cb = b.created_at || "";
+      if (ca !== cb) return ca < cb ? -1 : 1;
+      return String(a.id) < String(b.id) ? -1 : 1;
+    });
+    group.forEach((l, idx) => { if (idx >= limit) locked.add(l.id); });
+  }
+  return locked;
+}
+
+// True when THIS lead is over quota (recomputed against the full inbox so it's
+// correct even before renderLeads stamped _locked, e.g. a ?lead= deep link).
+function isLeadLocked(lead) {
+  if (!lead) return false;
+  return lockedLeadIds((current && current.leads) || []).has(lead.id);
 }
 
 // Thumbnails: the request's photo in the list avatar. Attachment bytes are
@@ -1241,6 +1286,14 @@ function jobTitle(lead) {
 }
 
 async function openThread(lead) {
+  // Paywall: an over-quota, unpaid request must not open — send the business to
+  // the subscribe page instead (mirrors the /l link's locked teaser). Fail-open
+  // matches the server: if billing hasn't resolved yet, isLeadLocked is false.
+  if (isLeadLocked(lead)) {
+    showView("billing");
+    renderBilling();
+    return;
+  }
   thread = lead;
   // Node header title = the job (derived), never the business name; the subhead is
   // the request's timestamp (Figma 2020:6841).
