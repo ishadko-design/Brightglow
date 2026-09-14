@@ -664,12 +664,11 @@ struct QuoteRequestScreen: View {
     /// LeadBridge only accepts one photo per lead — when several are attached,
     /// the first (the drawn/annotated one, when there is one) is what's sent.
     /// With none attached the lead goes as text only.
-    private 
-enum LeadSaveError: Error {
-    case urlVerificationFailed
-}
+    private enum LeadSaveError: Error {
+        case urlVerificationFailed
+    }
 
-func sendRequest() {
+    private func sendRequest() {
         guard canSend, let contractor else { return }
 #if DEBUG
         // Test-mode indicator: when smsTestRecipient is empty, the composer
