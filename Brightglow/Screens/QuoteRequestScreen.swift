@@ -773,8 +773,8 @@ struct QuoteRequestScreen: View {
             // and reply box live behind the /l link.
             // Ask boilerplate: appended unless the user already asked in their own words.
             let lowerDesc = description.lowercased()
-            let alreadyAsked = lowerDesc.contains("how much") || lowerDesc.contains("can you") || lowerDesc.contains("thank")
-            let askSuffix = alreadyAsked ? "" : " Can you do this, and how much would it cost? Thank you!"
+            let alreadyAsked = lowerDesc.contains("how much") || lowerDesc.contains("can you") || lowerDesc.contains("thank") || lowerDesc.contains("estimate")
+            let askSuffix = alreadyAsked ? "" : " Can you take this on? Please reply with your estimate and availability. Thank you!"
             let body = "Hi \(contractor.name)! I'd like a quote for: \(description).\(askSuffix) "
                 + "Photos and details here: \(LeadBridgeService.replyURL(publicId: publicId)) - via Brightglow.co"
             compose = ComposePayload(
