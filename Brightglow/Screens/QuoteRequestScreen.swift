@@ -84,6 +84,10 @@ struct QuoteRequestScreen: View {
     // EMAIL_OVERRIDE_TO on the backend.)
     private static let smsTestRecipient = ""   // e.g. "+15551234567"
     @State private var images: [UIImage] = []
+    /// Server photo_ids from eager pre-upload, parallel to `images` (nil = not
+    /// yet uploaded or upload failed — falls back to inline at submit time).
+    /// Set the moment a photo is picked; cleared when the photo is edited.
+    @State private var preuploadIds: [UUID?] = []
     /// The business's hosted logo, resolved once on appear (LogoService). Only a
     /// real, resolved logo is ever shown — there's deliberately no monogram
     /// fallback here (an initials tile reads as a fake mark on a screen that's all
@@ -177,7 +181,23 @@ struct QuoteRequestScreen: View {
                     editableRequest = trimmedReq + " Can you take this on? How much would it cost? Thank you!"
                 }
             }
-            if images.isEmpty { images = initialImages }
+            if images.isEmpty {
+                images = initialImages
+                preuploadIds = Array(repeating: nil, count: initialImages.count)
+                // Eager-upload any pre-existing photos too.
+                for (idx, img) in initialImages.enumerated() {
+                    Task {
+                        guard let jpeg = img.jpegData(compressionQuality: 0.85) else { return }
+                        if let pid = await LeadBridgeService.preuploadPhoto(jpeg) {
+                            await MainActor.run {
+                                if preuploadIds.indices.contains(idx) {
+                                    preuploadIds[idx] = pid
+                                }
+                            }
+                        }
+                    }
+                }
+            }
             resolveLogo()
             AnalyticsService.track("quote_opened", ["place_id": contractor?.id ?? ""])
         }
@@ -328,8 +348,27 @@ struct QuoteRequestScreen: View {
                     }
                 }
                 await MainActor.run {
+                    let baseIndex = images.count
                     images.append(contentsOf: added)
+                    // Eager-upload each photo NOW, while the user is still typing.
+                    // By the time they tap Continue, the bytes are already on the
+                    // server and the lead POST is tiny. Failures fall back to
+                    // inline upload at submit time — never a blocker.
+                    preuploadIds.append(contentsOf: Array(repeating: nil, count: added.count))
                     pickedItems = []
+                    for (offset, img) in added.enumerated() {
+                        let idx = baseIndex + offset
+                        Task {
+                            guard let jpeg = img.jpegData(compressionQuality: 0.85) else { return }
+                            if let pid = await LeadBridgeService.preuploadPhoto(jpeg) {
+                                await MainActor.run {
+                                    if preuploadIds.indices.contains(idx) {
+                                        preuploadIds[idx] = pid
+                                    }
+                                }
+                            }
+                        }
+                    }
                     // Photos are added as attachments only — the drawing tool
                     // opens only when the user taps a thumbnail. Auto-opening
                     // it on add wiped the request text field (full-screen
@@ -352,6 +391,21 @@ struct QuoteRequestScreen: View {
                     },
                     onSubmit: { _, resultImage in
                         images[index] = resultImage
+                        // The edited image differs from what was pre-uploaded —
+                        // drop the stale id and re-upload the new bytes.
+                        if preuploadIds.indices.contains(index) {
+                            preuploadIds[index] = nil
+                        }
+                        Task {
+                            guard let jpeg = resultImage.jpegData(compressionQuality: 0.85) else { return }
+                            if let pid = await LeadBridgeService.preuploadPhoto(jpeg) {
+                                await MainActor.run {
+                                    if preuploadIds.indices.contains(index) {
+                                        preuploadIds[index] = pid
+                                    }
+                                }
+                            }
+                        }
                         drawingPaths = []
                         drawingIndex = nil
                     },
@@ -483,7 +537,11 @@ struct QuoteRequestScreen: View {
 
             // Remove (✕) — top-trailing, inset inside the tile (not offset out).
             Button {
-                withAnimation(.easeInOut(duration: 0.15)) { _ = images.remove(at: index) }
+                withAnimation(.easeInOut(duration: 0.15)) {
+                    _ = images.remove(at: index)
+                    // The orphaned pre-upload is GC'd server-side in 24h.
+                    if preuploadIds.indices.contains(index) { preuploadIds.remove(at: index) }
+                }
             } label: {
                 Image(systemName: "xmark")
                     .font(.system(size: 12, weight: .bold))
@@ -809,6 +867,10 @@ struct QuoteRequestScreen: View {
             description: description,
             city: contractor.city,
             photos: photos,
+            // Photos already on the server (eager upload) are referenced by id —
+            // the lead POST skips their bytes entirely, so Continue feels instant.
+            // Any photo without an id (upload failed/in-flight) falls back to inline.
+            preuploadIds: preuploadIds.compactMap { $0 },
             publicId: publicId,
             notify: notify,
             contactConsent: consent
