@@ -145,7 +145,7 @@ struct QuoteRequestScreen: View {
         .preferredColorScheme(.dark)
         .onDisappear {
             // Save the draft so if the user goes back, the text is preserved.
-            let draftKey = "draftRequest_\(contractor.id)"
+            let draftKey = "draftRequest"
             if !editableRequest.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                 UserDefaults.standard.set(editableRequest, forKey: draftKey)
             }
@@ -154,7 +154,7 @@ struct QuoteRequestScreen: View {
             // Restore the draft if the user went back and returned; the draft
             // takes precedence over the transcript pre-fill.
             if editableRequest.isEmpty {
-                let draftKey = "draftRequest_\(contractor.id)"
+                let draftKey = "draftRequest"
                 if let draft = UserDefaults.standard.string(forKey: draftKey), !draft.isEmpty {
                     editableRequest = draft
                 }
@@ -438,7 +438,7 @@ struct QuoteRequestScreen: View {
                                 savingLead = false
                                 pendingPayload = nil
                                 // Clear the draft on successful save.
-                                let draftKey = "draftRequest_\(contractor.id)"
+                                let draftKey = "draftRequest"
                                 UserDefaults.standard.removeObject(forKey: draftKey)
                                 withAnimation(.easeInOut(duration: 0.25)) { sent = true }
                             }
