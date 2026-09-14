@@ -932,8 +932,8 @@ struct QuoteRequestScreen: View {
             photos: photos,
             publicId: publicId,
             notify: notify,
-            jobTitle: leadJobTitle,
             contactConsent: consent,
+            jobTitle: leadJobTitle,
             deviceId: AnalyticsService.deviceID
         )
     }
