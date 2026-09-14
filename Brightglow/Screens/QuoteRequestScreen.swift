@@ -294,10 +294,8 @@ struct QuoteRequestScreen: View {
 
 
                         if let sendError {
-                             else {
-                                warning(sendError)
-                            }
-                        }
+                             warning(sendError)
+                         }
                     }
                     .padding(.horizontal, 16)
                 }
