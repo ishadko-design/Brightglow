@@ -148,17 +148,27 @@ struct QuoteRequestScreen: View {
         .preferredColorScheme(.dark)
         .onDisappear {
             // Save the draft so if the user goes back, the text is preserved.
+            // The transcript is saved alongside so we only restore the draft for
+            // the same request (same clarify session), not a new one.
             let draftKey = "draftRequest"
+            let transcriptKey = "draftRequestTranscript"
             if !editableRequest.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                 UserDefaults.standard.set(editableRequest, forKey: draftKey)
+                UserDefaults.standard.set(clarifyTranscript.augmentedDescription(base: ""), forKey: transcriptKey)
             }
         }
         .onAppear {
             // Restore the draft if the user went back and returned; the draft
-            // takes precedence over the transcript pre-fill.
+            // takes precedence over the transcript pre-fill — but only for the
+            // same request (same clarify session). A new transcript means a new
+            // request, so the old draft is discarded.
             if editableRequest.isEmpty {
                 let draftKey = "draftRequest"
-                if let draft = UserDefaults.standard.string(forKey: draftKey), !draft.isEmpty {
+                let transcriptKey = "draftRequestTranscript"
+                let currentTranscript = clarifyTranscript.augmentedDescription(base: "")
+                let savedTranscript = UserDefaults.standard.string(forKey: transcriptKey) ?? ""
+                if currentTranscript == savedTranscript,
+                   let draft = UserDefaults.standard.string(forKey: draftKey), !draft.isEmpty {
                     editableRequest = draft
                 }
             }
@@ -441,9 +451,9 @@ struct QuoteRequestScreen: View {
                     if result == .failed { sendError = "Couldn't open Messages. Try again." }
                     return
                 }
-                // Text sent with a verified link. Clear the draft.
-                let draftKey = "draftRequest"
-                UserDefaults.standard.removeObject(forKey: draftKey)
+                // Text sent with a verified link. The draft is kept so the user
+                // can send the same (edited) text to other contractors. It's
+                // discarded only when a new clarify session starts (see onAppear).
                 withAnimation(.easeInOut(duration: 0.25)) { sent = true }
             }
         }
