@@ -1299,14 +1299,11 @@ function renderThread(msgs) {
     box.innerHTML = `<p class="thread-empty" id="threadEmpty">This request came in without a message.</p>`;
     return;
   }
-  // The request bubble shows the job summary (Figma 2020:6841 shows the
-  // summary-length text, not the full message); replies keep full text.
-  const summary = jobTitle(thread);
+  // The request bubble shows the full message text (not the jobTitle summary).
   const request = shown.find((m) => m.direction !== "inbound");
   box.innerHTML = shown.map((m) => {
     const mine = m.direction === "inbound";
-    const text = (m === request) ? summary : m.body_text;
-    return `<div class="bubble ${mine ? "mine" : "theirs"}">${esc(text)}</div>`;
+    return `<div class="bubble ${mine ? "mine" : "theirs"}">${esc(m.body_text)}</div>`;
   }).join("");
   box.scrollTop = box.scrollHeight;
 }
