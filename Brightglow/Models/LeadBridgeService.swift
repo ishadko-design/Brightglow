@@ -69,38 +69,6 @@ enum LeadBridgeService {
         }
     }
 
-    /// Eager-uploads a photo BEFORE the lead is created. Call this the moment
-    /// the user picks a photo — the upload happens in the background while
-    /// they type their description, so tapping Continue only sends a tiny
-    /// JSON POST. Returns the server's photo_id on success, nil on failure
-    /// (the caller then falls back to inline upload at submit time).
-    static func preuploadPhoto(_ jpegData: Data) async -> UUID? {
-        let boundary = "Boundary-\(UUID().uuidString)"
-        var req = URLRequest(url: URL(string: "\(baseURL)/api/photos/preupload")!)
-        req.httpMethod = "POST"
-        req.setValue("multipart/form-data; boundary=\(boundary)", forHTTPHeaderField: "Content-Type")
-
-        var body = Data()
-        body.append("--\(boundary)\r\n".data(using: .utf8)!)
-        body.append("Content-Disposition: form-data; name=\"photo\"; filename=\"photo.jpg\"\r\n".data(using: .utf8)!)
-        body.append("Content-Type: image/jpeg\r\n\r\n".data(using: .utf8)!)
-        body.append(jpegData)
-        body.append("\r\n".data(using: .utf8)!)
-        body.append("--\(boundary)--\r\n".data(using: .utf8)!)
-        req.httpBody = body
-
-        do {
-            let (data, response) = try await URLSession.shared.data(for: req)
-            guard let http = response as? HTTPURLResponse, (200...299).contains(http.statusCode) else {
-                return nil
-            }
-            struct PreuploadResponse: Decodable { let photo_id: UUID }
-            return try? JSONDecoder().decode(PreuploadResponse.self, from: data).photo_id
-        } catch {
-            return nil
-        }
-    }
-
     static func submitLead(
         userEmail: String,
         userId: UUID? = nil,
@@ -112,18 +80,15 @@ enum LeadBridgeService {
         description: String,
         city: String,
         photos: [UIImage] = [],
-        preuploadIds: [UUID] = [],
         publicId: String? = nil,
         notify: Bool = true,
-        contactConsent: Bool = false
+        contactConsent: Bool = false,
+        deviceId: String? = nil
     ) async throws -> String {
         // Photos are optional; when there are any, failing to encode one is still
         // an error rather than a silent partial send. LeadBridge accepts up to 5.
-        // Photos already pre-uploaded (via preuploadPhoto) are referenced by id —
-        // only photos WITHOUT a pre-upload id are encoded inline.
         var jpegDatas: [Data] = []
-        let photosToEncode = preuploadIds.isEmpty ? Array(photos.prefix(5)) : []
-        for photo in photosToEncode {
+        for photo in photos.prefix(5) {
             guard let encoded = photo.jpegData(compressionQuality: 0.85) else {
                 throw SubmitError.encodingFailed
             }
@@ -161,15 +126,10 @@ enum LeadBridgeService {
         // Consent record: the customer ticked "the business can text me back" on
         // the confirmation screen. Stored on the lead as dated proof.
         if contactConsent { appendField("contact_consent", "true") }
-        // Eager-uploaded photos: reference by id instead of re-uploading bytes.
-        // The server links these as attachments (same storage object, no copy).
-        if !preuploadIds.isEmpty {
-            let idsJSON = preuploadIds.map { $0.uuidString }
-            if let jsonData = try? JSONSerialization.data(withJSONObject: idsJSON),
-               let jsonString = String(data: jsonData, encoding: .utf8) {
-                appendField("preupload_ids", jsonString)
-            }
-        }
+        // The customer's app device (AnalyticsService.deviceID). LeadBridge
+        // stamps it onto the link_opened analytics event so the dashboard can
+        // ratio opens per customer. Best-effort; older servers ignore it.
+        if let deviceId, !deviceId.isEmpty { appendField("sender_device_id", deviceId) }
 
         // Every attached photo goes as its own `photo` field — multer's
         // upload.array('photo', 5) collects them into req.files in order.

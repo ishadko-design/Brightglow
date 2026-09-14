@@ -46,6 +46,7 @@ struct QuoteRequestScreen: View {
     @State private var savingLead = false
     /// The payload whose lead save is in flight or failed, so a failure can
     /// be retried with the SAME publicId (the link already in the sent SMS).
+    @State private var pendingPayload: ComposePayload? = nil
     #if DEBUG
     /// Test-mode switch (debug builds only): when ON, the lead files under the
     /// dedicated Bright Test Plumbing business instead of the real contractor.
@@ -84,10 +85,6 @@ struct QuoteRequestScreen: View {
     // EMAIL_OVERRIDE_TO on the backend.)
     private static let smsTestRecipient = ""   // e.g. "+15551234567"
     @State private var images: [UIImage] = []
-    /// Server photo_ids from eager pre-upload, parallel to `images` (nil = not
-    /// yet uploaded or upload failed — falls back to inline at submit time).
-    /// Set the moment a photo is picked; cleared when the photo is edited.
-    @State private var preuploadIds: [UUID?] = []
     /// The business's hosted logo, resolved once on appear (LogoService). Only a
     /// real, resolved logo is ever shown — there's deliberately no monogram
     /// fallback here (an initials tile reads as a fake mark on a screen that's all
@@ -148,33 +145,17 @@ struct QuoteRequestScreen: View {
         .preferredColorScheme(.dark)
         .onDisappear {
             // Save the draft so if the user goes back, the text is preserved.
-            // The transcript is saved alongside so we only restore the draft for
-            // the same request (same clarify session), not a new one.
             let draftKey = "draftRequest"
-            let transcriptKey = "draftRequestTranscript"
             if !editableRequest.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                 UserDefaults.standard.set(editableRequest, forKey: draftKey)
-                UserDefaults.standard.set(clarifyTranscript.augmentedDescription(base: ""), forKey: transcriptKey)
             }
         }
         .onAppear {
             // Restore the draft if the user went back and returned; the draft
-            // takes precedence over the transcript pre-fill. OTA-tunable via
-            // ranking_config.draft: scopeToTranscript limits restoration to the
-            // same clarify session; persistOnSend (checked on send) controls
-            // whether the draft survives a successful send.
+            // takes precedence over the transcript pre-fill.
             if editableRequest.isEmpty {
                 let draftKey = "draftRequest"
-                let transcriptKey = "draftRequestTranscript"
-                let draftConfig = RankingConfigStore.current.draft
-                let transcriptMatches: Bool = {
-                    guard draftConfig.scopeToTranscript else { return true }
-                    let current = clarifyTranscript.augmentedDescription(base: "")
-                    let saved = UserDefaults.standard.string(forKey: transcriptKey) ?? ""
-                    return current == saved
-                }()
-                if transcriptMatches,
-                   let draft = UserDefaults.standard.string(forKey: draftKey), !draft.isEmpty {
+                if let draft = UserDefaults.standard.string(forKey: draftKey), !draft.isEmpty {
                     editableRequest = draft
                 }
             }
@@ -197,23 +178,7 @@ struct QuoteRequestScreen: View {
                     editableRequest = trimmedReq + " Can you take this on? How much would it cost? Thank you!"
                 }
             }
-            if images.isEmpty {
-                images = initialImages
-                preuploadIds = Array(repeating: nil, count: initialImages.count)
-                // Eager-upload any pre-existing photos too.
-                for (idx, img) in initialImages.enumerated() {
-                    Task {
-                        guard let jpeg = img.jpegData(compressionQuality: 0.85) else { return }
-                        if let pid = await LeadBridgeService.preuploadPhoto(jpeg) {
-                            await MainActor.run {
-                                if preuploadIds.indices.contains(idx) {
-                                    preuploadIds[idx] = pid
-                                }
-                            }
-                        }
-                    }
-                }
-            }
+            if images.isEmpty { images = initialImages }
             resolveLogo()
             AnalyticsService.track("quote_opened", ["place_id": contractor?.id ?? ""])
         }
@@ -330,8 +295,39 @@ struct QuoteRequestScreen: View {
 
 
                         if let sendError {
-                             warning(sendError)
-                         }
+                            if pendingPayload != nil {
+                                // Lead-save failure after the SMS went out: prominent,
+                                // with a retry that reuses the same publicId (the link
+                                // already in the sent text). Not a small warning —
+                                // this is the state Igor hit as "nothing happened".
+                                VStack(alignment: .leading, spacing: 12) {
+                                    Text(sendError)
+                                        .font(.bodyLight)
+                                        .foregroundStyle(.white)
+                                    Button(action: retryLeadSave) {
+                                        if savingLead {
+                                            ProgressView().tint(.white)
+                                                .frame(maxWidth: .infinity)
+                                                .frame(height: 48)
+                                        } else {
+                                            Text("Try again")
+                                                .font(.h3)
+                                                .foregroundStyle(.white)
+                                                .frame(maxWidth: .infinity)
+                                                .frame(height: 48)
+                                        }
+                                    }
+                                    .buttonStyle(.gradient)
+                                    .disabled(savingLead)
+                                }
+                                .padding(16)
+                                .background(AppColors.searchBg)
+                                .clipShape(RoundedRectangle(cornerRadius: 20))
+                                .overlay(RoundedRectangle(cornerRadius: 20).stroke(AppColors.starFilled, lineWidth: 1))
+                            } else {
+                                warning(sendError)
+                            }
+                        }
                     }
                     .padding(.horizontal, 16)
                 }
@@ -364,27 +360,8 @@ struct QuoteRequestScreen: View {
                     }
                 }
                 await MainActor.run {
-                    let baseIndex = images.count
                     images.append(contentsOf: added)
-                    // Eager-upload each photo NOW, while the user is still typing.
-                    // By the time they tap Continue, the bytes are already on the
-                    // server and the lead POST is tiny. Failures fall back to
-                    // inline upload at submit time — never a blocker.
-                    preuploadIds.append(contentsOf: Array(repeating: nil, count: added.count))
                     pickedItems = []
-                    for (offset, img) in added.enumerated() {
-                        let idx = baseIndex + offset
-                        Task {
-                            guard let jpeg = img.jpegData(compressionQuality: 0.85) else { return }
-                            if let pid = await LeadBridgeService.preuploadPhoto(jpeg) {
-                                await MainActor.run {
-                                    if preuploadIds.indices.contains(idx) {
-                                        preuploadIds[idx] = pid
-                                    }
-                                }
-                            }
-                        }
-                    }
                     // Photos are added as attachments only — the drawing tool
                     // opens only when the user taps a thumbnail. Auto-opening
                     // it on add wiped the request text field (full-screen
@@ -407,21 +384,6 @@ struct QuoteRequestScreen: View {
                     },
                     onSubmit: { _, resultImage in
                         images[index] = resultImage
-                        // The edited image differs from what was pre-uploaded —
-                        // drop the stale id and re-upload the new bytes.
-                        if preuploadIds.indices.contains(index) {
-                            preuploadIds[index] = nil
-                        }
-                        Task {
-                            guard let jpeg = resultImage.jpegData(compressionQuality: 0.85) else { return }
-                            if let pid = await LeadBridgeService.preuploadPhoto(jpeg) {
-                                await MainActor.run {
-                                    if preuploadIds.indices.contains(index) {
-                                        preuploadIds[index] = pid
-                                    }
-                                }
-                            }
-                        }
                         drawingPaths = []
                         drawingIndex = nil
                     },
@@ -443,30 +405,56 @@ struct QuoteRequestScreen: View {
             MessageComposerView(recipient: payload.recipient, body: payload.body, photos: payload.photos) { result in
                 compose = nil
                 // The blue Send INSIDE Messages: the true conversion. .sent means
-                // the text actually went; .cancelled is the abandon; .failed is a compose error.
+                // the text actually went; .cancelled is the abandon we couldn't
+                // see before; .failed is a compose error.
                 AnalyticsService.track("send_result", [
                     "place_id": contractor?.id ?? "",
                     "channel": "text",
                     "outcome": result == .sent ? "sent" : (result == .failed ? "failed" : "cancelled"),
                 ])
-                // The lead was already saved and the URL verified BEFORE Messages
-                // opened (see sendRequest). If the user sent, show confirmation.
-                // If they cancelled, the lead exists but no SMS went out — they
-                // can tap Send again to re-open Messages with the same link.
+                // Only a real send delivers anything. Cancelling (or a compose
+                // failure) leaves the business with nothing and keeps the user on
+                // the form — no email leg, no "Request sent".
                 guard result == .sent else {
                     if result == .failed { sendError = "Couldn't open Messages. Try again." }
                     return
                 }
-                // Text sent with a verified link. OTA-tunable via
-                // ranking_config.draft.persistOnSend: when true (default) the
-                // draft is kept so the user can send the same (edited) text to
-                // other contractors; when false it's cleared (legacy behavior).
-                if !RankingConfigStore.current.draft.persistOnSend {
-                    UserDefaults.standard.removeObject(forKey: "draftRequest")
-                    UserDefaults.standard.removeObject(forKey: "draftRequestTranscript")
+                // The text went — record the lead with the SAME id used in the
+                // reply link (so /l/<id> resolves), but notify:false: the user's
+                // own text is the delivery, so LeadBridge sends no email here.
+                // Awaited, not fire-and-forget: if the lead isn't recorded the
+                // reply link 404s, so "Request sent" waits for the save. A
+                // failure surfaces as an error instead of vanishing into try?.
+                // savingLead shows progress; the payload is kept for retry.
+                if let contractor {
+                    pendingPayload = payload
+                    savingLead = true
+                    sendError = nil
+                    Task {
+                        do {
+                            try await submitEmailLead(contractor, description: payload.description, photos: payload.uploadPhotos,
+                                                      publicId: payload.publicId, notify: false)
+                            await MainActor.run {
+                                savingLead = false
+                                pendingPayload = nil
+                                // Clear the draft on successful save.
+                                let draftKey = "draftRequest"
+                                UserDefaults.standard.removeObject(forKey: draftKey)
+                                withAnimation(.easeInOut(duration: 0.25)) { sent = true }
+                            }
+                        } catch {
+                            print("❌ lead save failed: \(error)")
+                            await MainActor.run {
+                                savingLead = false
+                                sendError = "Text sent, but the request link couldn't be saved. Please try again."
+                            }
+                        }
+                    }
+                } else {
+                    withAnimation(.easeInOut(duration: 0.25)) { sent = true }
                 }
-                withAnimation(.easeInOut(duration: 0.25)) { sent = true }
             }
+            .ignoresSafeArea()
         }
     }
 
@@ -558,11 +546,7 @@ struct QuoteRequestScreen: View {
 
             // Remove (✕) — top-trailing, inset inside the tile (not offset out).
             Button {
-                withAnimation(.easeInOut(duration: 0.15)) {
-                    _ = images.remove(at: index)
-                    // The orphaned pre-upload is GC'd server-side in 24h.
-                    if preuploadIds.indices.contains(index) { preuploadIds.remove(at: index) }
-                }
+                withAnimation(.easeInOut(duration: 0.15)) { _ = images.remove(at: index) }
             } label: {
                 Image(systemName: "xmark")
                     .font(.system(size: 12, weight: .bold))
@@ -743,10 +727,6 @@ struct QuoteRequestScreen: View {
     /// LeadBridge only accepts one photo per lead — when several are attached,
     /// the first (the drawn/annotated one, when there is one) is what's sent.
     /// With none attached the lead goes as text only.
-    private enum LeadSaveError: Error {
-        case urlVerificationFailed
-    }
-
     private func sendRequest() {
         guard canSend, let contractor else { return }
 #if DEBUG
@@ -783,54 +763,29 @@ struct QuoteRequestScreen: View {
         let description = vehicleNote.isEmpty ? base : "Vehicle: \(vehicleNote)\n\n\(base)"
 
         if let phone = contractor.phone, Self.deviceCanText {
-            // CRITICAL: "Never ship a dead link." The lead MUST be saved and the
-            // reply URL verified BEFORE Messages opens. The SMS is only composed
-            // after we confirm the business can open the link.
+            // Primary: person-to-person text with the photo, composed in the
+            // user's own Messages app. The lead record is NOT created here — it
+            // fires from the composer's completion ONLY when the user actually
+            // sends, so cancelling delivers nothing and shows no success.
             //
             // Mint the lead id up front so the reply link can go in the message
             // body: it points at a page that shows the photo and lets the business
             // reply into the in-app chat — the fallback for when MMS strips the
             // attachment, and the bridge that keeps the conversation on Brightglow.
             let publicId = LeadBridgeService.newPublicID()
-            let replyURL = LeadBridgeService.replyURL(publicId: publicId)
-            // Save in the background (no full-screen overlay) — but Messages does
-            // NOT open until the save succeeds and the URL is verified.
-            savingLead = true
-            sendError = nil
-            Task {
-                do {
-                    // 1. Save the lead first.
-                    try await submitEmailLead(contractor, description: description, photos: photos,
-                                              publicId: publicId, notify: false)
-                    // 2. Verify the reply URL resolves.
-                    guard await verifyReplyURL(replyURL) else {
-                        throw LeadSaveError.urlVerificationFailed
-                    }
-                    // 3. ONLY THEN open Messages with the verified link.
-                    await MainActor.run {
-                        savingLead = false
-                        // Personalized text: names the business and the job so it doesn't read
-                        // like a promo blast. The full description is in the SMS; the photos
-                        // and reply box live behind the /l link.
-                        let body = "Hi! I found you on Brightglow and I'd like a quote. "
-                            + "The details and photos are here: \(replyURL)"
-                        compose = ComposePayload(
-                            recipient: Self.smsTestRecipient.isEmpty ? phone : Self.smsTestRecipient,
-                            body: body,
-                            photos: [],
-                            uploadPhotos: photos,
-                            description: description,
-                            publicId: publicId
-                        )
-                    }
-                } catch {
-                    print("❌ lead save/verify failed: \(error)")
-                    await MainActor.run {
-                        savingLead = false
-                        sendError = "Couldn't save your request. Please check your connection and try again."
-                    }
-                }
-            }
+            // Personalized text: names the business and the job so it doesn't read
+            // like a promo blast. The full description is in the SMS; the photos
+            // and reply box live behind the /l link.
+            let body = "Hi! I found you on Brightglow and I'd like a quote. "
+                + "The details and photos are here: \(LeadBridgeService.replyURL(publicId: publicId))"
+            compose = ComposePayload(
+                recipient: Self.smsTestRecipient.isEmpty ? phone : Self.smsTestRecipient,
+                body: body,
+                photos: [],
+                uploadPhotos: photos,
+                description: description,
+                publicId: publicId
+            )
         } else {
             // No phone or the device can't text (e.g. iPad without iMessage) —
             // email is the only channel, so await it and surface any failure.
@@ -856,6 +811,28 @@ struct QuoteRequestScreen: View {
 
     /// Retries the lead save after a failure, reusing the SAME publicId so the
     /// link already in the sent SMS resolves. Never re-opens Messages.
+    private func retryLeadSave() {
+        guard let payload = pendingPayload, let contractor, !savingLead else { return }
+        savingLead = true
+        sendError = nil
+        Task {
+            do {
+                try await submitEmailLead(contractor, description: payload.description, photos: payload.uploadPhotos,
+                                          publicId: payload.publicId, notify: false)
+                await MainActor.run {
+                    savingLead = false
+                    pendingPayload = nil
+                    withAnimation(.easeInOut(duration: 0.25)) { sent = true }
+                }
+            } catch {
+                print("❌ lead save retry failed: \(error)")
+                await MainActor.run {
+                    savingLead = false
+                    sendError = "Text sent, but the request link couldn't be saved. Please try again."
+                }
+            }
+        }
+    }
 
     /// Records the lead server-side (chat thread + reply page). With `notify:true`
     /// (no phone) it also emails the business as the delivery channel; with
@@ -888,32 +865,12 @@ struct QuoteRequestScreen: View {
             description: description,
             city: contractor.city,
             photos: photos,
-            // Photos already on the server (eager upload) are referenced by id —
-            // the lead POST skips their bytes entirely, so Continue feels instant.
-            // Any photo without an id (upload failed/in-flight) falls back to inline.
-            preuploadIds: preuploadIds.compactMap { $0 },
             publicId: publicId,
             notify: notify,
-            contactConsent: consent
+            contactConsent: consent,
+            deviceId: AnalyticsService.deviceID
         )
     }
-
-    /// Verifies that the reply URL resolves with HTTP 200.
-    /// This is the "never ship a dead link" guarantee: the SMS is only
-    /// sent after we confirm the business can open the link.
-    private func verifyReplyURL(_ urlString: String) async -> Bool {
-        guard let url = URL(string: urlString) else { return false }
-        do {
-            let (_, response) = try await URLSession.shared.data(from: url)
-            if let httpResponse = response as? HTTPURLResponse {
-                return (200...299).contains(httpResponse.statusCode)
-            }
-            return false
-        } catch {
-            return false
-        }
-    }
-
 }
 
 /// Wraps the system SMS/MMS composer so the user can send the request — with the
