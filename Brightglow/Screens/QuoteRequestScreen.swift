@@ -933,8 +933,8 @@ struct QuoteRequestScreen: View {
             publicId: publicId,
             notify: notify,
             contactConsent: consent,
-            jobTitle: leadJobTitle,
-            deviceId: AnalyticsService.deviceID
+            deviceId: AnalyticsService.deviceID,
+            jobTitle: leadJobTitle
         )
     }
 }
