@@ -586,15 +586,15 @@ struct QuoteRequestScreen: View {
                 .submitLabel(.done)
                 .lineLimit(1...14)
                 .onSubmit { requestFocused = false }
-                .frame(maxWidth: .infinity, alignment: .leading)
-                // A multiline field can't submit on Return (it inserts a newline),
-                // so give the keyboard an explicit Done to fold it back down.
-                .toolbar {
-                    ToolbarItemGroup(placement: .keyboard) {
-                        Spacer()
-                        Button("Done") { requestFocused = false }
+                // Multi-line Return inserts a newline — intercept it and dismiss instead.
+                // (The toolbar Done was removed; the checkmark key now folds the keyboard.)
+                .onChange(of: editableRequest) { oldValue, newValue in
+                    if newValue.hasSuffix("\n") && !oldValue.hasSuffix("\n") {
+                        editableRequest = String(newValue.dropLast())
+                        requestFocused = false
                     }
                 }
+                .frame(maxWidth: .infinity, alignment: .leading)
         }
         .padding(.horizontal, 20)
         .padding(.vertical, 16)
