@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title>Brightglow — homepage redesign options</title>
+<meta name="theme-color" content="#0b0b0e">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  body{ margin:0; background:#0b0b0e; color:#f5f5f4; font-family:Inter,system-ui,sans-serif;
+    -webkit-font-smoothing:antialiased; padding:80px 0; }
+  .wrap{ width:min(880px,92vw); margin:0 auto; }
+  h1{ font-size:clamp(32px,5vw,52px); letter-spacing:-0.02em; margin:0 0 12px; }
+  p.sub{ color:rgba(245,245,244,.6); margin:0 0 48px; max-width:52em; }
+  p.sub code{ color:#d4a600; font-size:.92em; }
+  .opt{ display:block; text-decoration:none; color:inherit; border:1px solid rgba(245,245,244,.14);
+    border-radius:20px; padding:30px 32px; margin-bottom:18px; background:rgba(255,255,255,.03);
+    transition:transform .25s cubic-bezier(.2,.75,.2,1), border-color .25s, background .25s; }
+  .opt:hover{ transform:translateY(-4px); border-color:rgba(245,245,244,.32); background:rgba(255,255,255,.055); }
+  .opt .tag{ display:inline-block; font-size:12px; font-weight:700; letter-spacing:.14em; text-transform:uppercase;
+    color:#0b0b0e; background:#d4a600; border-radius:999px; padding:5px 13px; margin-bottom:14px; }
+  .opt h2{ margin:0 0 8px; font-size:26px; letter-spacing:-0.01em; }
+  .opt p{ margin:0; color:rgba(245,245,244,.62); font-size:15.5px; }
+  .opt .fonts{ margin-top:12px; font-size:13px; color:rgba(245,245,244,.42); }
+  .note{ margin-top:40px; font-size:13.5px; color:rgba(245,245,244,.42); }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Homepage redesign — three options</h1>
+  <p class="sub">Same page architecture, same copy, same design-system button (<code>#0039F5</code>) and colors (<code>#D4A600</code> gold on ink). What changes: the type system, the hero treatment, and the WebGL background — a clean gaussian-blob mesh gradient in each, replacing the noisy aurora. The moving photo gallery stays at the bottom of every option; the accent word's gradient now drifts slowly.</p>
+
+  <a class="opt" href="v1-noir-mesh.html">
+    <span class="tag">V1</span>
+    <h2>Noir Mesh</h2>
+    <p>Dark editorial. Closest to the current site's structure — headline left, floating proof cards + live phone carousel right. The mesh is deep ink with slow blue and gold blooms.</p>
+    <p class="fonts">Clash Display + Satoshi (Fontshare)</p>
+  </a>
+
+  <a class="opt" href="v2-paper-mesh.html">
+    <span class="tag">V2</span>
+    <h2>Paper Mesh</h2>
+    <p>Light editorial. Warm paper background with soft daylight washes of blue and gold. Centered hero, airy cards, same proof cluster below the fold line.</p>
+    <p class="fonts">Bricolage Grotesque + Inter (Google Fonts)</p>
+  </a>
+
+  <a class="opt" href="v3-signal.html">
+    <span class="tag">V3</span>
+    <h2>Signal</h2>
+    <p>Dark and loud. Oversized Space Grotesk headline, a kinetic outlined-type band scrolling the trades, and a diagonal silk-ribbon mesh in blue and gold.</p>
+    <p class="fonts">Space Grotesk + Inter (Google Fonts)</p>
+  </a>
+
+  <p class="note">Staging previews — not the live site. Nothing here is linked from brightglow.co. Branch: <code>brightglow-web-redesign</code>.</p>
+</div>
+</body>
+</html>
