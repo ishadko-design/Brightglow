@@ -6,33 +6,45 @@
 <meta name="robots" content="noindex">
 <title>Brightglow — V2 · Paper Mesh (design preview)</title>
 <meta name="description" content="Design preview V2: light editorial, Bricolage Grotesque + Inter, soft daylight WebGL mesh.">
-<meta name="theme-color" content="#fdf3e3">
+<meta name="theme-color" content="#faf1df">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500..800&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500..800&family=Inter:wght@400;500;600;700&family=Fraunces:opsz,wght@9..144,500..900&family=Instrument+Serif:ital@0;1&family=Newsreader:opsz,wght@6..72,400..800&family=DM+Serif+Display:ital@0;1&family=Archivo:wght@500..900&display=swap" rel="stylesheet">
 <style>
   :root{
-    --bg:#fdf3e3;
+    --bg:#faf1df;
     --ink:#131315;
     --ink-70:rgba(19,19,21,.70);
     --ink-55:rgba(19,19,21,.55);
     --ink-30:rgba(19,19,21,.30);
-    --line:rgba(19,19,21,.10);
+    --line:rgba(101,78,20,.14);
     --card:#ffffff;
     --blue:#0039f5;
     --gold:#d4a600;
+    --bronze:#9a7300;
     --disp:"Bricolage Grotesque","Inter",system-ui,-apple-system,sans-serif;
     --sans:"Inter",system-ui,-apple-system,sans-serif;
+    --headline:"Bricolage Grotesque","Inter",system-ui,-apple-system,sans-serif;
     --r:22px;
     --ease:cubic-bezier(.2,.75,.2,1);
   }
+  html[data-font="fraunces"]{ --headline:"Fraunces",Georgia,serif; }
+  html[data-font="instrument"]{ --headline:"Instrument Serif",Georgia,serif; }
+  html[data-font="newsreader"]{ --headline:"Newsreader",Georgia,serif; }
+  html[data-font="dmserif"]{ --headline:"DM Serif Display",Georgia,serif; }
+  html[data-font="archivo"]{ --headline:"Archivo","Inter",system-ui,sans-serif; }
+  html[data-font="fraunces"] h1, html[data-font="fraunces"] h2{ font-weight:600; letter-spacing:-0.01em; }
+  html[data-font="newsreader"] h1, html[data-font="newsreader"] h2{ font-weight:600; }
+  html[data-font="instrument"] h1, html[data-font="instrument"] h2,
+  html[data-font="dmserif"] h1, html[data-font="dmserif"] h2{ font-weight:400; letter-spacing:0; }
+  html[data-font="archivo"] h1, html[data-font="archivo"] h2{ font-weight:800; }
   html{ scroll-behavior:smooth; }
   body{
     margin:0; background:var(--bg); color:var(--ink);
     font-family:var(--sans); font-size:17px; line-height:1.6;
     -webkit-font-smoothing:antialiased; overflow-x:hidden;
   }
-  h1,h2,h3{ font-family:var(--disp); line-height:1.0; letter-spacing:-0.02em; margin:0; font-weight:700; }
+  h1,h2,h3{ font-family:var(--headline); line-height:1.0; letter-spacing:-0.02em; margin:0; font-weight:700; }
   p{ margin:0; }
   a{ color:inherit; }
   ::selection{ background:var(--blue); color:#fff; }
@@ -49,7 +61,7 @@
     transition:background .3s var(--ease), border-color .3s var(--ease), backdrop-filter .3s;
     border-bottom:1px solid transparent;
   }
-  .topbar.is-stuck{ background:rgba(253,243,227,.78); backdrop-filter:blur(14px); border-bottom-color:var(--line); }
+  .topbar.is-stuck{ background:rgba(250,241,223,.80); backdrop-filter:blur(14px); border-bottom-color:var(--line); }
   .logo{ display:flex; align-items:center; gap:12px; text-decoration:none; }
   .logo img{ width:38px; height:38px; border-radius:11px; display:block; box-shadow:0 4px 14px rgba(19,19,21,.18); }
   .wordmark{ font-family:var(--disp); font-weight:700; font-size:21px; letter-spacing:-0.01em; }
@@ -98,7 +110,7 @@
   .hero h1{ font-size:clamp(48px,7vw,96px); font-weight:800; max-width:14ch; margin:0 auto; }
   .accent{
     display:inline-block; padding-bottom:.1em; margin-bottom:-.1em;
-    background:linear-gradient(100deg,#0028c8 5%,#0039f5 40%,#2f6bff 70%,#0028c8 95%);
+    background:linear-gradient(100deg,#77590a 5%,#a8832a 42%,#c09a3c 58%,#77590a 95%);
     background-size:220% 100%;
     -webkit-background-clip:text; background-clip:text; color:transparent;
     animation:accentslide 7s ease-in-out infinite alternate;
@@ -211,6 +223,27 @@
   .footer-links a{ color:var(--ink-55); text-decoration:none; font-size:14.5px; }
   .footer-links a:hover{ color:var(--ink); }
   .footer-copy{ width:100%; margin-top:6px; font-size:13px; color:var(--ink-30); }
+
+  /* ---------- headline font switcher (preview tool) ---------- */
+  .fontbar{
+    position:fixed; left:50%; bottom:16px; transform:translateX(-50%); z-index:60;
+    display:flex; align-items:center; gap:2px; max-width:94vw; overflow-x:auto;
+    background:rgba(24,20,12,.88); backdrop-filter:blur(12px); -webkit-backdrop-filter:blur(12px);
+    border:1px solid rgba(212,166,0,.35); border-radius:14px; padding:8px 10px;
+    box-shadow:0 12px 32px rgba(20,16,8,.35);
+    font-family:var(--sans);
+  }
+  .fontbar-label{
+    font-size:10.5px; font-weight:700; letter-spacing:.14em; text-transform:uppercase;
+    color:rgba(255,217,138,.8); padding:0 8px 0 4px; white-space:nowrap;
+  }
+  .fontbar button{
+    border:0; background:transparent; cursor:pointer; white-space:nowrap;
+    color:rgba(255,255,255,.62); font-size:14px; padding:7px 11px; border-radius:9px;
+    transition:background .2s, color .2s;
+  }
+  .fontbar button:hover{ color:#fff; background:rgba(255,255,255,.08); }
+  .fontbar button.is-active{ background:var(--gold); color:#191510; font-weight:600; }
 
   /* ---------- reveal ---------- */
   .reveal{ opacity:0; transform:translateY(22px); transition:opacity .8s var(--ease), transform .8s var(--ease); }
@@ -345,6 +378,16 @@
   </div>
 </footer>
 
+<div class="fontbar" id="fontbar" aria-label="Headline font preview">
+  <span class="fontbar-label">Headline</span>
+  <button data-f="bricolage" class="is-active" style="font-family:'Bricolage Grotesque',sans-serif">Bricolage</button>
+  <button data-f="fraunces" style="font-family:'Fraunces',serif">Fraunces</button>
+  <button data-f="instrument" style="font-family:'Instrument Serif',serif">Instrument</button>
+  <button data-f="newsreader" style="font-family:'Newsreader',serif">Newsreader</button>
+  <button data-f="dmserif" style="font-family:'DM Serif Display',serif">DM Serif</button>
+  <button data-f="archivo" style="font-family:'Archivo',sans-serif">Archivo</button>
+</div>
+
 <script>
 (function(){
 "use strict";
@@ -356,11 +399,11 @@ var reduce = matchMedia("(prefers-reduced-motion: reduce)").matches;
   var gl = canvas.getContext("webgl") || canvas.getContext("experimental-webgl");
   if(!gl) return;
   var BLOBS = [
-    { c:[ 0.62, 0.24], r:0.66, col:[0.62,0.72,0.98], amt:0.12, ax:0.09, ay:0.06, sx:0.10, sy:0.08, par:0.07 },
-    { c:[-0.58,-0.24], r:0.70, col:[0.98,0.90,0.78], amt:0.14, ax:0.07, ay:0.08, sx:0.08, sy:0.11, par:0.05 },
-    { c:[-0.30, 0.30], r:0.60, col:[0.80,0.84,0.96], amt:0.12, ax:0.08, ay:0.07, sx:0.12, sy:0.09, par:0.06 },
-    { c:[ 0.30,-0.32], r:0.58, col:[0.99,0.88,0.76], amt:0.14, ax:0.06, ay:0.09, sx:0.09, sy:0.12, par:0.08 },
-    { c:[ 0.00, 0.00], r:1.00, col:[1.00,1.00,1.00], amt:0.10, ax:0.05, ay:0.05, sx:0.06, sy:0.07, par:0.02 }
+    { c:[ 0.62, 0.24], r:0.66, col:[0.96,0.86,0.66], amt:0.16, ax:0.09, ay:0.06, sx:0.10, sy:0.08, par:0.07 },
+    { c:[-0.58,-0.24], r:0.70, col:[0.93,0.78,0.55], amt:0.16, ax:0.07, ay:0.08, sx:0.08, sy:0.11, par:0.05 },
+    { c:[-0.30, 0.30], r:0.60, col:[0.83,0.65,0.32], amt:0.10, ax:0.08, ay:0.07, sx:0.12, sy:0.09, par:0.06 },
+    { c:[ 0.30,-0.32], r:0.58, col:[0.99,0.93,0.80], amt:0.16, ax:0.06, ay:0.09, sx:0.09, sy:0.12, par:0.08 },
+    { c:[ 0.00, 0.00], r:1.00, col:[1.00,1.00,1.00], amt:0.08, ax:0.05, ay:0.05, sx:0.06, sy:0.07, par:0.02 }
   ];
   var NB = BLOBS.length, i;
   var frag = [
@@ -399,7 +442,7 @@ var reduce = matchMedia("(prefers-reduced-motion: reduce)").matches;
   gl.vertexAttribPointer(loc, 2, gl.FLOAT, false, 0, 0);
   var uRes = gl.getUniformLocation(prog,"u_res"), uTime = gl.getUniformLocation(prog,"u_time"),
       uM = gl.getUniformLocation(prog,"u_m"), uBase = gl.getUniformLocation(prog,"u_base");
-  gl.uniform3f(uBase, 1.0, 0.949, 0.894);
+  gl.uniform3f(uBase, 0.980, 0.945, 0.874);
   var cols=[], prms=[], orbs=[], cens=[];
   for(i=0;i<NB;i++){ var b=BLOBS[i];
     cols.push(b.col[0],b.col[1],b.col[2]); prms.push(b.r,b.amt,b.par);
@@ -423,6 +466,21 @@ var reduce = matchMedia("(prefers-reduced-motion: reduce)").matches;
     if(document.hidden){ cancelAnimationFrame(raf); running=false; }
     else if(!running){ running=true; raf=requestAnimationFrame(frame); }
   });
+})();
+
+/* ---------- headline font switcher ---------- */
+(function fonts(){
+  var bar=document.getElementById("fontbar"); if(!bar) return;
+  var btns=Array.prototype.slice.call(bar.querySelectorAll("button"));
+  function set(f){
+    if(f==="bricolage") document.documentElement.removeAttribute("data-font");
+    else document.documentElement.setAttribute("data-font",f);
+    btns.forEach(function(b){ b.classList.toggle("is-active", b.getAttribute("data-f")===f); });
+    try{ localStorage.setItem("v2-headline-font",f); }catch(e){}
+  }
+  btns.forEach(function(b){ b.addEventListener("click",function(){ set(b.getAttribute("data-f")); }); });
+  var saved=null; try{ saved=localStorage.getItem("v2-headline-font"); }catch(e){}
+  if(saved && bar.querySelector('[data-f="'+saved+'"]')) set(saved);
 })();
 
 /* ---------- gallery marquee ---------- */
