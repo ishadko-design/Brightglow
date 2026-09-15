@@ -217,7 +217,7 @@ html.has-gl .bg-fallback { opacity: 0; }
 .hero-h1 {
   margin-top: 22px;
   font-family: var(--disp); font-weight: 800;
-  font-size: clamp(44px, 8.2vw, 92px); line-height: 1.02; letter-spacing: -0.035em;
+  font-size: clamp(48px,7vw,96px); line-height: 1.02; letter-spacing: -0.035em;
 }
 /* padding gives descenders (j, g, y) and the period room; the matching
    negative margin keeps the visual line spacing tight. */
@@ -239,7 +239,7 @@ html.has-gl .bg-fallback { opacity: 0; }
   line-height: 1.6; color: var(--ink-60);
 }
 .hero-cta { margin-top: 34px; display: flex; flex-wrap: wrap; gap: 14px; align-items: center; }
-.hero-note { margin-top: 18px; font-size: 13px; color: var(--ink-45); display: flex; align-items: center; gap: 8px; }
+.hero-note { margin-top: 18px; font-size: 13.5px; color: var(--ink-45); display: flex; align-items: center; gap: 8px; }
 .hero-note .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--green); box-shadow: 0 0 10px var(--green); }
 
 /* --- hero 3D proof-card cluster --- */
@@ -324,7 +324,7 @@ html.has-gl .bg-fallback { opacity: 0; }
 /* ====================== section: proof ====================== */
 .proof-head { display: grid; gap: 24px; align-items: end; }
 @media (min-width: 860px) { .proof-head { grid-template-columns: 1.2fr 0.8fr; } }
-.proof-head h2 { font-size: clamp(30px, 5vw, 60px); font-weight: 800; letter-spacing:-0.03em; }
+.proof-head h2 { font-size: clamp(32px,4.2vw,56px); font-weight: 800; letter-spacing:-0.03em; }
 .proof-head p { color: var(--ink-60); font-size: clamp(16px,1.8vw,18px); }
 
 /* proof gallery — masonry-ish flowing columns of real work photos */
@@ -365,13 +365,13 @@ html.has-gl .bg-fallback { opacity: 0; }
   border: 1px solid var(--ink-30); color: var(--amber-lite);
 }
 .step .num::before { content: "0" counter(step); }
-.step h3 { margin-top: 22px; font-size: 23px; font-weight: 800; letter-spacing: -0.02em; }
+.step h3 { margin-top: 22px; font-size: 23px; font-weight: var(--h3-weight); letter-spacing: -0.02em; }
 .step p { margin-top: 12px; color: var(--ink-60); font-size: 15.5px; line-height: 1.6; }
 
 /* ====================== section: verticals marquee ====================== */
 /* title on top, description beneath */
 .worlds-head { display:flex; flex-direction: column; align-items:flex-start; gap:16px; }
-.worlds-head h2 { font-size: clamp(30px,5vw,48px); line-height: 1.14; font-weight:800; letter-spacing:-0.03em; max-width: 20ch; }
+.worlds-head h2 { font-size: clamp(32px,4.2vw,56px); line-height: 1.14; font-weight:800; letter-spacing:-0.03em; max-width: 20ch; }
 .worlds-head p { max-width: 54ch; color: var(--ink-60); font-size: clamp(16px,1.8vw,18px); }
 .marquee { margin-top: 52px; position: relative; overflow: hidden;
   -webkit-mask-image: linear-gradient(90deg, transparent, #000 8%, #000 92%, transparent);
@@ -420,7 +420,7 @@ html.has-gl .bg-fallback { opacity: 0; }
 .finale::before { content:""; position:absolute; inset:0; z-index:-1;
   background: radial-gradient(60% 60% at 50% 45%, rgba(0,57,245,0.22), transparent 62%),
               radial-gradient(50% 50% at 70% 30%, rgba(255,178,58,0.12), transparent 60%); }
-.finale h2 { font-size: clamp(30px, 5vw, 48px); font-weight: 800; letter-spacing: -0.03em; line-height: 1.14; }
+.finale h2 { font-size: clamp(40px,5.6vw,76px); font-weight: 800; letter-spacing: -0.03em; line-height: 1.14; }
 .finale p { margin: 26px auto 0; max-width: 34ch; color: var(--ink-60); font-size: clamp(16px,1.8vw,18px); }
 .finale .hero-cta { justify-content: center; margin-top: 40px; }
 
