@@ -71,9 +71,9 @@
     /* business-landing tweaks on top of the shared consumer design system */
     .hero-fine { margin-top: 16px; font-size: 13px; color: var(--ink-45); }
     .hero-fine a { color: var(--ink-60); text-decoration: underline; }
-    /* the business headline is longer than the consumer's — cap the display
-       size so it wraps to a few lines instead of a dozen */
-    .hero-h1 { font-size: clamp(40px, 6.2vw, 66px); }
+    /* hero H1 matches the consumer page scale exactly (48px/7vw/96px) —
+       one title size across the whole site */
+    .hero-h1 { font-size: clamp(48px,7vw,96px); }
     /* header: sign-in pill only — no "For customers" CTA on the business site */
     .topbar-nav{ display:flex; align-items:center; gap:10px; }
     .biz-signin{
