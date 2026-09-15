@@ -6,13 +6,13 @@
 <meta name="robots" content="noindex">
 <title>Brightglow — V2 · Paper Mesh (design preview)</title>
 <meta name="description" content="Design preview V2: light editorial, Bricolage Grotesque + Inter, soft daylight WebGL mesh.">
-<meta name="theme-color" content="#f6f4ee">
+<meta name="theme-color" content="#fdf3e3">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500..800&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
 <style>
   :root{
-    --bg:#f6f4ee;
+    --bg:#fdf3e3;
     --ink:#131315;
     --ink-70:rgba(19,19,21,.70);
     --ink-55:rgba(19,19,21,.55);
@@ -49,7 +49,7 @@
     transition:background .3s var(--ease), border-color .3s var(--ease), backdrop-filter .3s;
     border-bottom:1px solid transparent;
   }
-  .topbar.is-stuck{ background:rgba(246,244,238,.78); backdrop-filter:blur(14px); border-bottom-color:var(--line); }
+  .topbar.is-stuck{ background:rgba(253,243,227,.78); backdrop-filter:blur(14px); border-bottom-color:var(--line); }
   .logo{ display:flex; align-items:center; gap:12px; text-decoration:none; }
   .logo img{ width:38px; height:38px; border-radius:11px; display:block; box-shadow:0 4px 14px rgba(19,19,21,.18); }
   .wordmark{ font-family:var(--disp); font-weight:700; font-size:21px; letter-spacing:-0.01em; }
@@ -90,16 +90,15 @@
   /* ---------- hero ---------- */
   .hero{ position:relative; padding:150px 0 60px; text-align:center; }
   .kicker{
-    display:inline-flex; align-items:center; gap:9px;
-    font-size:13px; font-weight:700; letter-spacing:.16em; text-transform:uppercase; color:var(--ink-70);
-    border:1px solid var(--line); border-radius:999px; padding:9px 18px 9px 14px; margin-bottom:28px;
-    background:rgba(255,255,255,.55);
+    display:inline-flex; align-items:center; gap:10px;
+    font-size:13px; font-weight:700; letter-spacing:.22em; text-transform:uppercase; color:var(--ink-70);
+    margin-bottom:28px;
   }
   .kicker .dot{ width:8px; height:8px; border-radius:50%; background:var(--gold); box-shadow:0 0 12px var(--gold); }
   .hero h1{ font-size:clamp(48px,7vw,96px); font-weight:800; max-width:14ch; margin:0 auto; }
   .accent{
     display:inline-block; padding-bottom:.1em; margin-bottom:-.1em;
-    background:linear-gradient(100deg,#9a7300 5%,#d4a600 35%,#f0c420 55%,#9a7300 95%);
+    background:linear-gradient(100deg,#ff9eb5 5%,#f6b8d9 30%,#c9a8ff 58%,#8fc7ff 92%);
     background-size:220% 100%;
     -webkit-background-clip:text; background-clip:text; color:transparent;
     animation:accentslide 7s ease-in-out infinite alternate;
@@ -357,10 +356,10 @@ var reduce = matchMedia("(prefers-reduced-motion: reduce)").matches;
   var gl = canvas.getContext("webgl") || canvas.getContext("experimental-webgl");
   if(!gl) return;
   var BLOBS = [
-    { c:[ 0.62, 0.24], r:0.66, col:[0.00,0.22,0.96], amt:0.13, ax:0.09, ay:0.06, sx:0.10, sy:0.08, par:0.07 },
-    { c:[-0.58,-0.24], r:0.70, col:[0.83,0.65,0.00], amt:0.17, ax:0.07, ay:0.08, sx:0.08, sy:0.11, par:0.05 },
-    { c:[-0.30, 0.30], r:0.60, col:[0.72,0.79,1.00], amt:0.20, ax:0.08, ay:0.07, sx:0.12, sy:0.09, par:0.06 },
-    { c:[ 0.30,-0.32], r:0.58, col:[0.94,0.83,0.60], amt:0.22, ax:0.06, ay:0.09, sx:0.09, sy:0.12, par:0.08 },
+    { c:[ 0.62, 0.24], r:0.66, col:[0.55,0.68,1.00], amt:0.16, ax:0.09, ay:0.06, sx:0.10, sy:0.08, par:0.07 },
+    { c:[-0.58,-0.24], r:0.70, col:[1.00,0.72,0.62], amt:0.20, ax:0.07, ay:0.08, sx:0.08, sy:0.11, par:0.05 },
+    { c:[-0.30, 0.30], r:0.60, col:[0.76,0.68,1.00], amt:0.20, ax:0.08, ay:0.07, sx:0.12, sy:0.09, par:0.06 },
+    { c:[ 0.30,-0.32], r:0.58, col:[1.00,0.70,0.80], amt:0.20, ax:0.06, ay:0.09, sx:0.09, sy:0.12, par:0.08 },
     { c:[ 0.00, 0.00], r:1.00, col:[1.00,1.00,1.00], amt:0.10, ax:0.05, ay:0.05, sx:0.06, sy:0.07, par:0.02 }
   ];
   var NB = BLOBS.length, i;
@@ -385,8 +384,6 @@ var reduce = matchMedia("(prefers-reduced-motion: reduce)").matches;
     "  }",
     "  vec2 vc = uv - 0.5;",
     "  col *= 1.0 - 0.16*dot(vc,vc);",
-    "  float n = fract(sin(dot(gl_FragCoord.xy + fract(u_time)*371.0, vec2(12.9898,78.233)))*43758.5453);",
-    "  col += (n-0.5)*0.008;",
     "  gl_FragColor = vec4(col, 1.0);",
     "}"
   ].join("\n");
@@ -402,7 +399,7 @@ var reduce = matchMedia("(prefers-reduced-motion: reduce)").matches;
   gl.vertexAttribPointer(loc, 2, gl.FLOAT, false, 0, 0);
   var uRes = gl.getUniformLocation(prog,"u_res"), uTime = gl.getUniformLocation(prog,"u_time"),
       uM = gl.getUniformLocation(prog,"u_m"), uBase = gl.getUniformLocation(prog,"u_base");
-  gl.uniform3f(uBase, 0.965, 0.957, 0.933);
+  gl.uniform3f(uBase, 1.0, 0.949, 0.894);
   var cols=[], prms=[], orbs=[], cens=[];
   for(i=0;i<NB;i++){ var b=BLOBS[i];
     cols.push(b.col[0],b.col[1],b.col[2]); prms.push(b.r,b.amt,b.par);
