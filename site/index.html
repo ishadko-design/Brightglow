@@ -184,11 +184,17 @@
     background:rgba(10,10,12,.66); backdrop-filter:blur(6px);
     padding:6px 12px; border-radius:999px; border:1px solid rgba(255,255,255,.16);
   }
+  /* mobile: collage cards peek from behind the phone — their tags get
+     awkwardly cropped, so hide them (the phone's own pill stays) */
+  @media (max-width:700px){ .pcard .tag{ display:none; } }
 
   /* ---------- sections ---------- */
   .section{ padding:110px 0; }
   .eyebrow{ font-size:13px; font-weight:700; letter-spacing:.16em; text-transform:uppercase; color:#9a7300; margin-bottom:18px; }
   .section h2{ font-size:clamp(32px,4.2vw,56px); font-weight:800; max-width:20ch; }
+  /* how-it-works header centered like the finale/gallery sections */
+  .how .eyebrow, .how h2{ text-align:center; }
+  .how h2{ margin-left:auto; margin-right:auto; }
   .section .lede{ margin-top:16px; color:var(--ink-70); max-width:44em; font-size:17px; }
   .steps{ margin-top:56px; display:grid; gap:18px; }
   @media(min-width:860px){ .steps{ grid-template-columns:repeat(3,1fr); } }
@@ -313,7 +319,7 @@
   </section>
 
   <!-- ================= HOW IT WORKS ================= -->
-  <section class="section">
+  <section class="section how">
     <div class="wrap">
       <p class="eyebrow reveal">How it works</p>
       <h2 class="reveal d1">Three steps. No wall of forms, no spam</h2>
