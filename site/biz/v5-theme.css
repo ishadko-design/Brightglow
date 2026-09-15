@@ -1,5 +1,5 @@
 /* ════════════════════════════════════════════════════════════════════
-   Preview V5: light warm Newsreader theme — COMPLETE inversion of the biz
+   Production light theme (Bricolage Grotesque headlines) — COMPLETE inversion of the biz
    portal design system.
    Covers the LIVE preview (production portal.css/js from origin/main) and the
    V5 mock, which share this file. Nothing here touches production.
@@ -31,14 +31,9 @@
   --bg-secondary:#ffffff;
   --input-border:1px solid rgba(101,78,20,.28);
   --gold:#9a7300;
-  --headline:"Newsreader",Georgia,serif;
+  --headline:"Bricolage Grotesque","Inter",system-ui,sans-serif;
 }
 
-html[data-font="fraunces"]{ --headline:"Fraunces",Georgia,serif; }
-html[data-font="instrument"]{ --headline:"Instrument Serif",Georgia,serif; }
-html[data-font="newsreader"]{ --headline:"Newsreader",Georgia,serif; }
-html[data-font="dmserif"]{ --headline:"DM Serif Display",Georgia,serif; }
-html[data-font="archivo"]{ --headline:"Archivo","Inter",system-ui,sans-serif; }
 
 html{ color-scheme:light; }
 body.portal{
@@ -54,19 +49,11 @@ body.portal:has(#authView:not([hidden])){
 .card-title,.thread-title,.section-head,.modal-title,.editor-head h1{
   font-family:var(--headline); font-weight:600; letter-spacing:-0.01em;
 }
-/* Site-wide headline token: every title on the site is Newsreader, including
-   the Billing h1, billing headers, and request-row titles. */
+/* Site-wide headline token: every title on the site is Bricolage Grotesque,
+   including the Billing h1, billing headers, and request-row titles. */
 h1,h2,h3,.billing-title,.lead-title{
   font-family:var(--headline);
 }
-html[data-font="instrument"] .card-title,html[data-font="instrument"] .thread-title,
-html[data-font="instrument"] .section-head,html[data-font="instrument"] .modal-title{ font-weight:400; }
-html[data-font="dmserif"] .card-title,html[data-font="dmserif"] .thread-title,
-html[data-font="dmserif"] .section-head,html[data-font="dmserif"] .modal-title{ font-weight:400; }
-html[data-font="bricolage"] .card-title,html[data-font="bricolage"] .thread-title,
-html[data-font="bricolage"] .section-head,html[data-font="bricolage"] .modal-title,
-html[data-font="archivo"] .card-title,html[data-font="archivo"] .thread-title,
-html[data-font="archivo"] .section-head,html[data-font="archivo"] .modal-title{ font-weight:800; }
 
 /* ── Buttons: ONE primary component everywhere ───────────────────────
    Primary actions (sign-in CTAs, Save, Subscribe) share the Figma primary
