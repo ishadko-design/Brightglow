@@ -86,6 +86,14 @@
     /* the business headline is longer than the consumer's — cap the display
        size so it wraps to a few lines instead of a dozen */
     .hero-h1 { font-size: clamp(40px, 6.2vw, 66px); }
+    /* header sign-in: solid pill next to the ghost "For customers" link */
+    .topbar-nav{ display:flex; align-items:center; gap:10px; }
+    .biz-signin{
+      flex:none; font-family:var(--disp); font-weight:700; font-size:14px; color:#faf1df;
+      padding:9px 20px; border-radius:var(--r-pill); background:var(--ink); border:1.5px solid var(--ink);
+      transition:transform .2s var(--ease), opacity .2s var(--ease);
+    }
+    .biz-signin:hover{ transform:translateY(-1px); opacity:.88; }
   </style>
   <script type="application/ld+json">
   {
@@ -112,7 +120,10 @@
       <img class="appicon" src="../media/appicon.png" alt="">
       <span class="wordmark">Brightglow</span>
     </a>
-    <a class="biz-link" href="/" data-magnetic>For customers</a>
+    <nav class="topbar-nav">
+      <a class="biz-link" href="/" data-magnetic>For customers</a>
+      <a class="biz-signin" href="v5-biz-portal.html" data-magnetic>Sign in</a>
+    </nav>
   </header>
 
   <main>
@@ -130,7 +141,7 @@
             then a spam-free chat. No cold calls, no bidding wars.
           </p>
           <div class="hero-cta enter e5">
-            <a class="btn" href="/biz" id="appstore" data-magnetic>Claim your business</a>
+            <a class="btn" href="v5-biz-portal.html" id="appstore" data-magnetic>Claim your business</a>
           </div>
           <p class="hero-fine enter e5">By continuing you agree to our <a href="../business-terms.html">Business Terms of Service</a>.</p>
         </div>
@@ -220,7 +231,7 @@
         <h2 class="reveal">Get found for the<br>work you do best</h2>
         <p class="reveal d1">Claim your page, show your work, and get matched to customers who need exactly what you do.</p>
         <div class="hero-cta reveal d2">
-          <a class="btn" href="/biz" data-magnetic>Claim your business</a>
+          <a class="btn" href="v5-biz-portal.html" data-magnetic>Claim your business</a>
         </div>
       </div>
     </section>
