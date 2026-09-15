@@ -311,7 +311,7 @@ input[type=number], textarea, select {
   border: var(--input-border);
   border-radius: var(--radius-input);
   color: var(--white);
-  font-family: inherit; font-size: 17px; font-weight: 300;
+  font-family: inherit; font-size: 17px; font-weight: 400;
   padding: 16px 20px;
   transition: border-color .15s ease;
 }
