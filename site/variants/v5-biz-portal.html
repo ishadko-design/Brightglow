@@ -539,6 +539,14 @@ Array.prototype.slice.call(document.querySelectorAll("#fontbar button[data-v]"))
   set(saved && document.querySelector('#fontbar button[data-f="'+saved+'"]') ? saved : "newsreader");
 })();
 
+/* walk the auth flow like the real page (still mock — no backend) */
+el("phoneForm").addEventListener("submit", function(e){ e.preventDefault(); showView("code"); });
+el("authForm").addEventListener("submit", function(e){ e.preventDefault(); showView("code"); });
+el("codeForm").addEventListener("submit", function(e){ e.preventDefault(); showView("requests"); });
+el("useEmailBtn").addEventListener("click", function(){ hide(el("phoneStep")); show(el("emailStep")); });
+el("usePhoneBtn").addEventListener("click", function(){ hide(el("emailStep")); show(el("phoneStep")); });
+el("restartBtn").addEventListener("click", function(){ showView("signin"); });
+
 showView("signin");
 })();
 </script>
