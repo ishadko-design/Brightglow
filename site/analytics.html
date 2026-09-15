@@ -107,6 +107,7 @@ let chart;
 
 function setMsg(t, err=false){ const m=$("msg"); m.textContent=t; m.className = "msg"+(err?" err":""); }
 function pct(n,d){ return d>0 ? Math.round(n/d*100) : 0; }
+function esc(s){ return String(s).replace(/[&<>"]/g, c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c])); }
 
 async function load(){
   $("load").disabled=true; setMsg("Loading…");
@@ -182,7 +183,15 @@ function render(d){
     <tr><td>Calls — list</td><td>${c.list||0}</td></tr>
     <tr><td>Calls — gallery</td><td>${c.gallery||0}</td></tr>
     ${tp.length? `<tr><td style="color:var(--ink);padding-top:12px">Top businesses</td><td style="color:var(--muted);padding-top:12px">impr → sent</td></tr>`:""}
-    ${tp.map(p=>`<tr><td style="font-family:monospace;font-size:11px">${p.place_id.slice(0,18)}…</td><td>${p.impressions||0} → ${p.sends||0}</td></tr>`).join("")}
+    ${tp.map(p=>{
+      // Show the real business name; fall back to a truncated place_id only for
+      // rows we've never seen an impression/results_shown label for (e.g. a
+      // send with no prior impression in the window).
+      const label = p.name
+        ? `<span title="${esc(p.place_id)}">${esc(p.name)}</span>`
+        : `<span style="font-family:monospace;font-size:11px" title="${esc(p.place_id)}">${esc(p.place_id.slice(0,18))}…</span>`;
+      return `<tr><td>${label}</td><td>${p.impressions||0} → ${p.sends||0}</td></tr>`;
+    }).join("")}
   </table>`;
 
   // Devices: every device_id seen in the window, with its event count. Excluded

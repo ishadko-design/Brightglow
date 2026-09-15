@@ -123,6 +123,7 @@ Deno.serve(async (req) => {
   const calls = { list: 0, gallery: 0 };
   const placeSends: Record<string, number> = {};
   const placeImpressions: Record<string, number> = {};   // per-business impressions
+  const placeNames: Record<string, string> = {};         // place_id → business name
   let impressionsTotal = 0;
 
   for (const r of rows) {
@@ -137,13 +138,24 @@ Deno.serve(async (req) => {
     // `results_shown.place_ids`. Tally both into placeImpressions.
     if (r.event === "impression") {
       const pid = String(r.props?.place_id ?? "");
-      if (pid) { placeImpressions[pid] = (placeImpressions[pid] ?? 0) + 1; impressionsTotal++; }
+      if (pid) {
+        placeImpressions[pid] = (placeImpressions[pid] ?? 0) + 1; impressionsTotal++;
+        const nm = String(r.props?.name ?? "").trim();
+        if (nm) placeNames[pid] = nm;   // gallery impression carries the business name
+      }
     }
     if (r.event === "results_shown" && Array.isArray(r.props?.place_ids)) {
-      for (const raw of r.props.place_ids as unknown[]) {
+      // The list surface sends `names` parallel to `place_ids`, so each id can be
+      // labelled with its business name instead of a raw place_id.
+      const ids = r.props.place_ids as unknown[];
+      const names = Array.isArray(r.props?.names) ? (r.props.names as unknown[]) : [];
+      ids.forEach((raw, i) => {
         const pid = String(raw ?? "");
-        if (pid) { placeImpressions[pid] = (placeImpressions[pid] ?? 0) + 1; impressionsTotal++; }
-      }
+        if (!pid) return;
+        placeImpressions[pid] = (placeImpressions[pid] ?? 0) + 1; impressionsTotal++;
+        const nm = String(names[i] ?? "").trim();
+        if (nm) placeNames[pid] = nm;
+      });
     }
 
     if (r.event === "send_result") {
@@ -178,6 +190,7 @@ Deno.serve(async (req) => {
   const topPlaces = [...placeIds]
     .map((place_id) => ({
       place_id,
+      name: placeNames[place_id] ?? "",
       impressions: placeImpressions[place_id] ?? 0,
       sends: placeSends[place_id] ?? 0,
     }))
