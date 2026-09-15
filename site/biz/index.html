@@ -74,7 +74,7 @@
     /* the business headline is longer than the consumer's — cap the display
        size so it wraps to a few lines instead of a dozen */
     .hero-h1 { font-size: clamp(40px, 6.2vw, 66px); }
-    /* header sign-in: solid pill next to the ghost "For customers" link */
+    /* header: sign-in pill only — no "For customers" CTA on the business site */
     .topbar-nav{ display:flex; align-items:center; gap:10px; }
     .biz-signin{
       flex:none; font-family:var(--disp); font-weight:700; font-size:14px; color:#faf1df;
@@ -132,7 +132,6 @@
       <span class="wordmark">Brightglow</span>
     </a>
     <nav class="topbar-nav">
-      <a class="biz-link" href="/" data-magnetic>For customers</a>
       <a class="biz-signin" href="/biz/signin/" data-magnetic>Sign in</a>
     </nav>
   </header>

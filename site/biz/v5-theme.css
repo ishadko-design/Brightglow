@@ -50,6 +50,10 @@ body.portal:has(#authView:not([hidden])){
 .card-title,.thread-title,.section-head,.modal-title{
   font-family:var(--headline); font-weight:var(--h2-weight); letter-spacing:-0.01em;
 }
+/* portal.css .auth-hero .card-title (0,2,0) beats the rule above — match it */
+.auth-hero .card-title{
+  font-family:var(--headline); font-weight:var(--h2-weight); letter-spacing:-0.01em;
+}
 .editor-head h1{ font-weight:var(--h1-weight); }
 /* Site-wide headline tokens: every title on the site is Bricolage Grotesque
    at the same weight per level (H1 800 / H2 800 / H3 700) — identical on
@@ -67,6 +71,17 @@ h3,.lead-title{
    button: 24° blue gradient, pill, Lato Bold, white text. portal.css gives
    .save-btn its own flat-blue style; this unifies it. */
 .primary-btn{ color:#ffffff; }
+
+/* ── Secondary buttons: high contrast on the light theme ─────────────
+   portal.css .btn-secondary was built for the dark theme (translucent
+   white fill, white text). On cream it renders as a faint ghost pill
+   ("Add service", "Delete", "Preview as customer"). Give it an ink-tinted
+   fill plus a hairline border so it reads as a real button. */
+.btn-secondary{
+  background:rgba(19,19,21,.08);
+  border:1.5px solid rgba(19,19,21,.28);
+  color:#131315;
+}
 .save-btn{
   background:linear-gradient(24deg,#0039f5 0%,#00218f 100%);
   color:#ffffff; border:none; border-radius:999px;
