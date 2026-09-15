@@ -807,15 +807,13 @@ struct QuoteRequestScreen: View {
                 }
                 return head.trimmingCharacters(in: .whitespacesAndNewlines) + "\u{2026}"
             }()
-            let jobClause: String = {
-                guard !smsJob.isEmpty else { return "." }
-                return " for: \(smsJob)" + (smsJob.hasSuffix("\u{2026}") ? "" : ".")
-            }()
-            // The reply link stands on its own line so iMessage unfurls it
-            // as the rich preview card (photo + title), not a bare inline URL.
-            let body = "Hi \(contractor.name)! I'd like a quote\(jobClause)\n"
-                + "Photos and details here:\n\(LeadBridgeService.replyURL(publicId: publicId))\n"
-                + "If you can take this on, just reply to this text."
+            let jobClause: String = smsJob.isEmpty ? "a request" : "a request for \(smsJob)"
+            // iMessage only unfurls a URL into the rich preview card (photo +
+            // title) when it's the LAST thing in the message — any text after
+            // the URL downgrades it to a bare inline link. So the copy comes
+            // first ("...below.") and the reply link ends the body.
+            let body = "Hi \(contractor.name), I have \(jobClause) — photos and details below. "
+                + LeadBridgeService.replyURL(publicId: publicId)
             let payload = ComposePayload(
                 recipient: Self.smsTestRecipient.isEmpty ? phone : Self.smsTestRecipient,
                 body: body,
