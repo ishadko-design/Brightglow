@@ -148,9 +148,6 @@ h3,.lead-title{
 /* Toggle knob is a hardcoded var(--white) pill; keep it white on the
    ink-20% track (Figma: white pill). */
 .toggle .knob{ background:#ffffff; }
-/* Photo remove × is hardcoded #fff on a light wash: needs ink. (The logo
-   remove × sits on a dark circle and correctly stays white.) */
-.photo-cell .rm{ color:#131315; }
 /* QR codes must stay black-on-white to scan — never the themed ink. */
 .preview-qr{ background:#ffffff; }
 
