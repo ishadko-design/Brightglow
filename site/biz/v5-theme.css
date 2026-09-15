@@ -33,6 +33,7 @@
   --gold:#9a7300;
   --headline:"Bricolage Grotesque","Inter",system-ui,sans-serif;
   --h1-weight:800; --h2-weight:800; --h3-weight:700; /* site-wide headline weight tokens — same on every page */
+  --btn-soft:rgba(19,19,21,.16); /* soft glass button fill — ink-derived darker gray, with backdrop blur */
 }
 
 
@@ -72,15 +73,21 @@ h3,.lead-title{
    .save-btn its own flat-blue style; this unifies it. */
 .primary-btn{ color:#ffffff; }
 
-/* ── Secondary buttons: high contrast on the light theme ─────────────
-   portal.css .btn-secondary was built for the dark theme (translucent
-   white fill, white text). On cream it renders as a faint ghost pill
-   ("Add service", "Delete", "Preview as customer"). Give it an ink-tinted
-   fill plus a hairline border so it reads as a real button. */
+/* ── Soft glass buttons (tokenized) ──────────────────────────────────
+   .btn-secondary pills ("Add service", "Delete", "Preview as customer",
+   "Upload logo") and the .rm × icon buttons on photo/logo tiles share one
+   treatment: the --btn-soft ink-derived fill plus backdrop blur. */
 .btn-secondary{
-  background:#131315;
+  background:var(--btn-soft);
+  -webkit-backdrop-filter:blur(64px); backdrop-filter:blur(64px);
   border:0;
-  color:#faf1df;
+  color:#131315;
+}
+.photo-cell .rm, .logo-wrap .rm{
+  background:var(--btn-soft);
+  -webkit-backdrop-filter:blur(64px); backdrop-filter:blur(64px);
+  border:0;
+  color:#fff;
 }
 .save-btn{
   background:linear-gradient(24deg,#0039f5 0%,#00218f 100%);
