@@ -31,13 +31,15 @@
     --line:rgba(101,78,20,.16);
     --amber:#9a7300; --amber-lite:#b08d1e;
     --headline:"Bricolage Grotesque","Inter",system-ui,-apple-system,sans-serif;
+    --h1-weight:800; --h2-weight:800; --h3-weight:700; /* site-wide headline weight tokens — same on every page */
   }
 
 
   html{ color-scheme:light; }
   body{ background:linear-gradient(180deg,#fdf6e7 0%,#faf1df 42%,#f5e8cd 100%); }
   #aurora,.grain,.cursor,.bg-fallback{ display:none !important; }
-  h1,h2{ font-family:var(--headline); font-weight:600; letter-spacing:-0.01em; }
+  h1{ font-family:var(--headline); font-weight:var(--h1-weight); letter-spacing:-0.01em; }
+  h2{ font-family:var(--headline); font-weight:var(--h2-weight); letter-spacing:-0.01em; }
   .kicker{ font-family:var(--headline); }
   .glow{
     background:linear-gradient(100deg,#77590a 5%,#a8832a 42%,#c09a3c 58%,#77590a 95%);
@@ -48,7 +50,8 @@
   /* Text tokens — one typeface per level (shared design system):
      H1/H2/H3 = Bricolage Grotesque (--headline, site-wide); body = Poppins (--sans, landing.css).
      The .hero-h1 override beats landing.css's heavier grotesque rule. */
-  h1, h2, h3, .hero-h1{ font-family:var(--headline); font-weight:600; letter-spacing:-0.01em; }
+  h3{ font-family:var(--headline); font-weight:var(--h3-weight); letter-spacing:-0.01em; }
+  .hero-h1{ font-weight:var(--h1-weight); } /* h1.hero-h1: family already set above */
   @media (max-width:700px){
     /* the 3D proof cluster renders as a dead empty block on phones — hide it there */
     .stage{ display:none; }

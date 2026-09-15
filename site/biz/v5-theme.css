@@ -32,6 +32,7 @@
   --input-border:1px solid rgba(101,78,20,.28);
   --gold:#9a7300;
   --headline:"Bricolage Grotesque","Inter",system-ui,sans-serif;
+  --h1-weight:800; --h2-weight:800; --h3-weight:700; /* site-wide headline weight tokens — same on every page */
 }
 
 
@@ -46,13 +47,19 @@ body.portal:has(#authView:not([hidden])){
   background-image:linear-gradient(212deg, rgba(212,166,0,.22) 0%, rgba(212,166,0,0) 45%);
   background-repeat:no-repeat; background-position:top center; background-size:100% 900px;
 }
-.card-title,.thread-title,.section-head,.modal-title,.editor-head h1{
-  font-family:var(--headline); font-weight:600; letter-spacing:-0.01em;
+.card-title,.thread-title,.section-head,.modal-title{
+  font-family:var(--headline); font-weight:var(--h2-weight); letter-spacing:-0.01em;
 }
-/* Site-wide headline token: every title on the site is Bricolage Grotesque,
-   including the Billing h1, billing headers, and request-row titles. */
-h1,h2,h3,.billing-title,.lead-title{
-  font-family:var(--headline);
+.editor-head h1{ font-weight:var(--h1-weight); }
+/* Site-wide headline tokens: every title on the site is Bricolage Grotesque
+   at the same weight per level (H1 800 / H2 800 / H3 700) — identical on
+   every page. Includes the Billing h1, billing headers, request-row titles. */
+h1,.billing-title{
+  font-family:var(--headline); font-weight:var(--h1-weight);
+}
+h2{ font-family:var(--headline); font-weight:var(--h2-weight); }
+h3,.lead-title{
+  font-family:var(--headline); font-weight:var(--h3-weight);
 }
 
 /* ── Buttons: ONE primary component everywhere ───────────────────────
