@@ -33,12 +33,26 @@
     --headline:"Newsreader",Georgia,serif;
   }
 
+
+  html{ color-scheme:light; }
+  body{ background:linear-gradient(180deg,#fdf6e7 0%,#faf1df 42%,#f5e8cd 100%); }
+  #aurora,.grain,.cursor,.bg-fallback{ display:none !important; }
+  h1,h2{ font-family:var(--headline); font-weight:600; letter-spacing:-0.01em; }
   .kicker{ font-family:var(--headline); }
   .glow{
     background:linear-gradient(100deg,#77590a 5%,#a8832a 42%,#c09a3c 58%,#77590a 95%);
     -webkit-background-clip:text; background-clip:text; color:transparent;
   }
   .topbar.is-stuck{ background:rgba(250,241,223,.85); backdrop-filter:blur(14px); -webkit-backdrop-filter:blur(14px); }
+
+  /* Text tokens — one typeface per level (shared design system):
+     H1/H2/H3 = Newsreader (--headline); body = Poppins (--sans, landing.css).
+     The .hero-h1 override beats landing.css's heavier grotesque rule. */
+  h1, h2, h3, .hero-h1{ font-family:var(--headline); font-weight:600; letter-spacing:-0.01em; }
+  @media (max-width:700px){
+    /* the 3D proof cluster renders as a dead empty block on phones — hide it there */
+    .stage{ display:none; }
+  }
 
   /* ---------- preview bar: view + headline font switcher ---------- */
 
