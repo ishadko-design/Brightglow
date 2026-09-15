@@ -578,12 +578,13 @@ select { appearance: none; background-image: none; }
   z-index: 1;
   touch-action: pan-y; transition: transform .18s ease; }
 .lead-row.open .lead-card { transform: translateX(-134px); }   /* 118 pill + 16 gap (Figma 1140:2933) */
-/* Reviewed requests: no card background, title de-bolds to Poppins 300 17
-   (Figma 1984:5579 "Variant3"), badge gone. The Delete button behind the card
+/* Reviewed requests: no card background, title de-bolds to Poppins 400 17
+   (Figma 1984:5579 "Variant3" specifies 300 — bumped to 400 for legibility),
+   badge gone. The Delete button behind the card
    stays invisible at rest — with a transparent card it would otherwise ghost
    through — and appears only once the swipe reveals it. */
 .lead-row.read .lead-card { background: transparent; }
-.lead-row.read .lead-title { font-family: "Poppins"; font-weight: 300; }
+.lead-row.read .lead-title { font-family: "Poppins"; font-weight: 400; }
 /* Figma 1984:5579: 44px thumbnail, 12px radius. Holds the customer's photo when
    the request has one (popped in async); otherwise the initial placeholder. */
 .lead-avatarwrap { position: relative; width: 44px; height: 44px; flex-shrink: 0; }
