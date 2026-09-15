@@ -78,7 +78,7 @@ enum LeadBridgeService {
         website: String? = nil,
         contractorPhone: String? = nil,
         description: String,
-        city: String,
+        city: String? = nil,
         photos: [UIImage] = [],
         publicId: String? = nil,
         notify: Bool = true,
@@ -118,7 +118,7 @@ enum LeadBridgeService {
         // its leads by verifying this number via OTP (the /biz phone-first identity).
         if let contractorPhone, !contractorPhone.isEmpty { appendField("contractor_phone", contractorPhone) }
         appendField("description", description)
-        appendField("city", city)
+        if let city, !city.isEmpty { appendField("city", city) }
         // P2P text path: the app-minted id (so the SMS link is known up front) and
         // `notify=false` so LeadBridge records the lead for the /l/<id> reply page
         // but sends no email — the customer's own text is the delivery.

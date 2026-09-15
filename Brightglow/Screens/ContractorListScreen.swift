@@ -28,6 +28,10 @@ struct ContractorListScreen: View {
     var aiResult: AIResult? = nil
     /// When set (manual ZIP/city or an already-resolved fix), used instead of GPS.
     var presetCoordinate: CLLocationCoordinate2D? = nil
+    /// The customer's resolved search city ("Daly City"), threaded to the
+    /// quote-request screen so the texted lead is tagged with the JOB's city
+    /// (not the business's). nil when no location was resolved.
+    var userCity: String? = nil
     /// Photos the user attached before arriving here (camera capture + drawing,
     /// or the search bar's own picker) — carried to the quote-request screen.
     var attachedImages: [UIImage] = []
@@ -62,6 +66,7 @@ struct ContractorListScreen: View {
          searchQuery: String = "",
          aiResult: AIResult? = nil,
          presetCoordinate: CLLocationCoordinate2D? = nil,
+         userCity: String? = nil,
          attachedImages: [UIImage] = [],
          photoDetails: String? = nil,
          photoDescription: String = "",
@@ -75,6 +80,7 @@ struct ContractorListScreen: View {
         self.searchQuery = searchQuery
         self.aiResult = aiResult
         self.presetCoordinate = presetCoordinate
+        self.userCity = userCity
         self.attachedImages = attachedImages
         self.photoDetails = photoDetails
         self.photoDescription = photoDescription
@@ -491,6 +497,7 @@ struct ContractorListScreen: View {
                 photoMatchTerms: photoMatchTerms,
                 pinnedReviewID: pinnedReviewID,
                 clarifyTranscript: clarifyTranscript,
+                userCity: userCity,
                 vehicleNote: quoteVehicleNote
             )
         }
@@ -501,7 +508,8 @@ struct ContractorListScreen: View {
                 contractor: contractors.first { $0.id == id },
                 initialImages: attachedImages,
                 vehicleNote: quoteVehicleNote,
-                clarifyTranscript: clarifyTranscript
+                clarifyTranscript: clarifyTranscript,
+                userCity: userCity
             )
         }
         // Custom bottom overlay (same as the gallery) so the card is a flush,

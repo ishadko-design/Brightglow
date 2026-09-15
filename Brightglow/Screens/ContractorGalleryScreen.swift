@@ -68,6 +68,10 @@ struct ContractorGalleryScreen: View {
     /// The landing clarifying Q&A, carried through to the quote-request screen so
     /// the message a business receives includes the AI-clarified details.
     var clarifyTranscript: ClarifyTranscript = .empty
+    /// The customer's resolved search city ("Daly City"), threaded to the
+    /// quote-request screen so the texted lead is tagged with the JOB's city
+    /// (not the business's). nil when no location was resolved.
+    var userCity: String? = nil
     /// "Motorcycle"/"Car" for an auto search, empty for home — passed to the
     /// quote so the business is told which vehicle.
     var vehicleNote: String = ""
@@ -250,7 +254,7 @@ struct ContractorGalleryScreen: View {
             }
         }
         .navigationDestination(isPresented: $showQuote) {
-            QuoteRequestScreen(contractor: selectedContractor, initialImages: attachedImages, vehicleNote: vehicleNote, clarifyTranscript: clarifyTranscript)
+            QuoteRequestScreen(contractor: selectedContractor, initialImages: attachedImages, vehicleNote: vehicleNote, clarifyTranscript: clarifyTranscript, userCity: userCity)
         }
         // Custom bottom overlay (not a system `.sheet`) so the card is a flush,
         // full-width bottom sheet rather than iOS 26's inset floating card.

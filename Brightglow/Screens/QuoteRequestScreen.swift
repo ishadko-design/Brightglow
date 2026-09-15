@@ -31,6 +31,12 @@ struct QuoteRequestScreen: View {
     /// empty box — but stays fully editable: the user can trim or rewrite
     /// before sending.
     var clarifyTranscript: ClarifyTranscript = .empty
+    /// The customer's resolved search city ("Daly City") — where the JOB is,
+    /// not where the business is. Sent with the lead so the texted card reads
+    /// "<job> near <city>" and the paywall/nudge copy names the right place.
+    /// nil when no location was resolved: the card then omits the location
+    /// rather than falsely showing the business's city.
+    var userCity: String? = nil
 
     @Environment(\.dismiss) private var dismiss
     @EnvironmentObject private var auth: AuthService
@@ -928,7 +934,8 @@ struct QuoteRequestScreen: View {
             // The number the user is texting — the key the business later claims by.
             contractorPhone: testMode ? "+16282029214" : contractor.phone,
             description: description,
-            city: contractor.city,
+            // The JOB's city (customer search location), never the business's.
+            city: userCity,
             photos: photos,
             publicId: publicId,
             notify: notify,
