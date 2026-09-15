@@ -19,7 +19,7 @@
 <script>document.documentElement.classList.add("js");</script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500..800&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Newsreader:opsz,wght@6..72,400..800&family=Bricolage+Grotesque:opsz,wght@12..96,500..800&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
 <script type="application/ld+json">
 {
   "@context": "https://schema.org",
@@ -39,7 +39,10 @@
      --ink #131315 = tokens bg (ink on light) · --card #FFFFFF = tokens white ·
      --bronze #9a7300 = gold darkened for legibility on cream (flagged token
      gap, same as /biz) · --bg #faf1df = light cream (shared with /biz).
-     Buttons: 999px pill, 56px height = tokens size/buttonHeight. */
+     Buttons: 999px pill, 56px height = tokens size/buttonHeight.
+     Type: --headline Newsreader = site-wide headline token (same as /biz);
+     --disp Bricolage Grotesque = display accents (wordmark, buttons);
+     --sans Inter = body token. */
   :root{
     --bg:#faf1df;
     --ink:#131315;
@@ -53,7 +56,7 @@
     --bronze:#9a7300;
     --disp:"Bricolage Grotesque","Inter",system-ui,-apple-system,sans-serif;
     --sans:"Inter",system-ui,-apple-system,sans-serif;
-    --headline:"Bricolage Grotesque","Inter",system-ui,-apple-system,sans-serif;
+    --headline:"Newsreader",Georgia,serif;
     --r:22px;
     --ease:cubic-bezier(.2,.75,.2,1);
   }
