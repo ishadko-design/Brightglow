@@ -32,6 +32,12 @@
     --amber:#9a7300; --amber-lite:#b08d1e;
     --headline:"Bricolage Grotesque","Inter",system-ui,-apple-system,sans-serif;
     --h1-weight:800; --h2-weight:800; --h3-weight:700; /* site-wide headline weight tokens — same on every page */
+    /* --disp redefined: landing.css sets it to Lato, and its class rules
+       (.hero-h1, .topbar .wordmark, .kicker, h1-h4) beat the element-level
+       --headline overrides on specificity — the hero was rendering Lato.
+       Pointing --disp at Bricolage fixes every landing.css title rule at once,
+       and unifies wordmark/buttons with the consumer page. */
+    --disp:"Bricolage Grotesque","Inter",system-ui,-apple-system,sans-serif;
   }
 
 
