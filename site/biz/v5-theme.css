@@ -34,7 +34,6 @@
   --headline:"Newsreader",Georgia,serif;
 }
 
-html[data-font="bricolage"]{ --headline:"Bricolage Grotesque","Inter",system-ui,sans-serif; }
 html[data-font="fraunces"]{ --headline:"Fraunces",Georgia,serif; }
 html[data-font="instrument"]{ --headline:"Instrument Serif",Georgia,serif; }
 html[data-font="newsreader"]{ --headline:"Newsreader",Georgia,serif; }
@@ -54,6 +53,11 @@ body.portal:has(#authView:not([hidden])){
 }
 .card-title,.thread-title,.section-head,.modal-title,.editor-head h1{
   font-family:var(--headline); font-weight:600; letter-spacing:-0.01em;
+}
+/* Site-wide headline token: every title on the site is Newsreader, including
+   the Billing h1, billing headers, and request-row titles. */
+h1,h2,h3,.billing-title,.lead-title{
+  font-family:var(--headline);
 }
 html[data-font="instrument"] .card-title,html[data-font="instrument"] .thread-title,
 html[data-font="instrument"] .section-head,html[data-font="instrument"] .modal-title{ font-weight:400; }
