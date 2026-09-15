@@ -76,6 +76,29 @@
       transition:transform .2s var(--ease), opacity .2s var(--ease);
     }
     .biz-signin:hover{ transform:translateY(-1px); opacity:.88; }
+
+    /* ---------- hero phone: unified with the consumer V2 phone ----------
+       The old landing.css phone (gradient frame, 34px radius, 24px pill)
+       no longer matches the consumer page. This overrides it 1:1. */
+    .phone{
+      width:min(230px,50vw); height:auto; aspect-ratio:250/512; padding:0;
+      border-radius:42px; background:#101014; border:1px solid rgba(19,19,21,.2);
+      box-shadow:0 40px 80px rgba(19,19,21,.28), 0 0 0 8px rgba(255,255,255,.5);
+      overflow:hidden;
+      transform:translate(-50%,-50%) translateZ(80px);
+    }
+    .phone-screen{ inset:10px; border-radius:34px; background:#000; }
+    .phone-input{
+      left:12px; right:12px; bottom:12px; height:auto; padding:11px 12px;
+      border-radius:16px; background:rgba(16,16,20,.82);
+      border:1px solid rgba(255,255,255,.12);
+      -webkit-backdrop-filter:blur(8px); backdrop-filter:blur(8px);
+    }
+    .phone-input .txt{ font-size:12.5px; font-weight:400; }
+    .phone-input .send{
+      width:30px; height:30px; box-shadow:none;
+      background:linear-gradient(100deg,#0039f5,#2f5bff);
+    }
   </style>
   <script type="application/ld+json">
   {
