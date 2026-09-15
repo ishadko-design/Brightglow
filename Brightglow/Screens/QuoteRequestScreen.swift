@@ -742,6 +742,12 @@ struct QuoteRequestScreen: View {
     /// With none attached the lead goes as text only.
     private func sendRequest() {
         guard canSend, let contractor else { return }
+        // Drop the keyboard BEFORE the SMS composer sheet takes over. Otherwise
+        // its keyboard-avoidance inset is left applied when the composer is
+        // cancelled — the screen comes back with a phantom gap where the (now
+        // gone) keyboard was. Resigning first returns us to the default layout.
+        requestFocused = false
+        emailFocused = false
 #if DEBUG
         // Test-mode indicator: when smsTestRecipient is empty, the composer
         // opens addressed to the business's real number — change it to your
