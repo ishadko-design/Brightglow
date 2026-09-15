@@ -8,7 +8,7 @@
   <meta name="theme-color" content="#faf1df">
   <link rel="icon" type="image/png" href="/favicon.png">
   <link rel="apple-touch-icon" href="/apple-touch-icon.png">
-  <meta name="robots" content="noindex"><link rel="canonical" href="https://brightglow.co/biz">
+  <link rel="canonical" href="https://brightglow.co/biz">
   <meta property="og:title" content="Brightglow for Business — get found for the work you do best">
   <meta property="og:description" content="Real customers matched to you by the work you have done. Claim your page — no cold calls, no bidding wars.">
   <meta property="og:type" content="website">
@@ -20,7 +20,7 @@
   <link rel="stylesheet" href="../landing.css?v=17">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Newsreader:opsz,wght@6..72,400..800&family=Fraunces:opsz,wght@9..144,500..900&family=Instrument+Serif:ital@0;1&family=DM+Serif+Display:ital@0;1&family=Archivo:wght@500..900&family=Bricolage+Grotesque:opsz,wght@12..96,500..800&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Newsreader:opsz,wght@6..72,400..800&display=swap" rel="stylesheet">
 <style>
   /* Preview V4: light warm Newsreader theme over the shared dark system */
   :root{
@@ -33,21 +33,6 @@
     --headline:"Newsreader",Georgia,serif;
   }
 
-  html[data-font="bricolage"]{ --headline:"Bricolage Grotesque","Inter",system-ui,sans-serif; }
-  html[data-font="fraunces"]{ --headline:"Fraunces",Georgia,serif; }
-  html[data-font="instrument"]{ --headline:"Instrument Serif",Georgia,serif; }
-  html[data-font="newsreader"]{ --headline:"Newsreader",Georgia,serif; }
-  html[data-font="dmserif"]{ --headline:"DM Serif Display",Georgia,serif; }
-  html[data-font="archivo"]{ --headline:"Archivo","Inter",system-ui,sans-serif; }
-
-  html{ color-scheme:light; }
-  body{ background:linear-gradient(180deg,#fdf6e7 0%,#faf1df 42%,#f5e8cd 100%); }
-  #aurora,.grain,.cursor,.bg-fallback{ display:none !important; }
-  h1,h2{ font-family:var(--headline); font-weight:600; letter-spacing:-0.01em; }
-  html[data-font="instrument"] h1,html[data-font="instrument"] h2,
-  html[data-font="dmserif"] h1,html[data-font="dmserif"] h2{ font-weight:400; }
-  html[data-font="bricolage"] h1,html[data-font="bricolage"] h2,
-  html[data-font="archivo"] h1,html[data-font="archivo"] h2{ font-weight:800; }
   .kicker{ font-family:var(--headline); }
   .glow{
     background:linear-gradient(100deg,#77590a 5%,#a8832a 42%,#c09a3c 58%,#77590a 95%);
@@ -56,26 +41,6 @@
   .topbar.is-stuck{ background:rgba(250,241,223,.85); backdrop-filter:blur(14px); -webkit-backdrop-filter:blur(14px); }
 
   /* ---------- preview bar: view + headline font switcher ---------- */
-  .fontbar{
-    position:fixed; left:50%; bottom:16px; transform:translateX(-50%); z-index:60;
-    display:flex; align-items:center; gap:2px; max-width:94vw; overflow-x:auto;
-    background:rgba(24,20,12,.88); backdrop-filter:blur(12px); -webkit-backdrop-filter:blur(12px);
-    border:1px solid rgba(212,166,0,.35); border-radius:14px; padding:8px 10px;
-    box-shadow:0 12px 32px rgba(20,16,8,.35);
-    font-family:"Inter",system-ui,-apple-system,sans-serif;
-  }
-  .fontbar-label{
-    font-size:10.5px; font-weight:700; letter-spacing:.14em; text-transform:uppercase;
-    color:rgba(255,217,138,.8); padding:0 8px 0 4px; white-space:nowrap;
-  }
-  .fontbar button{
-    border:0; background:transparent; cursor:pointer; white-space:nowrap;
-    color:rgba(255,255,255,.62); font-size:14px; padding:7px 11px; border-radius:9px;
-    transition:background .2s, color .2s;
-  }
-  .fontbar button:hover{ color:#fff; background:rgba(255,255,255,.08); }
-  .fontbar button.is-active{ background:#d4a600; color:#191510; font-weight:600; }
-  .fontbar-sep{ width:1px; align-self:stretch; background:rgba(255,255,255,.14); margin:2px 6px; flex:none; }
 
 </style>
 
@@ -250,20 +215,12 @@
         <a href="../privacy.html">Privacy</a>
         <a href="mailto:hello@brightglow.co">hello@brightglow.co</a>
       </nav>
-      <div class="footer-copy">© 2026 Brightglow LLC · Proof over reputation. · Design preview V4 — not the live site.</div>
+      <div class="footer-copy">© 2026 Brightglow LLC · Proof over reputation.</div>
     </div>
   </footer>
 
 
-<div class="fontbar" id="fontbar" aria-label="Preview controls">
-  <span class="fontbar-label">Headline</span>
-  <button data-f="bricolage" style="font-family:'Bricolage Grotesque',sans-serif">Bricolage</button>
-  <button data-f="fraunces" style="font-family:'Fraunces',serif">Fraunces</button>
-  <button data-f="instrument" style="font-family:'Instrument Serif',serif">Instrument</button>
-  <button data-f="newsreader" class="is-active" style="font-family:'Newsreader',serif">Newsreader</button>
-  <button data-f="dmserif" style="font-family:'DM Serif Display',serif">DM Serif</button>
-  <button data-f="archivo" style="font-family:'Archivo',sans-serif">Archivo</button>
-</div>
+
 
   <script>
   (function () {
@@ -464,20 +421,6 @@
     })();
   })();
   </script>
-<script>
-/* ---------- headline font switcher (preview) ---------- */
-(function fonts(){
-  var bar=document.getElementById("fontbar"); if(!bar) return;
-  var btns=Array.prototype.slice.call(bar.querySelectorAll("button[data-f]"));
-  function set(f){
-    document.documentElement.setAttribute("data-font",f);
-    btns.forEach(function(b){ b.classList.toggle("is-active", b.getAttribute("data-f")===f); });
-    try{ localStorage.setItem("biz-headline-font",f); }catch(e){}
-  }
-  btns.forEach(function(b){ b.addEventListener("click",function(){ set(b.getAttribute("data-f")); }); });
-  var saved=null; try{ saved=localStorage.getItem("biz-headline-font"); }catch(e){}
-  set(saved && bar.querySelector('[data-f="'+saved+'"]') ? saved : "newsreader");
-})();
-</script>
+
 </body>
 </html>
