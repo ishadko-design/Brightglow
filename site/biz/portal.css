@@ -737,7 +737,7 @@ select { appearance: none; background-image: none; }
   border: 1px solid var(--gray20); border-radius: 12px; padding: 14px 16px; margin-bottom: 14px; }
 .renewal-terms ul { margin: 8px 0 0; padding-left: 18px; }
 .renewal-terms li { margin: 4px 0; }
-.consent { display: flex; gap: 10px; align-items: flex-start; font-size: 14px;
+.consent { display: flex; gap: 10px; align-items: flex-start; font-size: 17px;
   color: var(--gray60); line-height: 1.45; margin-bottom: 16px; cursor: pointer; }
 .consent input { margin-top: 2px; width: 18px; height: 18px; flex: none; accent-color: var(--accent); }
 .consent a { color: var(--white); }
