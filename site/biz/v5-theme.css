@@ -78,9 +78,9 @@ h3,.lead-title{
    ("Add service", "Delete", "Preview as customer"). Give it an ink-tinted
    fill plus a hairline border so it reads as a real button. */
 .btn-secondary{
-  background:rgba(19,19,21,.08);
-  border:1.5px solid rgba(19,19,21,.28);
-  color:#131315;
+  background:#131315;
+  border:0;
+  color:#faf1df;
 }
 .save-btn{
   background:linear-gradient(24deg,#0039f5 0%,#00218f 100%);
