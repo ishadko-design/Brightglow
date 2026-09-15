@@ -1,0 +1,908 @@
+/* Brightglow for Business — portal styling.
+   Tokens mirror the landing site (site/styles.css) / design/tokens.json. */
+
+@font-face {
+  font-family: "Lato";
+  src: url("../fonts/Lato-Heavy.ttf") format("truetype");
+  font-weight: 800; font-display: swap;
+}
+@font-face {
+  font-family: "Lato";
+  src: url("../fonts/Lato-Bold.ttf") format("truetype");
+  font-weight: 700; font-display: swap;
+}
+@font-face {
+  font-family: "Lato";
+  src: url("../fonts/Lato-Regular.ttf") format("truetype");
+  font-weight: 400; font-display: swap;
+}
+@font-face {
+  font-family: "Poppins";
+  src: url("../fonts/Poppins-Light.ttf") format("truetype");
+  font-weight: 300; font-display: swap;
+}
+@font-face {
+  font-family: "Poppins";
+  src: url("../fonts/Poppins-Regular.ttf") format("truetype");
+  font-weight: 400; font-display: swap;
+}
+
+/* Design tokens — EXACTLY design/tokens.json, nothing invented. Two Figma-node
+   values the token set lacks are used verbatim and flagged: --danger (#ff0000,
+   the delete red from node 1984:5579) and --req-grad-end (#3859c5, the request
+   gradient stop from node 2020:6841). */
+:root {
+  --white: #ffffff;
+  --gray60: rgba(255, 255, 255, 0.6);
+  --gray50: rgba(255, 255, 255, 0.5);
+  --gray20: rgba(255, 255, 255, 0.2);
+  --gray10: rgba(255, 255, 255, 0.1);
+  --gray05: rgba(255, 255, 255, 0.05);
+  --bg: #131315;
+  /* --card: white 5% pre-composited over --bg (#131315) = #1F1F21, exact.
+     The request card MUST be opaque: it slides over the red delete reveal,
+     and the 95%-transparent gray05 lets the red bleed straight through the
+     card (the all-red-cards bug). Visually identical to gray05 on the
+     dashboard background. FLAGGED: derived value, not in tokens.json. */
+  --card: #1F1F21;
+  /* tokens.json `bgSecondary` — the fill Figma gives stat tiles and inputs. */
+  --bg-secondary: rgba(19, 19, 21, 0.9);
+  --accent: #0039f5;
+  --gold: #d4a600;
+  --green: #27c840;
+  --danger: #ff0000;
+  --req-grad-end: #3859c5;
+  /* Text fields, matching the Figma design-system "Regular" input (node
+     351-2043, and 1984:5663): radius 16, a 1px WHITE-20% hairline (stroke
+     opacity 0.2, outside), on the bg-secondary fill, padding 20 left / 16 right. */
+  --radius-input: 16px;
+  --input-border: 1px solid rgba(255, 255, 255, 0.2);
+  /* landing scale unit — mirrors site/styles.css: every Figma px × --s. */
+  --s: 1px;
+}
+/* Match the consumer landing's responsive scale-up on wider viewports. */
+@media (min-width: 700px) { 
+/* Safe area: respect iPhone notch/Dynamic Island everywhere */
+body.portal {
+  padding-left: env(safe-area-inset-left, 0px);
+  padding-right: env(safe-area-inset-right, 0px);
+}
+body.portal { --s: 1.25px; } }
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+html { color-scheme: dark; }
+/* `[hidden]` is a UA rule (specificity 0,1,0) that class rules like `.card.center`
+   would otherwise override — force it to win so toggled sections truly hide. */
+[hidden] { display: none !important; }
+
+body.portal {
+  background: var(--bg);
+  color: var(--white);
+  font-family: "Poppins", system-ui, sans-serif;
+  font-weight: 300;
+  min-height: 100vh;
+  -webkit-font-smoothing: antialiased;
+  display: flex;
+  flex-direction: column;
+}
+
+h1 { font-family: "Lato", sans-serif; font-weight: 800; font-size: 26px; line-height: 1.15; }
+h2 { font-family: "Lato", sans-serif; font-weight: 800; font-size: 19px; }
+a { color: inherit; }
+
+/* ── top bar ─────────────────────────────────────────────── */
+/* Figma header (Frame 36989): the 402 artboard, pad 16/24, wordmark + Sign out
+   pill. No bottom rule. */
+.topbar {
+  position: sticky; top: 0; z-index: 20;
+  background: var(--bg-secondary);
+  backdrop-filter: blur(12px);
+}
+.topbar-inner {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 16px 24px;
+}
+/* Web: the header spans the full width like the consumer landing (its 402px
+   artboard cap only ever matched phones). */
+@media (min-width: 700px) {
+  .topbar-inner { padding: 18px 28px; }
+}
+.topbar-actions { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
+.brand { display: flex; align-items: center; gap: 16px; text-decoration: none; font-family: "Lato"; font-weight: 800; font-size: 20px; letter-spacing: -0.01em; }
+.brand em { color: var(--gray50); font-style: normal; font-weight: 400; }
+.brand .appicon { width: 48px; height: 48px; border-radius: 17px; }
+
+/* Signed-in content sits on the 402 artboard, matching the Figma frames. */
+.wrap { width: 100%; max-width: 402px; margin: 0 auto; padding: 0 0 64px; flex: 1; }
+
+/* ── cards / generic ─────────────────────────────────────── */
+/* Figma gives every card the same treatment: gray05 at radius 32. */
+.card {
+  background: var(--gray05);
+  border: 1px solid var(--gray10);
+  border-radius: 32px;
+  padding: 16px;
+  margin-bottom: 12px;
+}
+.card.center, .center { display: flex; align-items: center; justify-content: center; min-height: 40vh; }
+.muted { color: var(--gray50); font-size: 14px; line-height: 1.5; }
+.center-text { text-align: center; }
+.fineprint { font-size: 12px; color: var(--gray50); margin-top: 14px; }
+.fineprint a, .form-msg a { color: var(--white); }
+
+/* ── signed-out screen ───────────────────────────────────────
+   #authView is a centred column, so
+   the fail()/noBusiness() fallbacks — which replace its innerHTML with a bare
+   <h1>/<p> — still read cleanly. */
+/* Mirror the consumer landing's hero exactly: a centred 402-unit column, centred
+   text, and every spacing value scaled by --s just like site/styles.css. */
+.auth-landing {
+  width: calc(402 * var(--s));
+  max-width: 100%;
+  margin: 0 auto;
+  padding-top: calc(56 * var(--s));   /* = .hero-copy padding-top (Figma gap) */
+}
+
+/* Hero background (Figma "Site-Biz" frame): black with an amber glow bleeding
+   from the top-right — exact stops #ffac36 @ 60% → #0a0a0b @ 59%, ending 85%.
+   Painted on the body (scrolls with the page, so it never shifts under the
+   content the way a fixed layer does) and scoped with :has() so it only shows
+   while signed out — the dashboard keeps its plain --bg. The gradient occupies
+   the top 801 units (the Figma frame height); black fills anything below. */
+/* Dashboard / signed-in views keep the plain token background. */
+/* The document scroll lives on <html>, so clip there too — the floating cards
+   bleed ~13/side past the column and would otherwise let the page scroll
+   sideways. `clip` on one axis leaves vertical scrolling untouched. */
+
+/* Scale the chrome below the header so the intro tracks --s (harmless on the
+   form steps, where --s falls back to 1px). The header itself stays fixed-px
+   (see the identical rules under :has(#authView)) so it matches the consumer. */
+
+/* Desktop / tablet: render the intro at the native scale and scroll normally
+   (matches the consumer). Height-fitting a short hero on a tall window would
+   otherwise blow it up huge. The phone no-scroll fit stays below 700px. */
+body.portal:has(#authView:not([hidden])) {
+  /* Match the phone mock's dark bezel (#131315, the app --bg) instead of pure
+     black, so the phone's edge doesn't read as a faint gray hairline against
+     the page. The amber gradient still rides on top. */
+  background-color: var(--bg);
+  /* Figma frame fill (node 1602:6559): a 212° amber→near-black gradient,
+     amber concentrated at the top and gone by ~40% of the frame height. */
+  background-image: linear-gradient(212deg, rgba(255, 172, 54, 0.25) 0%, rgba(25, 25, 34, 0.42) 40%);
+  background-repeat: no-repeat;
+  background-position: top center;
+  background-size: 100% calc(1531 * var(--s));
+}
+body.portal:has(#authView:not([hidden])) .brand em { display: none; }
+/* Sign-in background — Figma node 2051-10797: pure black plus the amber
+   gradient bloom at the top. */
+body.portal:has(#authView:not([hidden])) {
+  background-color: #000;
+  background-image: linear-gradient(212deg, rgba(255, 172, 54, 0.25) 0%, rgba(8, 8, 11, 0) 40%);
+  background-repeat: no-repeat;
+  background-position: top center;
+  background-size: 100% 600px;
+}
+/* Sign-in header — matches the consumer landing header exactly (Igor's call):
+   static, transparent, full-width; mobile 40px icon / 22px wordmark, desktop
+   (700px+) 48px icon / 26px wordmark like the landing. */
+body.portal:has(#authView:not([hidden])) .topbar {
+  position: static;
+  background: transparent;
+  backdrop-filter: none;
+}
+body.portal:has(#authView:not([hidden])) .topbar-inner {
+  max-width: none;
+  padding: 16px 20px 0;
+  justify-content: flex-start;
+}
+body.portal:has(#authView:not([hidden])) .topbar-actions { display: none; }
+body.portal:has(#authView:not([hidden])) .brand {
+  font-family: "Lato", sans-serif; font-weight: 800;
+  font-size: 22px; letter-spacing: -0.01em;
+}
+body.portal:has(#authView:not([hidden])) .brand .appicon {
+  width: 40px; height: 40px; border-radius: 10px;
+}
+@media (min-width: 700px) {
+  body.portal:has(#authView:not([hidden])) .topbar-inner { padding: 20px 28px 0; }
+  body.portal:has(#authView:not([hidden])) .brand { font-size: 26px; }
+  body.portal:has(#authView:not([hidden])) .brand .appicon {
+    width: 48px; height: 48px; border-radius: 12px;
+  }
+}
+/* Sign-in form steps (phone / email / code): the card must fit the screen with the
+   mobile keyboard up — no page scroll. Top-anchor a compact card and hide the
+   footer + tall paddings so the input and button stay above the keyboard on every
+   phone size. */
+body.portal:has(#authView:not([hidden])) {
+  /* Pin to the viewport and never scroll — the card fits well within it, so the
+     page can't scroll into empty space when the keyboard lifts the layout. */
+  height: 100vh;
+  height: 100dvh;
+  overflow: hidden;
+}
+body.portal:has(#authView:not([hidden])) .wrap {
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-start;
+  padding: 0 8px;
+  min-height: 0;
+}
+body.portal:has(#authView:not([hidden])) .auth-landing {
+  width: 100%;
+  padding-top: 0;
+}
+body.portal:has(#authView:not([hidden])) .portal-footer {
+  display: none;
+}
+
+/* The sign-in container — Figma node 2051-10797: white 5% fill, 32px radius,
+   no border, padding 24 top/bottom + 16 sides, 386 wide (8px page margins). */
+.auth-card {
+  max-width: 386px; margin: 0 auto;
+  background: rgba(255, 255, 255, 0.05);
+  border: none; border-radius: 32px;
+  padding: 24px 16px;
+}
+/* Sign-in hero — Figma: title Lato 800 24/28.8 centered, paragraph Poppins 400
+   14/21 white 60% centered, 354 wide. 80 below the header, 16 title→para,
+   16 para→container. */
+.auth-hero { max-width: 354px; margin: 80px auto 0; text-align: center; }
+.auth-hero .card-title {
+  font-family: "Lato", sans-serif; font-weight: 800;
+  font-size: 24px; line-height: 28.8px; color: var(--white);
+  margin: 0 0 16px;
+}
+.auth-hero .auth-sub {
+  font-family: "Poppins", sans-serif; font-weight: 400;
+  font-size: 14px; line-height: 21px; color: rgba(255, 255, 255, 0.6);
+  margin: 0 0 16px;
+}
+.auth-card label {
+  display: block;
+  font-family: "Lato", sans-serif; font-weight: 700;
+  font-size: 14px; color: var(--white); margin-bottom: 8px;
+}
+/* Figma input: white 20% hairline (not the solid-white token). */
+.auth-card input { border-color: rgba(255, 255, 255, 0.2); }
+/* Breathing room between a field and its CTA — Figma node 2051-10797: 24px.
+   Applies to every field (email AND the 6-digit code). */
+.auth-card form input { margin-bottom: 24px; }
+.auth-landing > .form-msg, .auth-step > .form-msg { max-width: 354px; margin: 10px auto 0; text-align: center; }
+
+/* Sign-in CTA — Figma node 2051-10797: 52 tall, a 24° blue gradient
+   (#0039F5 → #00218F), radius 32, Lato Bold 17, padding 16/32, and a black
+   25% shadow (0/16/56). */
+.auth-card .primary-btn {
+  height: 52px; padding: 16px 32px; border-radius: 32px;
+  background: linear-gradient(24deg, #0039f5 0%, #00218f 100%);
+  box-shadow: 0 16px 56px rgba(0, 0, 0, 0.25);
+  font-size: 17px;
+}
+.auth-card .primary-btn:hover {
+  transform: none;
+  box-shadow: 0 16px 56px rgba(0, 0, 0, 0.25);
+  filter: brightness(1.12);
+}
+.auth-card .primary-btn:active { transform: none; }
+
+/* Quiet text button — "Use email instead" / "Start over" on the sign-in steps.
+   Figma node 2051-10797: Poppins 500, 14px, white, UNDERLINED, centred,
+   16 below the button. The ← Back variant is left-aligned above the hero. */
+.linklike {
+  display: flex; align-items: center; justify-content: center;
+  min-height: 44px; margin: 16px auto 0; padding: 0;
+  background: none; border: none;
+  color: var(--white); font-family: "Poppins", sans-serif;
+  font-weight: 500; font-size: 14px;
+  text-decoration: underline; text-align: center; cursor: pointer;
+}
+.linklike.back { margin: 0 0 16px; text-align: left; }
+
+/* ── inputs ──────────────────────────────────────────────── */
+input[type=text], input[type=email], input[type=tel], input[type=url],
+input[type=number], textarea, select {
+  width: 100%;
+  /* Figma design-system "Regular" field (node 351-2043): bg-secondary fill, a
+     1px WHITE hairline, 16 radius, padding 20 left / 16 right, so 17px text
+     sits centered in the 64-tall field. */
+  background: var(--bg-secondary);
+  border: var(--input-border);
+  border-radius: var(--radius-input);
+  color: var(--white);
+  font-family: inherit; font-size: 17px; font-weight: 300;
+  padding: 16px 20px;
+  transition: border-color .15s ease;
+}
+/* Figma "Regular" field box is 64 tall; single-line inputs center their text, so
+   fix the height and drop vertical padding. Textarea keeps its padded multi-line. */
+input[type=text], input[type=email], input[type=tel], input[type=url], input[type=number] {
+  height: 64px; padding: 0 16px 0 20px;
+}
+/* Focus: brighten the hairline to white rather than the blue accent, so fields
+   stay monochrome like the rest of the UI. */
+input:focus, textarea:focus, select:focus { outline: none; border-color: var(--white); }
+input::placeholder, textarea::placeholder { color: var(--gray50); }
+textarea { resize: vertical; }
+select { appearance: none; background-image: none; }
+
+/* Field label — Figma "Regular" label: Lato Bold 14, white, 8 above the field. */
+.field-label { display: block; font-family: "Lato", sans-serif; font-weight: 700; font-size: 14px; color: var(--white); margin: 16px 0 8px; }
+.card > .field-label:first-child { margin-top: 0; }
+.check-field { display: flex; align-items: center; gap: 12px; margin-top: 16px; }
+
+/* ── buttons ─────────────────────────────────────────────── */
+.primary-btn {
+  /* Sign-in CTA — Figma node 2051-10797: 52 tall, a 24° blue gradient
+     (#0039F5 → #00218F), radius 32, Lato Bold 18 white. */
+  background: linear-gradient(24deg, #0039f5 0%, #00218f 100%);
+  color: var(--white);
+  border: none; border-radius: 999px;
+  box-shadow: 0 8px 24px rgba(0, 57, 245, 0.35);
+  font-family: "Lato"; font-weight: 700; font-size: 15px;
+  padding: 13px 24px; cursor: pointer; width: 100%;
+  transition: transform .18s ease, box-shadow .3s ease, opacity .15s ease;
+}
+.primary-btn:hover { transform: translateY(-1px); box-shadow: 0 12px 32px rgba(0, 57, 245, 0.5); }
+.primary-btn:active { transform: translateY(0); }
+.primary-btn:disabled { opacity: .5; cursor: default; }
+.ghost-btn {
+  background: transparent; color: var(--white);
+  border: 1px solid var(--gray20); border-radius: 999px;
+  font-family: "Lato"; font-weight: 700; font-size: 13px;
+  padding: 9px 16px; cursor: pointer; white-space: nowrap;
+}
+.ghost-btn:hover { background: var(--gray05); }
+.ghost-btn:disabled { opacity: 0.6; cursor: default; }
+
+/* Figma "Button Secondary" (node 1984:5663, 8 instances): fill #D9D9D9 at 20%,
+   BACKGROUND BLUR 64, radius 32, Lato Bold white. Two sizes —
+   sm: text-only, pad 4/16, 14px, 32 tall ("Upload logo", "Delete", "Add service");
+   lg: 24px icon + 10px gap + 18px label, pad 16/32, 48 tall ("Preview as customer").
+   There is no icon-only variant: it is a button, not an icon button. */
+.btn-secondary {
+  display: inline-flex; align-items: center; justify-content: center;
+  background: rgba(217, 217, 217, 0.20); color: var(--white);
+  -webkit-backdrop-filter: blur(64px); backdrop-filter: blur(64px);
+  border: 0; border-radius: 32px; cursor: pointer;
+  font-family: "Lato", sans-serif; font-weight: 700; white-space: nowrap;
+  transition: filter .15s ease, opacity .15s ease;
+}
+.btn-secondary:hover { filter: brightness(1.15); }
+.btn-secondary:disabled { opacity: .6; cursor: default; }
+.btn-secondary.sm { padding: 4px 16px; font-size: 14px; min-height: 32px; }
+.btn-secondary.lg { padding: 16px 32px; gap: 10px; font-size: 18px; min-height: 48px; }
+/* Desktop Preview: plain text (the button can't open the app there) above the QR. */
+.preview-label { margin: 0 0 16px; text-align: center;
+  font-family: "Lato", sans-serif; font-weight: 700; font-size: 18px; color: var(--white); }
+
+/* Header icon button — the hamburger (open) and the ✕ (close in the menu). A bare
+   44×44 tap target with a 24px glyph, matching the Figma header icons. */
+.icon-btn {
+  width: 44px; height: 44px; flex-shrink: 0;
+  display: inline-flex; align-items: center; justify-content: center;
+  background: none; border: 0; padding: 0; color: var(--white); cursor: pointer;
+}
+.icon-btn:hover { color: var(--gray60); }
+/* Save + Preview sit side by side, centered, 16px apart (in .save-row). On a phone
+   Preview opens the app; on desktop a QR appears below to scan. */
+.preview-extra { text-align: center; }
+.preview-qr {
+  margin: 16px auto 0; padding: 20px; width: fit-content;
+  background: var(--white); border: 1px solid var(--gray10); border-radius: 16px;
+}
+.preview-qr img { width: 160px; height: 160px; display: block; }
+.preview-hint { margin: 10px auto 0; font-size: 13px; color: var(--gray60); max-width: 280px; line-height: 1.4; }
+.form-msg { margin-top: 14px; font-size: 14px; color: var(--gray60); min-height: 20px; }
+.form-msg.ok { color: var(--green); }
+.form-msg.err { color: var(--danger); }
+
+/* ── Settings: "Accepting new work" toggle row (Figma 1984:5663 Frame 36992,
+   pad 0/16, gap 16): toggle on the left, label on the right. Sits 24 below the
+   tabs, above the Profile heading. ── */
+.accept-row { display: flex; align-items: center; gap: 16px; margin: 0 16px; cursor: pointer; user-select: none; }
+.accept-row input { position: absolute; opacity: 0; width: 0; height: 0; }
+/* Figma Toggle 64×28, radius 14; the knob is a 39×24 white pill (r13) that sits
+   left when off and slides 21px right when on. ON = green #27c840. */
+.toggle { position: relative; width: 64px; height: 28px; border-radius: 14px; background: var(--gray20); flex-shrink: 0; transition: background .18s ease; }
+.toggle .knob { position: absolute; top: 2px; left: 2px; width: 39px; height: 24px; border-radius: 13px; background: var(--white); transition: transform .18s ease; }
+.accept-row input:checked + .toggle { background: var(--green); }
+.accept-row input:checked + .toggle .knob { transform: translateX(21px); }
+.accept-label { font-family: "Poppins", sans-serif; font-weight: 300; font-size: 17px; color: var(--white); }
+
+/* One scrolling row, like the app's horizontal ScrollView of business chips —
+   wrapping onto extra lines pushed the whole dashboard down. */
+.biz-switcher { display: flex; gap: 8px; flex-wrap: nowrap; overflow-x: auto; margin-bottom: 16px; padding-bottom: 4px; }
+
+.biz-chip { background: var(--gray05); border: 1px solid var(--gray20); border-radius: 999px; padding: 8px 16px; font-size: 13px; cursor: pointer; color: var(--gray60); flex-shrink: 0; white-space: nowrap; }
+.biz-chip.is-active { background: var(--gray10); border-color: var(--accent); color: var(--white); }
+
+/* ── tabs ─────────────────────────────────────────────────
+   The three peer tabs (Figma 1140:2933). Same construction as the app's
+   SegmentedTabs: a gray05 capsule track, the active segment a gray20 capsule. */
+/* Figma Tabs (1984:5635): a white-5% capsule track, radius 100, height 40, two
+   equal segments with a 4px gap; the active segment is an rgba(217,217,217,.20)
+   pill at radius 32. Labels Lato Bold 18. */
+.tabs {
+  display: grid; grid-template-columns: repeat(2, 1fr); gap: 4px;
+  background: var(--gray05); border-radius: 100px;
+  margin: 24px 16px; max-width: 100%; height: 40px;   /* Figma 1984:5579: 370 wide, 16px inset; 32px header->tabs */
+}
+.tab {
+  font-family: "Lato"; font-weight: 700; font-size: 18px;
+  color: rgba(255, 255, 255, 0.6); background: none; border: 0; cursor: pointer;
+  border-radius: 32px; transition: background .18s, color .18s;
+}
+.tab:hover { color: var(--white); }
+.tab.is-active { background: rgba(217, 217, 217, 0.20); color: var(--white); }
+
+/* ── editor / billing views ──────────────────────────────── */
+/* Settings and Billing are separate views pushed over the dashboard, the way the
+   app pushes BusinessProfileScreen — so there's a back affordance, not a tab. */
+.editor-head { display: flex; align-items: center; gap: 14px; margin-bottom: 24px; }
+.editor-head h1 { font-size: 26px; }
+/* Billing header — Figma 2056:12052/12416: 44px tall, 8px horizontal padding,
+   44px bare-arrow back button, 4px gap, "Billing" Lato 800 24px. */
+#billingView .editor-head { gap: 4px; padding: 0 8px; margin-bottom: 80px; min-height: 44px; }  /* Figma: 80px header->title */
+#billingView .editor-head h1 {
+  font-family: "Lato", sans-serif; font-weight: 800; font-size: 24px;
+  line-height: 1.2; color: var(--white); margin: 0;
+}
+/* Settings on the dashboard header — the app's gear entry point, labelled and
+   sized as a real target rather than a 38px icon puck. */
+/* Delete + sign-out sit together at the tail of the editor, as in the app. */
+/* Tail of Settings: a rule, then a centered Delete profile (Figma 1140:1827). */
+
+/* Figma section heading ("Profile", "Typical services"): Lato Heavy 24, inset 16,
+   16 below the toggle row, 16 above the card. */
+.section-head { margin: 16px 16px 16px; font-size: 24px; line-height: 1.2; }
+.section-sub { margin: -8px 16px 12px; font-family: "Poppins", sans-serif; font-weight: 300; font-size: 14px; line-height: 1.5; color: var(--gray50); }
+#editorView > .section-head:first-of-type { margin-top: 16px; }
+
+/* Editor cards (Figma): white-5% fill, no border, radius 32, pad 24/16, inset 8. */
+#editorView .card,
+.service-card { background: var(--gray05); border: 0; border-radius: 32px; padding: 24px 16px; margin: 0 8px 16px; }
+
+/* Helper copy under logo / pictures (Poppins 300 14, white 50%). */
+.logo-hint { font-family: "Poppins", sans-serif; font-weight: 300; font-size: 14px; line-height: 1.5; color: var(--gray50); }
+
+/* ── services editor ─────────────────────────────────────── */
+/* One card per service — the app's ServiceRowEditor shape: name on its own row,
+   min/max side by side, Delete beneath. Not a spreadsheet grid. */
+.service-rows { display: flex; flex-direction: column; gap: 0; }
+.service-card > .field-label:first-child { margin-top: 0; }
+.price-pair { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+/* Figma service foot: Delete pill left, "per hour" checkbox right, 24 above. */
+.service-foot { display: flex; align-items: center; justify-content: space-between; gap: 24px; margin-top: 24px; }
+/* "Add service" pill, left-aligned, inset 16 (Figma Frame 36991 pad 0/16). */
+.add-service-row { margin: 0 16px; }
+
+/* ── photos ──────────────────────────────────────────────── */
+/* Horizontal strip — tiles are sized so ~3.5 show at once, always exposing the
+   edge of the next tile as the scroll affordance (it used to fit exactly 3
+   tiles, which read as the whole set). */
+.photo-strip { display: flex; gap: 8px; overflow-x: auto; padding: 4px 0 12px;
+  scrollbar-width: none; }   /* the peek is the affordance on touch */
+.photo-cell, .photo-add { flex: 0 0 calc((100% - 24px) / 3.5); aspect-ratio: 112 / 136; }
+.photo-cell { position: relative; border-radius: 16px; overflow: hidden; background: var(--gray10); cursor: grab; }
+.photo-add {
+  display: flex; align-items: center; justify-content: center;
+  border-radius: 16px;
+  background: var(--gray10); border: 1px solid var(--gray20); cursor: pointer;
+}
+/* Desktop: a thin scrollbar that's always visible while the strip overflows,
+   instead of the overlay bar that only appears mid-scroll. */
+@media (min-width: 700px) {
+  .photo-strip { scrollbar-width: thin; scrollbar-color: var(--gray50) transparent; }
+  .photo-strip::-webkit-scrollbar { height: 6px; }
+  .photo-strip::-webkit-scrollbar-thumb { background: var(--gray50); border-radius: 999px; }
+  .photo-strip::-webkit-scrollbar-track { background: transparent; }
+}
+.photo-add span {
+  display: flex; align-items: center; justify-content: center;
+  width: 44px; height: 44px; border-radius: 50%;
+  background: var(--gray10); font-size: 22px; line-height: 1;
+}
+.photo-add:hover { border-color: var(--gray50); }
+.photo-cell img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.photo-cell.dragging { opacity: .4; }
+/* Placeholder tile shown while a photo uploads. */
+.photo-cell.is-uploading { display: flex; align-items: center; justify-content: center; cursor: default; }
+.cell-spinner { width: 24px; height: 24px; border: 3px solid var(--gray20); border-top-color: var(--white); border-radius: 50%; animation: spin .8s linear infinite; }
+
+/* Upload progress — a bar + "X of N" counter, shown only while uploading. */
+.upload-progress { margin: 8px 0 0; }
+.upload-bar { height: 6px; background: var(--gray10); border-radius: 999px; overflow: hidden; margin-bottom: 6px; }
+.upload-bar span { display: block; height: 100%; width: 0; background: var(--accent); transition: width .25s ease; }
+.upload-count { font-size: 13px; color: var(--gray60); }
+/* Figma: the remove control is a 44×44 white-20% circle, 4px in from the
+   tile's top-right corner. */
+.photo-cell .rm {
+  position: absolute; top: 4px; right: 4px;
+  width: 44px; height: 44px; border-radius: 50%; background: rgba(217, 217, 217, 0.20);
+  color: #fff; border: none; cursor: pointer; font-size: 18px; line-height: 1;
+  display: flex; align-items: center; justify-content: center;
+}
+/* Caption under a field label (Pictures): 16px before the tiles. */
+.field-label + .logo-hint { margin-bottom: 16px; }
+/* Upload logo is a Button-Secondary pill (styled by .btn-secondary); the label
+   only needs to clip its hidden <input>. */
+.upload-btn { position: relative; overflow: hidden; }
+.upload-btn.wide { width: 100%; }
+
+.logo-row { display: flex; gap: 16px; align-items: center; margin-bottom: 16px; }
+.logo-wrap { position: relative; width: 80px; height: 80px; flex-shrink: 0; }
+/* Figma: the logo is a bare 80×80 image at radius 16 — no border. */
+.logo-preview { width: 80px; height: 80px; border-radius: 16px; background: var(--gray05) center/cover no-repeat; flex-shrink: 0; }
+.logo-wrap .rm { position: absolute; right: 6px; top: 6px; width: 24px; height: 24px; border-radius: 50%; background: rgba(0,0,0,.6); color: #fff; border: none; cursor: pointer; font-size: 14px; line-height: 1; }
+.logo-actions { display: flex; flex-direction: column; align-items: flex-start; gap: 8px; }
+
+/* ── leads ───────────────────────────────────────────────── */
+/* Request list — Figma "Chats" (1140:2933): 32 below the tabs, standalone gray05
+   cells at radius 16 with 4 between, an avatar + title/time + message glimpse, and
+   a gold dot for a request still awaiting a reply. No "Reply needed" pill, no Open
+   button — the whole cell opens the thread. */
+.leads-list { display: flex; flex-direction: column; gap: 4px; margin-top: 0; }
+/* Swipe-to-delete row (Figma 1984:5579: Button Secondary 118x48, #ff0000, r32).
+   The row itself stays on the page background — the card is white 5%, i.e. 95%
+   transparent, so a red row behind it would bleed straight through (that was the
+   all-red-cards bug). Instead the red Delete button hides behind the card and
+   is only revealed while dragging / when open. */
+/* Swipe-to-delete: the APPROVED interaction (v47) — the .lead-row itself carries
+   the red background (16px radius rounds both ends); the card slides left to
+   reveal it, with a transparent full-height Delete button sitting on the red.
+   No floating pill, no visibility toggling: the red is structural, so a plain
+   tap can never flash it.
+   The card uses --card (white 5% pre-composited over --bg), NOT the transparent
+   gray05: a 95%-transparent card lets the red row bleed straight through it,
+   which is exactly the stuck-all-red bug. Opaque composite, same Figma look. */
+.lead-row { position: relative; overflow: hidden; border-radius: 16px;
+  margin: 0 8px; background: transparent; }   /* Figma 1984:5579: the 386 card sits 8px inset in the 402 row */
+/* The Delete pill lives on the row behind the card. It must never show at
+   rest — not even as an antialiased fringe at the card's rounded corners — so it
+   only appears once a swipe starts (.swiping) or the row is open. */
+/* Figma 1140:2933 swiped state: the cell does NOT turn red. A small rounded
+   Delete pill (118x48, r32, --danger) sits at the row's right edge, vertically
+   centered. Hidden (opacity + pointer-events) until a swipe reveals it, so a
+   plain tap can never flash it. touch-action: manipulation kills any tap delay. */
+.lead-delete { position: absolute; right: 0; top: 50%; transform: translateY(-50%);
+  width: 118px; height: 48px; border: 0; border-radius: 32px;
+  background: var(--danger); cursor: pointer; touch-action: manipulation;
+  color: var(--white); font-family: "Lato"; font-weight: 700; font-size: 18px;
+  display: flex; align-items: center; justify-content: center;
+  opacity: 0; pointer-events: none; transition: opacity .18s ease; }
+.lead-row.swiping .lead-delete, .lead-row.open .lead-delete { opacity: 1; pointer-events: auto; }
+.lead-card { display: flex; align-items: center; gap: 12px; background: var(--card);
+  border: 0; border-radius: 16px; padding: 14px 12px; cursor: pointer; position: relative;
+  z-index: 1;
+  touch-action: pan-y; transition: transform .18s ease; }
+.lead-row.open .lead-card { transform: translateX(-134px); }   /* 118 pill + 16 gap (Figma 1140:2933) */
+/* Reviewed requests: no card background, title de-bolds to Poppins 300 17
+   (Figma 1984:5579 "Variant3"), badge gone. The Delete button behind the card
+   stays invisible at rest — with a transparent card it would otherwise ghost
+   through — and appears only once the swipe reveals it. */
+.lead-row.read .lead-card { background: transparent; }
+.lead-row.read .lead-title { font-family: "Poppins"; font-weight: 300; }
+/* Figma 1984:5579: 44px thumbnail, 12px radius. Holds the customer's photo when
+   the request has one (popped in async); otherwise the initial placeholder. */
+.lead-avatarwrap { position: relative; width: 44px; height: 44px; flex-shrink: 0; }
+.lead-avatar { width: 44px; height: 44px; border-radius: 12px; overflow: hidden;
+  background: var(--gray10); display: flex; align-items: center; justify-content: center;
+  font-family: "Lato"; font-weight: 700; font-size: 18px; color: var(--white); text-transform: uppercase; }
+.lead-avatar img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.lead-main { min-width: 0; flex: 1; display: flex; flex-direction: column; gap: 4px; }
+/* Figma list cell: the job (Lato Bold 17, #EBEAEC) over a timestamp (Poppins 300 14, white 60%). */
+.lead-title { font-family: "Lato"; font-weight: 700; font-size: 17px; line-height: 1.2; color: #EBEAEC;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.lead-sub { font-family: "Poppins"; font-weight: 300; font-size: 14px; color: rgba(255, 255, 255, 0.6);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+/* Figma 1984:5579 "Unread" badge: Ellipse 32 + Ellipse 31 — a 12px ring with the
+   8px gold dot concentric inside, i.e. the gold dot with a 2px border. The ring
+   is the card color so it separates the dot from the avatar photo; it straddles
+   the avatar's bottom-right corner (outer at -2,-2). */
+.lead-dot { position: absolute; right: -2px; bottom: -2px; width: 12px; height: 12px;
+  border-radius: 50%; background: var(--card); }
+.lead-dot::after { content: ""; position: absolute; left: 2px; top: 2px;
+  width: 8px; height: 8px; border-radius: 50%; background: var(--gold); }
+
+/* Paywall: an over-quota request looks like a regular unread row — customer
+   photo thumbnail, normal card — plus a small red lock badge on the avatar.
+   Tapping the row routes to Billing via the openThread() guard; the thread
+   itself never opens. */
+.lead-lockbadge { position: absolute; right: -4px; top: -4px; width: 20px; height: 20px;
+  border-radius: 50%; background: var(--danger); display: flex; align-items: center;
+  justify-content: center; box-shadow: 0 1px 4px rgba(0, 0, 0, 0.45); }
+.lead-lockbadge svg { display: block; }
+
+/* ── Open chat — Figma 2020:6841, built element-for-element ──────────────────
+   Header row: bare 44×44 back-arrow icon (no background) + job title (Lato 800/24)
+   over a timestamp (Poppins 300/14 @ 60%), 8px inset, 4px gap. Then the guidance
+   line (Poppins 400/14 @ 50%, left-aligned, 16px inset), the request as a
+   FIXED 320px blue-gradient container (r24, Poppins 300/17), and the photos stacked at
+   r16 with 8px between, inset 16. No card wrapper, no reply composer — the node
+   says to reply in the SMS thread the customer started. */
+.thread-head { display: flex; align-items: center; gap: 4px; margin: 0 8px 24px; }
+.thread-back { width: 44px; height: 44px; flex-shrink: 0; display: flex; align-items: center;
+  justify-content: center; padding: 0; background: none; border: none;
+  color: var(--white); cursor: pointer; }
+/* The node (2020:6841) shows a bare 24px arrow — no background, here or on any
+   other back button in the portal (billing/auth backs are already transparent). */
+/* Job title (Headline 3) over a timestamp (Body 2), per the Figma header. */
+.thread-titlewrap { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.thread-title {
+  margin: 0; font-family: "Lato"; font-weight: 800; font-size: 24px;
+  line-height: 1.33; color: var(--white);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.thread-time { font-family: "Poppins"; font-weight: 300; font-size: 14px; color: rgba(255,255,255,0.6); }
+/* "Send to top 5" — not in the node; hidden. */
+.thread-broadcast { flex-shrink: 0; background: var(--gray20); color: var(--white); border-radius: 32px;
+  padding: 4px 16px; font-family: "Lato"; font-weight: 700; font-size: 14px; white-space: nowrap; cursor: pointer; }
+.thread-sub { margin: 0 16px 24px; font-family: "Poppins"; font-weight: 400; font-size: 14px;
+  line-height: 1.5; color: rgba(255, 255, 255, 0.6); text-align: center; }
+.thread-sub strong { font-weight: 700; }
+/* Request + reply bubbles sit inset 16 (Figma Frame 36985 pad 0/16). */
+.thread-msgs { display: flex; flex-direction: column; gap: 16px; padding: 0 16px; }
+.bubble { padding: 16px; border-radius: 24px; font-family: "Poppins"; font-weight: 300;
+  font-size: 17px; line-height: 1.4; white-space: pre-wrap; word-break: break-word; }
+/* The incoming request (theirs): Figma 2020:6841 "Button Secondary" 320xFIXED,
+   radius 24, padding 16, linear gradient #0039F5 -> #3859C5 (top-right to
+   bottom-left, 232deg), Poppins Light 17 white. A business reply (mine) is a
+   right-aligned accent bubble. */
+.bubble.theirs { width: 320px; max-width: 100%; border-radius: 24px;
+  background: linear-gradient(232deg, var(--accent) 0%, var(--req-grad-end) 100%);
+  color: var(--white); }
+.bubble.mine { align-self: flex-end; max-width: 82%; background: var(--accent); color: var(--white); }
+/* Customer photos: 370 wide (16 inset), radius 16, 8px apart (Figma 2020:6841). */
+.thread-photos { display: flex; flex-direction: column; gap: 8px; margin: 8px 16px 0; }
+.thread-photo { width: 100%; aspect-ratio: 370 / 449; border-radius: 16px; object-fit: cover; cursor: zoom-in; }
+.thread-empty { color: var(--gray50); font-size: 14px; text-align: center; padding: 20px 0; }
+
+.composer { display: flex; gap: 10px; align-items: flex-end; padding-top: 14px; border-top: 1px solid var(--gray10); }
+.composer textarea { flex: 1; resize: none; }
+.composer .primary-btn { width: auto; flex-shrink: 0; }
+
+/* ── save ─────────────────────────────────────────────────── */
+/* Explicit Save (Figma Button_Primary): #0039F5, radius 32, pad 16/32, Lato 18.
+   Edits also autosave; this is the reassurance flush + confirmation. Centered
+   below the editor, above the Delete-account tail. */
+.save-row { display: flex; flex-direction: column; align-items: center; gap: 10px; margin-top: 32px; }
+/* Save → rule → Preview, stacked and centered with airy 64px gaps (Figma
+   1984:5663 tail). The rule spans the 354-wide content, inset 24. */
+.preview-section { display: flex; flex-direction: column; align-items: center; margin-top: 64px; }
+.save-div { align-self: stretch; border: 0; border-top: 1px solid var(--gray20); margin: 0 24px 64px; }
+.save-btn {
+  background: var(--accent); color: var(--white);
+  border: 0; border-radius: 32px;
+  font-family: "Lato", sans-serif; font-weight: 700; font-size: 18px;
+  padding: 13px 32px; cursor: pointer;
+  transition: filter .15s ease, opacity .15s ease;
+}
+.save-btn:hover { filter: brightness(1.08); }
+.save-btn:disabled { opacity: .6; cursor: default; }
+#saveHint { text-align: center; }
+
+/* Shown only when a save fails. */
+.save-bar { position: sticky; bottom: 0; display: flex; align-items: center; justify-content: flex-end; gap: 14px; padding: 14px 0; background: linear-gradient(180deg, transparent, var(--bg) 40%); }
+
+/* ── misc ────────────────────────────────────────────────── */
+/* Licensed / Insured (Figma node 1984:5663 "Checkbox"): a 44px tap target holding
+   a 22.29px box with 5.14px radius. Off = transparent with a white-20% hairline
+   (matches the input borders); on = accent fill + white check. The native input
+   stays for JS/focus; the label does the clicking. Label starts at the frame's
+   edge (0 gap); the box is centered in its 44px, giving an 11px visual gap. */
+.checkbox { position: relative; display: inline-flex; align-items: center; cursor: pointer;
+  font-family: "Poppins", sans-serif; font-weight: 300; font-size: 17px; color: var(--white); }
+.checkbox input[type="checkbox"] { position: absolute; opacity: 0; pointer-events: none; margin: 0; }
+.checkbox .tickbox { width: 44px; height: 44px; display: inline-flex; align-items: center;
+  justify-content: center; flex-shrink: 0; }
+.checkbox .tickbox .box { width: 22.29px; height: 22.29px; border-radius: 5.14px;
+  border: 1px solid var(--gray20); box-sizing: border-box;
+  display: inline-flex; align-items: center; justify-content: center; }
+.checkbox .tickbox .box svg { opacity: 0; display: block; }
+.checkbox input[type="checkbox"]:checked ~ .tickbox .box { background: var(--accent); border-color: var(--accent); }
+.checkbox input[type="checkbox"]:checked ~ .tickbox .box svg { opacity: 1; }
+.checkbox input[type="checkbox"]:focus-visible ~ .tickbox .box { outline: 2px solid var(--accent); outline-offset: 2px; }
+/* "per hour" hugs the right of the service foot rather than stretching. */
+.checkbox.per-hour { flex: 0 0 auto; }
+.spinner { width: 32px; height: 32px; border: 3px solid var(--gray20); border-top-color: var(--white); border-radius: 50%; animation: spin .8s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+
+.portal-footer { display: flex; gap: 20px; justify-content: center; align-items: center; padding: 24px; border-top: 1px solid var(--gray10); font-size: 12.5px; color: var(--gray50); flex-wrap: wrap; }
+.portal-footer a { color: var(--gray50); text-decoration: none; }
+.portal-footer a:hover { color: var(--white); }
+
+/* ── billing ─────────────────────────────────────────────── */
+.billing-head { margin: 0 0 14px; font-size: 20px; display: flex; align-items: center; gap: 10px; }
+.billing-body { color: var(--gray60); font-size: 15px; line-height: 1.55; margin: 14px 0 20px; }
+
+/* Free-lead meter — the one progress bar left in the portal (readiness is now a
+   stat card, as in the app). Turns gold at the limit rather than reading as a
+   completed task: running out of free leads is a prompt, not an achievement. */
+.meter { height: 6px; background: var(--gray10); border-radius: 999px; overflow: hidden; margin-bottom: 10px; }
+.meter span { display: block; height: 100%; width: 0; background: var(--accent); transition: width .4s ease; }
+.meter span.is-full { background: var(--gold); }
+
+.price-row { display: flex; align-items: baseline; gap: 8px; margin-bottom: 16px; }
+.price { font-size: 34px; font-weight: 800; letter-spacing: -0.5px; }
+
+/* Auto-renewal disclosure — deliberately at body size and full contrast, not
+   "fineprint". California's ARL requires these terms be clear and conspicuous
+   and in visual proximity to the consent control below. Do not shrink or gray. */
+.renewal-terms { font-size: 15px; color: var(--white); line-height: 1.5;
+  border: 1px solid var(--gray20); border-radius: 12px; padding: 14px 16px; margin-bottom: 14px; }
+.renewal-terms ul { margin: 8px 0 0; padding-left: 18px; }
+.renewal-terms li { margin: 4px 0; }
+.consent { display: flex; gap: 10px; align-items: flex-start; font-size: 14px;
+  color: var(--gray60); line-height: 1.45; margin-bottom: 16px; cursor: pointer; }
+.consent input { margin-top: 2px; width: 18px; height: 18px; flex: none; accent-color: var(--accent); }
+.consent a { color: var(--white); }
+
+.pill { font-size: 11px; font-weight: 700; padding: 3px 10px; border-radius: 999px; font-family: "Lato"; }
+.pill.ok { background: rgba(39, 200, 64, .14); color: var(--green); }
+.pill.warn { background: rgba(212, 166, 0, .18); color: var(--gold); }
+
+.primary-btn.wide, .ghost-btn.wide, .btn-secondary.wide { width: 100%; }
+
+/* ── menu overlay (Figma 2021:10043) ──────────────────────────
+   A full-screen sheet that animates in over the UI: wordmark + ✕ on top, then
+   Sign out / Billing / Delete account as big centered rows, 64 apart, split by
+   white-20% rules. */
+.menu-overlay {
+  position: fixed; inset: 0; z-index: 50;
+  background: var(--bg);
+  display: flex; flex-direction: column;
+  overflow-y: auto;
+  animation: menuIn .22s ease;
+}
+@keyframes menuIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
+.menu-list {
+  width: 100%; max-width: 402px; margin: 64px auto 0;
+  display: flex; flex-direction: column; gap: 64px;
+  padding: 0 24px;
+}
+.menu-item {
+  background: none; border: 0; padding: 0; width: 100%; cursor: pointer;
+  font-family: "Lato", sans-serif; font-weight: 800; font-size: 24px;
+  color: var(--white); text-align: center;
+  transition: color .15s ease;
+}
+.menu-item:hover { color: var(--gray60); }
+.menu-div { border: 0; border-top: 1px solid var(--gray20); margin: 0; }
+
+/* Destructive confirmation modal (account deletion). Centered card on a dimmed
+   backdrop — the same card treatment as .auth-card (white 5%, radius 32).
+   The confirm is the red --danger (Figma delete red); Cancel stays a quiet
+   underlined text button so the destructive choice carries all the weight. */
+.modal-overlay {
+  position: fixed; inset: 0; z-index: 60;
+  background: rgba(0, 0, 0, 0.6);
+  display: flex; align-items: center; justify-content: center;
+  padding: 24px;
+  animation: menuIn .22s ease;
+}
+.modal-card {
+  width: 100%; max-width: 386px;
+  background: var(--card); /* SOLID — the menu behind must not bleed through */
+  border: none; border-radius: 32px;
+  padding: 24px 16px;
+  text-align: center;
+}
+/* 16px between the stacked modal buttons (Confirm Deletion / Cancel). */
+.modal-card .primary-btn + .primary-btn { margin-top: 16px; }
+.modal-title {
+  font-family: "Lato", sans-serif; font-weight: 800; font-size: 24px; line-height: 1.2;
+  color: var(--white); margin: 0 0 16px;
+}
+.modal-body {
+  font-family: "Poppins", sans-serif; font-weight: 400; font-size: 14px; line-height: 1.5;
+  color: rgba(255, 255, 255, 0.6); margin: 0 0 24px;
+}
+/* Complete-removal warning: white 100% so the "nothing remains" message
+   can't be missed. */
+.delete-highlight { color: #fff; font-weight: 700; }
+/* Destructive-modal buttons: the SAFE choice is the most highlighted — Cancel is
+   a big solid light button. Confirm Deletion stays red but steps back to a red
+   outline, so the eye lands on Cancel first. */
+.light-btn {
+  background: var(--white);
+  color: var(--bg);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+}
+.light-btn:hover { transform: translateY(-1px); box-shadow: 0 12px 32px rgba(0, 0, 0, 0.45); }
+.light-btn:active { transform: translateY(0); }
+.danger-btn {
+  background: transparent;
+  color: var(--danger);
+  border: 1px solid var(--danger);
+  box-shadow: none;
+  margin-top: 12px;
+}
+.danger-btn:hover { transform: translateY(-1px); box-shadow: none; background: rgba(255, 0, 0, 0.08); }
+.danger-btn:active { transform: translateY(0); }
+
+/* Unified inbox: hide the business switcher chips. */
+.biz-switcher { display: none !important; }
+
+/* Figma 2020:6841 — no Send to top 5 button on thread view. */
+.thread-broadcast { display: none !important; }
+
+/* ── Billing — Figma 2056:12416 (landing) / 2056:12052 (active) ────────── */
+/* Figma 2056:12052/12416: title sits in Frame 36992 with 16px horizontal
+   inset (body/button/caption use 24px). Normal text flow — NOT flex, so the
+   space between "Subscription" and the green "active" stays a regular space. */
+.billing-title-wrap { padding: 0 16px; }
+.billing-title {
+  /* h2 token: Lato 800 24px, white. Figma: textAlignHorizontal CENTER. */
+  font-family: "Lato", sans-serif; font-weight: 800; font-size: 24px;
+  line-height: 1.2; color: var(--white); text-align: center;
+  margin: 0 0 16px;
+}
+.billing-body-wrap { padding: 0 24px; }
+/* Figma 2056:12052: the word "active" in "Subscription active" is green.
+   #27c840 is the node value verbatim — not in design/tokens.json (token gap). */
+.text-active-green { color: #27c840; }
+.billing-avatars {
+  /* Figma "Followed-by": 105x32 group, CENTERED. Title->avatars 16px, avatars->body 16px. */
+  display: flex; align-items: center; justify-content: center;
+  margin: 0 0 16px;
+}
+.billing-avatars span {
+  width: 32px; height: 32px; border-radius: 50%;
+  background: var(--gray20);
+  background-size: cover;
+  background-position: center;
+  border: 2px solid #18191b;
+  margin-left: -8px; flex: none;
+}
+.billing-avatars span:nth-child(1) { background-image: url("../media/billing-avatars/avatar-1.png"); }
+.billing-avatars span:nth-child(2) { background-image: url("../media/billing-avatars/avatar-2.png"); }
+.billing-avatars span:nth-child(3) { background-image: url("../media/billing-avatars/avatar-3.png"); }
+.billing-avatars span:nth-child(4) { background-image: url("../media/billing-avatars/avatar-4.png"); }
+.billing-avatars span:first-child { margin-left: 0; }
+.billing-lead {
+  /* Figma body: Poppins 400 14px, white, 21px line-height. CENTER aligned. 32px to button. */
+  font-family: "Poppins", sans-serif; font-weight: 400; font-size: 14px;
+  line-height: 1.5; color: var(--white); text-align: center;
+  margin: 0 0 32px;
+}
+.billing-caption {
+  /* Figma caption under the CTA: Poppins 400 14px, white, centered. 32px below button. */
+  font-family: "Poppins", sans-serif; font-weight: 400; font-size: 14px;
+  line-height: 1.5; color: var(--white); text-align: center;
+  margin: 32px 0 0;
+}
+/* Landing: button->caption is 16px (Figma 2056:12416). Active: 32px (Figma 2056:12052). */
+.billing-cta + .billing-caption { margin-top: 16px; }
+/* Billing background (Figma 2056:12416 "Frame 37003"): amber glow (#ffac36)
+   at the top fading into the dark --bg. The Figma layers three gradients
+   over a 402x498 frame; this is the visual equivalent in a single layer. */
+/* Figma 2056:12052/12416: root is solid #131315. Frame 37003 (amber gradient)
+   has visible=False in the node — it must NOT be rendered. */
+#billingView { background: #131315; }
+.billing-cta {
+  /* Figma Subscribe: 52 tall, blue gradient, radius 32, Lato 700 17px. 32px above. */
+  min-height: 52px; font-size: 17px; margin-top: 32px;
+}
+.arl-box {
+  /* California ARL §17602: the auto-renewal terms must be clear and
+     conspicuous and in visual proximity to the consent mechanism. The Figma
+     node covers renewal in the checkbox label; this box adds the two
+     disclosures the node omits: the amount charged TODAY and HOW to cancel. */
+  background: var(--gray05);
+  border: 1px solid var(--gray10);
+  border-radius: 16px;
+  padding: 16px;
+  margin: 20px 0;
+  font-size: 14px; line-height: 1.5; color: var(--white);
+}
+.arl-box p { margin: 0 0 8px; }
+.arl-box ul { margin: 0; padding-left: 18px; }
+.arl-box li { margin: 4px 0; }
+/* Billing email field uses the standard .field-label + input styles (Figma
+   "Regular" field: 64 tall, 16 radius, white hairline — already in the
+   design system). Space it from the ARL box. */
+.billing-lead + .field-label { margin-top: 0; }

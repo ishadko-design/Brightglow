@@ -9,22 +9,21 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, interactive-widget=resizes-content">
   <title>Brightglow for Business — manage your page</title>
   <meta name="description" content="Claim and manage your Brightglow business page — your services and prices, photos of your work, and the job requests customers send you.">
-  <meta name="theme-color" content="#faf1df">
+  <meta name="theme-color" content="#131315">
   <meta name="robots" content="noindex">
-  <link rel="icon" type="image/png" href="../favicon.png">
-  <link rel="apple-touch-icon" href="../apple-touch-icon.png">
-  <link rel="stylesheet" href="../biz/portal.css?v=79">
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Newsreader:opsz,wght@6..72,400..800&family=Fraunces:opsz,wght@9..144,500..900&family=Instrument+Serif:ital@0;1&family=DM+Serif+Display:ital@0;1&family=Archivo:wght@500..900&family=Bricolage+Grotesque:opsz,wght@12..96,500..800&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="v5-theme.css?v=1">
+  <link rel="icon" type="image/png" href="../../favicon.png">
+  <link rel="apple-touch-icon" href="../../apple-touch-icon.png">
+  <link rel="stylesheet" href="../portal.css">
+  <link rel="stylesheet" href="../../v5-theme.css?v=1">
 
 </head>
 <body class="portal">
+<div class="live-preview-badge" style="position:fixed;top:10px;left:50%;transform:translateX(-50%);z-index:100;background:rgba(24,20,12,.88);color:#ffd98a;font:700 10.5px/1 Inter,system-ui,sans-serif;letter-spacing:.14em;padding:8px 14px;border-radius:999px;border:1px solid rgba(212,166,0,.35);white-space:nowrap;">LIVE PREVIEW · REAL SIGN-IN · STAGING ONLY</div>
+
   <header class="topbar">
     <div class="topbar-inner">
-      <a class="brand" href="../index.html">
-        <img class="appicon" src="../media/appicon.png" alt="">
+      <a class="brand" href="../../index.html">
+        <img class="appicon" src="../../media/appicon.png" alt="">
         <span>Brightglow</span>
       </a>
       <div class="topbar-actions">
@@ -64,7 +63,7 @@
            have no email for. -->
       <div id="phoneStep" class="auth-step" hidden>
         <div class="auth-hero">
-          <h2 class="card-title">Sign up</h2>
+          <h2 class="card-title">Sign in</h2>
           <p class="auth-sub">
             Enter the phone customers call or text you on. We'll text a 6-digit code —
             no password. Only that number can manage the page.
@@ -85,7 +84,7 @@
            matched, or whose phone we never recorded. -->
       <div id="emailStep" class="auth-step" hidden>
         <div class="auth-hero">
-          <h2 class="card-title">Sign up</h2>
+          <h2 class="card-title">Sign in</h2>
           <p class="auth-sub">
             Enter the email where you received your Brightglow request. We'll email a
             6-digit sign-in code — no password. Only that inbox can manage the page.
@@ -318,7 +317,7 @@
     <header class="topbar">
       <div class="topbar-inner">
         <span class="brand">
-          <img class="appicon" src="../media/appicon.png" alt="">
+          <img class="appicon" src="../../media/appicon.png" alt="">
           <span>Brightglow</span>
         </span>
         <div class="topbar-actions">
@@ -353,127 +352,12 @@
   </div>
 
   <footer class="portal-footer">
-    <a href="../business-terms.html">Business Terms</a>
-    <a href="../terms.html">Terms</a>
+    <a href="../../business-terms.html">Business Terms</a>
+    <a href="../../terms.html">Terms</a>
     <a href="mailto:hello@brightglow.co">hello@brightglow.co</a>
-    <span>© 2026 Brightglow Technologies LLC · Design preview V5 — not the live site. Mock data, no backend.</span>
+    <span>© 2026 Brightglow Technologies LLC</span>
   </footer>
 
-  
-<div class="fontbar" id="fontbar" aria-label="Preview controls">
-  <span class="fontbar-label">View</span>
-  <button data-v="signin" class="is-active">Sign in</button>
-  <button data-v="code">Code</button>
-  <button data-v="requests">Requests</button>
-  <button data-v="thread">Thread</button>
-  <span class="fontbar-sep"></span>
-  <span class="fontbar-label">Headline</span>
-  <button data-f="bricolage" style="font-family:'Bricolage Grotesque',sans-serif">Bricolage</button>
-  <button data-f="fraunces" style="font-family:'Fraunces',serif">Fraunces</button>
-  <button data-f="instrument" style="font-family:'Instrument Serif',serif">Instrument</button>
-  <button data-f="newsreader" class="is-active" style="font-family:'Newsreader',serif">Newsreader</button>
-  <button data-f="dmserif" style="font-family:'DM Serif Display',serif">DM Serif</button>
-  <button data-f="archivo" style="font-family:'Archivo',sans-serif">Archivo</button>
-</div>
-
-
-<script>
-(function(){
-"use strict";
-function el(id){ return document.getElementById(id); }
-function hide(n){ if(n) n.hidden = true; }
-function show(n){ if(n) n.hidden = false; }
-
-var LOCK_SVG = '<span class="lead-lock" title="Locked">'
-  + '<svg viewBox="0 0 20 20" width="20" height="20" aria-hidden="true">'
-  + '<circle cx="10" cy="10" r="9" fill="#ff3b30"/>'
-  + '<rect x="6.4" y="9" width="7.2" height="5.6" rx="1.4" fill="#fff"/>'
-  + '<path d="M7.6 9V7.4a2.4 2.4 0 0 1 4.8 0V9" fill="none" stroke="#fff" stroke-width="1.6"/>'
-  + "</svg></span>";
-
-var ROWS = [
-  { t:"Fix a faucet leak", s:"Today 2:14 PM · Opened", img:"slide-01-plumbing.jpg", unread:true,  locked:false },
-  { t:"Install a ceiling light", s:"Today 11:02 AM",   img:"slide-02-electrical.jpg", unread:true,  locked:false },
-  { t:"AC not blowing cold air", s:"Yesterday",        img:"slide-04-hvac.jpg",       unread:false, locked:false },
-  { t:"Detail my car inside and out", s:"Yesterday",   img:"slide-12-detailing.jpg",  unread:true,  locked:true  }
-];
-function row(r, i){
-  return '<div class="lead-row' + (r.unread ? "" : " read") + '" data-i="' + i + '">'
-    + '<button type="button" class="lead-delete" data-i="' + i + '">Delete</button>'
-    + '<div class="lead-card"><div class="lead-avatarwrap">'
-    + '<div class="lead-avatar"><img src="../media/slides/' + r.img + '" alt="" loading="lazy"></div>'
-    + (r.unread && !r.locked ? '<span class="lead-dot"></span>' : "")
-    + (r.locked ? LOCK_SVG : "")
-    + '</div><div class="lead-main"><div class="lead-title">' + r.t + '</div>'
-    + '<div class="lead-sub">' + r.s + '</div></div></div></div>';
-}
-
-function showView(name){
-  ["phoneStep","emailStep","codeStep"].forEach(function(id){ hide(el(id)); });
-  hide(el("authView")); hide(el("chatsView")); hide(el("tabs"));
-  hide(el("bootView")); hide(el("threadCard")); show(el("leadsCard"));
-  var navs = Array.prototype.slice.call(document.querySelectorAll("#fontbar button[data-v]"));
-  navs.forEach(function(b){ b.classList.toggle("is-active", b.getAttribute("data-v")===name); });
-  if(name==="signin"){ show(el("authView")); show(el("phoneStep")); }
-  else if(name==="code"){
-    show(el("authView")); show(el("codeStep"));
-    el("codeTarget").textContent = "+1 (415) 555-0132";
-  }
-  else if(name==="requests" || name==="thread"){
-    show(el("tabs")); show(el("chatsView"));
-    el("leadsList").innerHTML = ROWS.map(row).join("");
-    hide(el("leadsEmpty"));
-    if(name==="thread"){
-      hide(el("leadsCard")); show(el("threadCard"));
-      el("threadTitle").textContent = "Fix a faucet leak";
-      el("threadTime").textContent = "Today 2:14 PM · Opened";
-      el("threadSub").textContent = "Reply in the SMS thread the customer started.";
-      el("threadMsgs").innerHTML = '<div class="bubble theirs">Hi! My kitchen faucet won\u2019t stop dripping. '
-        + 'It\u2019s a Delta single-handle, about 6 years old. Can you give me a quote?</div>';
-      el("threadPhotos").innerHTML = '<img class="thread-photo" src="../media/slides/slide-01-plumbing.jpg" alt="">'
-        + '<img class="thread-photo" src="../media/slides/slide-08-appliances.jpg" alt="">';
-    }
-  }
-  scrollTo(0,0);
-}
-
-Array.prototype.slice.call(document.querySelectorAll("#fontbar button[data-v]"))
-  .forEach(function(b){ b.addEventListener("click", function(){ showView(b.getAttribute("data-v")); }); });
-
-/* headline font switcher */
-(function fonts(){
-  var btns = Array.prototype.slice.call(document.querySelectorAll("#fontbar button[data-f]"));
-  function set(f){
-    document.documentElement.setAttribute("data-font", f);
-    btns.forEach(function(b){ b.classList.toggle("is-active", b.getAttribute("data-f")===f); });
-    try{ localStorage.setItem("biz-headline-font", f); }catch(e){}
-  }
-  btns.forEach(function(b){ b.addEventListener("click", function(){ set(b.getAttribute("data-f")); }); });
-  var saved = null; try{ saved = localStorage.getItem("biz-headline-font"); }catch(e){}
-  set(saved && document.querySelector('#fontbar button[data-f="'+saved+'"]') ? saved : "newsreader");
-})();
-
-/* walk the auth flow like the real page (still mock — no backend) */
-el("phoneForm").addEventListener("submit", function(e){
-  e.preventDefault();
-  var v = el("phone").value.trim();
-  if (v) el("codeTarget").textContent = v;
-  showView("code");
-});
-el("authForm").addEventListener("submit", function(e){
-  e.preventDefault();
-  var v = el("email").value.trim();
-  if (v) el("codeTarget").textContent = v;
-  showView("code");
-});
-el("codeForm").addEventListener("submit", function(e){ e.preventDefault(); showView("requests"); });
-el("useEmailBtn").addEventListener("click", function(){ hide(el("phoneStep")); show(el("emailStep")); });
-el("usePhoneBtn").addEventListener("click", function(){ hide(el("emailStep")); show(el("phoneStep")); });
-el("restartBtn").addEventListener("click", function(){ showView("signin"); });
-
-showView("signin");
-})();
-</script>
-
+  <script type="module" src="../portal.js"></script>
 </body>
 </html>

@@ -1,0 +1,88 @@
+  /* Preview V5: light warm Newsreader theme over the dark portal system */
+  :root{
+    --bg:#faf1df;
+    --white:#131315;
+    --gray60:rgba(19,19,21,.60); --gray50:rgba(19,19,21,.50);
+    --gray20:rgba(19,19,21,.20); --gray10:rgba(19,19,21,.10); --gray05:rgba(19,19,21,.05);
+    --card:#ffffff;
+    --bg-secondary:#ffffff;
+    --input-border:1px solid rgba(101,78,20,.28);
+    --gold:#9a7300;
+    --headline:"Newsreader",Georgia,serif;
+  }
+
+  html[data-font="bricolage"]{ --headline:"Bricolage Grotesque","Inter",system-ui,sans-serif; }
+  html[data-font="fraunces"]{ --headline:"Fraunces",Georgia,serif; }
+  html[data-font="instrument"]{ --headline:"Instrument Serif",Georgia,serif; }
+  html[data-font="newsreader"]{ --headline:"Newsreader",Georgia,serif; }
+  html[data-font="dmserif"]{ --headline:"DM Serif Display",Georgia,serif; }
+  html[data-font="archivo"]{ --headline:"Archivo","Inter",system-ui,sans-serif; }
+
+  html{ color-scheme:light; }
+  body.portal{
+    background:linear-gradient(180deg,#fdf6e7 0%,#faf1df 45%,#f5e8cd 100%);
+    color:#131315;
+  }
+  /* signed-out amber wash, light version */
+  body.portal:has(#authView:not([hidden])){
+    background-color:#faf1df;
+    background-image:linear-gradient(212deg, rgba(212,166,0,.22) 0%, rgba(212,166,0,0) 45%);
+    background-repeat:no-repeat; background-position:top center; background-size:100% 900px;
+  }
+  .card-title,.thread-title,.section-head,.modal-title,.editor-head h1{
+    font-family:var(--headline); font-weight:600; letter-spacing:-0.01em;
+  }
+  html[data-font="instrument"] .card-title,html[data-font="instrument"] .thread-title,
+  html[data-font="instrument"] .section-head,html[data-font="instrument"] .modal-title,
+  html[data-font="dmserif"] .card-title,html[data-font="dmserif"] .thread-title,
+  html[data-font="dmserif"] .section-head,html[data-font="dmserif"] .modal-title{ font-weight:400; }
+  html[data-font="bricolage"] .card-title,html[data-font="bricolage"] .thread-title,
+  html[data-font="bricolage"] .section-head,html[data-font="bricolage"] .modal-title,
+  html[data-font="archivo"] .card-title,html[data-font="archivo"] .thread-title,
+  html[data-font="archivo"] .section-head,html[data-font="archivo"] .modal-title{ font-weight:800; }
+  .auth-card{ background:#ffffff; border:1px solid rgba(101,78,20,.16);
+    box-shadow:0 18px 44px rgba(101,78,20,.10); }
+  .auth-hero .auth-sub{ color:rgba(19,19,21,.62); }
+  .auth-card input{ background:#ffffff; border-color:rgba(101,78,20,.28); color:#131315; }
+  .auth-card input::placeholder{ color:rgba(19,19,21,.35); }
+  .auth-card input:focus{ border-color:#9a7300; }
+  .tab{ color:rgba(19,19,21,.55); }
+  .tab.is-active{ background:rgba(19,19,21,.08); color:#131315; }
+  .lead-title{ color:#131315; }
+  .lead-sub{ color:rgba(19,19,21,.55); }
+  .lead-card{ box-shadow:0 10px 26px rgba(101,78,20,.10); border:1px solid rgba(101,78,20,.10); }
+  .lead-row.read .lead-card{ box-shadow:none; }
+  .thread-sub{ color:rgba(19,19,21,.55); }
+  .modal-card{ background:#ffffff; color:#131315; border:1px solid rgba(101,78,20,.16); }
+  .modal-body{ color:rgba(19,19,21,.65); }
+  .billing-avatars span{ border-color:#ffffff; }
+  .linklike{ color:#9a7300; }
+  /* theme redefines --white as ink for light surfaces, but these three sit on
+     blue (--accent / the CTA gradient) and need white text (Figma: white). */
+  .primary-btn,.bubble.mine,.save-div .save-btn{ color:#ffffff; }
+  .menu-overlay{ background:rgba(250,241,223,.97); }
+  .lead-lock{ position:absolute; top:-5px; right:-5px; width:20px; height:20px; display:block; }
+  .portal-footer a{ color:rgba(19,19,21,.55); }
+
+  /* ---------- preview bar: view + headline font switcher ---------- */
+  .fontbar{
+    position:fixed; left:50%; bottom:16px; transform:translateX(-50%); z-index:60;
+    display:flex; align-items:center; gap:2px; max-width:94vw; overflow-x:auto;
+    background:rgba(24,20,12,.88); backdrop-filter:blur(12px); -webkit-backdrop-filter:blur(12px);
+    border:1px solid rgba(212,166,0,.35); border-radius:14px; padding:8px 10px;
+    box-shadow:0 12px 32px rgba(20,16,8,.35);
+    font-family:"Inter",system-ui,-apple-system,sans-serif;
+  }
+  .fontbar-label{
+    font-size:10.5px; font-weight:700; letter-spacing:.14em; text-transform:uppercase;
+    color:rgba(255,217,138,.8); padding:0 8px 0 4px; white-space:nowrap;
+  }
+  .fontbar button{
+    border:0; background:transparent; cursor:pointer; white-space:nowrap;
+    color:rgba(255,255,255,.62); font-size:14px; padding:7px 11px; border-radius:9px;
+    transition:background .2s, color .2s;
+  }
+  .fontbar button:hover{ color:#fff; background:rgba(255,255,255,.08); }
+  .fontbar button.is-active{ background:#d4a600; color:#191510; font-weight:600; }
+  .fontbar-sep{ width:1px; align-self:stretch; background:rgba(255,255,255,.14); margin:2px 6px; flex:none; }
+
