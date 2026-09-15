@@ -1,88 +1,174 @@
-  /* Preview V5: light warm Newsreader theme over the dark portal system */
-  :root{
-    --bg:#faf1df;
-    --white:#131315;
-    --gray60:rgba(19,19,21,.60); --gray50:rgba(19,19,21,.50);
-    --gray20:rgba(19,19,21,.20); --gray10:rgba(19,19,21,.10); --gray05:rgba(19,19,21,.05);
-    --card:#ffffff;
-    --bg-secondary:#ffffff;
-    --input-border:1px solid rgba(101,78,20,.28);
-    --gold:#9a7300;
-    --headline:"Newsreader",Georgia,serif;
-  }
+/* ════════════════════════════════════════════════════════════════════
+   Preview V5: light warm Newsreader theme — COMPLETE inversion of the biz
+   portal design system.
+   Covers the LIVE preview (production portal.css/js from origin/main) and the
+   V5 mock, which share this file. Nothing here touches production.
 
-  html[data-font="bricolage"]{ --headline:"Bricolage Grotesque","Inter",system-ui,sans-serif; }
-  html[data-font="fraunces"]{ --headline:"Fraunces",Georgia,serif; }
-  html[data-font="instrument"]{ --headline:"Instrument Serif",Georgia,serif; }
-  html[data-font="newsreader"]{ --headline:"Newsreader",Georgia,serif; }
-  html[data-font="dmserif"]{ --headline:"DM Serif Display",Georgia,serif; }
-  html[data-font="archivo"]{ --headline:"Archivo","Inter",system-ui,sans-serif; }
+   PART A — token map. Every color token in portal.css :root gets exactly one
+   light value, chosen by its primary semantic:
+     --white        #ffffff -> #131315            primary text on light surfaces
+     --gray60/50    white .6/.5 -> ink .6/.5     secondary / muted text
+     --gray20/10/05 white washes -> ink washes   hairlines, tracks, fills
+     --bg           #131315 -> #faf1df           page background (cream)
+     --card         #1F1F21 -> #ffffff            elevated cards
+     --bg-secondary dark fill -> #ffffff         input + topbar fill
+     --input-border white-20% hairline -> bronze-tinted ink hairline
+   Brand accents keep their values, except --gold which darkens #d4a600 ->
+   #9a7300 for legibility on cream (flagged token gap, same as before).
 
-  html{ color-scheme:light; }
-  body.portal{
-    background:linear-gradient(180deg,#fdf6e7 0%,#faf1df 45%,#f5e8cd 100%);
-    color:#131315;
-  }
-  /* signed-out amber wash, light version */
-  body.portal:has(#authView:not([hidden])){
-    background-color:#faf1df;
-    background-image:linear-gradient(212deg, rgba(212,166,0,.22) 0%, rgba(212,166,0,0) 45%);
-    background-repeat:no-repeat; background-position:top center; background-size:100% 900px;
-  }
-  .card-title,.thread-title,.section-head,.modal-title,.editor-head h1{
-    font-family:var(--headline); font-weight:600; letter-spacing:-0.01em;
-  }
-  html[data-font="instrument"] .card-title,html[data-font="instrument"] .thread-title,
-  html[data-font="instrument"] .section-head,html[data-font="instrument"] .modal-title,
-  html[data-font="dmserif"] .card-title,html[data-font="dmserif"] .thread-title,
-  html[data-font="dmserif"] .section-head,html[data-font="dmserif"] .modal-title{ font-weight:400; }
-  html[data-font="bricolage"] .card-title,html[data-font="bricolage"] .thread-title,
-  html[data-font="bricolage"] .section-head,html[data-font="bricolage"] .modal-title,
-  html[data-font="archivo"] .card-title,html[data-font="archivo"] .thread-title,
-  html[data-font="archivo"] .section-head,html[data-font="archivo"] .modal-title{ font-weight:800; }
-  .auth-card{ background:#ffffff; border:1px solid rgba(101,78,20,.16);
-    box-shadow:0 18px 44px rgba(101,78,20,.10); }
-  .auth-hero .auth-sub{ color:rgba(19,19,21,.62); }
-  .auth-card input{ background:#ffffff; border-color:rgba(101,78,20,.28); color:#131315; }
-  .auth-card input::placeholder{ color:rgba(19,19,21,.35); }
-  .auth-card input:focus{ border-color:#9a7300; }
-  .tab{ color:rgba(19,19,21,.55); }
-  .tab.is-active{ background:rgba(19,19,21,.08); color:#131315; }
-  .lead-title{ color:#131315; }
-  .lead-sub{ color:rgba(19,19,21,.55); }
-  .lead-card{ box-shadow:0 10px 26px rgba(101,78,20,.10); border:1px solid rgba(101,78,20,.10); }
-  .lead-row.read .lead-card{ box-shadow:none; }
-  .thread-sub{ color:rgba(19,19,21,.55); }
-  .modal-card{ background:#ffffff; color:#131315; border:1px solid rgba(101,78,20,.16); }
-  .modal-body{ color:rgba(19,19,21,.65); }
-  .billing-avatars span{ border-color:#ffffff; }
-  .linklike{ color:#9a7300; }
-  /* theme redefines --white as ink for light surfaces, but these three sit on
-     blue (--accent / the CTA gradient) and need white text (Figma: white). */
-  .primary-btn,.bubble.mine,.save-div .save-btn{ color:#ffffff; }
-  .menu-overlay{ background:rgba(250,241,223,.97); }
-  .lead-lock{ position:absolute; top:-5px; right:-5px; width:20px; height:20px; display:block; }
-  .portal-footer a{ color:rgba(19,19,21,.55); }
+   PART B — per-component repairs. portal.css mixes hardcoded light-on-dark
+   values (rgba(255,255,255,x), #fff, #131315, #18191b) and dual-semantic token
+   uses (e.g. --white as a *surface* in .preview-qr, or as *text on blue* in
+   .bubble.theirs). Each repair cites the portal.css line it corrects.
+   Selectors were audited against origin/main's portal.css + signin HTML.
+   ════════════════════════════════════════════════════════════════════ */
+:root{
+  --bg:#faf1df;
+  --white:#131315;
+  --gray60:rgba(19,19,21,.60); --gray50:rgba(19,19,21,.50);
+  --gray20:rgba(19,19,21,.20); --gray10:rgba(19,19,21,.10); --gray05:rgba(19,19,21,.05);
+  --card:#ffffff;
+  --bg-secondary:#ffffff;
+  --input-border:1px solid rgba(101,78,20,.28);
+  --gold:#9a7300;
+  --headline:"Newsreader",Georgia,serif;
+}
 
-  /* ---------- preview bar: view + headline font switcher ---------- */
-  .fontbar{
-    position:fixed; left:50%; bottom:16px; transform:translateX(-50%); z-index:60;
-    display:flex; align-items:center; gap:2px; max-width:94vw; overflow-x:auto;
-    background:rgba(24,20,12,.88); backdrop-filter:blur(12px); -webkit-backdrop-filter:blur(12px);
-    border:1px solid rgba(212,166,0,.35); border-radius:14px; padding:8px 10px;
-    box-shadow:0 12px 32px rgba(20,16,8,.35);
-    font-family:"Inter",system-ui,-apple-system,sans-serif;
-  }
-  .fontbar-label{
-    font-size:10.5px; font-weight:700; letter-spacing:.14em; text-transform:uppercase;
-    color:rgba(255,217,138,.8); padding:0 8px 0 4px; white-space:nowrap;
-  }
-  .fontbar button{
-    border:0; background:transparent; cursor:pointer; white-space:nowrap;
-    color:rgba(255,255,255,.62); font-size:14px; padding:7px 11px; border-radius:9px;
-    transition:background .2s, color .2s;
-  }
-  .fontbar button:hover{ color:#fff; background:rgba(255,255,255,.08); }
-  .fontbar button.is-active{ background:#d4a600; color:#191510; font-weight:600; }
-  .fontbar-sep{ width:1px; align-self:stretch; background:rgba(255,255,255,.14); margin:2px 6px; flex:none; }
+html[data-font="bricolage"]{ --headline:"Bricolage Grotesque","Inter",system-ui,sans-serif; }
+html[data-font="fraunces"]{ --headline:"Fraunces",Georgia,serif; }
+html[data-font="instrument"]{ --headline:"Instrument Serif",Georgia,serif; }
+html[data-font="newsreader"]{ --headline:"Newsreader",Georgia,serif; }
+html[data-font="dmserif"]{ --headline:"DM Serif Display",Georgia,serif; }
+html[data-font="archivo"]{ --headline:"Archivo","Inter",system-ui,sans-serif; }
 
+html{ color-scheme:light; }
+body.portal{
+  background:linear-gradient(180deg,#fdf6e7 0%,#faf1df 45%,#f5e8cd 100%);
+  color:#131315;
+}
+/* signed-out amber wash, light version */
+body.portal:has(#authView:not([hidden])){
+  background-color:#faf1df;
+  background-image:linear-gradient(212deg, rgba(212,166,0,.22) 0%, rgba(212,166,0,0) 45%);
+  background-repeat:no-repeat; background-position:top center; background-size:100% 900px;
+}
+.card-title,.thread-title,.section-head,.modal-title,.editor-head h1{
+  font-family:var(--headline); font-weight:600; letter-spacing:-0.01em;
+}
+html[data-font="instrument"] .card-title,html[data-font="instrument"] .thread-title,
+html[data-font="instrument"] .section-head,html[data-font="instrument"] .modal-title{ font-weight:400; }
+html[data-font="dmserif"] .card-title,html[data-font="dmserif"] .thread-title,
+html[data-font="dmserif"] .section-head,html[data-font="dmserif"] .modal-title{ font-weight:400; }
+html[data-font="bricolage"] .card-title,html[data-font="bricolage"] .thread-title,
+html[data-font="bricolage"] .section-head,html[data-font="bricolage"] .modal-title,
+html[data-font="archivo"] .card-title,html[data-font="archivo"] .thread-title,
+html[data-font="archivo"] .section-head,html[data-font="archivo"] .modal-title{ font-weight:800; }
+
+/* ── Buttons: ONE primary component everywhere ───────────────────────
+   Primary actions (sign-in CTAs, Save, Subscribe) share the Figma primary
+   button: 24° blue gradient, pill, Lato Bold, white text. portal.css gives
+   .save-btn its own flat-blue style; this unifies it. */
+.primary-btn{ color:#ffffff; }
+.save-btn{
+  background:linear-gradient(24deg,#0039f5 0%,#00218f 100%);
+  color:#ffffff; border:none; border-radius:999px;
+  box-shadow:0 8px 24px rgba(0,57,245,.35);
+  transition:transform .18s ease, box-shadow .3s ease, opacity .15s ease;
+}
+.save-btn:hover{ transform:translateY(-1px); box-shadow:0 12px 32px rgba(0,57,245,.5); }
+.save-btn:disabled{ opacity:.5; cursor:default; }
+/* .light-btn ("Cancel") is the *light* secondary: white fill, ink text. The
+   token inversion would make it a dark button; restore its light meaning. */
+.light-btn{
+  background:#ffffff; color:#131315;
+  border:1px solid rgba(19,19,21,.2);
+  box-shadow:0 8px 24px rgba(101,78,20,.12);
+}
+/* The preview button's icon is a hardcoded white SVG (stroke="#fff"
+   presentation attribute); on the light wash it needs ink. */
+#previewBtn svg{ stroke:#131315; }
+
+/* ── Auth ──────────────────────────────────────────────────────────── */
+.auth-card{ background:#ffffff; border:1px solid rgba(101,78,20,.16);
+  box-shadow:0 18px 44px rgba(101,78,20,.10); }
+/* portal.css hardcodes rgba(255,255,255,.6) for .auth-sub */
+.auth-hero .auth-sub{ color:rgba(19,19,21,.62); }
+/* portal.css hardcodes a white-20% border on auth inputs */
+.auth-card input{ background:#ffffff; border-color:rgba(101,78,20,.28); color:#131315; }
+.auth-card input::placeholder{ color:rgba(19,19,21,.35); }
+.auth-card input:focus{ border-color:#9a7300; }
+
+/* ── Tabs ──────────────────────────────────────────────────────────── */
+/* portal.css hardcodes rgba(255,255,255,.6) for .tab */
+.tab{ color:rgba(19,19,21,.55); }
+.tab.is-active{ background:rgba(19,19,21,.08); color:#131315; }
+
+/* ── Requests list ─────────────────────────────────────────────────── */
+.lead-card{ background:#ffffff; box-shadow:0 10px 26px rgba(101,78,20,.10);
+  border:1px solid rgba(101,78,20,.10); }
+/* portal.css hardcodes #EBEAEC for .lead-title and white-60 for .lead-sub */
+.lead-title{ color:#131315; }
+.lead-sub{ color:rgba(19,19,21,.55); }
+/* Read rows keep a card background on the light theme so the list reads as
+   cards. (Figma Variant3 has them transparent — flagged deviation.) */
+.lead-row.read .lead-card{ background:#ffffff; box-shadow:none; }
+/* Swipe-to-delete pill sits on --danger red: white text, not ink. */
+.lead-delete{ color:#ffffff; }
+
+/* ── Thread ────────────────────────────────────────────────────────── */
+/* Bubbles sit on blue: white text (the --white->ink inversion would make
+   them unreadable). portal.css sets color:var(--white) on both. */
+.bubble.theirs,.bubble.mine{ color:#ffffff; }
+/* portal.css hardcodes rgba(255,255,255,.6) for .thread-time and .thread-sub */
+.thread-time{ color:rgba(19,19,21,.55); }
+.thread-sub{ color:rgba(19,19,21,.55); }
+
+/* ── Settings ──────────────────────────────────────────────────────── */
+#editorView .card,.service-card{ background:#f5eddc; border:1px solid rgba(101,78,20,.12); }
+/* Toggle knob is a hardcoded var(--white) pill; keep it white on the
+   ink-20% track (Figma: white pill). */
+.toggle .knob{ background:#ffffff; }
+/* Photo remove × is hardcoded #fff on a light wash: needs ink. (The logo
+   remove × sits on a dark circle and correctly stays white.) */
+.photo-cell .rm{ color:#131315; }
+/* QR codes must stay black-on-white to scan — never the themed ink. */
+.preview-qr{ background:#ffffff; }
+
+/* ── Billing ───────────────────────────────────────────────────────── */
+/* portal.css hardcodes #billingView{background:#131315} (ID selector). */
+#billingView{ background:transparent; }
+/* Avatar rings are hardcoded #18191b; on cream they read as dark outlines. */
+.billing-avatars span{ border-color:#ffffff; }
+
+/* ── Menu + modal ──────────────────────────────────────────────────── */
+.menu-overlay{ background:rgba(250,241,223,.97); }
+.modal-card{ background:#ffffff; color:#131315; border:1px solid rgba(101,78,20,.16); }
+/* portal.css hardcodes rgba(255,255,255,.6) for .modal-body and #fff for
+   .delete-highlight */
+.modal-body{ color:rgba(19,19,21,.65); }
+.delete-highlight{ color:#131315; }
+
+.linklike{ color:#9a7300; }
+.portal-footer a{ color:rgba(19,19,21,.55); }
+
+/* ---------- preview bar: view + headline font switcher ---------- */
+.fontbar{
+  position:fixed; left:50%; bottom:16px; transform:translateX(-50%); z-index:60;
+  display:flex; align-items:center; gap:2px; max-width:94vw; overflow-x:auto;
+  background:rgba(24,20,12,.88); backdrop-filter:blur(12px); -webkit-backdrop-filter:blur(12px);
+  border:1px solid rgba(212,166,0,.35); border-radius:14px; padding:8px 10px;
+  box-shadow:0 12px 32px rgba(20,16,8,.35);
+  font-family:"Inter",system-ui,-apple-system,sans-serif;
+}
+.fontbar-label{
+  font-size:10.5px; font-weight:700; letter-spacing:.14em; text-transform:uppercase;
+  color:rgba(255,217,138,.8); padding:0 8px 0 4px; white-space:nowrap;
+}
+.fontbar button{
+  border:0; background:transparent; cursor:pointer; white-space:nowrap;
+  color:rgba(255,255,255,.62); font-size:14px; padding:7px 11px; border-radius:9px;
+  transition:background .2s, color .2s;
+}
+.fontbar button:hover{ color:#fff; background:rgba(255,255,255,.08); }
+.fontbar button.is-active{ background:#d4a600; color:#191510; font-weight:600; }
+.fontbar-sep{ width:1px; align-self:stretch; background:rgba(255,255,255,.14); margin:2px 6px; flex:none; }

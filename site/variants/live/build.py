@@ -19,7 +19,7 @@ from pathlib import Path
 
 WORKTREE = Path(__file__).resolve().parents[3]   # build.py -> live -> variants -> site -> root
 OUT = WORKTREE / "site" / "variants" / "live"
-THEME_VERSION = "1"
+THEME_VERSION = "2"
 
 
 def git_show(ref_path: str) -> str:
