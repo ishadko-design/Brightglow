@@ -131,12 +131,20 @@ function classificationCacheKey(category: string, description: string): string {
  *  (one per distinct job in the request — see llmClassifier.ts) AND the
  *  vehicle, all from one call. Empty jobs mean "keyword result stands" — the
  *  classifier degrades, never hard-fails. "none" outcomes are cached like hits
- *  so unmatchable text costs one call, not one per retry. */
+ *  so unmatchable text costs one call, not one per retry.
+ *
+ *  Every request (hit or miss) is also logged to classification_requests with
+ *  the caller's device_id, so "what people type" analytics can attribute —
+ *  and exclude — per device. Logging is best-effort and never fails the
+ *  request. */
 async function classifyLLMCached(
   category: string,
   description: string,
+  deviceId: string | null,
 ): Promise<Classification> {
   const key = classificationCacheKey(category, description);
+  let result: Classification | null = null;
+  let cacheHit = false;
 
   if (db) {
     try {
@@ -151,42 +159,62 @@ async function classifyLLMCached(
           : typeof data.job_type === "string" && data.job_type
           ? [{ jobType: data.job_type as string, detail: "" }]
           : [];
-        return {
+        result = {
           jobs,
           vehicle: v === "auto" || v === "moto" ? v : null,
           vertical: vert === "home" || vert === "auto" ? vert : null,
         };
+        cacheHit = true;
       }
     } catch (_) { /* ignore, fall through to a live call */ }
   }
 
-  // The pool is the WHOLE taxonomy, not the tapped category's slice: a request
-  // can span trades ("repair the siding and fix the roof"), and filtering to
-  // the category silently dropped every cross-trade job (2026-09-11 — the
-  // siding half of a siding+roof request priced $0). The tapped category
-  // travels as a prompt hint instead.
-  const pool = buildClassifierPool(JOB_TYPE_TAXONOMY, CATEGORY_GENERAL, "");
-  let result: Classification;
-  try {
-    result = await classifyWithLLM(pool, description, ANTHROPIC_API_KEY, category || undefined);
-  } catch (err) {
-    // Not cached: a transient API failure shouldn't pin "no match" for 24h.
-    console.error("pricing: LLM classification failed", err);
-    return { jobs: [], vehicle: null, vertical: null };
+  if (!result) {
+    // The pool is the WHOLE taxonomy, not the tapped category's slice: a request
+    // can span trades ("repair the siding and fix the roof"), and filtering to
+    // the category silently dropped every cross-trade job (2026-09-11 — the
+    // siding half of a siding+roof request priced $0). The tapped category
+    // travels as a prompt hint instead.
+    const pool = buildClassifierPool(JOB_TYPE_TAXONOMY, CATEGORY_GENERAL, "");
+    let classifiedOk = false;
+    try {
+      result = await classifyWithLLM(pool, description, ANTHROPIC_API_KEY, category || undefined);
+      classifiedOk = true;
+    } catch (err) {
+      // Not cached: a transient API failure shouldn't pin "no match" for 24h.
+      console.error("pricing: LLM classification failed", err);
+      result = { jobs: [], vehicle: null, vertical: null };
+    }
+    if (classifiedOk) {
+      console.log("pricing: llm-classified", JSON.stringify({ category, description, ...result }));
+
+      if (db) {
+        try {
+          await db.from("classification_cache").upsert({
+            cache_key: key,
+            job_type: result.jobs[0]?.jobType ?? null,
+            jobs: result.jobs,
+            vehicle: result.vehicle,
+            vertical: result.vertical,
+            created_at: new Date().toISOString(),
+          });
+        } catch (_) { /* ignore, cache write is best-effort */ }
+      }
+    }
   }
-  console.log("pricing: llm-classified", JSON.stringify({ category, description, ...result }));
 
   if (db) {
     try {
-      await db.from("classification_cache").upsert({
+      await db.from("classification_requests").insert({
+        device_id: deviceId,
+        category,
         cache_key: key,
-        job_type: result.jobs[0]?.jobType ?? null,
         jobs: result.jobs,
         vehicle: result.vehicle,
         vertical: result.vertical,
-        created_at: new Date().toISOString(),
+        cache_hit: cacheHit,
       });
-    } catch (_) { /* ignore, cache write is best-effort */ }
+    } catch (_) { /* ignore, request logging is best-effort */ }
   }
 
   return result;
@@ -226,6 +254,9 @@ Deno.serve(async (req) => {
   const category = payload.category;
   const description = typeof payload.description === "string" ? payload.description : "";
   const zip = typeof payload.zip === "string" ? payload.zip : undefined;
+  // Stable per-device id for request attribution (analytics_excluded_devices
+  // is the exclusion list). Optional: old apps don't send it.
+  const deviceId = typeof payload.device_id === "string" ? payload.device_id : null;
   // Auto & moto: the app's vehicle filter. "replace tires" is the same phrase
   // for a car (4 units) and a bike (2, different parts and labor), so this is
   // not recoverable from the description — see MOTO_VARIANTS in pricingEngine.
@@ -278,7 +309,7 @@ Deno.serve(async (req) => {
   // priced separately below. Empty = "none", the keyword result stands.
   let llmJobs: Array<{ entry: JobTypeEntry; description: string }> = [];
   if (ANTHROPIC_API_KEY && trimmedDesc.length >= 3) {
-    const llm = await classifyLLMCached(category, trimmedDesc);
+    const llm = await classifyLLMCached(category, trimmedDesc, deviceId);
     const generalEntries = Object.values(CATEGORY_GENERAL)
       .filter((e): e is NonNullable<typeof e> => e !== null);
     const universe = [...JOB_TYPE_TAXONOMY, ...generalEntries];
