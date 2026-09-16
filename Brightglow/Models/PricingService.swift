@@ -53,6 +53,9 @@ enum PricingService {
         if let zip { body["zip"] = zip }
         if let vehicle { body["vehicle"] = vehicle == .moto ? "moto" : "auto" }
         if fast { body["fast"] = true }
+        // Stable per-device id (Keychain-backed) for server-side request
+        // attribution; lets analytics exclude test devices. Optional server-side.
+        body["device_id"] = AnalyticsService.deviceID
 
         // Generous: the server may run a web-grounded estimate (a bounded web
         // search) before answering. The estimate loads asynchronously into the
