@@ -1,0 +1,69 @@
+/* ════════════════════════════════════════════════════════════════════
+   Brightglow — ONE shared design-token set (light theme).
+   Single source of truth for every page: consumer landing, /biz landing,
+   /biz portal + billing + settings, legal docs, local SEO pages, analytics.
+   Load this BEFORE any page stylesheet. Nothing else should define a raw
+   colour, font stack, or weight — reference these tokens instead.
+
+   Palette + type mirror the production light theme first shipped in
+   site/index.html and site/biz/v5-theme.css (cream #faf1df ground, ink
+   #131315 text, Bricolage Grotesque headlines, Inter body). --gold darkens
+   to --bronze on cream for legibility (documented token gap).
+   ════════════════════════════════════════════════════════════════════ */
+
+/* One place loads the type system for every page that links tokens.css. */
+@import url("https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500..800&family=Inter:wght@400;500;600;700&display=swap");
+
+:root {
+  /* ── Ground + surfaces ─────────────────────────────────────────── */
+  --bg:            #faf1df;            /* page ground — warm cream */
+  --bg-grad:       linear-gradient(180deg,#fdf6e7 0%,#faf1df 45%,#f5e8cd 100%);
+  --card:          #ffffff;            /* elevated cards, inputs, top bar */
+  --surface:       #f5eddc;            /* settings cards / inset panels */
+
+  /* ── Ink (text + lines), one opacity ramp ──────────────────────── */
+  --ink:           #131315;            /* primary text / on-light */
+  --ink-82:        rgba(19,19,21,.82);
+  --ink-70:        rgba(19,19,21,.70);
+  --ink-60:        rgba(19,19,21,.60);
+  --ink-55:        rgba(19,19,21,.55);
+  --ink-45:        rgba(19,19,21,.45);
+  --ink-30:        rgba(19,19,21,.30);
+  --ink-20:        rgba(19,19,21,.20);
+  --ink-10:        rgba(19,19,21,.10);
+  --ink-08:        rgba(19,19,21,.08);
+  --ink-05:        rgba(19,19,21,.05);
+
+  /* Bronze-tinted hairlines read warmer than flat ink on cream. */
+  --line:          rgba(101,78,20,.14);
+  --line-strong:   rgba(101,78,20,.28);
+
+  /* ── Brand accents (unchanged hues; --bronze = --gold on cream) ── */
+  --blue:          #0039f5;
+  --blue-2:        #2f5bff;            /* gradient mid */
+  --blue-deep:     #00218f;            /* gradient end / pressed */
+  --gold:          #d4a600;
+  --bronze:        #9a7300;            /* legible gold on cream */
+  --green:         #27c840;
+  --danger:        #ff0000;
+
+  /* Canonical primary-button gradient — identical on every CTA. */
+  --grad-blue:     linear-gradient(100deg,#0039f5 0%,#2f5bff 60%,#1a44d6 100%);
+
+  /* ── Type: one headline face, one body face ────────────────────── */
+  --headline:      "Bricolage Grotesque","Inter",system-ui,-apple-system,sans-serif;
+  --sans:          "Inter",system-ui,-apple-system,sans-serif;
+  --disp:          var(--headline);    /* display accents (wordmark, kickers) */
+  --cta:           var(--sans);         /* every button/CTA label — one font site-wide (Inter) */
+  --h1-weight:     800;
+  --h2-weight:     800;
+  --h3-weight:     700;
+
+  /* ── Radii ─────────────────────────────────────────────────────── */
+  --r-pill:        999px;
+  --r-lg:          32px;
+  --r-card:        24px;
+  --r:             22px;
+
+  color-scheme: light;
+}

@@ -22,17 +22,22 @@
    .bubble.theirs). Each repair cites the portal.css line it corrects.
    Selectors were audited against origin/main's portal.css + signin HTML.
    ════════════════════════════════════════════════════════════════════ */
+/* Pull in the one shared token set (colour + type). Loaded here so this file
+   is self-sufficient over portal.css regardless of who links it; the cream
+   --bg/--card/etc. land after portal.css's dark values and win. */
+@import url("../tokens.css?v=2");
+
+/* Map portal.css's legacy dark token names onto the shared light tokens, so
+   every portal.css rule that reads --white / --grayNN / --gold now resolves to
+   the one palette. --bg, --card, --headline and the weight tokens come straight
+   from tokens.css. */
 :root{
-  --bg:#faf1df;
-  --white:#131315;
-  --gray60:rgba(19,19,21,.60); --gray50:rgba(19,19,21,.50);
-  --gray20:rgba(19,19,21,.20); --gray10:rgba(19,19,21,.10); --gray05:rgba(19,19,21,.05);
-  --card:#ffffff;
-  --bg-secondary:#ffffff;
-  --input-border:1px solid rgba(101,78,20,.28);
-  --gold:#9a7300;
-  --headline:"Bricolage Grotesque","Inter",system-ui,sans-serif;
-  --h1-weight:800; --h2-weight:800; --h3-weight:700; /* site-wide headline weight tokens — same on every page */
+  --white:var(--ink);
+  --gray60:var(--ink-60); --gray50:var(--ink-55);
+  --gray20:var(--ink-20); --gray10:var(--ink-10); --gray05:var(--ink-05);
+  --bg-secondary:var(--card);
+  --input-border:1px solid var(--line-strong);
+  --gold:var(--bronze);
   --btn-soft:rgba(19,19,21,.16); /* soft glass button fill — ink-derived darker gray, with backdrop blur */
 }
 
@@ -41,7 +46,11 @@ html{ color-scheme:light; }
 body.portal{
   background:linear-gradient(180deg,#fdf6e7 0%,#faf1df 45%,#f5e8cd 100%);
   color:#131315;
+  font-family:var(--sans);   /* design-system body font (Inter); portal.css used Poppins */
 }
+/* elements that hard-code Poppins → the shared body font, so the whole portal
+   is Inter body + Bricolage headings like the rest of the site. */
+.checkbox, .consent, body.portal input, body.portal textarea, body.portal select{ font-family:var(--sans); }
 /* signed-out amber wash, light version */
 body.portal:has(#authView:not([hidden])){
   background-color:#faf1df;
@@ -72,6 +81,16 @@ h3,.lead-title{
    button: 24° blue gradient, pill, Lato Bold, white text. portal.css gives
    .save-btn its own flat-blue style; this unifies it. */
 .primary-btn{ color:#ffffff; }
+/* Pill radius on every portal CTA to match the landing buttons (999px), not
+   portal.css's 32px — one button shape site-wide. */
+.primary-btn,.light-btn,.save-btn,.auth-card .primary-btn{ border-radius:var(--r-pill); }
+
+/* CTA typeface — unify every portal button to the landing CTA font
+   (Bricolage Grotesque, --headline) so buttons read as one system across the
+   whole site instead of portal.css's Lato. */
+.primary-btn,.save-btn,.light-btn,.ghost-btn,.btn-secondary,.sub-btn,.auth-card button,.menu-item{
+  font-family:var(--cta);
+}
 
 /* ── Soft glass buttons (tokenized) ──────────────────────────────────
    .btn-secondary pills ("Add service", "Delete", "Preview as customer",
@@ -107,6 +126,13 @@ h3,.lead-title{
 /* The preview button's icon is a hardcoded white SVG (stroke="#fff"
    presentation attribute); on the light wash it needs ink. */
 #previewBtn svg{ stroke:#131315; }
+
+/* ── Header: identical to the landing header across the whole site ────
+   portal.css gives .brand a Lato wordmark + a 48px icon; match the landing
+   (Bricolage wordmark, 40px icon / 44px ≥700) so the header never jumps
+   between the marketing pages and the portal. */
+.brand{ font-family:var(--headline); font-weight:var(--h1-weight); font-size:22px; }
+.brand .appicon{ width:40px; height:40px; border-radius:10px; } /* identical to every other page — no responsive bump */
 
 /* ── Auth ──────────────────────────────────────────────────────────── */
 .auth-card{ background:#ffffff; border:1px solid rgba(101,78,20,.16);
@@ -156,6 +182,26 @@ h3,.lead-title{
 #billingView{ background:transparent; }
 /* Avatar rings are hardcoded #18191b; on cream they read as dark outlines. */
 .billing-avatars span{ border-color:#ffffff; }
+/* Billing header: 32px of breathing room above the "← Billing" title. */
+#billingView .editor-head{ padding-top:32px; }
+
+/* Consent checkbox: portal.css renders it as a plain native box (.consent
+   input). Restyle it to the settings/profile tickbox (.checkbox .box) — same
+   22.29px square, 5.14px radius, ink hairline, accent fill + white check when
+   ticked — so every checkbox on the site is one control. */
+.consent input{
+  -webkit-appearance:none; appearance:none;
+  width:22.29px; height:22.29px; border-radius:5.14px;
+  border:1px solid var(--gray20); box-sizing:border-box; background:transparent;
+  margin-top:2px; flex:none; position:relative; cursor:pointer;
+}
+.consent input:checked{ background:var(--accent); border-color:var(--accent); }
+.consent input:checked::after{
+  content:""; position:absolute; left:50%; top:50%; transform:translate(-50%,-50%);
+  width:11px; height:9px;
+  background:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 11 9' width='11' height='9'><path d='M1.5 4.6l2.7 2.7L9.5 1.5' fill='none' stroke='%23fff' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'/></svg>") center/contain no-repeat;
+}
+.consent input:focus-visible{ outline:2px solid var(--accent); outline-offset:2px; }
 
 /* ── Menu + modal ──────────────────────────────────────────────────── */
 .menu-overlay{ background:rgba(250,241,223,.97); }

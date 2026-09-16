@@ -1,46 +1,18 @@
-/* Brightglow site — tokens mirrored from design/tokens.json,
-   landing layout from Figma node 923:2736 (402px mobile frame) */
+/* Brightglow site — colours + type come from the shared token set
+   (tokens.css, loaded before this file). Layout mirrors Figma node
+   923:2736 (402px mobile frame). Light theme. */
 
-@font-face {
-  font-family: "Lato";
-  src: url("fonts/Lato-Heavy.ttf") format("truetype");
-  font-weight: 800;
-  font-display: swap;
-}
-@font-face {
-  font-family: "Lato";
-  src: url("fonts/Lato-Bold.ttf") format("truetype");
-  font-weight: 700;
-  font-display: swap;
-}
-@font-face {
-  font-family: "Lato";
-  src: url("fonts/Lato-Regular.ttf") format("truetype");
-  font-weight: 400;
-  font-display: swap;
-}
-@font-face {
-  font-family: "Poppins";
-  src: url("fonts/Poppins-Light.ttf") format("truetype");
-  font-weight: 300;
-  font-display: swap;
-}
-@font-face {
-  font-family: "Poppins";
-  src: url("fonts/Poppins-Regular.ttf") format("truetype");
-  font-weight: 400;
-  font-display: swap;
-}
-
+/* Legacy token aliases → shared tokens. Keeps existing `var(--white)`,
+   `var(--grayNN)`, `var(--accent)`, `var(--orange)` uses (here and in the
+   local SEO pages' inline styles) resolving to the one light palette. */
 :root {
-  --white: #ffffff;
-  --gray50: rgba(255, 255, 255, 0.5);
-  --gray20: rgba(255, 255, 255, 0.2);
-  --gray10: rgba(255, 255, 255, 0.1);
-  --bg: #131315;
-  --accent: #0039f5;
-  --orange: #d4a600;
-  --radius: 32px;
+  --white:  var(--ink);
+  --gray50: var(--ink-55);
+  --gray20: var(--ink-20);
+  --gray10: var(--ink-10);
+  --accent: var(--blue);
+  --orange: var(--gold);
+  --radius: var(--r-lg);
   /* landing scale unit: all Figma px multiply by this */
   --s: 1px;
 }
@@ -52,7 +24,6 @@
 }
 
 html {
-  color-scheme: dark;
   /* the landing's decorative float cards bleed past the viewport edges by
      design; clip horizontal overflow at the root so the page can't scroll
      sideways. body's overflow-x alone doesn't reach the viewport scroll. */
@@ -61,28 +32,28 @@ html {
 
 body {
   background: var(--bg);
-  color: var(--white);
-  font-family: "Poppins", system-ui, sans-serif;
-  font-weight: 300;
+  color: var(--ink);
+  font-family: var(--sans);
+  font-weight: 400;
   font-size: 17px;
   line-height: 1.6;
   -webkit-font-smoothing: antialiased;
 }
 
 h1, h2, h3, h4 {
-  font-family: "Lato", system-ui, sans-serif;
+  font-family: var(--headline);
   line-height: 1.15;
 }
 
 a {
-  color: var(--white);
+  color: var(--ink);
 }
 
 .wordmark {
-  font-family: "Lato", system-ui, sans-serif;
-  font-weight: 800;
+  font-family: var(--disp);
+  font-weight: var(--h1-weight);
   font-size: 24px;
-  color: var(--white);
+  color: var(--ink);
   text-decoration: none;
   letter-spacing: -0.01em;
 }
@@ -90,7 +61,7 @@ a {
 /* ---------- landing ---------- */
 
 body.landing {
-  background: #000;
+  background: var(--bg);
   /* Figma-exact scale: 1 Figma unit = one 402nd of the viewport width, so every
      element (H1, phone, CTA, subtext) renders at its true Figma size. */
   --s: calc(100vw / 402);
@@ -107,9 +78,9 @@ body.landing {
   body.landing { --s: 1.25px; }
 }
 
-/* warm ambient gradient — from Figma node 1367:3260: an amber bloom sweeping
-   down from the upper-right into near-black. Fixed so it stays a calm backdrop
-   while the page scrolls. */
+/* warm ambient gradient — an amber bloom sweeping down from the upper-right,
+   the light-theme wash shared with the /biz signed-out view. Fixed so it stays
+   a calm backdrop while the page scrolls. */
 body.landing::before {
   content: "";
   position: fixed;
@@ -117,8 +88,8 @@ body.landing::before {
   z-index: -1;
   pointer-events: none;
   background:
-    linear-gradient(212deg, rgba(255, 172, 54, 0.45) 0%, rgba(10, 10, 11, 0) 42%),
-    radial-gradient(60% 40% at 88% 60%, rgba(180, 120, 40, 0.18), transparent 70%);
+    linear-gradient(212deg, rgba(212, 166, 0, 0.22) 0%, rgba(250, 241, 223, 0) 45%),
+    radial-gradient(60% 40% at 88% 60%, rgba(212, 166, 0, 0.10), transparent 70%);
 }
 
 .column {
@@ -155,20 +126,19 @@ body.landing::before {
 }
 
 .topbar .wordmark {
-  font-family: "Lato", system-ui, sans-serif;
-  font-weight: 800;
+  font-family: var(--disp);
+  font-weight: var(--h1-weight);
   font-size: 22px;
   line-height: 1;
   letter-spacing: -0.01em;
-  color: var(--white);
+  color: var(--ink);
 }
 
 /* Larger fixed header on desktop/tablet — still identical across both landings. */
 @media (min-width: 700px) {
-  .topbar { padding: 20px 28px 0; gap: 20px; }
+  .topbar { padding: 18px 40px 0; gap: 20px; }
   .topbar .logo { gap: 12px; }
-  .topbar .appicon { width: 48px; height: 48px; border-radius: 12px; }
-  .topbar .wordmark { font-size: 26px; }
+  /* logo lockup identical at every width + across pages — no responsive bump */
 }
 
 /* Consumer landing header: FIXED size, not --s-scaled. Scaling it with the hero's
@@ -177,18 +147,19 @@ body.landing::before {
    business site's header (40px icon / 22px wordmark / 16-20px padding), so the two
    headers match and neither jumps when navigating between the sites. */
 
-/* H1 — Figma node 1599:5807: Lato Regular 44 / 52.8, centred, below the header */
+/* H1 — Figma node 1599:5807: display headline 44 / 52.8, centred, below the header */
 .hero-h1 {
   padding-top: calc(52 * var(--s));
   text-align: center;
-  font-family: "Lato", system-ui, sans-serif;
-  font-weight: 400;
+  font-family: var(--headline);
+  font-weight: var(--h1-weight);
   font-size: calc(44 * var(--s));
   line-height: calc(52.8 * var(--s));
-  color: var(--white);
+  letter-spacing: -0.02em;
+  color: var(--ink);
 }
 
-/* App Store button — Figma "Frame 36953" (y353): 283×52, #0039F5→#00218F,
+/* App Store button — Figma "Frame 36953" (y353): 283×52, blue gradient,
    32 below the subtext. */
 .appstore-btn {
   margin: calc(32 * var(--s)) auto 0;
@@ -199,23 +170,24 @@ body.landing::before {
   width: calc(283 * var(--s));
   max-width: 100%;
   height: calc(52 * var(--s));
-  border-radius: var(--radius);
-  background: linear-gradient(90deg, #0039f5 0%, #00218f 100%);
-  color: var(--white);
-  font-family: "Lato", system-ui, sans-serif;
-  font-weight: 700;
+  border-radius: var(--r-pill);
+  background: var(--grad-blue);
+  color: #fff;
+  font-family: var(--cta);
+  font-weight: var(--h3-weight);
   font-size: calc(17 * var(--s));
   text-decoration: none;
   white-space: nowrap;
+  box-shadow: 0 10px 30px rgba(0, 57, 245, 0.30);
 }
 
-/* subtext — Figma (Frame 37011, gap 24): Poppins Light 14 / 21, centred, white 60%, 24 below H1 */
+/* subtext — Figma (Frame 37011, gap 24): body 14 / 21, centred, muted, 24 below H1 */
 .hero-sub {
   margin: calc(24 * var(--s)) auto 0;
   text-align: center;
   font-size: calc(14 * var(--s));
   line-height: calc(21 * var(--s));
-  color: rgba(255, 255, 255, 0.6);
+  color: var(--ink-60);
 }
 
 .appstore-btn svg {
@@ -243,7 +215,8 @@ body.landing::before {
   pointer-events: none;
 }
 
-/* the centre phone: rounded edge-to-edge screen showing a live job photo */
+/* the centre phone: rounded edge-to-edge screen showing a live job photo.
+   The device bezel stays dark (a real phone) against the cream ground. */
 .stage .phone {
   position: absolute;
   left: calc(71 * var(--s));
@@ -254,7 +227,7 @@ body.landing::before {
   overflow: hidden;
   background: #1a1a1a;
   z-index: 2;
-  box-shadow: 0 calc(16 * var(--s)) calc(40 * var(--s)) rgba(0, 0, 0, 0.5);
+  box-shadow: 0 calc(16 * var(--s)) calc(40 * var(--s)) rgba(19, 19, 21, 0.28);
 }
 
 /* rotating job photos — a soft dissolve: the previous photo fades out while the
@@ -324,8 +297,9 @@ body.landing::before {
   height: calc(12 * var(--s));
 }
 
-/* input pill — the app search field (MainScreen.swift): #131315 @ 0.9 + blur,
-   1.5px white-20 hairline, showing the current service + a #0039F5 send button. */
+/* input pill — the app search field (MainScreen.swift): dark glass over the
+   photo, hairline, showing the current service + a blue send button. Sits on the
+   phone's photo, so it stays dark for legibility. */
 .stage .phone-input {
   position: absolute;
   left: calc(14 * var(--s));
@@ -348,8 +322,8 @@ body.landing::before {
 .stage .phone-input-text {
   flex: 1 1 auto;
   min-width: 0;
-  font-family: "Poppins", system-ui, sans-serif;
-  font-weight: 300;
+  font-family: var(--sans);
+  font-weight: 400;
   font-size: calc(13.5 * var(--s));
   line-height: calc(20 * var(--s));
   color: #fff;
@@ -366,7 +340,7 @@ body.landing::before {
   width: calc(35 * var(--s));
   height: calc(35 * var(--s));
   border-radius: 50%;
-  background: #0039f5;
+  background: var(--blue);
 }
 .stage .phone-input-send svg {
   width: calc(16 * var(--s));
@@ -375,7 +349,7 @@ body.landing::before {
 }
 
 /* Category cards (Figma 1599:5879/5880): 125×167, radius 22, photo + label on a
-   bottom transparent→#1A1A1A scrim, dimmed to 20%. At the frame edges (x −66 /
+   bottom transparent→dark scrim, dimmed to 20%. At the frame edges (x −66 /
    343, y 261 within the phone). The stage isn't clipped, so on wide/desktop they
    show in full; on a phone they slip behind the screen edges (acceptable). */
 .stage .peek {
@@ -418,25 +392,25 @@ body.landing::before {
 
 /* ---------- landing footer ---------- */
 
-/* Footer — Figma: Lato 700 14 / 32, white 60%, stacked & centred, 56 below sub */
+/* Footer — Figma: display 700 14 / 32, muted, stacked & centred, 56 below sub */
 .landing-footer {
   position: relative;
   z-index: 1;
   margin-top: calc(56 * var(--s));
   padding: 0 calc(32 * var(--s)) calc(40 * var(--s));
   text-align: center;
-  font-family: "Lato", system-ui, sans-serif;
-  font-weight: 700;
+  font-family: var(--disp);
+  font-weight: var(--h3-weight);
   font-size: calc(14 * var(--s));
   line-height: calc(32 * var(--s));
-  color: rgba(255, 255, 255, 0.6);
+  color: var(--ink-60);
 }
 
 /* three stacked, centred lines (Figma): Terms · email · copyright */
 .landing-footer a,
 .landing-footer .copyright {
   display: block;
-  color: rgba(255, 255, 255, 0.6);
+  color: var(--ink-60);
   text-decoration: none;
 }
 .landing-footer .footer-terms {
@@ -444,22 +418,23 @@ body.landing::before {
 }
 
 /* "For businesses" entry point — navbar pill, right of the logo lockup.
-   Figma "Button Secondary": outlined (white-20 hairline), transparent fill. */
+   Figma "Button Secondary": outlined hairline, transparent fill. */
 .biz-link {
   flex: none;
-  font-family: "Lato", system-ui, sans-serif;
-  font-weight: 700;
+  font-family: var(--cta);
+  font-weight: var(--h3-weight);
   font-size: 14px;
-  color: var(--white);
+  color: var(--ink);
   text-decoration: none;
   padding: 8px 20px;
-  border-radius: 999px;
-  border: 1.5px solid rgba(255, 255, 255, 0.2);
-  background: transparent;
-  transition: background 0.15s ease;
+  border-radius: var(--r-pill);
+  border: 1.5px solid var(--line-strong);
+  background: rgba(255, 255, 255, 0.5);
+  transition: background 0.15s ease, border-color 0.15s ease;
 }
 .biz-link:hover {
-  background: rgba(255, 255, 255, 0.08);
+  background: #fff;
+  border-color: var(--ink-30);
 }
 
 /* ---------- terms ---------- */
@@ -475,33 +450,33 @@ body.landing::before {
 }
 
 .doc h1 {
-  font-weight: 800;
+  font-weight: var(--h1-weight);
   font-size: clamp(28px, 5vw, 40px);
 }
 
 .doc .updated {
   margin-top: 8px;
-  color: var(--gray50);
+  color: var(--ink-55);
   font-size: 14px;
 }
 
 .doc .notice {
   margin: 32px 0;
   padding: 24px;
-  border: 1px solid var(--gray20);
-  border-radius: var(--radius);
+  border: 1px solid var(--line);
+  border-radius: var(--r-lg);
   font-size: 14px;
-  color: var(--gray50);
+  color: var(--ink-55);
 }
 
 .doc h2 {
-  font-weight: 700;
+  font-weight: var(--h2-weight);
   font-size: 24px;
   margin: 48px 0 16px;
 }
 
 .doc p, .doc li {
-  color: rgba(255, 255, 255, 0.75);
+  color: var(--ink-82);
 }
 
 .doc p {
@@ -517,41 +492,39 @@ body.landing::before {
 }
 
 .doc strong {
-  color: var(--white);
-  font-weight: 400;
-  font-family: "Poppins", system-ui, sans-serif;
+  color: var(--ink);
+  font-weight: 600;
+  font-family: var(--sans);
 }
 
 .doc hr {
   border: 0;
-  border-top: 1px solid var(--gray10);
+  border-top: 1px solid var(--line);
   margin: 48px 0;
 }
 
 .footer {
   padding: 24px 0;
-  border-top: 1px solid var(--gray10);
+  border-top: 1px solid var(--line);
   display: flex;
   flex-wrap: wrap;
   gap: 16px 24px;
   align-items: center;
   font-size: 14px;
-  color: var(--gray50);
+  color: var(--ink-55);
 }
 
 .footer a {
-  color: var(--gray50);
+  color: var(--ink-55);
 }
 
 .footer .copyright {
   margin-left: auto;
 }
 
-/* Print / PDF: the site is a dark theme (white text on a dark background).
-   When printing, browsers drop the dark background but keep the near-white
-   text, so it washes out. Force black-on-white so Terms / Privacy /
-   Business-Terms export as legible PDFs (e.g. to send to a lawyer).
-   Screen appearance is unaffected. */
+/* Print / PDF: force clean black-on-white so Terms / Privacy / Business-Terms
+   export as legible PDFs (e.g. to send to a lawyer). Screen appearance is
+   unaffected. */
 @media print {
   body,
   body.landing { background: #fff !important; }
