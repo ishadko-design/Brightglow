@@ -551,10 +551,14 @@ struct ContractorListScreen: View {
 
                 header(topInset: topInset)
             }
-            // Retreating multi-select footer (prototype) — floats above the
-            // list, same fading-gradient treatment as the gallery's button bar.
+            // Multi-select footer — TABLED 2026-09-16 per Igor (kept as an
+            // exploration, not shipping). Flip FeatureFlags.multiSelectEnabled
+            // to restore the "Select multiple" pill, select mode, and the bulk
+            // quote-request flow; the implementation is intact.
             .overlay(alignment: .bottom) {
-                selectFooter(bottomInset: proxy.safeAreaInsets.bottom)
+                if FeatureFlags.multiSelectEnabled {
+                    selectFooter(bottomInset: proxy.safeAreaInsets.bottom)
+                }
             }
             // Extend the content + footer (and its scrim) to the true screen
             // bottom, past the home-indicator safe area — otherwise the footer
