@@ -482,9 +482,8 @@ struct QuoteRequestScreen: View {
                         .multilineTextAlignment(.center)
                 }
             }
-            return
-        }
-        VStack(spacing: 24) {
+        } else {
+            VStack(spacing: 24) {
             if let logoURL {
                 AsyncImage(url: logoURL) { phase in
                     if case .success(let image) = phase {
@@ -504,6 +503,7 @@ struct QuoteRequestScreen: View {
                 .font(.bodyLight)
                 .foregroundStyle(.white)
                 .multilineTextAlignment(.center)
+        }
         }
     }
 
