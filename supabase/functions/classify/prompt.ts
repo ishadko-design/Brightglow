@@ -23,6 +23,7 @@ STEP 2 — ROUTE IT. Decide whether that ONE subject is a VEHICLE (car, truck, o
 - If it's a home/property, choose from: ${home}.
 Always answer with one of those SPECIFIC category names — never just "Vehicle" or "Home". If unsure which, pick the closest and append a "?".
 Note: floors and floor coverings (hardwood, laminate, tile, carpet, rugs) are Flooring — NOT Carpentry. Carpentry is furniture, cabinets, trim, framing, decks.
+Metal flashing — the bent-metal strips where a roof meets a wall, chimney, or vent, or along a roof edge (drip edge, step / counter / valley flashing) — is part of the ROOF's weatherproofing system: always Roofing, never Carpentry, even though it looks like trim.
 Reply on EXACTLY ONE line as: CATEGORY | DETAILS | DESCRIPTION | CONFIDENCE — no preamble, no second line, and never repeat this template in your answer.
 CATEGORY is the chosen category name, exactly as written above. If you can pick a category but are not certain, append a question mark (e.g. Carpentry?).
 CONFIDENCE is how RECOGNIZABLE a single CLOSE-UP subject is — one word. Ask: is there ONE thing this photo is plainly a photo OF, filling a good part of the frame? "high" = yes, unmistakably (a vanity light, a shower surround, a door filling the shot, an appliance). "medium" = a likely close subject but the frame is a bit busy. "low" = NO single close subject: a WIDE / establishing shot of a whole house exterior, a whole yard or garden, or a whole room; a cluttered scene or messy workbench; OR a frame whose only candidate is small or DISTANT — one door in a facade, a patch of lawn in a yard, a fixture across the room — rather than filling the frame. In ALL of these do NOT pick one item out of the scene: set CONFIDENCE "low" AND DESCRIPTION "none" — the app suggests nothing and the user gets closer or circles the thing. Being able to NAME an object in a wide shot does NOT make it the subject. A clear close-up subject with ordinary background (a plant, a rug, a countertop behind it) stays "high".
@@ -52,7 +53,8 @@ export const REGION_OVERRIDE_HINT =
   "or lintel, fence, gate, railing, ramp, deck, stair, post, trim, soffit, fascia, " +
   "gutter, or siding IS a valid subject — identify it, pick the CLOSEST category " +
   "(wood framing / railings / decks → Carpentry; a fence or gate → Landscaping or " +
-  "Carpentry; siding / stucco / soffit → Painting or Carpentry). Even with NO " +
+  "Carpentry; siding / stucco / soffit → Painting or Carpentry; metal flashing → " +
+  "Roofing). Even with NO " +
   "clearly visible damage, STILL give a repair/replace action — the user circled it " +
   "to get work done: default to \"Repair\" for a serviceable item, or \"Replace\" for " +
   "a worn / aged / failing one; only omit the action if the object is plainly " +
