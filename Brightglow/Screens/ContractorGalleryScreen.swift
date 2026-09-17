@@ -544,10 +544,10 @@ struct ContractorGalleryScreen: View {
     // built 1:1. CTA row (spacing 8; padding top 16, bottom max(32, safe area),
     // horizontal 16) on the solid #131315 strip, with the "Blurred bg" scrim
     // behind it (124 tall, ends at the frame edge). Call = 94x48 secondary
-    // (white 20% + background blur, radius 32, phone icon + 18px label);
+    // (white 20% + background blur, radius 32, 18px label — no icon, per Igor;
+    // Figma 1270:2647 shows a phone glyph, which we deliberately drop);
     // Request quote = 181x48 primary blue (#0039F5, 18px label). Type from the
-    // design system (.h3 = 18pt bold). The phone icon is SF Symbols (Figma uses
-    // a Streamline phone glyph — closest native match).
+    // design system (.h3 = 18pt bold).
     private func ctaFooter(width: CGFloat, bottomInset: CGFloat) -> some View {
         // Figma button sizes (402pt frame); the row centers them on wider screens.
         let pairWidth: CGFloat = 181
@@ -569,16 +569,12 @@ struct ContractorGalleryScreen: View {
             // the app, then hands off to the dialer. Dimmed when Places returned
             // no phone number for this business.
             Button(action: { showCallReminder = true }) {
-                HStack(spacing: 8) {
-                    Image(systemName: "phone.fill")
-                        .font(.system(size: 24))
-                    Text("Call")
-                        .font(.h3)
-                }
-                .foregroundStyle(.white)
-                .frame(width: canQuote ? callWidth : max(0, width - 32), height: 48)
-                .background { FrostedPillBackground() }
-                .opacity(hasPhone ? 1 : 0.4)
+                Text("Call")
+                    .font(.h3)
+                    .foregroundStyle(.white)
+                    .frame(width: canQuote ? callWidth : max(0, width - 32), height: 48)
+                    .background { FrostedPillBackground() }
+                    .opacity(hasPhone ? 1 : 0.4)
             }
             .buttonStyle(.plain)
             .disabled(!hasPhone)
@@ -603,7 +599,7 @@ struct ContractorGalleryScreen: View {
         // No solid strip — the smooth scrim alone carries the footer,
         // so there is no visible container edge.
         .background(alignment: .bottom) {
-            FigmaFooterScrim(height: 124, belowExtend: 0)
+            FigmaFooterScrim(height: 124)
         }
     }
 

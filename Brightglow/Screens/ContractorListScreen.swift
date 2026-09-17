@@ -791,7 +791,7 @@ struct ContractorListScreen: View {
                 // so there is no visible container edge. Sized to row + 65 so
                 // the full feather stays visible above the pills.
                 .background(alignment: .bottom) {
-                    FigmaFooterScrim(height: 16 + 32 + max(32, bottomInset) + 65, belowExtend: 38)
+                    FigmaFooterScrim(height: 125)
                 }
             } else {
                 Button(action: {
@@ -808,7 +808,7 @@ struct ContractorListScreen: View {
                 .padding(.bottom, 16 + bottomInset)
                 .frame(maxWidth: .infinity)
                 .background(alignment: .bottom) {
-                    FigmaFooterScrim(height: 125, belowExtend: 0)
+                    FigmaFooterScrim(height: 125)
                 }
             }
         }
