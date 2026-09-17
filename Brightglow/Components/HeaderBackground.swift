@@ -110,24 +110,17 @@ struct BlurredHeaderBackground: View {
     private let sideOverscan: CGFloat = 40
 }
 
-/// Exact Figma footer scrim — "Blurred bg" instance from nodes 1049:4441
-/// (list) and 1270:2647 (gallery):
-/// - BG rect 492pt wide on the 402pt frame = 45pt overscan per side, so the
-///   blur's side edges fall off-screen.
-/// - GRADIENT_LINEAR, black: opaque (1.0) at position 0 → transparent (0.0) at
-///   position 1, with position 0 at y=112.3% (below the rect) and position 1
-///   at y=8.0%. As top→bottom stop locations: 0.0 → alpha 0, 0.08 → alpha 0,
-///   1.0 → alpha 0.882.
-/// - Layer blur 24, visible.
+/// Footer scrim — the same soft-gradient-plus-blur recipe as
+/// BlurredHeaderBackground, flipped vertically: clear at the top, ramping to
+/// black at the bottom, drawn oversized and blurred so both ends die soft
+/// with no hard edge. (Figma nodes 1049:4441 / 1270:2647: black gradient,
+/// layer blur 24, 45pt horizontal overscan so the blur's side edges fall
+/// off-screen, list footer extending 38pt past the frame.)
 ///
-/// Figma also lists background blur 8 (visible), but there is no tintless
-/// backdrop-blur primitive on iOS — the material approximation tinted the
-/// scrim into a black void, which looked worse than the blur's absence. The
-/// exact gradient + layer blur is what's actually visible.
-///
-/// Layout-neutral: fixed size, drawn in an overlay/background, never
-/// intercepts touches, and can never inflate the footer or push buttons
-/// off-screen.
+/// Layout-neutral: a fixed-size `Color.clear` anchors the footprint; the
+/// gradient lives in a bottom-aligned overlay drawn taller and pulled down
+/// with `.offset` to cover past the bottom edge. Never intercepts touches,
+//  and can never inflate the footer or push buttons off-screen.
 struct FigmaFooterScrim: View {
     /// Total scrim height. The caller sizes it so the Figma feather amount
     /// stays visible above its (safe-area-taller) CTA row: list = row + 65,
@@ -138,21 +131,31 @@ struct FigmaFooterScrim: View {
     /// Figma gallery footer: 0 (ends at the frame edge).
     var belowExtend: CGFloat = 0
 
+    /// Very smooth black→clear stops: a gentle ease-like ramp with no steep
+    /// sections, so the blur melts it into a soft glow with no visible edge.
+    /// Dark enough at the bottom (0.85) for white pill text to read.
+    private var stops: [Gradient.Stop] {
+        [
+            .init(color: .clear, location: 0.0),
+            .init(color: .black.opacity(0.15), location: 0.35),
+            .init(color: .black.opacity(0.4), location: 0.6),
+            .init(color: .black.opacity(0.65), location: 0.8),
+            .init(color: .black.opacity(0.85), location: 1.0),
+        ]
+    }
+
     var body: some View {
-        LinearGradient(
-            stops: [
-                .init(color: .black.opacity(0), location: 0.0),
-                .init(color: .black.opacity(0), location: 0.08),
-                .init(color: .black.opacity(0.882), location: 1.0),
-            ],
-            startPoint: .top, endPoint: .bottom
-        )
-        .frame(maxWidth: .infinity)
-        .frame(height: height)
-        .padding(.horizontal, -45)
-        .blur(radius: 24)
-        .offset(y: belowExtend)
-        .allowsHitTesting(false)
+        Color.clear
+            .frame(maxWidth: .infinity)
+            .frame(height: height)
+            .overlay(alignment: .bottom) {
+                LinearGradient(stops: stops, startPoint: .top, endPoint: .bottom)
+                    .frame(height: height + belowExtend)
+                    .padding(.horizontal, -45)
+                    .blur(radius: 24)
+                    .offset(y: belowExtend)
+            }
+            .allowsHitTesting(false)
     }
 }
 

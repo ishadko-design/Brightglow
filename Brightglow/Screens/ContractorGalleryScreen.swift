@@ -600,7 +600,8 @@ struct ContractorGalleryScreen: View {
         .padding(.bottom, max(32, bottomInset))
         .padding(.horizontal, 16)
         .frame(maxWidth: .infinity)
-        .background(AppColors.bg)
+        // No solid strip — the smooth scrim alone carries the footer,
+        // so there is no visible container edge.
         .background(alignment: .bottom) {
             FigmaFooterScrim(height: 124, belowExtend: 0)
         }

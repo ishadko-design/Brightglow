@@ -787,12 +787,9 @@ struct ContractorListScreen: View {
                 .padding(.bottom, max(32, bottomInset))
                 .padding(.horizontal, 16)
                 .frame(maxWidth: .infinity)
-                .background(AppColors.bg)
-                // Figma feather = 65pt of gradient visible above the strip
-                // (125 scrim − 60 strip). The app's row is safe-area-taller
-                // than Figma's strip, so the scrim is sized to row + 65 to
-                // keep the full feather — otherwise the pills float in a
-                // black void.
+                // No solid strip — the smooth scrim alone carries the footer,
+                // so there is no visible container edge. Sized to row + 65 so
+                // the full feather stays visible above the pills.
                 .background(alignment: .bottom) {
                     FigmaFooterScrim(height: 16 + 32 + max(32, bottomInset) + 65, belowExtend: 38)
                 }
