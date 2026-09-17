@@ -554,12 +554,14 @@ struct ContractorListScreen: View {
             // Retreating multi-select footer (prototype) — floats above the
             // list, same fading-gradient treatment as the gallery's button bar.
             .overlay(alignment: .bottom) {
-                // Extend into the bottom safe area so the scrim reaches the true
-                // screen edge — otherwise it stops at the safe-area line and the
-                // dark band reads as a shadow floating above the bottom row.
                 selectFooter(bottomInset: proxy.safeAreaInsets.bottom)
-                    .ignoresSafeArea(.container, edges: .bottom)
             }
+            // Extend the content + footer (and its scrim) to the true screen
+            // bottom, past the home-indicator safe area — otherwise the footer
+            // overlay aligns to the safe-area line and the scrim reads as a
+            // shadow floating above the last row. Mirrors the gallery, which
+            // ignores the bottom safe area on its content ZStack.
+            .ignoresSafeArea(.container, edges: .bottom)
         }
         .navigationBarBackButtonHidden(true)
         .toolbar(.hidden, for: .navigationBar)
