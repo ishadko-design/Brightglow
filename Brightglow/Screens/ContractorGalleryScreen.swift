@@ -537,8 +537,9 @@ struct ContractorGalleryScreen: View {
         URL(string: "https://search.google.com/local/reviews?placeid=\(contractor.id)")
     }
 
-    // Pinned Call / Request quote — equal-width buttons on a fading floor
-    // (Figma "CTAs": two 48pt-tall buttons, radius 32, 8pt gap).
+    // Pinned Call / Request quote — equal-width buttons over the shared blurred
+    // footer backdrop (Figma "CTAs": two 48pt-tall buttons, radius 32, 8pt gap;
+    // node 1270:2647 footer "Blurred bg").
     private func ctaFooter(width: CGFloat, bottomInset: CGFloat) -> some View {
         // Exact equal widths from the known screen width — no reliance on the
         // parent's width proposal (which has overflowed past the screen edges).
@@ -553,7 +554,12 @@ struct ContractorGalleryScreen: View {
         let hasEmail = topContractor?.contactEmail != nil
         let canQuote = hasPhone || hasEmail
         let callWidth = canQuote ? pairWidth : max(0, width - 32)
-        return HStack(spacing: 8) {
+        return ZStack(alignment: .bottom) {
+            // Shared blurred footer backdrop: black→transparent gradient,
+            // layer-blurred like the header — no backdrop blur. 124pt of fade
+            // (Figma), buttons bottom-anchored.
+            BlurredFooterBackground(height: 124, bottomInset: bottomInset)
+            HStack(spacing: 8) {
             // Call replaces the old "Next": tapping shows a reminder to mention
             // the app, then hands off to the dialer. Dimmed when Places returned
             // no phone number for this business.
@@ -586,29 +592,10 @@ struct ContractorGalleryScreen: View {
                 }
                 .buttonStyle(.plain)
             }
+            }
+            .padding(.bottom, 16 + bottomInset)
         }
-        // Taller top padding so the fade region extends well above the buttons —
-        // the buttons stay bottom-anchored (bottom padding is unchanged), this just
-        // grows the gradient upward into a long, soft fade instead of a hard edge.
-        .padding(.top, 88)
-        .padding(.bottom, 16 + bottomInset)
         .frame(width: width)
-        // Opaque floor (matches the sheet color) that fades in gradually from the
-        // top, so the reviews behind melt out softly rather than cutting off right
-        // at the buttons. Solid well before the buttons; the long transparent-to-
-        // opaque ramp above them is what reads as "soft".
-        .background(
-            LinearGradient(
-                stops: [
-                    .init(color: AppColors.bg.opacity(0),    location: 0.0),
-                    .init(color: AppColors.bg.opacity(0.6),  location: 0.32),
-                    .init(color: AppColors.bg,               location: 0.58),
-                    .init(color: AppColors.bg,               location: 1.0)
-                ],
-                startPoint: .top, endPoint: .bottom
-            )
-            .allowsHitTesting(false)
-        )
     }
 
     private func statusView(spinner: Bool, text: String) -> some View {

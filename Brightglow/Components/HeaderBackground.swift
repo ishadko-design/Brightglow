@@ -109,3 +109,46 @@ struct BlurredHeaderBackground: View {
     /// the screen rather than showing as faded strips at the left/right margins.
     private let sideOverscan: CGFloat = 40
 }
+
+/// Shared footer backdrop — the Figma "Blurred bg" treatment (node 1049:4441
+/// "Open category - list", node 1270:2647 "Open category - no description"): a
+/// black→transparent linear gradient, softly layer-blurred (24pt), with NO
+/// backdrop blur — the same recipe as the header scrim, so the top and bottom
+/// of the screen read as one system.
+///
+/// Layout-neutral like the header: a fixed-size `Color.clear` anchors the
+/// footprint (`height` of visible fade plus `bottomInset` under the home
+/// indicator); the blurred gradient is drawn oversized horizontally so the
+/// blur's side edges fall off-screen instead of leaving faded strips.
+struct BlurredFooterBackground: View {
+    /// Visible fade height (Figma: 125 on the list, 124 on the gallery).
+    var height: CGFloat = 125
+    /// The screen's safe-area bottom inset — the black holds solid through it.
+    var bottomInset: CGFloat = 0
+
+    var body: some View {
+        Color.clear
+            .frame(maxWidth: .infinity)
+            .frame(height: height + bottomInset)
+            .overlay {
+                LinearGradient(
+                    stops: [
+                        .init(color: .clear, location: 0.0),
+                        .init(color: .black, location: 1.0),
+                    ],
+                    startPoint: .top, endPoint: .bottom
+                )
+                .frame(maxWidth: .infinity)
+                .frame(height: height + bottomInset)
+                .padding(.horizontal, -sideOverscan)
+                .blur(radius: blurRadius)
+            }
+            .allowsHitTesting(false)
+    }
+
+    /// Figma LAYER_BLUR on the footer BG rect.
+    private let blurRadius: CGFloat = 24
+    /// Horizontal overscan (≥ the blur radius) so the blurred side edges fall
+    /// off the screen rather than showing as faded strips at the margins.
+    private let sideOverscan: CGFloat = 40
+}

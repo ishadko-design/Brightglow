@@ -724,24 +724,17 @@ struct ContractorListScreen: View {
     }
 
     // ── Multi-select footer (prototype) ─────────────────────────────────────
-    // Floating pill over a fading gradient floor — the same transparent→opaque
-    // treatment as the gallery's bottom button bar, but a smaller secondary
-    // pill. The gradient is visual-only (never intercepts touches); only the
-    // pills are tappable, so list rows beside them stay reachable.
+    // Figma node 1049:4441 ("Open category - list"): the pill floats over the
+    // shared blurred footer backdrop (black→transparent gradient, layer-blurred
+    // like the header — no backdrop blur), 125pt of fade, a 32pt pill in white
+    // at 20% (AppColors.btnSecondary), Lato 14 Bold (.h4). The backdrop is
+    // visual-only (never intercepts touches); only the pills are tappable, so
+    // list rows beside them stay reachable.
     private func selectFooter(bottomInset: CGFloat) -> some View {
         let shown = isSelectMode || footerVisible
         return ZStack(alignment: .bottom) {
-            LinearGradient(
-                stops: [
-                    .init(color: AppColors.bg.opacity(0),   location: 0.0),
-                    .init(color: AppColors.bg.opacity(0.6), location: 0.45),
-                    .init(color: AppColors.bg,              location: 0.8),
-                    .init(color: AppColors.bg,              location: 1.0)
-                ],
-                startPoint: .top, endPoint: .bottom
-            )
-            .allowsHitTesting(false)
-            HStack(spacing: 12) {
+            BlurredFooterBackground(height: 125, bottomInset: bottomInset)
+            HStack(spacing: 8) {
                 if isSelectMode {
                     Button(action: {
                         withAnimation(.easeInOut(duration: 0.2)) {
@@ -750,20 +743,18 @@ struct ContractorListScreen: View {
                         }
                     }) {
                         Text("Cancel")
-                            .font(.bodySmall)
-                            .fontWeight(.semibold)
+                            .font(.h4)
                             .foregroundStyle(.white)
-                            .frame(height: 40)
+                            .frame(height: 32)
                             .padding(.horizontal, 20)
                             .background(AppColors.btnSecondary, in: Capsule())
                     }
                     .buttonStyle(.plain)
                     Button(action: startMultiQuote) {
                         Text("Request quotes (\(selectedIDs.count))")
-                            .font(.bodySmall)
-                            .fontWeight(.semibold)
+                            .font(.h4)
                             .foregroundStyle(.white)
-                            .frame(height: 40)
+                            .frame(height: 32)
                             .padding(.horizontal, 20)
                             .background(selectedIDs.isEmpty ? AppColors.btnSecondary : AppColors.btnPrimary,
                                         in: Capsule())
@@ -775,10 +766,9 @@ struct ContractorListScreen: View {
                         withAnimation(.easeInOut(duration: 0.2)) { isSelectMode = true }
                     }) {
                         Text("Select multiple")
-                            .font(.bodySmall)
-                            .fontWeight(.semibold)
+                            .font(.h4)
                             .foregroundStyle(.white)
-                            .frame(height: 40)
+                            .frame(height: 32)
                             .padding(.horizontal, 20)
                             .background(AppColors.btnSecondary, in: Capsule())
                     }
@@ -787,7 +777,6 @@ struct ContractorListScreen: View {
             }
             .padding(.bottom, 16 + bottomInset)
         }
-        .padding(.top, 72)
         .frame(maxWidth: .infinity)
         .offset(y: shown ? 0 : 160)
         .opacity(shown ? 1 : 0)
