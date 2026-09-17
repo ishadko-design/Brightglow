@@ -727,20 +727,27 @@ struct ContractorListScreen: View {
     // The pill floats over the shared blurred footer backdrop: a tall
     // black→transparent scrim (up past the viewport, so the fade never reads
     // as a floating band), layer-blurred like the header — no backdrop blur.
-    // Pill: 32pt, frosted secondary (live background blur under the white-at-20%
-    // tint, Figma "Background blur"), Lato 14 Bold (.h4). "Request quotes" turns
-    // solid primary blue once something is selected.
-    // The backdrop is visual-only (never intercepts touches); only the pills
-    // are tappable, so list rows beside them stay reachable.
+    // Multiselect footer — Figma node 1049:4441 ("Open category - list"), built 1:1.
+    // Select mode: CTA row (spacing 8; padding top 16, bottom max(32, safe
+    // area), horizontal 16) on the solid #131315 strip (the CTAs frame fill),
+    // with the "Blurred bg" scrim behind it (125 tall, 38pt past the frame's
+    // bottom edge). Cancel = secondary pill (white 20% + background blur,
+    // radius 32, 32 tall, 14px); Request quotes = primary blue when something
+    // is selected, frosted secondary when empty. The (N) counter is plain text
+    // next to the button, not part of it (Igor). Type comes from the design
+    // system (.h4 = 14pt bold); the iOS token set is Lato (Bricolage was never
+    // added to the app bundle — separate migration).
+    // Entry state ("Select multiple" pill) is not in the Figma node: it keeps
+    // the floating frosted pill over the scrim, no solid strip.
+    // The scrim is visual-only (never intercepts touches); only the pills are
+    // tappable, so list rows beside them stay reachable.
     private func selectFooter(bottomInset: CGFloat) -> some View {
         let shown = isSelectMode || footerVisible
-        // Full-height scrim: must clear the screen entirely when retreating.
-        let fadeH: CGFloat = 160
-        let extendH: CGFloat = 800
-        return ZStack(alignment: .bottom) {
-            BlurredFooterBackground(height: fadeH, topExtend: extendH, bottomInset: bottomInset)
-            HStack(spacing: 8) {
-                if isSelectMode {
+        // Clears the row plus the scrim feather above it when retreating.
+        let hideOffset: CGFloat = 160
+        return Group {
+            if isSelectMode {
+                HStack(spacing: 8) {
                     Button(action: {
                         withAnimation(.easeInOut(duration: 0.2)) {
                             isSelectMode = false
@@ -751,7 +758,7 @@ struct ContractorListScreen: View {
                             .font(.h4)
                             .foregroundStyle(.white)
                             .frame(height: 32)
-                            .padding(.horizontal, 20)
+                            .padding(.horizontal, 16)
                             .background { FrostedPillBackground() }
                     }
                     .buttonStyle(.plain)
@@ -760,7 +767,7 @@ struct ContractorListScreen: View {
                             .font(.h4)
                             .foregroundStyle(.white)
                             .frame(height: 32)
-                            .padding(.horizontal, 20)
+                            .padding(.horizontal, 16)
                             .background {
                                 if selectedIDs.isEmpty {
                                     FrostedPillBackground()
@@ -775,24 +782,35 @@ struct ContractorListScreen: View {
                     Text("(\(selectedIDs.count))")
                         .font(.h4)
                         .foregroundStyle(.white)
-                } else {
-                    Button(action: {
-                        withAnimation(.easeInOut(duration: 0.2)) { isSelectMode = true }
-                    }) {
-                        Text("Select multiple")
-                            .font(.h4)
-                            .foregroundStyle(.white)
-                            .frame(height: 32)
-                            .padding(.horizontal, 20)
-                            .background { FrostedPillBackground() }
-                    }
-                    .buttonStyle(.plain)
+                }
+                .padding(.top, 16)
+                .padding(.bottom, max(32, bottomInset))
+                .padding(.horizontal, 16)
+                .frame(maxWidth: .infinity)
+                .background(AppColors.bg)
+                .background(alignment: .bottom) {
+                    FigmaFooterScrim(height: 125, belowExtend: 38)
+                }
+            } else {
+                Button(action: {
+                    withAnimation(.easeInOut(duration: 0.2)) { isSelectMode = true }
+                }) {
+                    Text("Select multiple")
+                        .font(.h4)
+                        .foregroundStyle(.white)
+                        .frame(height: 32)
+                        .padding(.horizontal, 16)
+                        .background { FrostedPillBackground() }
+                }
+                .buttonStyle(.plain)
+                .padding(.bottom, 16 + bottomInset)
+                .frame(maxWidth: .infinity)
+                .background(alignment: .bottom) {
+                    FigmaFooterScrim(height: 125, belowExtend: 0)
                 }
             }
-            .padding(.bottom, 16 + bottomInset)
         }
-        .frame(maxWidth: .infinity)
-        .offset(y: shown ? 0 : extendH + fadeH + bottomInset)
+        .offset(y: shown ? 0 : hideOffset)
         .opacity(shown ? 1 : 0)
         .animation(.easeInOut(duration: 0.25), value: shown)
         .allowsHitTesting(shown)

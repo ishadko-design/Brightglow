@@ -110,66 +110,53 @@ struct BlurredHeaderBackground: View {
     private let sideOverscan: CGFloat = 40
 }
 
-/// Shared footer backdrop — mirrors the header scrim, flipped vertically: a
-/// black→transparent gradient drawn TALL (up past the top of the viewport) and
-/// softly layer-blurred (24pt), with NO backdrop blur. The fade starts
-/// off-screen, so there is never a visible band edge floating over content;
-/// black holds strong through the bottom (like the header holds it at the top)
-/// so the CTAs sit on darkness. The gradient also runs past the bottom edge of
-/// the screen, so the blur's faded bottom edge falls off-screen and the visible
-/// bottom stays solid black.
+/// Exact Figma footer scrim — "Blurred bg" instance from nodes 1049:4441
+/// (list) and 1270:2647 (gallery):
+/// - BG rect 492pt wide on the 402pt frame = 45pt overscan per side, so the
+///   blur's side edges fall off-screen.
+/// - GRADIENT_LINEAR, black: opaque (1.0) at position 0 → transparent (0.0) at
+///   position 1, with position 0 at y=112.3% (below the rect) and position 1
+///   at y=8.0%. As top→bottom stop locations: 0.0 → alpha 0, 0.08 → alpha 0,
+///   1.0 → alpha 0.882.
+/// - Layer blur 24, visible; background blur 8, visible.
 ///
-/// Layout-neutral: a fixed-size `Color.clear` anchors the footprint (strong
-/// zone + bottom inset); the oversized gradient is drawn in the overlay /
-/// background and offset downward, so it can never inflate the footer or push
-/// buttons off-screen. The blurred gradient is drawn oversized horizontally so
-/// the blur's side edges fall off-screen instead of leaving faded strips.
-struct BlurredFooterBackground: View {
-    /// Strong-black zone at the bottom (CTAs + home indicator).
-    var height: CGFloat = 160
-    /// How far the fade extends upward — past the top of the viewport, so its
-    /// start is never visible.
-    var topExtend: CGFloat = 800
-    /// How far the gradient continues past the bottom edge of the screen.
-    var bottomExtend: CGFloat = 300
-    /// The screen's safe-area bottom inset — the black holds solid through it.
-    var bottomInset: CGFloat = 0
-
-    private var totalHeight: CGFloat { topExtend + height + bottomExtend + bottomInset }
-    /// Gradient location where the fade begins (everything above is clear).
-    private var fadeStart: CGFloat { topExtend / totalHeight }
-    /// Gradient location where the black turns solid (stays solid past the
-    /// screen's bottom edge).
-    private var solidStart: CGFloat { fadeStart + 0.08 }
+/// The background blur is approximated with ultraThinMaterial — the closest
+/// native backdrop-blur primitive (its tint darkens slightly more than Figma's
+/// pure blur). Everything else is 1:1.
+///
+/// Layout-neutral: fixed size, drawn in an overlay/background, never
+/// intercepts touches, and can never inflate the footer or push buttons
+/// off-screen.
+struct FigmaFooterScrim: View {
+    /// Figma BG rect height: 125 (list) / 124 (gallery).
+    var height: CGFloat = 125
+    /// How far the scrim extends below the footer's bottom edge.
+    /// Figma list footer: 38 (the Footer group extends 38pt past the frame).
+    /// Figma gallery footer: 0 (ends at the frame edge).
+    var belowExtend: CGFloat = 0
 
     var body: some View {
-        Color.clear
-            .frame(maxWidth: .infinity)
-            .frame(height: height + bottomInset)
-            .overlay(alignment: .bottom) {
-                LinearGradient(
-                    stops: [
-                        .init(color: .clear, location: 0.0),
-                        .init(color: .black.opacity(0.35), location: fadeStart),
-                        .init(color: .black.opacity(0.85), location: solidStart),
-                        .init(color: .black.opacity(0.85), location: 1.0),
-                    ],
-                    startPoint: .top, endPoint: .bottom
-                )
-                .frame(maxWidth: .infinity)
-                .frame(height: totalHeight)
-                .padding(.horizontal, -sideOverscan)
-                .blur(radius: blurRadius)
-                .offset(y: bottomExtend)
-            }
-            .allowsHitTesting(false)
+        ZStack {
+            // Figma: background blur 8 (visible) — backdrop blur under the gradient.
+            Rectangle()
+                .fill(.ultraThinMaterial)
+            // Figma: black gradient + layer blur 24 (visible).
+            LinearGradient(
+                stops: [
+                    .init(color: .black.opacity(0), location: 0.0),
+                    .init(color: .black.opacity(0), location: 0.08),
+                    .init(color: .black.opacity(0.882), location: 1.0),
+                ],
+                startPoint: .top, endPoint: .bottom
+            )
+            .blur(radius: 24)
+        }
+        .frame(maxWidth: .infinity)
+        .frame(height: height)
+        .padding(.horizontal, -45)
+        .offset(y: belowExtend)
+        .allowsHitTesting(false)
     }
-
-    /// Layer blur softening the fade (the header's recipe, no backdrop blur).
-    private let blurRadius: CGFloat = 24
-    /// Horizontal overscan (≥ the blur radius) so the blurred side edges fall
-    /// off the screen rather than showing as faded strips at the margins.
-    private let sideOverscan: CGFloat = 40
 }
 
 /// Frosted-glass background for the secondary pills: the Figma "Background
