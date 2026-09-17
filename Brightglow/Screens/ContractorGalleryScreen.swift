@@ -554,12 +554,10 @@ struct ContractorGalleryScreen: View {
         let hasEmail = topContractor?.contactEmail != nil
         let canQuote = hasPhone || hasEmail
         let callWidth = canQuote ? pairWidth : max(0, width - 32)
-        return ZStack(alignment: .bottom) {
-            // Shared blurred footer backdrop: tall black→transparent scrim, up
-            // past the viewport like the header — no floating band edge, black
-            // held strong behind the buttons.
-            BlurredFooterBackground(bottomInset: bottomInset)
-            HStack(spacing: 8) {
+        // The tall scrim lives in the background (layout-neutral): as a ZStack
+        // child it inflated the footer past the screen height and pushed the
+        // buttons off-screen inside the VStack + Spacer.
+        return HStack(spacing: 8) {
             // Call replaces the old "Next": tapping shows a reminder to mention
             // the app, then hands off to the dialer. Dimmed when Places returned
             // no phone number for this business.
@@ -594,8 +592,13 @@ struct ContractorGalleryScreen: View {
             }
             }
             .padding(.bottom, 16 + bottomInset)
-        }
         .frame(width: width)
+        .background(alignment: .bottom) {
+            // Shared blurred footer backdrop: tall black→transparent scrim, up
+            // past the viewport like the header — no floating band edge, black
+            // held strong behind the buttons.
+            BlurredFooterBackground(bottomInset: bottomInset)
+        }
     }
 
     private func statusView(spinner: Bool, text: String) -> some View {
