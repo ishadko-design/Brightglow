@@ -17,10 +17,12 @@ import CoreLocation
 
 /// Navigation payload for a multi-contractor quote request (prototype).
 /// `Contractor` isn't Hashable, so the array rides inside this wrapper for
-/// `navigationDestination(item:)`.
-private struct MultiQuoteRequest: Identifiable {
+/// `navigationDestination(item:)` — keyed on the UUID alone.
+private struct MultiQuoteRequest: Identifiable, Hashable {
     let id = UUID()
     let contractors: [Contractor]
+    static func == (lhs: Self, rhs: Self) -> Bool { lhs.id == rhs.id }
+    func hash(into hasher: inout Hasher) { hasher.combine(id) }
 }
 
 struct ContractorListScreen: View {
