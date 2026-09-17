@@ -469,6 +469,7 @@ struct QuoteRequestScreen: View {
     /// name. Name in Poppins Light 17, centered; 24pt gap. The logo is 44×44 (r12) —
     /// half the Figma's 88, since resolved marks are often small/low-res and blow up
     /// badly at full size; smaller keeps a pixelated logo from dominating the screen.
+    @ViewBuilder
     private var businessHeader: some View {
         // Multi-select prototype: the selected business names at 14pt — no
         // logos, so up to five fit comfortably.
