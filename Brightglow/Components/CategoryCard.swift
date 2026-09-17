@@ -25,6 +25,7 @@ let categoryItems: [CategoryItem] = [
     CategoryItem(category: .roofing,      assetName: "fig_roofing"),
     CategoryItem(category: .flooring,     assetName: "fig_flooring"),
     CategoryItem(category: .windowsDoors, assetName: "fig_windows"),
+    CategoryItem(category: .generalContractor, assetName: "fig_generalcontractor"),
 ]
 
 /// Generic image card used across the landing sheet (verticals) and the
