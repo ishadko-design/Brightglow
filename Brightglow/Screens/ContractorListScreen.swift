@@ -727,7 +727,9 @@ struct ContractorListScreen: View {
     // The pill floats over the shared blurred footer backdrop: a tall
     // black→transparent scrim (up past the viewport, so the fade never reads
     // as a floating band), layer-blurred like the header — no backdrop blur.
-    // Pill: 32pt, white at 20% (AppColors.btnSecondary), Lato 14 Bold (.h4).
+    // Pill: 32pt, frosted secondary (live background blur under the white-at-20%
+    // tint, Figma "Background blur"), Lato 14 Bold (.h4). "Request quotes" turns
+    // solid primary blue once something is selected.
     // The backdrop is visual-only (never intercepts touches); only the pills
     // are tappable, so list rows beside them stay reachable.
     private func selectFooter(bottomInset: CGFloat) -> some View {
@@ -750,7 +752,7 @@ struct ContractorListScreen: View {
                             .foregroundStyle(.white)
                             .frame(height: 32)
                             .padding(.horizontal, 20)
-                            .background(AppColors.btnSecondary, in: Capsule())
+                            .background { FrostedPillBackground() }
                     }
                     .buttonStyle(.plain)
                     Button(action: startMultiQuote) {
@@ -759,8 +761,13 @@ struct ContractorListScreen: View {
                             .foregroundStyle(.white)
                             .frame(height: 32)
                             .padding(.horizontal, 20)
-                            .background(selectedIDs.isEmpty ? AppColors.btnSecondary : AppColors.btnPrimary,
-                                        in: Capsule())
+                            .background {
+                                if selectedIDs.isEmpty {
+                                    FrostedPillBackground()
+                                } else {
+                                    Capsule().fill(AppColors.btnPrimary)
+                                }
+                            }
                     }
                     .buttonStyle(.plain)
                     .disabled(selectedIDs.isEmpty)
@@ -773,7 +780,7 @@ struct ContractorListScreen: View {
                             .foregroundStyle(.white)
                             .frame(height: 32)
                             .padding(.horizontal, 20)
-                            .background(AppColors.btnSecondary, in: Capsule())
+                            .background { FrostedPillBackground() }
                     }
                     .buttonStyle(.plain)
                 }

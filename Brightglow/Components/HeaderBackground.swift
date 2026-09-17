@@ -161,3 +161,16 @@ struct BlurredFooterBackground: View {
     /// off the screen rather than showing as faded strips at the margins.
     private let sideOverscan: CGFloat = 40
 }
+
+/// Frosted-glass background for the secondary pills: the Figma "Background
+/// blur" on the CTA pills — a live backdrop blur under the white-at-20% tint,
+/// clipped to the pill shape. The photo behind the pill visibly frosts instead
+/// of showing through flat. (The gallery's Call button already uses this
+/// recipe; this shares it with the list's pills.)
+struct FrostedPillBackground: View {
+    var body: some View {
+        Capsule()
+            .fill(.ultraThinMaterial)
+            .overlay(Capsule().fill(AppColors.btnSecondary))
+    }
+}
