@@ -71,6 +71,19 @@ enum ContractorLoader {
         return Array(page.contractors.prefix(count))
     }
 
+    /// Trade-repair pool-widening for small jobs: one extra "{trade} repair"
+    /// query (e.g. "roof repair") whose top `count` results merge into the
+    /// trade query's pool, deduped. This is the missing middle the handyman
+    /// supplement can't find — trade pros who actually take small repair work,
+    /// like a roofer who does flashing fixes but never shows up for an 8-foot
+    /// job under a "roofing contractor" search. Same first-page-only,
+    /// fail-open contract as `fetchHandymanSupplement`.
+    static func fetchTradeRepairSupplement(near coord: CLLocationCoordinate2D, count: Int, repairQuery: String) async -> [Contractor] {
+        guard count > 0, !repairQuery.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return [] }
+        let page = await PlacesService.fetchPage(searchText: repairQuery, near: coord, forceAuto: false)
+        return Array(page.contractors.prefix(count))
+    }
+
     /// Built-in demo contractors — used only when no location can be resolved
     /// (GPS denied / offline).
     static func fallback(category: String, searchQuery: String) -> [Contractor] {
