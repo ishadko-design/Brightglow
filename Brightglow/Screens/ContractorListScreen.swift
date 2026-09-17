@@ -791,13 +791,13 @@ struct ContractorListScreen: View {
                 }
                 .padding(.top, 16)
                 // 20pt off the bottom (Igor), seated in the scrim's solid band.
-                .padding(.bottom, 20)
+                .padding(.bottom, 28)
                 .padding(.horizontal, 16)
                 .frame(maxWidth: .infinity)
                 // No solid strip — the smooth scrim alone carries the footer,
                 // so there is no visible container edge.
                 .background(alignment: .bottom) {
-                    FigmaFooterScrim()
+                    FigmaFooterScrim(height: 80)
                 }
             } else {
                 Button(action: {
@@ -811,10 +811,10 @@ struct ContractorListScreen: View {
                         .background { FrostedPillBackground() }
                 }
                 .buttonStyle(.plain)
-                .padding(.bottom, 20)
+                .padding(.bottom, 28)
                 .frame(maxWidth: .infinity)
                 .background(alignment: .bottom) {
-                    FigmaFooterScrim()
+                    FigmaFooterScrim(height: 80)
                 }
             }
         }

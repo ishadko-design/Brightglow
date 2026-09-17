@@ -129,13 +129,15 @@ struct FigmaFooterScrim: View {
     /// transparent, so the visible dark strip reads small.
     var height: CGFloat = 150
 
-    /// Clear at the top, ramping to a near-solid hold across the bottom band so
-    /// the CTA row always has an opaque backdrop and content never reads through.
+    /// Clear at the top, ramping smoothly and evenly to near-solid black at the
+    /// bottom — no steep mid shelf (which read as a "dirty" band). The fade
+    /// begins early (small opacity near the top) so the transition is gradual.
     private var stops: [Gradient.Stop] {
         [
             .init(color: .clear,               location: 0.0),
-            .init(color: .black.opacity(0.4),  location: 0.28),
-            .init(color: .black.opacity(0.88), location: 0.48),
+            .init(color: .black.opacity(0.1),  location: 0.18),
+            .init(color: .black.opacity(0.45), location: 0.45),
+            .init(color: .black.opacity(0.75), location: 0.72),
             .init(color: .black.opacity(0.92), location: 1.0),
         ]
     }
@@ -144,8 +146,27 @@ struct FigmaFooterScrim: View {
         Color.clear
             .frame(maxWidth: .infinity)
             .frame(height: height)
-            .overlay {
-                LinearGradient(stops: stops, startPoint: .top, endPoint: .bottom)
+            .overlay(alignment: .bottom) {
+                ZStack(alignment: .bottom) {
+                    // Background blur — frosts the content (list rows / gallery
+                    // sheet) behind the footer, same as BlurredHeaderBackground's
+                    // dark material, flipped. Masked to fade out toward the TOP so
+                    // its edge is never visible; the dark gradient on top covers
+                    // its greyness across the bottom band so it never tints.
+                    Rectangle()
+                        .fill(.ultraThinMaterial)
+                        .mask(
+                            LinearGradient(
+                                stops: [
+                                    .init(color: .clear, location: 0.18),
+                                    .init(color: .black, location: 0.38),
+                                    .init(color: .black, location: 1.0),
+                                ],
+                                startPoint: .top, endPoint: .bottom
+                            )
+                        )
+                    LinearGradient(stops: stops, startPoint: .top, endPoint: .bottom)
+                }
             }
             .allowsHitTesting(false)
     }
