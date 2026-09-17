@@ -110,12 +110,21 @@ struct BlurredHeaderBackground: View {
     private let sideOverscan: CGFloat = 40
 }
 
-/// Footer scrim — the same soft-gradient-plus-blur recipe as
-/// BlurredHeaderBackground, flipped vertically: clear at the top, ramping to
-/// black at the bottom, drawn oversized and blurred so both ends die soft
-/// with no hard edge. (Figma nodes 1049:4441 / 1270:2647: black gradient,
-/// layer blur 24, 45pt horizontal overscan so the blur's side edges fall
-/// off-screen, list footer extending 38pt past the frame.)
+/// Footer scrim — the same soft-gradient-plus-blur layer as
+/// BlurredHeaderBackground(.dark), flipped vertically: clear at the top,
+/// ramping to black at the bottom, drawn oversized and blurred so both ends
+/// die soft with no hard edge. (Figma nodes 1049:4441 / 1270:2647: black
+/// gradient, layer blur 24, 45pt horizontal overscan so the blur's side edges
+/// fall off-screen, list footer extending 38pt past the frame. Geometry kept
+/// Figma-true; the ramp itself is the header's, mirrored, per Igor: the
+/// Figma 2-stop linear ramp never got dark enough behind the pills once the
+/// solid #131315 CTA strip was removed, and the 5-stop "very smooth" ease
+/// left only ~0.3 black behind the buttons. The mirrored header holds ~0.75
+/// black across the button row and melts to clear above.)
+///
+/// Backdrop blur stays OFF: Figma's background-blur 8 has no tintless native
+/// equivalent — the material approximation was tried and rejected for
+/// tinting. Gradient + layer blur only.
 ///
 /// Layout-neutral: a fixed-size `Color.clear` anchors the footprint; the
 /// gradient lives in a bottom-aligned overlay drawn taller and pulled down
@@ -131,16 +140,16 @@ struct FigmaFooterScrim: View {
     /// Figma gallery footer: 0 (ends at the frame edge).
     var belowExtend: CGFloat = 0
 
-    /// Very smooth black→clear stops: a gentle ease-like ramp with no steep
-    /// sections, so the blur melts it into a soft glow with no visible edge.
-    /// Dark enough at the bottom (0.85) for white pill text to read.
+    /// BlurredHeaderBackground(.dark) stops, mirrored vertically
+    /// (location -> 1 - location): the header holds 0.8 black across the top
+    /// then eases to clear; the footer holds 0.8 black across the bottom then
+    /// eases to clear. Same blur radius as the header (16).
     private var stops: [Gradient.Stop] {
         [
-            .init(color: .clear, location: 0.0),
-            .init(color: .black.opacity(0.15), location: 0.35),
-            .init(color: .black.opacity(0.4), location: 0.6),
-            .init(color: .black.opacity(0.65), location: 0.8),
-            .init(color: .black.opacity(0.85), location: 1.0),
+            .init(color: .clear,               location: 0.0),
+            .init(color: .black.opacity(0.3),  location: 0.18),
+            .init(color: .black.opacity(0.75), location: 0.4),
+            .init(color: .black.opacity(0.8),  location: 1.0),
         ]
     }
 
@@ -152,7 +161,7 @@ struct FigmaFooterScrim: View {
                 LinearGradient(stops: stops, startPoint: .top, endPoint: .bottom)
                     .frame(height: height + belowExtend)
                     .padding(.horizontal, -45)
-                    .blur(radius: 24)
+                    .blur(radius: 16)
                     .offset(y: belowExtend)
             }
             .allowsHitTesting(false)
