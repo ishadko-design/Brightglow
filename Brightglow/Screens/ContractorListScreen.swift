@@ -784,14 +784,14 @@ struct ContractorListScreen: View {
                         .foregroundStyle(.white)
                 }
                 .padding(.top, 16)
-                .padding(.bottom, max(32, bottomInset))
+                // 20pt off the bottom (Igor), seated in the scrim's solid band.
+                .padding(.bottom, 20)
                 .padding(.horizontal, 16)
                 .frame(maxWidth: .infinity)
                 // No solid strip — the smooth scrim alone carries the footer,
-                // so there is no visible container edge. Sized to row + 65 so
-                // the full feather stays visible above the pills.
+                // so there is no visible container edge.
                 .background(alignment: .bottom) {
-                    FigmaFooterScrim(height: 125)
+                    FigmaFooterScrim()
                 }
             } else {
                 Button(action: {
@@ -805,10 +805,10 @@ struct ContractorListScreen: View {
                         .background { FrostedPillBackground() }
                 }
                 .buttonStyle(.plain)
-                .padding(.bottom, 16 + bottomInset)
+                .padding(.bottom, 20)
                 .frame(maxWidth: .infinity)
                 .background(alignment: .bottom) {
-                    FigmaFooterScrim(height: 125)
+                    FigmaFooterScrim()
                 }
             }
         }

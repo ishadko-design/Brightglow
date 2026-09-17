@@ -593,13 +593,15 @@ struct ContractorGalleryScreen: View {
             }
         }
         .padding(.top, 16)
-        .padding(.bottom, max(32, bottomInset))
+        // 20pt off the bottom (Igor) — overrides Figma's safe-area bottom pad so
+        // the CTA sits low, seated in the scrim's solid band.
+        .padding(.bottom, 20)
         .padding(.horizontal, 16)
         .frame(maxWidth: .infinity)
         // No solid strip — the smooth scrim alone carries the footer,
         // so there is no visible container edge.
         .background(alignment: .bottom) {
-            FigmaFooterScrim(height: 124)
+            FigmaFooterScrim()
         }
     }
 
