@@ -115,34 +115,43 @@ struct BlurredHeaderBackground: View {
 /// softly layer-blurred (24pt), with NO backdrop blur. The fade starts
 /// off-screen, so there is never a visible band edge floating over content;
 /// black holds strong through the bottom (like the header holds it at the top)
-/// so the CTAs sit on darkness.
+/// so the CTAs sit on darkness. The gradient also runs past the bottom edge of
+/// the screen, so the blur's faded bottom edge falls off-screen and the visible
+/// bottom stays solid black.
 ///
-/// Layout-neutral like the header: a fixed-size `Color.clear` anchors the
-/// footprint; the blurred gradient is drawn oversized horizontally so the
-/// blur's side edges fall off-screen instead of leaving faded strips.
+/// Layout-neutral: a fixed-size `Color.clear` anchors the footprint (strong
+/// zone + bottom inset); the oversized gradient is drawn in the overlay /
+/// background and offset downward, so it can never inflate the footer or push
+/// buttons off-screen. The blurred gradient is drawn oversized horizontally so
+/// the blur's side edges fall off-screen instead of leaving faded strips.
 struct BlurredFooterBackground: View {
     /// Strong-black zone at the bottom (CTAs + home indicator).
     var height: CGFloat = 160
     /// How far the fade extends upward — past the top of the viewport, so its
     /// start is never visible.
     var topExtend: CGFloat = 800
+    /// How far the gradient continues past the bottom edge of the screen.
+    var bottomExtend: CGFloat = 300
     /// The screen's safe-area bottom inset — the black holds solid through it.
     var bottomInset: CGFloat = 0
 
-    private var totalHeight: CGFloat { topExtend + height + bottomInset }
+    private var totalHeight: CGFloat { topExtend + height + bottomExtend + bottomInset }
     /// Gradient location where the fade begins (everything above is clear).
     private var fadeStart: CGFloat { topExtend / totalHeight }
+    /// Gradient location where the black turns solid (stays solid past the
+    /// screen's bottom edge).
+    private var solidStart: CGFloat { fadeStart + 0.08 }
 
     var body: some View {
         Color.clear
             .frame(maxWidth: .infinity)
-            .frame(height: totalHeight)
+            .frame(height: height + bottomInset)
             .overlay(alignment: .bottom) {
                 LinearGradient(
                     stops: [
                         .init(color: .clear, location: 0.0),
                         .init(color: .black.opacity(0.35), location: fadeStart),
-                        .init(color: .black.opacity(0.8), location: fadeStart + (1 - fadeStart) * 0.55),
+                        .init(color: .black.opacity(0.85), location: solidStart),
                         .init(color: .black.opacity(0.85), location: 1.0),
                     ],
                     startPoint: .top, endPoint: .bottom
@@ -151,6 +160,7 @@ struct BlurredFooterBackground: View {
                 .frame(height: totalHeight)
                 .padding(.horizontal, -sideOverscan)
                 .blur(radius: blurRadius)
+                .offset(y: bottomExtend)
             }
             .allowsHitTesting(false)
     }

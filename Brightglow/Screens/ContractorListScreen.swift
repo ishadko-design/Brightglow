@@ -756,7 +756,7 @@ struct ContractorListScreen: View {
                     }
                     .buttonStyle(.plain)
                     Button(action: startMultiQuote) {
-                        Text("Request quotes (\(selectedIDs.count))")
+                        Text("Request quotes")
                             .font(.h4)
                             .foregroundStyle(.white)
                             .frame(height: 32)
@@ -771,6 +771,10 @@ struct ContractorListScreen: View {
                     }
                     .buttonStyle(.plain)
                     .disabled(selectedIDs.isEmpty)
+                    // The counter is plain text, not part of the button.
+                    Text("(\(selectedIDs.count))")
+                        .font(.h4)
+                        .foregroundStyle(.white)
                 } else {
                     Button(action: {
                         withAnimation(.easeInOut(duration: 0.2)) { isSelectMode = true }
