@@ -118,17 +118,20 @@ struct BlurredHeaderBackground: View {
 ///   position 1, with position 0 at y=112.3% (below the rect) and position 1
 ///   at y=8.0%. As top→bottom stop locations: 0.0 → alpha 0, 0.08 → alpha 0,
 ///   1.0 → alpha 0.882.
-/// - Layer blur 24, visible; background blur 8, visible.
+/// - Layer blur 24, visible.
 ///
-/// The background blur is approximated with ultraThinMaterial — the closest
-/// native backdrop-blur primitive (its tint darkens slightly more than Figma's
-/// pure blur). Everything else is 1:1.
+/// Figma also lists background blur 8 (visible), but there is no tintless
+/// backdrop-blur primitive on iOS — the material approximation tinted the
+/// scrim into a black void, which looked worse than the blur's absence. The
+/// exact gradient + layer blur is what's actually visible.
 ///
 /// Layout-neutral: fixed size, drawn in an overlay/background, never
 /// intercepts touches, and can never inflate the footer or push buttons
 /// off-screen.
 struct FigmaFooterScrim: View {
-    /// Figma BG rect height: 125 (list) / 124 (gallery).
+    /// Total scrim height. The caller sizes it so the Figma feather amount
+    /// stays visible above its (safe-area-taller) CTA row: list = row + 65,
+    /// gallery = 124.
     var height: CGFloat = 125
     /// How far the scrim extends below the footer's bottom edge.
     /// Figma list footer: 38 (the Footer group extends 38pt past the frame).
@@ -136,24 +139,18 @@ struct FigmaFooterScrim: View {
     var belowExtend: CGFloat = 0
 
     var body: some View {
-        ZStack {
-            // Figma: background blur 8 (visible) — backdrop blur under the gradient.
-            Rectangle()
-                .fill(.ultraThinMaterial)
-            // Figma: black gradient + layer blur 24 (visible).
-            LinearGradient(
-                stops: [
-                    .init(color: .black.opacity(0), location: 0.0),
-                    .init(color: .black.opacity(0), location: 0.08),
-                    .init(color: .black.opacity(0.882), location: 1.0),
-                ],
-                startPoint: .top, endPoint: .bottom
-            )
-            .blur(radius: 24)
-        }
+        LinearGradient(
+            stops: [
+                .init(color: .black.opacity(0), location: 0.0),
+                .init(color: .black.opacity(0), location: 0.08),
+                .init(color: .black.opacity(0.882), location: 1.0),
+            ],
+            startPoint: .top, endPoint: .bottom
+        )
         .frame(maxWidth: .infinity)
         .frame(height: height)
         .padding(.horizontal, -45)
+        .blur(radius: 24)
         .offset(y: belowExtend)
         .allowsHitTesting(false)
     }
