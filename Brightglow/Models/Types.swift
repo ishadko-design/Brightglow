@@ -78,6 +78,25 @@ extension Category {
         }
     }
 
+    /// Google Places query that finds trade pros who do small repair work — the
+    /// missing middle between full-trade contractors and generic handymen.
+    /// Used as the pool-widening supplement for small jobs (next to the
+    /// handyman supplement). Nil when the trade has no natural "repair"
+    /// query; those jobs keep the handyman supplement only.
+    var repairQuery: String? {
+        switch self {
+        case .plumbing:     return "plumbing repair"
+        case .electrical:   return "electrical repair"
+        case .hvac:         return "hvac repair"
+        case .roofing:      return "roof repair"
+        case .appliances:   return "appliance repair service"
+        case .carpentry:    return "carpentry repair"
+        case .windowsDoors: return "window repair"
+        case .flooring:     return "floor repair"
+        case .painting, .landscaping, .pestControl: return nil
+        }
+    }
+
     /// Indicative price tiers per trade (Places has no pricing).
     var priceTiers: [PriceTier] {
         switch self {

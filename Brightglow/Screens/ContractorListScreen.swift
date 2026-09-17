@@ -384,6 +384,9 @@ struct ContractorListScreen: View {
         RankingConfigStore.current.smallJob.enabled && jobSize != .standard && !isLicensedSpecialty
     }
 
+    /// The job's trade as a Category, when the search resolved to one.
+    private var jobCategory: Category? { Category(rawValue: category) }
+
     /// Composite relevance score — the single number that decides which five
     /// lead. Job-specific proof first, upstream quality order as the base: a
     /// review naming the searched work and a screened work photo of it outrank
@@ -400,7 +403,7 @@ struct ContractorListScreen: View {
         let review = PhotoFilter.reviewMatchStrength(reviews, query: matchQuery)
         let photo = PhotoFilter.photoMatchStrength(keptPhotos[c.id] ?? [], query: matchQuery, category: category)
         let upstream = upstreamCount > 1 ? 1 - Double(upstreamIndex) / Double(upstreamCount - 1) : 1
-        let sizeFit = smallJobActive && takesSmallJobs(c) ? 1.0 : 0.0
+        let sizeFit = smallJobActive && takesSmallJobs(c, category: jobCategory) ? 1.0 : 0.0
         let score = w.reviewMatch * review + w.photoMatch * photo
             + w.sizeFit * sizeFit + w.upstream * upstream
         return min(score, 1)
@@ -409,15 +412,26 @@ struct ContractorListScreen: View {
     /// Single source of truth for the "Takes small jobs" cue: true when the
     /// business's own profile or its reviewers say it takes on small work.
     /// One-directional — absence draws no cue, never a negative badge.
-    private func takesSmallJobs(_ c: Contractor) -> Bool {
+    ///
+    /// Trade-aware via `category`: repair language in the job's own trade
+    /// ("roof repair", "fixed my roof") counts as a strong claim, and a review
+    /// profile dominated by install/replacement work ("new roof", "full
+    /// replacement") with no repair mention vetoes the cue — across every
+    /// trade, repair businesses take small jobs and install businesses don't.
+    /// The veto only ever suppresses the positive cue; it never renders a
+    /// negative badge.
+    private func takesSmallJobs(_ c: Contractor, category cat: Category?) -> Bool {
         // A handyman IS the small-jobs business model — no review-mining needed.
         if c.placeTypes.contains("handyman") { return true }
         if c.name.localizedCaseInsensitiveContains("handyman") { return true }
         let texts = c.reviews.map(\.text).map { " \($0.lowercased()) " }
         guard !texts.isEmpty else { return false }
-        // Explicit "no job too small"-style claims: one hit is enough.
-        let strong = ["no job too small", "no job is too small", "small jobs welcome",
+        // Explicit "no job too small"-style claims: one hit is enough. The
+        // job's own trade in repair language joins the strong list — a roofer
+        // reviewers say "repaired my roof" is exactly the missing middle.
+        var strong = ["no job too small", "no job is too small", "small jobs welcome",
                       "any size job", "any size project"]
+        if let cat = cat { strong += tradeRepairPhrases(for: cat) }
         if strong.contains(where: { s in texts.contains(where: { $0.contains(s) }) }) { return true }
         // Explicit refusals veto everything — never claim it when a reviewer
         // says the business turned small work away.
@@ -425,11 +439,55 @@ struct ContractorListScreen: View {
                         "only large", "only big", "large jobs only",
                         "won't do small", "wouldn't do small"]
         if negative.contains(where: { s in texts.contains(where: { $0.contains(s) }) }) { return false }
+        // Install/replacement-dominated profile with no repair mention: this
+        // business does big jobs, not small ones. Conservative by design —
+        // three independent install mentions, zero repair mentions.
+        if installDominated(texts) && !repairMentioned(texts) { return false }
         // Weaker small-work mentions: need two independent hits.
         let positive = ["small job", "small jobs", "minor repair", "quick fix",
                         "tiny job", "small repair", "little job"]
         let hits = texts.reduce(0) { total, text in total + positive.filter { p in text.contains(p) }.count }
         return hits >= 2
+    }
+
+    /// Repair-language phrases for the job's own trade — one hit is a strong
+    /// "takes small jobs" claim. The general form of the flashing lesson: the
+    /// business reviewers describe doing *repairs* takes small work.
+    private func tradeRepairPhrases(for cat: Category) -> [String] {
+        switch cat {
+        case .roofing:      return ["roof repair", "roof repaired", "repaired my roof", "repaired our roof",
+                                    "fixed my roof", "fixed our roof", "small roof job", "roof leak fixed"]
+        case .plumbing:     return ["plumbing repair", "fixed my leak", "fixed our leak", "leak fixed",
+                                    "small plumbing job", "repaired my faucet", "fixed my toilet"]
+        case .electrical:   return ["electrical repair", "small electrical job", "fixed my outlet",
+                                    "outlet fixed", "fixed our wiring"]
+        case .hvac:         return ["hvac repair", "furnace repair", "ac repair", "fixed my ac",
+                                    "fixed our furnace", "small hvac job"]
+        case .appliances:   return ["appliance repair", "fixed my fridge", "fixed my washer",
+                                    "fixed our dryer", "small appliance job"]
+        case .carpentry:    return ["carpentry repair", "small carpentry job", "fixed my deck",
+                                    "trim repair", "fixed our fence"]
+        case .windowsDoors: return ["window repair", "door repair", "fixed my window",
+                                    "small window job", "repaired my door"]
+        case .flooring:     return ["floor repair", "fixed my floor", "small floor job",
+                                    "repaired my floor"]
+        case .painting, .landscaping, .pestControl: return []
+        }
+    }
+
+    /// True when reviewers describe install/replacement work at least three
+    /// times — the profile of a business that does big jobs.
+    private func installDominated(_ texts: [String]) -> Bool {
+        let install = ["new roof", "roof replacement", "replaced my roof", "replaced our roof",
+                       "full replacement", "new installation", "installed a new", "full remodel",
+                       "new construction"]
+        let hits = texts.reduce(0) { total, text in total + install.filter { p in text.contains(p) }.count }
+        return hits >= 3
+    }
+
+    /// True when any review mentions repair work at all.
+    private func repairMentioned(_ texts: [String]) -> Bool {
+        ["repair", "repaired", "fixed"].contains(where: { s in texts.contains(where: { $0.contains(s) }) })
     }
 
     /// The customer review that best describes the searched job, shown on the row
@@ -562,7 +620,7 @@ struct ContractorListScreen: View {
                             // the ~4 businesses in view, then more as the user scrolls.
                             photos: revealedIDs.contains(contractor.id) ? screenedByID[contractor.id] : nil,
                             licenseNo: licenseByID[contractor.id]?.licenseNo,
-                            takesSmallJobs: takesSmallJobs(contractor),
+                            takesSmallJobs: takesSmallJobs(contractor, category: jobCategory),
                             // The customer's own words about this job — shown as
                             // the "why" when a review names the searched work.
                             matchingReview: matchingReview(contractor),
@@ -916,6 +974,21 @@ struct ContractorListScreen: View {
             if smallJobActive {
                 let extra = await ContractorLoader.fetchHandymanSupplement(
                     near: coord, count: RankingConfigStore.current.smallJob.supplementCount)
+                let existing = Set(page.contractors.map(\.id))
+                let fresh = extra.filter { !existing.contains($0.id) }
+                if !fresh.isEmpty {
+                    page = PlacesService.Page(contractors: page.contractors + fresh,
+                                              nextPageToken: page.nextPageToken)
+                }
+            }
+            // Small non-licensed job: also widen with "{trade} repair" pros —
+            // the missing middle between full-trade contractors and generic
+            // handymen. A roofer who does flashing fixes is found by
+            // "roof repair", not by "roofing contractor". Merged deduped,
+            // first page only — pagination continues the trade query untouched.
+            if smallJobActive, let cat = jobCategory, let repairQ = cat.repairQuery {
+                let extra = await ContractorLoader.fetchTradeRepairSupplement(
+                    near: coord, count: RankingConfigStore.current.smallJob.supplementCount, repairQuery: repairQ)
                 let existing = Set(page.contractors.map(\.id))
                 let fresh = extra.filter { !existing.contains($0.id) }
                 if !fresh.isEmpty {
