@@ -16,6 +16,11 @@ import MessageUI
 /// enough to send.
 struct QuoteRequestScreen: View {
     var contractor: Contractor? = nil
+    /// Multi-select prototype: when non-empty, the request is composed for ALL
+    /// of these businesses. In-memory only — the selection is never persisted.
+    var contractors: [Contractor] = []
+    /// True when this is a multi-business request (prototype).
+    private var isMulti: Bool { !contractors.isEmpty }
     /// Photos already captured earlier in the flow (camera + drawing, or the
     /// search bar's own picker) — shown up front so the user reviews exactly
     /// what's about to be sent, rather than picking again from scratch.
@@ -132,11 +137,15 @@ struct QuoteRequestScreen: View {
     /// app is the reply channel — the business gets the customer's number — so no
     /// email is needed or used. Email is only the reply channel on the fallback.
     private var willText: Bool {
-        contractor?.phone != nil && Self.deviceCanText
+        if isMulti { return contractors.contains { $0.phone != nil } && Self.deviceCanText }
+        return contractor?.phone != nil && Self.deviceCanText
     }
     private var canSend: Bool {
-        (willText || emailValid) && hasDescription && contractor != nil && !sending && !savingLead
+        (willText || emailValid) && hasDescription && (contractor != nil || isMulti) && !sending && !savingLead
     }
+    /// Multi-send queue (prototype): SMS payloads awaiting their composer turn.
+    /// Email-only businesses send immediately during the build pass.
+    @State private var smsQueue: [ComposePayload] = []
 
     var body: some View {
         ZStack {
@@ -424,6 +433,8 @@ struct QuoteRequestScreen: View {
         // duplicate in the background (see sendRequest).
         .sheet(item: $compose) { payload in
             MessageComposerView(recipient: payload.recipient, body: payload.body, photos: payload.photos) { result in
+                // Multi-select prototype: advance (or stop) the per-business queue.
+                if isMulti { handleMultiComposerResult(result, payload: payload); return }
                 compose = nil
                 // The blue Send INSIDE Messages: the true conversion. .sent means
                 // the text actually went; .cancelled is the abandon we couldn't
@@ -459,6 +470,20 @@ struct QuoteRequestScreen: View {
     /// half the Figma's 88, since resolved marks are often small/low-res and blow up
     /// badly at full size; smaller keeps a pixelated logo from dominating the screen.
     private var businessHeader: some View {
+        // Multi-select prototype: the selected business names at 14pt — no
+        // logos, so up to five fit comfortably.
+        if isMulti {
+            VStack(spacing: 8) {
+                ForEach(contractors) { c in
+                    Text(c.name)
+                        .font(.system(size: 14))
+                        .foregroundStyle(.white)
+                        .lineLimit(1)
+                        .multilineTextAlignment(.center)
+                }
+            }
+            return
+        }
         VStack(spacing: 24) {
             if let logoURL {
                 AsyncImage(url: logoURL) { phase in
@@ -666,7 +691,9 @@ struct QuoteRequestScreen: View {
                 Text("Request sent")
                     .font(.h2)
                     .foregroundStyle(.white)
-                Text("\(contractor?.name ?? "The business") has your request. They'll reply to you directly.")
+                Text(isMulti
+                     ? "\(contractors.count) businesses have your request. They'll reply to you directly."
+                     : "\(contractor?.name ?? "The business") has your request. They'll reply to you directly.")
                     .font(.bodyLight)
                     .foregroundStyle(.white)
                     .multilineTextAlignment(.center)
@@ -741,7 +768,10 @@ struct QuoteRequestScreen: View {
     /// the first (the drawn/annotated one, when there is one) is what's sent.
     /// With none attached the lead goes as text only.
     private func sendRequest() {
-        guard canSend, let contractor else { return }
+        guard canSend else { return }
+        // Multi-select prototype: one personalized send per selected business.
+        if isMulti { sendMultiRequest(); return }
+        guard let contractor else { return }
         // Drop the keyboard BEFORE the SMS composer sheet takes over. Otherwise
         // its keyboard-avoidance inset is left applied when the composer is
         // cancelled — the screen comes back with a phantom gap where the (now
@@ -878,6 +908,134 @@ struct QuoteRequestScreen: View {
                 }
             }
         }
+    }
+
+    // MARK: - Multi-select prototype (in-memory; nothing persisted)
+
+    /// Prototype multi-send: one personalized SMS per selected business,
+    /// presented sequentially in the user's own Messages app (P2P, 1:1 —
+    /// never a group text). Businesses without a textable phone send over
+    /// email immediately during the build pass. A cancel or failure stops
+    /// the queue; businesses already sent keep their leads.
+    private func sendMultiRequest() {
+        // Drop the keyboard BEFORE the SMS composer sheet takes over (same
+        // phantom-gap avoidance as the single path).
+        requestFocused = false
+        emailFocused = false
+#if DEBUG
+        if Self.smsTestRecipient.isEmpty {
+            sendError = "Test mode off: change the recipient to your own number in the Messages app."
+        }
+#endif
+        AnalyticsService.track("send_tapped", [
+            "place_id": "multi",
+            "channel": "multi",
+            "count": contractors.count,
+        ])
+        let photos = images.map { $0.brightglowWatermarked() }
+        emailFocused = false
+        requestFocused = false
+        editingEmail = false
+        sendError = nil
+
+        let base = editableRequest.trimmingCharacters(in: .whitespacesAndNewlines)
+        let description = vehicleNote.isEmpty ? base : "Vehicle: \(vehicleNote)\n\n\(base)"
+        // {job} is the clarify LLM's 3-5 word job title — shared across every
+        // recipient; only the business name is personalized per text.
+        let smsJob: String = {
+            let titled = strippingTestKeyword(clarifyTranscript.jobTitle)
+            if !titled.isEmpty { return titled }
+            let firstLine = strippingTestKeyword(
+                description.components(separatedBy: .newlines).first?
+                    .trimmingCharacters(in: .whitespacesAndNewlines) ?? "")
+            guard firstLine.count > 40 else { return firstLine }
+            let head = String(firstLine.prefix(40))
+            if let space = head.lastIndex(of: " ") {
+                return String(head[..<space]).trimmingCharacters(in: .whitespacesAndNewlines) + "\u{2026}"
+            }
+            return head.trimmingCharacters(in: .whitespacesAndNewlines) + "\u{2026}"
+        }()
+        let jobClause: String = smsJob.isEmpty ? "a request" : "a request for \(smsJob)"
+
+        sending = true
+        smsQueue = []
+        Task {
+            var queue: [ComposePayload] = []
+            for c in contractors {
+                if let phone = c.phone, Self.deviceCanText {
+                    // Same pre-compose lead save as the single path: the /l
+                    // link must be live before the composer opens.
+                    let publicId = LeadBridgeService.newPublicID()
+                    let body = "Hi \(c.name), I have \(jobClause) — photos and details below. "
+                        + LeadBridgeService.replyURL(publicId: publicId)
+                    let payload = ComposePayload(
+                        recipient: Self.smsTestRecipient.isEmpty ? phone : Self.smsTestRecipient,
+                        body: body,
+                        photos: [],
+                        uploadPhotos: photos,
+                        description: description,
+                        publicId: publicId
+                    )
+                    do {
+                        try await submitEmailLead(c, description: payload.description,
+                                                  photos: payload.uploadPhotos,
+                                                  publicId: payload.publicId, notify: false)
+                        queue.append(payload)
+                    } catch {
+                        print("❌ multi lead save failed for \(c.name): \(error)")
+                        await MainActor.run {
+                            sending = false
+                            sendError = "Couldn't save your request for \(c.name). Please try again."
+                        }
+                        return
+                    }
+                } else {
+                    // No textable phone — email is the only channel.
+                    do {
+                        try await submitEmailLead(c, description: description, photos: photos)
+                    } catch {
+                        await MainActor.run {
+                            sending = false
+                            sendError = "Couldn't send to \(c.name): \(error)"
+                        }
+                        return
+                    }
+                }
+            }
+            await MainActor.run {
+                sending = false
+                smsQueue = queue
+                advanceMultiQueue()
+            }
+        }
+    }
+
+    /// Presents the next queued SMS composer, or finishes once the queue drains.
+    private func advanceMultiQueue() {
+        guard !smsQueue.isEmpty else {
+            withAnimation(.easeInOut(duration: 0.25)) { sent = true }
+            return
+        }
+        compose = smsQueue.removeFirst()
+    }
+
+    /// Handles one Messages composer result in a multi-send: a real send
+    /// advances to the next business; a cancel or failure retracts that lead
+    /// and stops the queue.
+    private func handleMultiComposerResult(_ result: MessageComposeResult, payload: ComposePayload) {
+        compose = nil
+        AnalyticsService.track("send_result", [
+            "place_id": "multi",
+            "channel": "text",
+            "outcome": result == .sent ? "sent" : (result == .failed ? "failed" : "cancelled"),
+        ])
+        guard result == .sent else {
+            Task { await LeadBridgeService.deleteLead(publicId: payload.publicId) }
+            if result == .failed { sendError = "Couldn't open Messages. Try again." }
+            smsQueue = []
+            return
+        }
+        advanceMultiQueue()
     }
 
     /// Retries the pre-compose lead save, then opens the composer. Reuses the

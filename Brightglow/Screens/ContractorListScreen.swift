@@ -15,6 +15,14 @@ import CoreLocation
 // re-fetch or re-screen.
 // ─────────────────────────────────────────────────────────────────────────────
 
+/// Navigation payload for a multi-contractor quote request (prototype).
+/// `Contractor` isn't Hashable, so the array rides inside this wrapper for
+/// `navigationDestination(item:)`.
+private struct MultiQuoteRequest: Identifiable {
+    let id = UUID()
+    let contractors: [Contractor]
+}
+
 struct ContractorListScreen: View {
     var category: String = ""
     /// The vertical the clarifying chat resolved ("home" / "auto_moto"), empty
@@ -142,6 +150,18 @@ struct ContractorListScreen: View {
     /// Held by id (not the value) because `navigationDestination(item:)` wants a
     /// Hashable, and `Contractor` isn't one.
     @State private var quoteContractorID: String? = nil
+    // ── Multi-select prototype ──────────────────────────────────────────
+    // In-memory only: the selection dies with this screen — nothing is
+    // written to UserDefaults, files, or the backend.
+    @State private var isSelectMode = false
+    @State private var selectedIDs: Set<String> = []
+    /// Retreating-footer visibility: the footer slides away while the user
+    /// scrolls down through results and returns when they scroll back up.
+    @State private var footerVisible = true
+    /// Drives the multi-contractor quote screen (prototype).
+    @State private var multiQuote: MultiQuoteRequest? = nil
+    /// Cap on simultaneous selections (prototype).
+    private let maxSelection = 5
     /// Explainer for the header's info icon next to the estimate.
     @State private var showEstimateInfo = false
     @State private var goGallery = false
@@ -529,6 +549,11 @@ struct ContractorListScreen: View {
 
                 header(topInset: topInset)
             }
+            // Retreating multi-select footer (prototype) — floats above the
+            // list, same fading-gradient treatment as the gallery's button bar.
+            .overlay(alignment: .bottom) {
+                selectFooter(bottomInset: proxy.safeAreaInsets.bottom)
+            }
         }
         .navigationBarBackButtonHidden(true)
         .toolbar(.hidden, for: .navigationBar)
@@ -564,6 +589,17 @@ struct ContractorListScreen: View {
             // whose row CTA was tapped.
             QuoteRequestScreen(
                 contractor: contractors.first { $0.id == id },
+                initialImages: attachedImages,
+                vehicleNote: quoteVehicleNote,
+                clarifyTranscript: clarifyTranscript,
+                userCity: userCity
+            )
+        }
+        .navigationDestination(item: $multiQuote) { req in
+            // Multi-select prototype: the send screen lists every selected
+            // business and sends the request to each in turn.
+            QuoteRequestScreen(
+                contractors: req.contractors,
                 initialImages: attachedImages,
                 vehicleNote: quoteVehicleNote,
                 clarifyTranscript: clarifyTranscript,
@@ -630,7 +666,11 @@ struct ContractorListScreen: View {
                             onQuote: { quoteContractorID = contractor.id },
                             onCall: { callContractor = contractor },
                             onPhotoUnavailable: { url in dropUnusablePhoto(url, from: contractor.id) },
-                            onNoUsablePhotos: { dropPhotolessBusiness(contractor.id) }
+                            onNoUsablePhotos: { dropPhotolessBusiness(contractor.id) },
+                            // Multi-select prototype: the logo slot becomes a checkbox.
+                            selectionMode: isSelectMode,
+                            isSelected: selectedIDs.contains(contractor.id),
+                            onToggleSelect: { toggleSelect(contractor) }
                         )
                         .id(contractor.id)
                         // Strictly lazy: reveal (and screen) a row's photos only when
@@ -668,7 +708,106 @@ struct ContractorListScreen: View {
             // A fresh screening re-fetches images the cache never stored (a failed
             // fetch isn't cached), so a transient miss recovers on the next pull.
             .refreshable { await reload() }
+            // Retreating footer (prototype): slides away while the user scrolls
+            // down through results (revealing more content) and returns when
+            // they scroll back up.
+            .onScrollGeometryChange(for: CGFloat.self) { geometry in
+                geometry.contentOffset.y
+            } action: { old, new in
+                let dy = new - old
+                guard abs(dy) > 2 else { return }
+                footerVisible = dy < 0 || new <= 0
+            }
         }
+    }
+
+    // ── Multi-select footer (prototype) ─────────────────────────────────────
+    // Floating pill over a fading gradient floor — the same transparent→opaque
+    // treatment as the gallery's bottom button bar, but a smaller secondary
+    // pill. The gradient is visual-only (never intercepts touches); only the
+    // pills are tappable, so list rows beside them stay reachable.
+    private func selectFooter(bottomInset: CGFloat) -> some View {
+        let shown = isSelectMode || footerVisible
+        return ZStack(alignment: .bottom) {
+            LinearGradient(
+                stops: [
+                    .init(color: AppColors.bg.opacity(0),   location: 0.0),
+                    .init(color: AppColors.bg.opacity(0.6), location: 0.45),
+                    .init(color: AppColors.bg,              location: 0.8),
+                    .init(color: AppColors.bg,              location: 1.0)
+                ],
+                startPoint: .top, endPoint: .bottom
+            )
+            .allowsHitTesting(false)
+            HStack(spacing: 12) {
+                if isSelectMode {
+                    Button(action: {
+                        withAnimation(.easeInOut(duration: 0.2)) {
+                            isSelectMode = false
+                            selectedIDs = []
+                        }
+                    }) {
+                        Text("Cancel")
+                            .font(.bodySmall)
+                            .fontWeight(.semibold)
+                            .foregroundStyle(.white)
+                            .frame(height: 40)
+                            .padding(.horizontal, 20)
+                            .background(AppColors.btnSecondary, in: Capsule())
+                    }
+                    .buttonStyle(.plain)
+                    Button(action: startMultiQuote) {
+                        Text("Request quotes (\(selectedIDs.count))")
+                            .font(.bodySmall)
+                            .fontWeight(.semibold)
+                            .foregroundStyle(.white)
+                            .frame(height: 40)
+                            .padding(.horizontal, 20)
+                            .background(selectedIDs.isEmpty ? AppColors.btnSecondary : AppColors.btnPrimary,
+                                        in: Capsule())
+                    }
+                    .buttonStyle(.plain)
+                    .disabled(selectedIDs.isEmpty)
+                } else {
+                    Button(action: {
+                        withAnimation(.easeInOut(duration: 0.2)) { isSelectMode = true }
+                    }) {
+                        Text("Select multiple")
+                            .font(.bodySmall)
+                            .fontWeight(.semibold)
+                            .foregroundStyle(.white)
+                            .frame(height: 40)
+                            .padding(.horizontal, 20)
+                            .background(AppColors.btnSecondary, in: Capsule())
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+            .padding(.bottom, 16 + bottomInset)
+        }
+        .padding(.top, 72)
+        .frame(maxWidth: .infinity)
+        .offset(y: shown ? 0 : 160)
+        .opacity(shown ? 1 : 0)
+        .animation(.easeInOut(duration: 0.25), value: shown)
+        .allowsHitTesting(shown)
+    }
+
+    /// Toggles a contractor's selection, capped at `maxSelection` (prototype —
+    /// further taps at the cap are ignored).
+    private func toggleSelect(_ c: Contractor) {
+        if selectedIDs.contains(c.id) {
+            selectedIDs.remove(c.id)
+        } else if selectedIDs.count < maxSelection {
+            selectedIDs.insert(c.id)
+        }
+    }
+
+    /// Heads to the send screen with the selected businesses (prototype).
+    private func startMultiQuote() {
+        let picked = contractors.filter { selectedIDs.contains($0.id) }
+        guard !picked.isEmpty else { return }
+        multiQuote = MultiQuoteRequest(contractors: picked)
     }
 
     // ── Infinite scroll — reveals held-back matches, then pages, on approach ───
@@ -1505,6 +1644,13 @@ private struct ContractorListRow: View {
     /// Every one of this business's photos failed to load — parent drops the
     /// business, enforcing "a listed contractor must show a real picture".
     let onNoUsablePhotos: () -> Void
+    // ── Multi-select prototype ──────────────────────────────────────────
+    /// When true the logo slot becomes a checkbox instead of the business logo.
+    let selectionMode: Bool
+    /// Whether this row is currently selected (prototype).
+    let isSelected: Bool
+    /// Toggles this row's selection (prototype).
+    let onToggleSelect: () -> Void
 
     /// Photo URLs that failed to load, so their gray tiles are dropped and the
     /// mosaic re-lays-out around the survivors (or the row is removed if none).
@@ -1519,6 +1665,27 @@ private struct ContractorListRow: View {
     /// the three most related to the user's request.
     private let maxTiles = 3
 
+    /// Multi-select checkbox (prototype): replaces the logo slot. The circle is
+    /// 26pt but the tappable area is the full 44×44, so it's easy to hit.
+    private var selectCheckbox: some View {
+        ZStack {
+            if isSelected {
+                Circle()
+                    .fill(AppColors.btnPrimary)
+                    .frame(width: 26, height: 26)
+                Image(systemName: "checkmark")
+                    .font(.system(size: 13, weight: .bold))
+                    .foregroundStyle(.white)
+            } else {
+                Circle()
+                    .strokeBorder(.white.opacity(0.45), lineWidth: 2)
+                    .frame(width: 26, height: 26)
+            }
+        }
+        .frame(width: 44, height: 44)
+        .contentShape(Rectangle())
+    }
+
     var body: some View {
         // Header block (8pt above the photo mosaic).
         VStack(alignment: .leading, spacing: 8) {
@@ -1526,9 +1693,13 @@ private struct ContractorListRow: View {
             // Figma 793:1779: 12pt between the name/CTA row and the metadata row.
             VStack(alignment: .leading, spacing: 12) {
                 HStack(spacing: 12) {
-                    Button(action: { onOpen(0) }) {
+                    Button(action: { selectionMode ? onToggleSelect() : onOpen(0) }) {
                         HStack(spacing: 8) {
-                            ContractorLogoView(name: contractor.name, url: logoURL)
+                            if selectionMode {
+                                selectCheckbox
+                            } else {
+                                ContractorLogoView(name: contractor.name, url: logoURL)
+                            }
                             Text(contractor.name)
                                 .font(.h3)                  // Lato 700 / 18
                                 .foregroundStyle(.white)
