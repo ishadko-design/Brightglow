@@ -724,16 +724,19 @@ struct ContractorListScreen: View {
     }
 
     // ── Multi-select footer (prototype) ─────────────────────────────────────
-    // Figma node 1049:4441 ("Open category - list"): the pill floats over the
-    // shared blurred footer backdrop (black→transparent gradient, layer-blurred
-    // like the header — no backdrop blur), 125pt of fade, a 32pt pill in white
-    // at 20% (AppColors.btnSecondary), Lato 14 Bold (.h4). The backdrop is
-    // visual-only (never intercepts touches); only the pills are tappable, so
-    // list rows beside them stay reachable.
+    // The pill floats over the shared blurred footer backdrop: a tall
+    // black→transparent scrim (up past the viewport, so the fade never reads
+    // as a floating band), layer-blurred like the header — no backdrop blur.
+    // Pill: 32pt, white at 20% (AppColors.btnSecondary), Lato 14 Bold (.h4).
+    // The backdrop is visual-only (never intercepts touches); only the pills
+    // are tappable, so list rows beside them stay reachable.
     private func selectFooter(bottomInset: CGFloat) -> some View {
         let shown = isSelectMode || footerVisible
+        // Full-height scrim: must clear the screen entirely when retreating.
+        let fadeH: CGFloat = 160
+        let extendH: CGFloat = 800
         return ZStack(alignment: .bottom) {
-            BlurredFooterBackground(height: 125, bottomInset: bottomInset)
+            BlurredFooterBackground(height: fadeH, topExtend: extendH, bottomInset: bottomInset)
             HStack(spacing: 8) {
                 if isSelectMode {
                     Button(action: {
@@ -778,7 +781,7 @@ struct ContractorListScreen: View {
             .padding(.bottom, 16 + bottomInset)
         }
         .frame(maxWidth: .infinity)
-        .offset(y: shown ? 0 : 160)
+        .offset(y: shown ? 0 : extendH + fadeH + bottomInset)
         .opacity(shown ? 1 : 0)
         .animation(.easeInOut(duration: 0.25), value: shown)
         .allowsHitTesting(shown)

@@ -110,43 +110,52 @@ struct BlurredHeaderBackground: View {
     private let sideOverscan: CGFloat = 40
 }
 
-/// Shared footer backdrop — the Figma "Blurred bg" treatment (node 1049:4441
-/// "Open category - list", node 1270:2647 "Open category - no description"): a
-/// black→transparent linear gradient, softly layer-blurred (24pt), with NO
-/// backdrop blur — the same recipe as the header scrim, so the top and bottom
-/// of the screen read as one system.
+/// Shared footer backdrop — mirrors the header scrim, flipped vertically: a
+/// black→transparent gradient drawn TALL (up past the top of the viewport) and
+/// softly layer-blurred (24pt), with NO backdrop blur. The fade starts
+/// off-screen, so there is never a visible band edge floating over content;
+/// black holds strong through the bottom (like the header holds it at the top)
+/// so the CTAs sit on darkness.
 ///
 /// Layout-neutral like the header: a fixed-size `Color.clear` anchors the
-/// footprint (`height` of visible fade plus `bottomInset` under the home
-/// indicator); the blurred gradient is drawn oversized horizontally so the
+/// footprint; the blurred gradient is drawn oversized horizontally so the
 /// blur's side edges fall off-screen instead of leaving faded strips.
 struct BlurredFooterBackground: View {
-    /// Visible fade height (Figma: 125 on the list, 124 on the gallery).
-    var height: CGFloat = 125
+    /// Strong-black zone at the bottom (CTAs + home indicator).
+    var height: CGFloat = 160
+    /// How far the fade extends upward — past the top of the viewport, so its
+    /// start is never visible.
+    var topExtend: CGFloat = 800
     /// The screen's safe-area bottom inset — the black holds solid through it.
     var bottomInset: CGFloat = 0
+
+    private var totalHeight: CGFloat { topExtend + height + bottomInset }
+    /// Gradient location where the fade begins (everything above is clear).
+    private var fadeStart: CGFloat { topExtend / totalHeight }
 
     var body: some View {
         Color.clear
             .frame(maxWidth: .infinity)
-            .frame(height: height + bottomInset)
-            .overlay {
+            .frame(height: totalHeight)
+            .overlay(alignment: .bottom) {
                 LinearGradient(
                     stops: [
                         .init(color: .clear, location: 0.0),
-                        .init(color: .black, location: 1.0),
+                        .init(color: .black.opacity(0.35), location: fadeStart),
+                        .init(color: .black.opacity(0.8), location: fadeStart + (1 - fadeStart) * 0.55),
+                        .init(color: .black.opacity(0.85), location: 1.0),
                     ],
                     startPoint: .top, endPoint: .bottom
                 )
                 .frame(maxWidth: .infinity)
-                .frame(height: height + bottomInset)
+                .frame(height: totalHeight)
                 .padding(.horizontal, -sideOverscan)
                 .blur(radius: blurRadius)
             }
             .allowsHitTesting(false)
     }
 
-    /// Figma LAYER_BLUR on the footer BG rect.
+    /// Layer blur softening the fade (the header's recipe, no backdrop blur).
     private let blurRadius: CGFloat = 24
     /// Horizontal overscan (≥ the blur radius) so the blurred side edges fall
     /// off the screen rather than showing as faded strips at the margins.

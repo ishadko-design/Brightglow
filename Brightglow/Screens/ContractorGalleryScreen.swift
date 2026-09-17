@@ -555,10 +555,10 @@ struct ContractorGalleryScreen: View {
         let canQuote = hasPhone || hasEmail
         let callWidth = canQuote ? pairWidth : max(0, width - 32)
         return ZStack(alignment: .bottom) {
-            // Shared blurred footer backdrop: black→transparent gradient,
-            // layer-blurred like the header — no backdrop blur. 124pt of fade
-            // (Figma), buttons bottom-anchored.
-            BlurredFooterBackground(height: 124, bottomInset: bottomInset)
+            // Shared blurred footer backdrop: tall black→transparent scrim, up
+            // past the viewport like the header — no floating band edge, black
+            // held strong behind the buttons.
+            BlurredFooterBackground(bottomInset: bottomInset)
             HStack(spacing: 8) {
             // Call replaces the old "Next": tapping shows a reminder to mention
             // the app, then hands off to the dialer. Dimmed when Places returned
