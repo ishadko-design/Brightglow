@@ -825,8 +825,11 @@ enum PhotoFilter {
     /// the tagger emitted `job:` tags.
     private nonisolated static func scoringLabels(_ labels: [String]) -> [String] {
         labels.flatMap { label -> [String] in
-            guard label.hasPrefix("job:") else { return [label] }
-            let words = String(label.dropFirst(4))
+            // Case-insensitive: the server lowercases tags on store, but a
+            // fresh tag batch returns the model's raw casing on first sight.
+            let lower = label.lowercased()
+            guard lower.hasPrefix("job:") else { return [label] }
+            let words = String(lower.dropFirst(4))
                 .split(whereSeparator: { !$0.isLetter }).map(String.init)
             return words.isEmpty ? [] : words
         }
@@ -843,7 +846,7 @@ enum PhotoFilter {
     /// job-tagged photo.
     private nonisolated static func isDistractorJob(_ labels: [String], _ visual: VisualQuery) -> Bool {
         guard !visual.isEmpty else { return false }
-        let jobWords = scoringLabels(labels.filter { $0.hasPrefix("job:") })
+        let jobWords = scoringLabels(labels.filter { $0.lowercased().hasPrefix("job:") })
         guard !jobWords.isEmpty else { return false }
         return !visual.concepts.contains { concept in
             jobWords.contains { word in concept.contains { matches(word, $0) } }
