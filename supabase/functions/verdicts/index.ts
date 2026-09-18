@@ -20,7 +20,7 @@
 // NOTE: unauthenticated (verify_jwt = false) like `search`; hardening is Phase 4.
 
 import { createClient } from "jsr:@supabase/supabase-js@2";
-import { lookupStoredTags, photoNameFromUrl } from "../_shared/photo-tagging.ts";
+import { lookupStoredTags, photoNameFromUrl, TAG_VERSION } from "../_shared/photo-tagging.ts";
 
 const SUPA_URL = Deno.env.get("SUPABASE_URL") ?? "";
 const SERVICE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
@@ -75,8 +75,8 @@ Deno.serve(async (req) => {
     // or never-enriched verdict serves "furnace"-level labels the moment any
     // tagging path has covered its photos — no client change needed for the
     // ranking to start seeing them.
+    const urlToKey = new Map<string, string>();
     try {
-      const urlToKey = new Map<string, string>();
       for (const v of Object.values(out)) {
         const kept = (v as { kept?: unknown }).kept;
         if (!Array.isArray(kept)) continue;
@@ -105,6 +105,29 @@ Deno.serve(async (req) => {
       }
     } catch (err) {
       console.error("verdicts: tag merge failed", err);  // best-effort; verdicts still served
+    }
+    // A verdict only counts as enriched if its kept photos actually carry
+    // current-version vision tags. Older clients marked enriched=true even
+    // when the tagger added nothing, which wedged those verdicts on generic
+    // on-device labels forever — the client never retries an enriched
+    // verdict, so photo-evidence ranking could never fire for them.
+    // Recompute from the tag store (version-aware, like phototags'
+    // cache-skip) instead of trusting the stored flag.
+    try {
+      const current = await lookupStoredTags(db, [...urlToKey.values()], TAG_VERSION);
+      for (const v of Object.values(out)) {
+        const entry = v as { kept?: unknown; enriched?: boolean };
+        const kept = entry.kept;
+        if (!Array.isArray(kept) || kept.length === 0) continue;
+        const allTagged = kept.every((k) => {
+          const url = typeof k === "string" ? k : (k as { url?: unknown })?.url;
+          if (typeof url !== "string" || !url) return false;
+          return current[urlToKey.get(url) ?? ""] !== undefined;
+        });
+        if (!allTagged) entry.enriched = false;
+      }
+    } catch (err) {
+      console.error("verdicts: enriched recompute failed", err);  // best-effort; stored flag stands
     }
     return json({ verdicts: out });
   }
