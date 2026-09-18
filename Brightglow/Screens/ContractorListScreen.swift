@@ -560,12 +560,6 @@ struct ContractorListScreen: View {
                     selectFooter(bottomInset: proxy.safeAreaInsets.bottom)
                 }
             }
-            // Extend the content + footer (and its scrim) to the true screen
-            // bottom, past the home-indicator safe area — otherwise the footer
-            // overlay aligns to the safe-area line and the scrim reads as a
-            // shadow floating above the last row. Mirrors the gallery, which
-            // ignores the bottom safe area on its content ZStack.
-            .ignoresSafeArea(.container, edges: .bottom)
         }
         .navigationBarBackButtonHidden(true)
         .toolbar(.hidden, for: .navigationBar)
@@ -794,14 +788,14 @@ struct ContractorListScreen: View {
                         .foregroundStyle(.white)
                 }
                 .padding(.top, 16)
-                // 20pt off the bottom (Igor), seated in the scrim's solid band.
-                .padding(.bottom, 28)
+                .padding(.bottom, max(32, bottomInset))
                 .padding(.horizontal, 16)
                 .frame(maxWidth: .infinity)
                 // No solid strip — the smooth scrim alone carries the footer,
-                // so there is no visible container edge.
+                // so there is no visible container edge. Sized to row + 65 so
+                // the full feather stays visible above the pills.
                 .background(alignment: .bottom) {
-                    FigmaFooterScrim(height: 80)
+                    FigmaFooterScrim(height: 16 + 32 + max(32, bottomInset) + 65, belowExtend: 38)
                 }
             } else {
                 Button(action: {
@@ -815,10 +809,10 @@ struct ContractorListScreen: View {
                         .background { FrostedPillBackground() }
                 }
                 .buttonStyle(.plain)
-                .padding(.bottom, 28)
+                .padding(.bottom, 16 + bottomInset)
                 .frame(maxWidth: .infinity)
                 .background(alignment: .bottom) {
-                    FigmaFooterScrim(height: 80)
+                    FigmaFooterScrim(height: 125, belowExtend: 0)
                 }
             }
         }

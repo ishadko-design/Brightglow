@@ -110,35 +110,46 @@ struct BlurredHeaderBackground: View {
     private let sideOverscan: CGFloat = 40
 }
 
-/// Footer scrim — a soft vertical gradient, clear at the top ramping to a
-/// near-solid black at the bottom, that fills its own crop exactly and sits at
-/// the bottom of the screen. Same idea as `BlurredHeaderBackground`, flipped and
-/// much smaller. No backdrop material (the `.ultraThinMaterial`/`background-blur`
-/// approximation tinted the photos and was rejected), and no separate blur pass:
-/// a many-stop linear ramp is already smooth, and — unlike the earlier
-/// blur-plus-offset construction — it can't sample transparency beyond its own
-/// edge and wash the band out behind the buttons.
+/// Footer scrim — the same soft-gradient-plus-blur layer as
+/// BlurredHeaderBackground(.dark), flipped vertically: clear at the top,
+/// ramping to black at the bottom, drawn oversized and blurred so both ends
+/// die soft with no hard edge. (Figma nodes 1049:4441 / 1270:2647: black
+/// gradient, layer blur 24, 45pt horizontal overscan so the blur's side edges
+/// fall off-screen, list footer extending 38pt past the frame. Geometry kept
+/// Figma-true; the ramp itself is the header's, mirrored, per Igor: the
+/// Figma 2-stop linear ramp never got dark enough behind the pills once the
+/// solid #131315 CTA strip was removed, and the 5-stop "very smooth" ease
+/// left only ~0.3 black behind the buttons. The mirrored header holds ~0.75
+/// black across the button row and melts to clear above.)
 ///
-/// The gradient fills the `Color.clear` frame 1:1, so the bottom stop lands at
-/// the screen's bottom edge (cropped, no hard line) and the CTA row — seated in
-/// the bottom band — always has an opaque backdrop. Layout-neutral: never
-/// intercepts touches, never inflates the footer or pushes buttons off-screen.
+/// Backdrop blur stays OFF: Figma's background-blur 8 has no tintless native
+/// equivalent — the material approximation was tried and rejected for
+/// tinting. Gradient + layer blur only.
+///
+/// Layout-neutral: a fixed-size `Color.clear` anchors the footprint; the
+/// gradient lives in a bottom-aligned overlay drawn taller and pulled down
+/// with `.offset` to cover past the bottom edge. Never intercepts touches,
+//  and can never inflate the footer or push buttons off-screen.
 struct FigmaFooterScrim: View {
-    /// Visible scrim height. Tall enough that the fade completes well ABOVE the
-    /// CTA row while the solid black sits behind and below it — most of it is
-    /// transparent, so the visible dark strip reads small.
-    var height: CGFloat = 150
+    /// Total scrim height. The caller sizes it so the Figma feather amount
+    /// stays visible above its (safe-area-taller) CTA row: list = row + 65,
+    /// gallery = 124.
+    var height: CGFloat = 125
+    /// How far the scrim extends below the footer's bottom edge.
+    /// Figma list footer: 38 (the Footer group extends 38pt past the frame).
+    /// Figma gallery footer: 0 (ends at the frame edge).
+    var belowExtend: CGFloat = 0
 
-    /// Clear at the top, ramping smoothly and evenly to near-solid black at the
-    /// bottom — no steep mid shelf (which read as a "dirty" band). The fade
-    /// begins early (small opacity near the top) so the transition is gradual.
+    /// BlurredHeaderBackground(.dark) stops, mirrored vertically
+    /// (location -> 1 - location): the header holds 0.8 black across the top
+    /// then eases to clear; the footer holds 0.8 black across the bottom then
+    /// eases to clear. Same blur radius as the header (16).
     private var stops: [Gradient.Stop] {
         [
             .init(color: .clear,               location: 0.0),
-            .init(color: .black.opacity(0.1),  location: 0.18),
-            .init(color: .black.opacity(0.45), location: 0.45),
-            .init(color: .black.opacity(0.75), location: 0.72),
-            .init(color: .black.opacity(0.92), location: 1.0),
+            .init(color: .black.opacity(0.3),  location: 0.18),
+            .init(color: .black.opacity(0.75), location: 0.4),
+            .init(color: .black.opacity(0.8),  location: 1.0),
         ]
     }
 
@@ -147,26 +158,11 @@ struct FigmaFooterScrim: View {
             .frame(maxWidth: .infinity)
             .frame(height: height)
             .overlay(alignment: .bottom) {
-                ZStack(alignment: .bottom) {
-                    // Background blur — frosts the content (list rows / gallery
-                    // sheet) behind the footer, same as BlurredHeaderBackground's
-                    // dark material, flipped. Masked to fade out toward the TOP so
-                    // its edge is never visible; the dark gradient on top covers
-                    // its greyness across the bottom band so it never tints.
-                    Rectangle()
-                        .fill(.ultraThinMaterial)
-                        .mask(
-                            LinearGradient(
-                                stops: [
-                                    .init(color: .clear, location: 0.18),
-                                    .init(color: .black, location: 0.38),
-                                    .init(color: .black, location: 1.0),
-                                ],
-                                startPoint: .top, endPoint: .bottom
-                            )
-                        )
-                    LinearGradient(stops: stops, startPoint: .top, endPoint: .bottom)
-                }
+                LinearGradient(stops: stops, startPoint: .top, endPoint: .bottom)
+                    .frame(height: height + belowExtend)
+                    .padding(.horizontal, -45)
+                    .blur(radius: 16)
+                    .offset(y: belowExtend)
             }
             .allowsHitTesting(false)
     }
