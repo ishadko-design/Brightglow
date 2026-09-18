@@ -1610,8 +1610,11 @@ struct ContractorListScreen: View {
                 }
             if gained {
                 keptPhotos[id] = enriched
-                // Display write goes through the freeze: if the strip already
-                // painted, the enriched order only reaches the stored verdicts.
+                // The freeze stops reshuffling while scrolling — but an enrich
+                // that gained semantic tags (the furnace photo is now tagged
+                // "furnace") is a correction, not a reshuffle. Unfreeze so the
+                // right lead photo actually reaches the display.
+                stripFrozenIDs.remove(id)
                 setStripPhotos(id, withOwnerLead(id, PhotoFilter.order(enriched, query: orderQuery, category: category,
                                                      capPremises: stripMaxPremises, vehicle: photoVehicle)))
             } else {
