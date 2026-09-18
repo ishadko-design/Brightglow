@@ -14,6 +14,7 @@ enum Category: String, CaseIterable, Codable {
     case roofing       = "Roofing"
     case flooring      = "Flooring"
     case windowsDoors  = "Windows & Doors"
+    case generalContractor = "General Contractor"
 
     /// Keywords a user might free-form type that map to this category.
     var keywords: [String] {
@@ -33,6 +34,7 @@ enum Category: String, CaseIterable, Codable {
         // owns that), no bare "range"/"oven" (they sit inside "arrange" and
         // "proven"). "dryer vent" is the one vent phrase this trade owns.
         case .appliances:   return ["applianc", "dishwasher", "refrigerator", "fridge", "freezer", "ice maker", "washing machine", "dryer", "dryer vent", "stove", "cooktop", "microwave"]
+        case .generalContractor: return ["general contractor", "general contracting", "comprehensive renovation", "whole home renovation", "home renovation", "renovation", "gc"]
         }
     }
 
@@ -75,6 +77,7 @@ extension Category {
         case .landscaping:  return "landscaping lawn care contractor"
         case .pestControl:  return "pest control mold remediation contractor"
         case .appliances:   return "appliance repair and installation service"
+        case .generalContractor: return "general contractor"
         }
     }
 
@@ -93,7 +96,7 @@ extension Category {
         case .carpentry:    return "carpentry repair"
         case .windowsDoors: return "window repair"
         case .flooring:     return "floor repair"
-        case .painting, .landscaping, .pestControl: return nil
+        case .painting, .landscaping, .pestControl, .generalContractor: return nil
         }
     }
 
@@ -111,6 +114,7 @@ extension Category {
         case .landscaping:  return [PriceTier(label: "Lawn / cleanup", min: 100, max: 400), PriceTier(label: "Garden redesign", min: 1500, max: 5000), PriceTier(label: "Full landscape", min: 8000, max: 25000)]
         case .pestControl:  return [PriceTier(label: "Single treatment", min: 150, max: 400), PriceTier(label: "Mold remediation", min: 1000, max: 4000), PriceTier(label: "Full fumigation", min: 2000, max: 6000)]
         case .appliances:   return [PriceTier(label: "Service call", min: 75, max: 150), PriceTier(label: "Repair", min: 150, max: 500), PriceTier(label: "Install / replace", min: 150, max: 450)]
+        case .generalContractor: return [PriceTier(label: "Single-trade project", min: 2000, max: 8000), PriceTier(label: "Multi-room remodel", min: 15000, max: 60000), PriceTier(label: "Whole-home renovation", min: 50000, max: 250000)]
         }
     }
 }

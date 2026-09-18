@@ -465,7 +465,7 @@ struct ContractorListScreen: View {
                                     "small window job", "repaired my door"]
         case .flooring:     return ["floor repair", "fixed my floor", "small floor job",
                                     "repaired my floor"]
-        case .painting, .landscaping, .pestControl: return []
+        case .painting, .landscaping, .pestControl, .generalContractor: return []
         }
     }
 
