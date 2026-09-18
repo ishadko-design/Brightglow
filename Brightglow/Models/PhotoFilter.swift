@@ -817,22 +817,41 @@ enum PhotoFilter {
         return VisualQuery(concepts: concepts)
     }
 
+    /// The vision tagger's `job:<noun>` assertion words — honored only when the
+    /// photo's plain tags corroborate them (redundancy against a misfired
+    /// assertion). Corroboration is word-level and prefix-tolerant ("furnaces"
+    /// backs `job:furnace`; "gas furnace" backs `job:gas furnace`), or the
+    /// whole noun phrase inside a plain label ("rooftop air conditioner
+    /// unit"). A lone `job:furnace` with no furnace-ish plain tag is a likely
+    /// model misread: it expands to nothing, so it scores neither as evidence
+    /// nor as a distractor. The prompt already instructs the model to reuse
+    /// its plain tag's canonical noun; this enforces it. Fails safe: an
+    /// uncorroborated-but-correct assertion is ignored rather than trusted.
+    private nonisolated static func corroboratedJobWords(_ labels: [String]) -> [String] {
+        let plain = labels.filter { !$0.lowercased().hasPrefix("job:") }
+        let plainWords = plain.flatMap {
+            $0.lowercased().split(whereSeparator: { !$0.isLetter }).map(String.init)
+        }
+        return labels.flatMap { label -> [String] in
+            let lower = label.lowercased()
+            guard lower.hasPrefix("job:") else { return [] }
+            let noun = String(lower.dropFirst(4))
+            let words = noun.split(whereSeparator: { !$0.isLetter }).map(String.init)
+            let backed = words.contains { w in plainWords.contains { matches($0, w) } }
+                || plain.contains { $0.lowercased().contains(noun) }
+            return backed ? words : []
+        }
+    }
+
     /// Expand the vision tagger's `job:<noun>` assertion tags into their words
     /// for relevance scoring, so `job:gas furnace` counts as furnace evidence
     /// the same way a plain "furnace" tag does. Plain labels pass through
     /// untouched; the `job:` prefix itself never scores (it would only add a
-    /// constant prefix to every comparison). No-op for photos tagged before
-    /// the tagger emitted `job:` tags.
+    /// constant prefix to every comparison). Assertions without corroboration
+    /// (see corroboratedJobWords) contribute nothing. No-op for photos tagged
+    /// before the tagger emitted `job:` tags.
     private nonisolated static func scoringLabels(_ labels: [String]) -> [String] {
-        labels.flatMap { label -> [String] in
-            // Case-insensitive: the server lowercases tags on store, but a
-            // fresh tag batch returns the model's raw casing on first sight.
-            let lower = label.lowercased()
-            guard lower.hasPrefix("job:") else { return [label] }
-            let words = String(lower.dropFirst(4))
-                .split(whereSeparator: { !$0.isLetter }).map(String.init)
-            return words.isEmpty ? [] : words
-        }
+        labels.filter { !$0.lowercased().hasPrefix("job:") } + corroboratedJobWords(labels)
     }
 
     /// True when the vision tagger confidently identified the photo as ONE
@@ -846,7 +865,7 @@ enum PhotoFilter {
     /// job-tagged photo.
     private nonisolated static func isDistractorJob(_ labels: [String], _ visual: VisualQuery) -> Bool {
         guard !visual.isEmpty else { return false }
-        let jobWords = scoringLabels(labels.filter { $0.lowercased().hasPrefix("job:") })
+        let jobWords = corroboratedJobWords(labels)
         guard !jobWords.isEmpty else { return false }
         return !visual.concepts.contains { concept in
             jobWords.contains { word in concept.contains { matches(word, $0) } }
