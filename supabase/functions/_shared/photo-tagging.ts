@@ -13,6 +13,14 @@ export type TagVertical = "home" | "auto" | "both";
 
 export const TAG_MODEL = "claude-sonnet-5";
 
+// Prompt/tag-schema version, stored in photo_tags.model alongside TAG_MODEL.
+// Bump when the prompt changes (new tag kinds, new synonyms): the phototags
+// cache-skip only honors rows at the current version, so a bump re-tags every
+// photo exactly once fleet-wide instead of serving stale-schema tags forever.
+// The verdicts union path stays version-agnostic — old tags are better than
+// none while the re-tag wave propagates.
+export const TAG_VERSION = `${TAG_MODEL}/p2`;
+
 // Bound the vision cost per call. A place returns at most ~10 Places photos;
 // tag every photo in one message.
 const MAX_PHOTOS = 12;
@@ -63,6 +71,15 @@ storefront, building exterior, garage bay / shop interior, signage, or logo \
 board (even if parked cars or a work area are visible) — tag it \`storefront\` \
 (plus any other clearly-visible tags). This is NOT a job the user searched for, \
 so it must never lead the results.
+
+- THE JOB TAG: if the photo clearly shows ONE specific trade job — the work \
+being done or its finished result (a furnace install, an air-conditioner \
+condenser, a water heater, a roof replacement, a bumper respray) — add ONE tag \
+\`job:<canonical-noun>\` using the same canonical noun as your plain tag \
+(\`job:furnace\`, \`job:air conditioner\`, \`job:water heater\`). This is how \
+the app tells "a photo OF the searched job" from "a photo of other work". Omit \
+it when no single job is identifiable (generic tools, materials, vans, \
+storefronts — a storefront gets the \`storefront\` tag, never a \`job:\` tag).
 
 - SYNONYMS: emit BOTH the specific term and the common words a customer would \
 type in a search. A gas furnace is "furnace", "gas furnace", AND "heater". A \
@@ -173,22 +190,30 @@ export async function tagImageBatch(
 }
 
 /// Look up stored tags for a batch of keys. Returns the subset that already
-/// has tags (key -> tags).
+/// has tags (key -> tags). When `version` is given, only rows tagged at that
+/// prompt version count — the phototags cache-skip passes TAG_VERSION so a
+/// prompt bump re-tags stale-schema rows; callers that just want "any tags"
+/// (the verdicts union) omit it.
 // deno-lint-ignore no-explicit-any
-export async function lookupStoredTags(db: any, keys: string[]): Promise<Record<string, string[]>> {
+export async function lookupStoredTags(
+  db: any,
+  keys: string[],
+  version?: string,
+): Promise<Record<string, string[]>> {
   const uniq = [...new Set(keys.filter(Boolean))];
   if (!db || uniq.length === 0) return {};
   // Chunk the IN list so a big pool can't blow up the query.
   const out: Record<string, string[]> = {};
   for (let i = 0; i < uniq.length; i += 200) {
     const chunk = uniq.slice(i, i + 200);
-    const { data, error } = await db.from("photo_tags").select("photo_name, tags").in("photo_name", chunk);
+    const { data, error } = await db.from("photo_tags").select("photo_name, tags, model").in("photo_name", chunk);
     if (error) {
       console.error("photo-tagging: tag lookup failed", error);
       continue;
     }
     for (const row of data ?? []) {
-      if (row.photo_name && Array.isArray(row.tags) && row.tags.length > 0) {
+      if (row.photo_name && Array.isArray(row.tags) && row.tags.length > 0
+          && (!version || row.model === version)) {
         out[row.photo_name as string] = (row.tags as string[]).map(String);
       }
     }
@@ -196,8 +221,10 @@ export async function lookupStoredTags(db: any, keys: string[]): Promise<Record<
   return out;
 }
 
-/// Persist fresh tags. First write wins (ignoreDuplicates): a photo is tagged
-/// once, globally — later callers reuse the row instead of re-calling the VLM.
+/// Persist fresh tags. Last write wins on conflict: a re-tag at a new prompt
+/// version overwrites the stale-schema row (same-version concurrent writes are
+/// harmless — near-identical content). Stored with TAG_VERSION so the
+/// cache-skip can tell stale rows from current ones.
 // deno-lint-ignore no-explicit-any
 export async function storePhotoTags(
   db: any,
@@ -209,13 +236,12 @@ export async function storePhotoTags(
       photo_name: r.photo_name,
       place_id: placeIdFromPhotoName(r.photo_name),
       tags: [...new Set(r.tags.map((t) => t.trim().toLowerCase()).filter(Boolean))],
-      model: TAG_MODEL,
+      model: TAG_VERSION,
       tagged_at: new Date().toISOString(),
     }));
   if (!db || payload.length === 0) return;
   const { error } = await db.from("photo_tags").upsert(payload, {
     onConflict: "photo_name",
-    ignoreDuplicates: true,
   });
   if (error) console.error("photo-tagging: tag store failed", error);
 }

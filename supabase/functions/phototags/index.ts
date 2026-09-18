@@ -12,9 +12,10 @@
 // labels — which the existing `PhotoFilter.order` already ranks against the
 // query.
 //
-// Cost is bounded and amortized: stored tags are checked FIRST, so a photo is
-// vision-tagged at most once globally — across all users, both verticals, and
-// verdict refreshes — instead of once per 30-day verdict cycle. Images arrive
+// Cost is bounded and amortized: stored tags at the current prompt version
+// are checked FIRST, so a photo is vision-tagged at most once per prompt
+// version globally — across all users, both verticals, and verdict refreshes
+// — instead of once per 30-day verdict cycle. Images arrive
 // as base64 bytes the client ALREADY downloaded for screening — so tagging
 // adds no Google Places Photo billing.
 //
@@ -32,6 +33,7 @@ import {
   lookupStoredTags,
   storePhotoTags,
   photoNameFromUrl,
+  TAG_VERSION,
   type TagVertical,
 } from "../_shared/photo-tagging.ts";
 
@@ -77,8 +79,12 @@ Deno.serve(async (req) => {
   }
   if (photos.length === 0) return json({ tags: {} });
 
-  // Serve whatever the shared store already has — no VLM call for those.
-  const stored = await lookupStoredTags(db, photos.map((p) => p.key));
+  // Serve whatever the shared store already has at the current prompt
+  // version — no VLM call for those. Rows tagged under an older prompt
+  // version don't count: they get re-tagged once below, so a prompt upgrade
+  // (new tag kinds like `job:`, new synonyms) rolls out instead of serving
+  // stale-schema tags forever.
+  const stored = await lookupStoredTags(db, photos.map((p) => p.key), TAG_VERSION);
 
   // Vision-tag only the photos nobody has tagged yet, then persist them so
   // the next caller (any user, either vertical, any verdict refresh) reuses
