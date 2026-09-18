@@ -29,6 +29,12 @@ enum PhotoTagService {
         (Bundle.main.object(forInfoDictionaryKey: "APP_TOKEN") as? String) ?? ""
     static var isConfigured: Bool { !ref.isEmpty && !anonKey.isEmpty }
 
+    /// Tagger prompt version. Must match the server's TAG_VERSION
+    /// (supabase/functions/_shared/photo-tagging.ts) — bump in lockstep with
+    /// it. Verdicts tagged under an older version are re-tagged on next view,
+    /// so a prompt upgrade reaches photos already on the phone.
+    static let tagVersion = "claude-sonnet-5/p2"
+
     /// Tag at most this many photos per place — the pool Places returns is ≤10 and
     /// the strip/gallery only need a handful ranked well.
     private static let maxPhotos = 12

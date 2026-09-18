@@ -1207,7 +1207,12 @@ struct ContractorListScreen: View {
                     scannedCount[c.id] = v.scanned
                     // A verdict cached before rich tagging (or by an older build)
                     // orders only on generic labels — enrich it when its row shows.
-                    if !v.enriched { needsEnrich.insert(c.id) }
+                    // A verdict marked enriched under an older tagger version (or before
+                // versions were recorded) carries pre-prompt labels — re-tag it so the
+                // photo-evidence tier sees the server's current tags.
+                if !v.enriched || ScreeningStore.shared.isStaleEnrichment(c.id, allowVehicles: allowVehicles) {
+                    needsEnrich.insert(c.id)
+                }
                 } else if v.scanned >= c.photos.count {
                     // Whole pool scanned but only premises/exterior (or nothing) →
                     // mark scanned so the drop below removes it; a storefront is not
@@ -1613,7 +1618,8 @@ struct ContractorListScreen: View {
                 ScreeningStore.shared.noteEmptyEnrich(id, allowVehicles: allowVehicles)
             }
             ScreeningStore.shared.save(id, allowVehicles: allowVehicles, kept: gained ? enriched : kept,
-                                       scanned: scanned, enriched: gained)
+                                       scanned: scanned, enriched: gained,
+                                       tagVersion: gained ? PhotoTagService.tagVersion : nil)
             VerdictService.upload(id: id, allowVehicles: allowVehicles, kept: gained ? enriched : kept,
                                   scanned: scanned, enriched: gained)
         }

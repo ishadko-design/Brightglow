@@ -763,7 +763,13 @@ enum PhotoFilter {
         "wiring": ["wire", "cable"],
         "outlet": ["switch"],
         "switch": ["outlet"],
-        "furnace": ["heater"],
+        // NOTE: "heater" is deliberately NOT a synonym of "furnace". A heater
+        // is many things — space heater, water heater, patio heater — and the
+        // vision tagger emits "job:water heater" for water-heater photos; the
+        // word-split in corroboratedJobWords turned that into a bare "heater"
+        // that falsely matched furnace queries, promoting water-heater photos
+        // as furnace evidence. The reverse holds: a "heater" search should find
+        // furnaces, since a furnace IS a heater.
         "heater": ["furnace"],
         // NOTE: "hvac" is deliberately NOT a synonym of anything here. It's a
         // trade hypernym, not a visible object: a mini-split, a furnace, and a

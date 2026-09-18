@@ -18,9 +18,13 @@ final class ScreeningStore: @unchecked Sendable {
         /// ones). Decodes to false for entries written before this field existed,
         /// so they get enriched once on next view.
         let enriched: Bool
+        /// Tagger prompt version that produced the labels (nil for entries
+        /// written before versioning — treated as stale, see isStaleEnrichment).
+        let tagVersion: String?
 
-        init(kept: [ScreenedPhoto], scanned: Int, at: Double, enriched: Bool) {
+        init(kept: [ScreenedPhoto], scanned: Int, at: Double, enriched: Bool, tagVersion: String? = nil) {
             self.kept = kept; self.scanned = scanned; self.at = at; self.enriched = enriched
+            self.tagVersion = tagVersion
         }
         init(from decoder: Decoder) throws {
             let c = try decoder.container(keyedBy: CodingKeys.self)
@@ -28,6 +32,7 @@ final class ScreeningStore: @unchecked Sendable {
             scanned = try c.decode(Int.self, forKey: .scanned)
             at = try c.decode(Double.self, forKey: .at)
             enriched = try c.decodeIfPresent(Bool.self, forKey: .enriched) ?? false
+            tagVersion = try c.decodeIfPresent(String.self, forKey: .tagVersion)
         }
     }
 
@@ -59,10 +64,23 @@ final class ScreeningStore: @unchecked Sendable {
         return (e.kept, e.scanned, e.enriched)
     }
 
-    func save(_ id: String, allowVehicles: Bool, kept: [ScreenedPhoto], scanned: Int, enriched: Bool = false) {
+    /// True when this place's verdict claims enrichment but was tagged under an
+    /// older tagger version (or before versions were recorded). The labels
+    /// predate the current prompt — the server may have re-tagged the photos
+    /// since, so the verdict must be re-enriched before its photo-evidence can
+    /// be trusted for ranking.
+    func isStaleEnrichment(_ id: String, allowVehicles: Bool) -> Bool {
+        lock.lock(); defer { lock.unlock() }
+        guard let e = map[key(id, allowVehicles: allowVehicles)], e.enriched else { return false }
+        return e.tagVersion != PhotoTagService.tagVersion
+    }
+
+    func save(_ id: String, allowVehicles: Bool, kept: [ScreenedPhoto], scanned: Int, enriched: Bool = false,
+              tagVersion: String? = nil) {
         lock.lock()
         map[key(id, allowVehicles: allowVehicles)] =
-            Entry(kept: kept, scanned: scanned, at: Date().timeIntervalSince1970, enriched: enriched)
+            Entry(kept: kept, scanned: scanned, at: Date().timeIntervalSince1970, enriched: enriched,
+                  tagVersion: tagVersion)
         lock.unlock()
         scheduleWrite()
     }
@@ -91,7 +109,10 @@ final class ScreeningStore: @unchecked Sendable {
     /// which re-tags through the normal verdict cycle — tries again. Kept in
     /// UserDefaults rather than the verdict file so it never perturbs the
     /// 30-day screening TTL.
-    private let emptyEnrichKey = "screening_empty_enrich_at"
+    /// Versioned with the tagger prompt: a prompt upgrade orphans the old
+    /// backoff entries, so places the old tagger couldn't name get retried
+    /// under the new one instead of waiting out the 7-day window.
+    private var emptyEnrichKey: String { "screening_empty_enrich_at_" + PhotoTagService.tagVersion }
     private static let emptyEnrichBackoff: TimeInterval = 7 * 24 * 3600
 
     /// Remember that an enrich attempt for this place gained no tags.
