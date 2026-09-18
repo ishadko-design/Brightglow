@@ -20,6 +20,7 @@
 // NOTE: unauthenticated (verify_jwt = false) like `search`; hardening is Phase 4.
 
 import { createClient } from "jsr:@supabase/supabase-js@2";
+import { lookupStoredTags, photoNameFromUrl } from "../_shared/photo-tagging.ts";
 
 const SUPA_URL = Deno.env.get("SUPABASE_URL") ?? "";
 const SERVICE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
@@ -68,6 +69,42 @@ Deno.serve(async (req) => {
           kept: row.kept, scanned: row.scanned, enriched: row.enriched ?? false,
         };
       }
+    }
+    // Union server-side vision tags into each kept photo's labels. Tags are
+    // stored globally per photo (any user, either vertical), so even a stale
+    // or never-enriched verdict serves "furnace"-level labels the moment any
+    // tagging path has covered its photos — no client change needed for the
+    // ranking to start seeing them.
+    try {
+      const urlToKey = new Map<string, string>();
+      for (const v of Object.values(out)) {
+        const kept = (v as { kept?: unknown }).kept;
+        if (!Array.isArray(kept)) continue;
+        for (const k of kept) {
+          const url = typeof k === "string" ? k : (k as { url?: unknown })?.url;
+          if (typeof url === "string" && url && !urlToKey.has(url)) {
+            urlToKey.set(url, photoNameFromUrl(url) ?? url);
+          }
+        }
+      }
+      const stored = await lookupStoredTags(db, [...urlToKey.values()]);
+      if (Object.keys(stored).length > 0) {
+        for (const v of Object.values(out)) {
+          const kept = (v as { kept?: unknown }).kept;
+          if (!Array.isArray(kept)) continue;
+          for (const k of kept) {
+            if (typeof k !== "object" || k === null) continue;
+            const entry = k as { url?: unknown; labels?: unknown };
+            if (typeof entry.url !== "string") continue;
+            const extra = stored[urlToKey.get(entry.url) ?? ""];
+            if (!extra || extra.length === 0) continue;
+            const labels = Array.isArray(entry.labels) ? entry.labels.map(String) : [];
+            entry.labels = [...new Set([...labels, ...extra])];
+          }
+        }
+      }
+    } catch (err) {
+      console.error("verdicts: tag merge failed", err);  // best-effort; verdicts still served
     }
     return json({ verdicts: out });
   }
