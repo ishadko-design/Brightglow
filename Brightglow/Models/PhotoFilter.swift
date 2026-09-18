@@ -583,15 +583,28 @@ enum PhotoFilter {
             visual.isEmpty ? matchScore($0.labels, terms)
                            : conceptMatchScore($0.labels, visual)
         }
+        // Whether the job vocabulary matched nothing at all — the tiebreaks
+        // below only apply then; a real job match always outranks them.
+        let noJobMatch = jobScores.allSatisfy { $0 == 0 }
         // Trade fallback: when the job vocabulary matched nothing at all, prefer
         // photos showing the trade's kind of work over unrelated interiors.
         // Pure tiebreak — a real job match always outranks it.
-        let tradeTerms = jobScores.allSatisfy { $0 == 0 }
+        let tradeTerms = noJobMatch
             ? tradeFallbackTerms[category.lowercased()] : nil
         let sorted = photos.enumerated()
             .sorted { a, b in
                 let sa = jobScores[a.offset], sb = jobScores[b.offset]
                 if sa != sb { return sa > sb }
+                // No photo matched the job: sink shots the vision tagger
+                // confidently identified as a DIFFERENT specific job (a rooftop
+                // AC unit leading a furnace search) below neutral work photos,
+                // instead of letting Google upload order put a misleading shot
+                // first.
+                if noJobMatch {
+                    let da = isDistractorJob(a.element.labels, visual)
+                    let db = isDistractorJob(b.element.labels, visual)
+                    if da != db { return !da }
+                }
                 if let tradeTerms {
                     let ta = matchScore(a.element.labels, tradeTerms)
                     let tb = matchScore(b.element.labels, tradeTerms)
@@ -804,11 +817,45 @@ enum PhotoFilter {
         return VisualQuery(concepts: concepts)
     }
 
+    /// Expand the vision tagger's `job:<noun>` assertion tags into their words
+    /// for relevance scoring, so `job:gas furnace` counts as furnace evidence
+    /// the same way a plain "furnace" tag does. Plain labels pass through
+    /// untouched; the `job:` prefix itself never scores (it would only add a
+    /// constant prefix to every comparison). No-op for photos tagged before
+    /// the tagger emitted `job:` tags.
+    private nonisolated static func scoringLabels(_ labels: [String]) -> [String] {
+        labels.flatMap { label -> [String] in
+            guard label.hasPrefix("job:") else { return [label] }
+            let words = String(label.dropFirst(4))
+                .split(whereSeparator: { !$0.isLetter }).map(String.init)
+            return words.isEmpty ? [] : words
+        }
+    }
+
+    /// True when the vision tagger confidently identified the photo as ONE
+    /// specific job (`job:air conditioner`) and that job matches none of the
+    /// search's concepts — a different job than the user asked for. Only
+    /// consulted when the job vocabulary matched no photo at all; then such a
+    /// shot is actively misleading as the lead photo (it asserts the business
+    /// does THAT work, not the searched work) and sinks below neutral work
+    /// shots. Guarded on a non-empty vocabulary: a query with no subject terms
+    /// ("ac repair" — "ac" is too short to be a term) must not demote every
+    /// job-tagged photo.
+    private nonisolated static func isDistractorJob(_ labels: [String], _ visual: VisualQuery) -> Bool {
+        guard !visual.isEmpty else { return false }
+        let jobWords = scoringLabels(labels.filter { $0.hasPrefix("job:") })
+        guard !jobWords.isEmpty else { return false }
+        return !visual.concepts.contains { concept in
+            jobWords.contains { word in concept.contains { matches(word, $0) } }
+        }
+    }
+
     /// Concept-level match: how many of the visual query's concepts the photo's
     /// labels hit. One concept = one subject term + its visual synonyms; ANY
     /// synonym hitting ANY label counts the concept as matched.
     private nonisolated static func conceptMatchScore(_ labels: [String], _ query: VisualQuery) -> Int {
-        query.concepts.reduce(0) { acc, concept in
+        let labels = scoringLabels(labels)
+        return query.concepts.reduce(0) { acc, concept in
             acc + (labels.contains { label in concept.contains { matches(label, $0) } } ? 1 : 0)
         }
     }
@@ -922,7 +969,8 @@ enum PhotoFilter {
     /// door search led with windows. Prefix matching keeps plurals / derivations
     /// ("window"→"windows", "door"→"doorway") while dropping the suffix collisions.
     private nonisolated static func matchScore(_ labels: [String], _ terms: [String]) -> Int {
-        terms.reduce(0) { acc, t in
+        let labels = scoringLabels(labels)
+        return terms.reduce(0) { acc, t in
             acc + (labels.contains { matches($0, t) } ? 1 : 0)
         }
     }

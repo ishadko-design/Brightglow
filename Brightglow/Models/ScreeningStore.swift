@@ -82,4 +82,34 @@ final class ScreeningStore: @unchecked Sendable {
             try? data.write(to: fileURL, options: .atomic)
         }
     }
+
+    // MARK: - Empty-enrich backoff
+
+    /// When the vision tagger runs but adds no tags (photos it can't name),
+    /// retrying every visit would burn a model call per visit forever. Record
+    /// the attempt and back off: a later visit — or a tagger prompt upgrade,
+    /// which re-tags through the normal verdict cycle — tries again. Kept in
+    /// UserDefaults rather than the verdict file so it never perturbs the
+    /// 30-day screening TTL.
+    private let emptyEnrichKey = "screening_empty_enrich_at"
+    private static let emptyEnrichBackoff: TimeInterval = 7 * 24 * 3600
+
+    /// Remember that an enrich attempt for this place gained no tags.
+    func noteEmptyEnrich(_ id: String, allowVehicles: Bool) {
+        let now = Date().timeIntervalSince1970
+        var map = (UserDefaults.standard.dictionary(forKey: emptyEnrichKey) as? [String: Double] ?? [:])
+            .filter { now - $0.value < Self.emptyEnrichBackoff }   // prune stale entries
+        map[key(id, allowVehicles: allowVehicles)] = now
+        UserDefaults.standard.set(map, forKey: emptyEnrichKey)
+    }
+
+    /// True when the last enrich attempt for this place gained nothing and the
+    /// backoff window hasn't elapsed — the caller should skip re-tagging it.
+    /// A *successful* enrich clears nothing here: the verdict's `enriched`
+    /// flag then gates retries on its own.
+    func recentEmptyEnrich(_ id: String, allowVehicles: Bool) -> Bool {
+        guard let map = UserDefaults.standard.dictionary(forKey: emptyEnrichKey) as? [String: Double],
+              let at = map[key(id, allowVehicles: allowVehicles)] else { return false }
+        return Date().timeIntervalSince1970 - at < Self.emptyEnrichBackoff
+    }
 }

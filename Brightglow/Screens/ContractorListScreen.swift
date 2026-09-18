@@ -1581,6 +1581,10 @@ struct ContractorListScreen: View {
     /// ordering; this only refines it a beat later (and once per place, shared).
     private func enrichInBackground(_ id: String, kept: [ScreenedPhoto],
                                     scanned: Int, allowVehicles: Bool) {
+        // Back off when the last attempt gained no tags — the tagger had
+        // nothing for these photos; retry after the window (or a prompt
+        // upgrade) rather than burning a model call on every visit.
+        guard !ScreeningStore.shared.recentEmptyEnrich(id, allowVehicles: allowVehicles) else { return }
         Task { @MainActor in
             // nil = the tagger didn't run (off / network / error) → leave the
             // verdict un-enriched so a later visit retries it.
@@ -1588,19 +1592,28 @@ struct ContractorListScreen: View {
             // The row may have been dropped, or the Auto⇄Moto filter switched
             // (which clears state), while tagging was in flight.
             guard contractors.contains(where: { $0.id == id }) else { return }
-            // Re-order/re-share only when the tags actually changed the labels;
-            // either way mark the verdict enriched so we don't re-tag every visit.
-            if enriched != kept {
+            // Only a verdict whose labels actually gained tags counts as
+            // enriched (compared as sets — the merge permutes label order, so
+            // array equality would false-positive). A run that added nothing
+            // leaves enriched=false so a later visit, or a tagger prompt
+            // upgrade, retries it — but notes the empty attempt so the retry
+            // waits out the backoff window instead of re-calling the model on
+            // every visit.
+            let gained = enriched.count != kept.count
+                || zip(enriched, kept).contains { $0.url != $1.url || Set($0.labels) != Set($1.labels) }
+            if gained {
                 keptPhotos[id] = enriched
                 // Display write goes through the freeze: if the strip already
                 // painted, the enriched order only reaches the stored verdicts.
                 setStripPhotos(id, withOwnerLead(id, PhotoFilter.order(enriched, query: orderQuery, category: category,
                                                      capPremises: stripMaxPremises, vehicle: photoVehicle)))
+            } else {
+                ScreeningStore.shared.noteEmptyEnrich(id, allowVehicles: allowVehicles)
             }
-            ScreeningStore.shared.save(id, allowVehicles: allowVehicles, kept: enriched,
-                                       scanned: scanned, enriched: true)
-            VerdictService.upload(id: id, allowVehicles: allowVehicles, kept: enriched,
-                                  scanned: scanned, enriched: true)
+            ScreeningStore.shared.save(id, allowVehicles: allowVehicles, kept: gained ? enriched : kept,
+                                       scanned: scanned, enriched: gained)
+            VerdictService.upload(id: id, allowVehicles: allowVehicles, kept: gained ? enriched : kept,
+                                  scanned: scanned, enriched: gained)
         }
     }
 }
