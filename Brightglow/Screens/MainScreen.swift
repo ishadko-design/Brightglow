@@ -787,6 +787,9 @@ struct MainScreen: View {
                 )) {
                     ContractorListScreen(category: goSwipe?.rawValue ?? "",
                                          presetCoordinate: locationStore.coordinate,
+                                         // The resolved search city, tagged onto the lead so the texted
+                                         // card reads "<job> near <city>" (the job's city, not the shop's).
+                                         userCity: locationStore.label,
                                          // Camera capture + any library picks, so a
                                          // photo added before tapping a category is
                                          // carried through (see searchResults).
@@ -814,6 +817,9 @@ struct MainScreen: View {
                     ContractorListScreen(category: goAuto?.name ?? "",
                                          searchQuery: goAuto?.searchQuery ?? "",
                                          presetCoordinate: locationStore.coordinate,
+                                         // The resolved search city, tagged onto the lead so the texted
+                                         // card reads "<job> near <city>" (the job's city, not the shop's).
+                                         userCity: locationStore.label,
                                          // Camera capture + any library picks (see
                                          // searchResults) so neither source is lost.
                                          attachedImages: attachedImages + pickedImages,
@@ -1163,6 +1169,9 @@ struct MainScreen: View {
                              clarifyVertical: chatVertical,
                              searchQuery: submittedQuery,
                              presetCoordinate: locationStore.coordinate,
+                             // The resolved search city, tagged onto the lead so the texted
+                             // card reads "<job> near <city>" (the job's city, not the shop's).
+                             userCity: locationStore.label,
                              // BOTH sources — a camera capture (attachedImages) AND
                              // any library picks added mid-chat (pickedImages). The
                              // input bar shows both, so the review screen must carry

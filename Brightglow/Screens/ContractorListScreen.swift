@@ -15,6 +15,16 @@ import CoreLocation
 // re-fetch or re-screen.
 // ─────────────────────────────────────────────────────────────────────────────
 
+/// Navigation payload for a multi-contractor quote request (prototype).
+/// `Contractor` isn't Hashable, so the array rides inside this wrapper for
+/// `navigationDestination(item:)` — keyed on the UUID alone.
+private struct MultiQuoteRequest: Identifiable, Hashable {
+    let id = UUID()
+    let contractors: [Contractor]
+    static func == (lhs: Self, rhs: Self) -> Bool { lhs.id == rhs.id }
+    func hash(into hasher: inout Hasher) { hasher.combine(id) }
+}
+
 struct ContractorListScreen: View {
     var category: String = ""
     /// The vertical the clarifying chat resolved ("home" / "auto_moto"), empty
@@ -28,6 +38,10 @@ struct ContractorListScreen: View {
     var aiResult: AIResult? = nil
     /// When set (manual ZIP/city or an already-resolved fix), used instead of GPS.
     var presetCoordinate: CLLocationCoordinate2D? = nil
+    /// The customer's resolved search city ("Daly City"), threaded to the
+    /// quote-request screen so the texted lead is tagged with the JOB's city
+    /// (not the business's). nil when no location was resolved.
+    var userCity: String? = nil
     /// Photos the user attached before arriving here (camera capture + drawing,
     /// or the search bar's own picker) — carried to the quote-request screen.
     var attachedImages: [UIImage] = []
@@ -62,6 +76,7 @@ struct ContractorListScreen: View {
          searchQuery: String = "",
          aiResult: AIResult? = nil,
          presetCoordinate: CLLocationCoordinate2D? = nil,
+         userCity: String? = nil,
          attachedImages: [UIImage] = [],
          photoDetails: String? = nil,
          photoDescription: String = "",
@@ -75,6 +90,7 @@ struct ContractorListScreen: View {
         self.searchQuery = searchQuery
         self.aiResult = aiResult
         self.presetCoordinate = presetCoordinate
+        self.userCity = userCity
         self.attachedImages = attachedImages
         self.photoDetails = photoDetails
         self.photoDescription = photoDescription
@@ -136,6 +152,18 @@ struct ContractorListScreen: View {
     /// Held by id (not the value) because `navigationDestination(item:)` wants a
     /// Hashable, and `Contractor` isn't one.
     @State private var quoteContractorID: String? = nil
+    // ── Multi-select prototype ──────────────────────────────────────────
+    // In-memory only: the selection dies with this screen — nothing is
+    // written to UserDefaults, files, or the backend.
+    @State private var isSelectMode = false
+    @State private var selectedIDs: Set<String> = []
+    /// Retreating-footer visibility: the footer slides away while the user
+    /// scrolls down through results and returns when they scroll back up.
+    @State private var footerVisible = true
+    /// Drives the multi-contractor quote screen (prototype).
+    @State private var multiQuote: MultiQuoteRequest? = nil
+    /// Cap on simultaneous selections (prototype).
+    private let maxSelection = 5
     /// Explainer for the header's info icon next to the estimate.
     @State private var showEstimateInfo = false
     @State private var goGallery = false
@@ -335,14 +363,17 @@ struct ContractorListScreen: View {
         let total = contractors.count
         let scored = contractors.enumerated()
             .map { (offset: $0.offset, contractor: $0.element,
-                    score: relevanceScore($0.element, upstreamIndex: $0.offset, upstreamCount: total)) }
-        // Single score sort — trade match, size fit, and upstream quality
-        // compete in one number, so a 5-star plumber whose reviews name the job
-        // can still outrank a mediocre handyman on a small plumbing job.
-        // Fairness means the same factors for every business on every job: no
-        // tiers, no pre-decided winners.
+                    scored: relevanceScore($0.element, upstreamIndex: $0.offset, upstreamCount: total)) }
+        // Photo evidence is the primary sort key (Igor 2026-09-18): a business
+        // with a screened photo of the searched work always outranks one
+        // without — even a 5-star one. The photo is the strongest signal
+        // because it's the only one that says THIS business did THIS job.
+        // Within each tier the composite score still decides, so stronger
+        // evidence and better reviews win among evidenced businesses, and the
+        // no-evidence order is unchanged.
         let ranked = scored.sorted {
-            if $0.score != $1.score { return $0.score > $1.score }
+            if $0.scored.photoEvidence != $1.scored.photoEvidence { return $0.scored.photoEvidence }
+            if $0.scored.score != $1.scored.score { return $0.scored.score > $1.scored.score }
             return $0.offset < $1.offset
         }
         return Array(ranked.map(\.contractor).prefix(visibleLimit))
@@ -381,8 +412,9 @@ struct ContractorListScreen: View {
     /// The job's trade as a Category, when the search resolved to one.
     private var jobCategory: Category? { Category(rawValue: category) }
 
-    /// Composite relevance score — the single number that decides which five
-    /// lead. Job-specific proof first, upstream quality order as the base: a
+    /// Composite relevance score + photo-evidence flag. The score orders
+    /// businesses *within* a photo-evidence tier (see visibleContractors);
+    /// job-specific proof first, upstream quality order as the base: a
     /// review naming the searched work and a screened work photo of it outrank
     /// every free-signal heuristic, because they're the only signals that say
     /// THIS business does THIS job. The upstream Places order (proximity,
@@ -391,7 +423,7 @@ struct ContractorListScreen: View {
     /// size-fit factor scores whether the business is the right size for this
     /// job's price — a handyman for a small job — as one competing factor, not
     /// a pre-decided tier. All four weights are OTA-tunable (`ranking_config`).
-    private func relevanceScore(_ c: Contractor, upstreamIndex: Int, upstreamCount: Int) -> Double {
+    private func relevanceScore(_ c: Contractor, upstreamIndex: Int, upstreamCount: Int) -> (score: Double, photoEvidence: Bool) {
         let w = RankingConfigStore.current.weights
         let reviews = c.reviews.map(\.text)
         let review = PhotoFilter.reviewMatchStrength(reviews, query: matchQuery)
@@ -400,7 +432,9 @@ struct ContractorListScreen: View {
         let sizeFit = smallJobActive && takesSmallJobs(c, category: jobCategory) ? 1.0 : 0.0
         let score = w.reviewMatch * review + w.photoMatch * photo
             + w.sizeFit * sizeFit + w.upstream * upstream
-        return min(score, 1)
+        // photoEvidence: at least one screened photo matched the job vocabulary.
+        // The primary sort key in visibleContractors — see that comment.
+        return (min(score, 1), photo > 0)
     }
 
     /// Single source of truth for the "Takes small jobs" cue: true when the
@@ -523,6 +557,15 @@ struct ContractorListScreen: View {
 
                 header(topInset: topInset)
             }
+            // Multi-select footer — TABLED 2026-09-16 per Igor (kept as an
+            // exploration, not shipping). Flip FeatureFlags.multiSelectEnabled
+            // to restore the "Select multiple" pill, select mode, and the bulk
+            // quote-request flow; the implementation is intact.
+            .overlay(alignment: .bottom) {
+                if FeatureFlags.multiSelectEnabled {
+                    selectFooter(bottomInset: proxy.safeAreaInsets.bottom)
+                }
+            }
         }
         .navigationBarBackButtonHidden(true)
         .toolbar(.hidden, for: .navigationBar)
@@ -549,6 +592,7 @@ struct ContractorListScreen: View {
                 photoMatchTerms: photoMatchTerms,
                 pinnedReviewID: pinnedReviewID,
                 clarifyTranscript: clarifyTranscript,
+                userCity: userCity,
                 vehicleNote: quoteVehicleNote
             )
         }
@@ -559,7 +603,19 @@ struct ContractorListScreen: View {
                 contractor: contractors.first { $0.id == id },
                 initialImages: attachedImages,
                 vehicleNote: quoteVehicleNote,
-                clarifyTranscript: clarifyTranscript
+                clarifyTranscript: clarifyTranscript,
+                userCity: userCity
+            )
+        }
+        .navigationDestination(item: $multiQuote) { req in
+            // Multi-select prototype: the send screen lists every selected
+            // business and sends the request to each in turn.
+            QuoteRequestScreen(
+                contractors: req.contractors,
+                initialImages: attachedImages,
+                vehicleNote: quoteVehicleNote,
+                clarifyTranscript: clarifyTranscript,
+                userCity: userCity
             )
         }
         // Custom bottom overlay (same as the gallery) so the card is a flush,
@@ -622,7 +678,11 @@ struct ContractorListScreen: View {
                             onQuote: { quoteContractorID = contractor.id },
                             onCall: { callContractor = contractor },
                             onPhotoUnavailable: { url in dropUnusablePhoto(url, from: contractor.id) },
-                            onNoUsablePhotos: { dropPhotolessBusiness(contractor.id) }
+                            onNoUsablePhotos: { dropPhotolessBusiness(contractor.id) },
+                            // Multi-select prototype: the logo slot becomes a checkbox.
+                            selectionMode: isSelectMode,
+                            isSelected: selectedIDs.contains(contractor.id),
+                            onToggleSelect: { toggleSelect(contractor) }
                         )
                         .id(contractor.id)
                         // Strictly lazy: reveal (and screen) a row's photos only when
@@ -660,7 +720,129 @@ struct ContractorListScreen: View {
             // A fresh screening re-fetches images the cache never stored (a failed
             // fetch isn't cached), so a transient miss recovers on the next pull.
             .refreshable { await reload() }
+            // Retreating footer (prototype): slides away while the user scrolls
+            // down through results (revealing more content) and returns when
+            // they scroll back up.
+            .onScrollGeometryChange(for: CGFloat.self) { geometry in
+                geometry.contentOffset.y
+            } action: { old, new in
+                let dy = new - old
+                guard abs(dy) > 2 else { return }
+                footerVisible = dy < 0 || new <= 0
+            }
         }
+    }
+
+    // ── Multi-select footer (prototype) ─────────────────────────────────────
+    // The pill floats over the shared blurred footer backdrop: a tall
+    // black→transparent scrim (up past the viewport, so the fade never reads
+    // as a floating band), layer-blurred like the header — no backdrop blur.
+    // Multiselect footer — Figma node 1049:4441 ("Open category - list"), built 1:1.
+    // Select mode: CTA row (spacing 8; padding top 16, bottom max(32, safe
+    // area), horizontal 16) on the solid #131315 strip (the CTAs frame fill),
+    // with the "Blurred bg" scrim behind it (125 tall, 38pt past the frame's
+    // bottom edge). Cancel = secondary pill (white 20% + background blur,
+    // radius 32, 32 tall, 14px); Request quotes = primary blue when something
+    // is selected, frosted secondary when empty. The (N) counter is plain text
+    // next to the button, not part of it (Igor). Type comes from the design
+    // system (.h4 = 14pt bold); the iOS token set is Lato (Bricolage was never
+    // added to the app bundle — separate migration).
+    // Entry state ("Select multiple" pill) is not in the Figma node: it keeps
+    // the floating frosted pill over the scrim, no solid strip.
+    // The scrim is visual-only (never intercepts touches); only the pills are
+    // tappable, so list rows beside them stay reachable.
+    private func selectFooter(bottomInset: CGFloat) -> some View {
+        let shown = isSelectMode || footerVisible
+        // Clears the row plus the scrim feather above it when retreating.
+        let hideOffset: CGFloat = 160
+        return Group {
+            if isSelectMode {
+                HStack(spacing: 8) {
+                    Button(action: {
+                        withAnimation(.easeInOut(duration: 0.2)) {
+                            isSelectMode = false
+                            selectedIDs = []
+                        }
+                    }) {
+                        Text("Cancel")
+                            .font(.h4)
+                            .foregroundStyle(.white)
+                            .frame(height: 32)
+                            .padding(.horizontal, 16)
+                            .background { FrostedPillBackground() }
+                    }
+                    .buttonStyle(.plain)
+                    Button(action: startMultiQuote) {
+                        Text("Request quotes")
+                            .font(.h4)
+                            .foregroundStyle(.white)
+                            .frame(height: 32)
+                            .padding(.horizontal, 16)
+                            .background {
+                                if selectedIDs.isEmpty {
+                                    FrostedPillBackground()
+                                } else {
+                                    Capsule().fill(AppColors.btnPrimary)
+                                }
+                            }
+                    }
+                    .buttonStyle(.plain)
+                    .disabled(selectedIDs.isEmpty)
+                    // The counter is plain text, not part of the button.
+                    Text("(\(selectedIDs.count))")
+                        .font(.h4)
+                        .foregroundStyle(.white)
+                }
+                .padding(.top, 16)
+                .padding(.bottom, max(32, bottomInset))
+                .padding(.horizontal, 16)
+                .frame(maxWidth: .infinity)
+                // No solid strip — the smooth scrim alone carries the footer,
+                // so there is no visible container edge. Sized to row + 65 so
+                // the full feather stays visible above the pills.
+                .background(alignment: .bottom) {
+                    FigmaFooterScrim(height: 16 + 32 + max(32, bottomInset) + 65, belowExtend: 38)
+                }
+            } else {
+                Button(action: {
+                    withAnimation(.easeInOut(duration: 0.2)) { isSelectMode = true }
+                }) {
+                    Text("Select multiple")
+                        .font(.h4)
+                        .foregroundStyle(.white)
+                        .frame(height: 32)
+                        .padding(.horizontal, 16)
+                        .background { FrostedPillBackground() }
+                }
+                .buttonStyle(.plain)
+                .padding(.bottom, 16 + bottomInset)
+                .frame(maxWidth: .infinity)
+                .background(alignment: .bottom) {
+                    FigmaFooterScrim(height: 125, belowExtend: 0)
+                }
+            }
+        }
+        .offset(y: shown ? 0 : hideOffset)
+        .opacity(shown ? 1 : 0)
+        .animation(.easeInOut(duration: 0.25), value: shown)
+        .allowsHitTesting(shown)
+    }
+
+    /// Toggles a contractor's selection, capped at `maxSelection` (prototype —
+    /// further taps at the cap are ignored).
+    private func toggleSelect(_ c: Contractor) {
+        if selectedIDs.contains(c.id) {
+            selectedIDs.remove(c.id)
+        } else if selectedIDs.count < maxSelection {
+            selectedIDs.insert(c.id)
+        }
+    }
+
+    /// Heads to the send screen with the selected businesses (prototype).
+    private func startMultiQuote() {
+        let picked = contractors.filter { selectedIDs.contains($0.id) }
+        guard !picked.isEmpty else { return }
+        multiQuote = MultiQuoteRequest(contractors: picked)
     }
 
     // ── Infinite scroll — reveals held-back matches, then pages, on approach ───
@@ -1025,7 +1207,12 @@ struct ContractorListScreen: View {
                     scannedCount[c.id] = v.scanned
                     // A verdict cached before rich tagging (or by an older build)
                     // orders only on generic labels — enrich it when its row shows.
-                    if !v.enriched { needsEnrich.insert(c.id) }
+                    // A verdict marked enriched under an older tagger version (or before
+                // versions were recorded) carries pre-prompt labels — re-tag it so the
+                // photo-evidence tier sees the server's current tags.
+                if !v.enriched || ScreeningStore.shared.isStaleEnrichment(c.id, allowVehicles: allowVehicles) {
+                    needsEnrich.insert(c.id)
+                }
                 } else if v.scanned >= c.photos.count {
                     // Whole pool scanned but only premises/exterior (or nothing) →
                     // mark scanned so the drop below removes it; a storefront is not
@@ -1224,8 +1411,16 @@ struct ContractorListScreen: View {
     /// the owner's curated ones from the lead.
     private func withOwnerLead(_ id: String, _ list: [String]) -> [String] {
         guard let owner = ownerPhotosByID[id], !owner.isEmpty else { return list }
-        let have = Set(owner)
-        return owner + list.filter { !have.contains($0) }
+        let have = Set(list)
+        let fresh = owner.filter { !have.contains($0) }
+        guard !fresh.isEmpty else { return list }
+        // Owner photos are curated but unlabeled — they must not outrank a
+        // query-matching work photo. If the job vocabulary matched one of the
+        // screened photos, the owner's shots go behind it; otherwise (no match)
+        // they keep the lead as the business's chosen showcase.
+        let matched = PhotoFilter.photoMatchStrength(keptPhotos[id] ?? [], query: orderQuery,
+                                                     category: category) > 0
+        return matched ? list + fresh : fresh + list
     }
 
     /// Look up active contractor licences for businesses we haven't checked yet.
@@ -1399,6 +1594,10 @@ struct ContractorListScreen: View {
     /// ordering; this only refines it a beat later (and once per place, shared).
     private func enrichInBackground(_ id: String, kept: [ScreenedPhoto],
                                     scanned: Int, allowVehicles: Bool) {
+        // Back off when the last attempt gained no tags — the tagger had
+        // nothing for these photos; retry after the window (or a prompt
+        // upgrade) rather than burning a model call on every visit.
+        guard !ScreeningStore.shared.recentEmptyEnrich(id, allowVehicles: allowVehicles) else { return }
         Task { @MainActor in
             // nil = the tagger didn't run (off / network / error) → leave the
             // verdict un-enriched so a later visit retries it.
@@ -1406,19 +1605,34 @@ struct ContractorListScreen: View {
             // The row may have been dropped, or the Auto⇄Moto filter switched
             // (which clears state), while tagging was in flight.
             guard contractors.contains(where: { $0.id == id }) else { return }
-            // Re-order/re-share only when the tags actually changed the labels;
-            // either way mark the verdict enriched so we don't re-tag every visit.
-            if enriched != kept {
+            // Only a verdict whose labels actually gained tags counts as
+            // enriched (compared as sets — the merge permutes label order, so
+            // array equality would false-positive). A run that added nothing
+            // leaves enriched=false so a later visit, or a tagger prompt
+            // upgrade, retries it — but notes the empty attempt so the retry
+            // waits out the backoff window instead of re-calling the model on
+            // every visit.
+            let gained = enriched.count != kept.count
+                || zip(enriched, kept).contains { pair in
+                    pair.0.url != pair.1.url || Set(pair.0.labels) != Set(pair.1.labels)
+                }
+            if gained {
                 keptPhotos[id] = enriched
-                // Display write goes through the freeze: if the strip already
-                // painted, the enriched order only reaches the stored verdicts.
+                // The freeze stops reshuffling while scrolling — but an enrich
+                // that gained semantic tags (the furnace photo is now tagged
+                // "furnace") is a correction, not a reshuffle. Unfreeze so the
+                // right lead photo actually reaches the display.
+                stripFrozenIDs.remove(id)
                 setStripPhotos(id, withOwnerLead(id, PhotoFilter.order(enriched, query: orderQuery, category: category,
                                                      capPremises: stripMaxPremises, vehicle: photoVehicle)))
+            } else {
+                ScreeningStore.shared.noteEmptyEnrich(id, allowVehicles: allowVehicles)
             }
-            ScreeningStore.shared.save(id, allowVehicles: allowVehicles, kept: enriched,
-                                       scanned: scanned, enriched: true)
-            VerdictService.upload(id: id, allowVehicles: allowVehicles, kept: enriched,
-                                  scanned: scanned, enriched: true)
+            ScreeningStore.shared.save(id, allowVehicles: allowVehicles, kept: gained ? enriched : kept,
+                                       scanned: scanned, enriched: gained,
+                                       tagVersion: gained ? PhotoTagService.tagVersion : nil)
+            VerdictService.upload(id: id, allowVehicles: allowVehicles, kept: gained ? enriched : kept,
+                                  scanned: scanned, enriched: gained)
         }
     }
 }
@@ -1497,6 +1711,13 @@ private struct ContractorListRow: View {
     /// Every one of this business's photos failed to load — parent drops the
     /// business, enforcing "a listed contractor must show a real picture".
     let onNoUsablePhotos: () -> Void
+    // ── Multi-select prototype ──────────────────────────────────────────
+    /// When true the logo slot becomes a checkbox instead of the business logo.
+    let selectionMode: Bool
+    /// Whether this row is currently selected (prototype).
+    let isSelected: Bool
+    /// Toggles this row's selection (prototype).
+    let onToggleSelect: () -> Void
 
     /// Photo URLs that failed to load, so their gray tiles are dropped and the
     /// mosaic re-lays-out around the survivors (or the row is removed if none).
@@ -1511,6 +1732,27 @@ private struct ContractorListRow: View {
     /// the three most related to the user's request.
     private let maxTiles = 3
 
+    /// Multi-select checkbox (prototype): replaces the logo slot. The circle is
+    /// 26pt but the tappable area is the full 44×44, so it's easy to hit.
+    private var selectCheckbox: some View {
+        ZStack {
+            if isSelected {
+                Circle()
+                    .fill(AppColors.btnPrimary)
+                    .frame(width: 26, height: 26)
+                Image(systemName: "checkmark")
+                    .font(.system(size: 13, weight: .bold))
+                    .foregroundStyle(.white)
+            } else {
+                Circle()
+                    .strokeBorder(.white.opacity(0.45), lineWidth: 2)
+                    .frame(width: 26, height: 26)
+            }
+        }
+        .frame(width: 44, height: 44)
+        .contentShape(Rectangle())
+    }
+
     var body: some View {
         // Header block (8pt above the photo mosaic).
         VStack(alignment: .leading, spacing: 8) {
@@ -1518,9 +1760,13 @@ private struct ContractorListRow: View {
             // Figma 793:1779: 12pt between the name/CTA row and the metadata row.
             VStack(alignment: .leading, spacing: 12) {
                 HStack(spacing: 12) {
-                    Button(action: { onOpen(0) }) {
+                    Button(action: { selectionMode ? onToggleSelect() : onOpen(0) }) {
                         HStack(spacing: 8) {
-                            ContractorLogoView(name: contractor.name, url: logoURL)
+                            if selectionMode {
+                                selectCheckbox
+                            } else {
+                                ContractorLogoView(name: contractor.name, url: logoURL)
+                            }
                             Text(contractor.name)
                                 .font(.h3)                  // Lato 700 / 18
                                 .foregroundStyle(.white)

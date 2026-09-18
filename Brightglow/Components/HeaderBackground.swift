@@ -109,3 +109,74 @@ struct BlurredHeaderBackground: View {
     /// the screen rather than showing as faded strips at the left/right margins.
     private let sideOverscan: CGFloat = 40
 }
+
+/// Footer scrim — the same soft-gradient-plus-blur layer as
+/// BlurredHeaderBackground(.dark), flipped vertically: clear at the top,
+/// ramping to black at the bottom, drawn oversized and blurred so both ends
+/// die soft with no hard edge. (Figma nodes 1049:4441 / 1270:2647: black
+/// gradient, layer blur 24, 45pt horizontal overscan so the blur's side edges
+/// fall off-screen, list footer extending 38pt past the frame. Geometry kept
+/// Figma-true; the ramp itself is the header's, mirrored, per Igor: the
+/// Figma 2-stop linear ramp never got dark enough behind the pills once the
+/// solid #131315 CTA strip was removed, and the 5-stop "very smooth" ease
+/// left only ~0.3 black behind the buttons. The mirrored header holds ~0.75
+/// black across the button row and melts to clear above.)
+///
+/// Backdrop blur stays OFF: Figma's background-blur 8 has no tintless native
+/// equivalent — the material approximation was tried and rejected for
+/// tinting. Gradient + layer blur only.
+///
+/// Layout-neutral: a fixed-size `Color.clear` anchors the footprint; the
+/// gradient lives in a bottom-aligned overlay drawn taller and pulled down
+/// with `.offset` to cover past the bottom edge. Never intercepts touches,
+//  and can never inflate the footer or push buttons off-screen.
+struct FigmaFooterScrim: View {
+    /// Total scrim height. The caller sizes it so the Figma feather amount
+    /// stays visible above its (safe-area-taller) CTA row: list = row + 65,
+    /// gallery = 124.
+    var height: CGFloat = 125
+    /// How far the scrim extends below the footer's bottom edge.
+    /// Figma list footer: 38 (the Footer group extends 38pt past the frame).
+    /// Figma gallery footer: 0 (ends at the frame edge).
+    var belowExtend: CGFloat = 0
+
+    /// BlurredHeaderBackground(.dark) stops, mirrored vertically
+    /// (location -> 1 - location): the header holds 0.8 black across the top
+    /// then eases to clear; the footer holds 0.8 black across the bottom then
+    /// eases to clear. Same blur radius as the header (16).
+    private var stops: [Gradient.Stop] {
+        [
+            .init(color: .clear,               location: 0.0),
+            .init(color: .black.opacity(0.3),  location: 0.18),
+            .init(color: .black.opacity(0.75), location: 0.4),
+            .init(color: .black.opacity(0.8),  location: 1.0),
+        ]
+    }
+
+    var body: some View {
+        Color.clear
+            .frame(maxWidth: .infinity)
+            .frame(height: height)
+            .overlay(alignment: .bottom) {
+                LinearGradient(stops: stops, startPoint: .top, endPoint: .bottom)
+                    .frame(height: height + belowExtend)
+                    .padding(.horizontal, -45)
+                    .blur(radius: 16)
+                    .offset(y: belowExtend)
+            }
+            .allowsHitTesting(false)
+    }
+}
+
+/// Frosted-glass background for the secondary pills: the Figma "Background
+/// blur" on the CTA pills — a live backdrop blur under the white-at-20% tint,
+/// clipped to the pill shape. The photo behind the pill visibly frosts instead
+/// of showing through flat. (The gallery's Call button already uses this
+/// recipe; this shares it with the list's pills.)
+struct FrostedPillBackground: View {
+    var body: some View {
+        Capsule()
+            .fill(.ultraThinMaterial)
+            .overlay(Capsule().fill(AppColors.btnSecondary))
+    }
+}

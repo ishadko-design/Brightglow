@@ -68,6 +68,10 @@ struct ContractorGalleryScreen: View {
     /// The landing clarifying Q&A, carried through to the quote-request screen so
     /// the message a business receives includes the AI-clarified details.
     var clarifyTranscript: ClarifyTranscript = .empty
+    /// The customer's resolved search city ("Daly City"), threaded to the
+    /// quote-request screen so the texted lead is tagged with the JOB's city
+    /// (not the business's). nil when no location was resolved.
+    var userCity: String? = nil
     /// "Motorcycle"/"Car" for an auto search, empty for home — passed to the
     /// quote so the business is told which vehicle.
     var vehicleNote: String = ""
@@ -250,7 +254,7 @@ struct ContractorGalleryScreen: View {
             }
         }
         .navigationDestination(isPresented: $showQuote) {
-            QuoteRequestScreen(contractor: selectedContractor, initialImages: attachedImages, vehicleNote: vehicleNote, clarifyTranscript: clarifyTranscript)
+            QuoteRequestScreen(contractor: selectedContractor, initialImages: attachedImages, vehicleNote: vehicleNote, clarifyTranscript: clarifyTranscript, userCity: userCity)
         }
         // Custom bottom overlay (not a system `.sheet`) so the card is a flush,
         // full-width bottom sheet rather than iOS 26's inset floating card.
@@ -533,12 +537,21 @@ struct ContractorGalleryScreen: View {
         URL(string: "https://search.google.com/local/reviews?placeid=\(contractor.id)")
     }
 
-    // Pinned Call / Request quote — equal-width buttons on a fading floor
-    // (Figma "CTAs": two 48pt-tall buttons, radius 32, 8pt gap).
+    // Pinned Call / Request quote — equal-width buttons over the shared blurred
+    // footer backdrop (Figma "CTAs": two 48pt-tall buttons, radius 32, 8pt gap;
+    // node 1270:2647 footer "Blurred bg").
+    // Gallery footer — Figma node 1270:2647 ("Open category - no description"),
+    // built 1:1. CTA row (spacing 8; padding top 16, bottom max(32, safe area),
+    // horizontal 16) on the solid #131315 strip, with the "Blurred bg" scrim
+    // behind it (124 tall, ends at the frame edge). Call = 94x48 secondary
+    // (white 20% + background blur, radius 32, phone icon + 18px label);
+    // Request quote = 181x48 primary blue (#0039F5, 18px label). Type from the
+    // design system (.h3 = 18pt bold). The phone icon is SF Symbols (Figma uses
+    // a Streamline phone glyph — closest native match).
     private func ctaFooter(width: CGFloat, bottomInset: CGFloat) -> some View {
-        // Exact equal widths from the known screen width — no reliance on the
-        // parent's width proposal (which has overflowed past the screen edges).
-        let pairWidth = max(0, (width - 32 - 8) / 2)
+        // Figma button sizes (402pt frame); the row centers them on wider screens.
+        let pairWidth: CGFloat = 181
+        let callWidth: CGFloat = 94
         let hasPhone = topContractor?.phone != nil
         // Offer "Request quote" whenever we can DELIVER one — a phone (it sends as
         // a P2P text now) OR an email. This mirrors the list row, which shows the
@@ -548,24 +561,24 @@ struct ContractorGalleryScreen: View {
         // takes the full width.
         let hasEmail = topContractor?.contactEmail != nil
         let canQuote = hasPhone || hasEmail
-        let callWidth = canQuote ? pairWidth : max(0, width - 32)
+        // The scrim is layout-neutral (a bottom-aligned background): it draws
+        // behind the buttons but can never inflate the footer or push the
+        // buttons off-screen inside the VStack + Spacer.
         return HStack(spacing: 8) {
             // Call replaces the old "Next": tapping shows a reminder to mention
             // the app, then hands off to the dialer. Dimmed when Places returned
             // no phone number for this business.
             Button(action: { showCallReminder = true }) {
-                Text("Call")
-                    .font(.h3)
-                    .foregroundStyle(.white)
-                    .frame(width: callWidth, height: 48)
-                    .background {
-                        ZStack {
-                            Rectangle().fill(.ultraThinMaterial)
-                            AppColors.btnSecondary
-                        }
-                    }
-                    .clipShape(RoundedRectangle(cornerRadius: 32, style: .continuous))
-                    .opacity(hasPhone ? 1 : 0.4)
+                HStack(spacing: 8) {
+                    Image(systemName: "phone.fill")
+                        .font(.system(size: 24))
+                    Text("Call")
+                        .font(.h3)
+                }
+                .foregroundStyle(.white)
+                .frame(width: canQuote ? callWidth : max(0, width - 32), height: 48)
+                .background { FrostedPillBackground() }
+                .opacity(hasPhone ? 1 : 0.4)
             }
             .buttonStyle(.plain)
             .disabled(!hasPhone)
@@ -583,28 +596,15 @@ struct ContractorGalleryScreen: View {
                 .buttonStyle(.plain)
             }
         }
-        // Taller top padding so the fade region extends well above the buttons —
-        // the buttons stay bottom-anchored (bottom padding is unchanged), this just
-        // grows the gradient upward into a long, soft fade instead of a hard edge.
-        .padding(.top, 88)
-        .padding(.bottom, 16 + bottomInset)
-        .frame(width: width)
-        // Opaque floor (matches the sheet color) that fades in gradually from the
-        // top, so the reviews behind melt out softly rather than cutting off right
-        // at the buttons. Solid well before the buttons; the long transparent-to-
-        // opaque ramp above them is what reads as "soft".
-        .background(
-            LinearGradient(
-                stops: [
-                    .init(color: AppColors.bg.opacity(0),    location: 0.0),
-                    .init(color: AppColors.bg.opacity(0.6),  location: 0.32),
-                    .init(color: AppColors.bg,               location: 0.58),
-                    .init(color: AppColors.bg,               location: 1.0)
-                ],
-                startPoint: .top, endPoint: .bottom
-            )
-            .allowsHitTesting(false)
-        )
+        .padding(.top, 16)
+        .padding(.bottom, max(32, bottomInset))
+        .padding(.horizontal, 16)
+        .frame(maxWidth: .infinity)
+        // No solid strip — the smooth scrim alone carries the footer,
+        // so there is no visible container edge.
+        .background(alignment: .bottom) {
+            FigmaFooterScrim(height: 124, belowExtend: 0)
+        }
     }
 
     private func statusView(spinner: Bool, text: String) -> some View {

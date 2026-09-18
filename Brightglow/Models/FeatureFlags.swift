@@ -30,4 +30,14 @@ enum FeatureFlags {
     /// prefetch already warms the user's ACTUAL job, which is the higher-value path.
     /// Flip to `true` to accept that trade for instant common-job estimates.
     static let prewarmPopularEstimates = false
+
+    /// Multi-select bulk quote requests: the floating "Select multiple" pill on
+    /// the contractor list, checkbox select mode (up to 5), and the
+    /// Cancel / Request quotes (N) footer that sends one P2P text per business.
+    ///
+    /// TABLED 2026-09-16 per Igor — not shipping yet, kept as an exploration
+    /// for the future. The implementation is intact (ContractorListScreen's
+    /// selectFooter, selection state, and the multi-contractor
+    /// QuoteRequestScreen path); flipping this to `true` restores all of it.
+    static let multiSelectEnabled = false
 }

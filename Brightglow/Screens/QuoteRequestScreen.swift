@@ -16,6 +16,11 @@ import MessageUI
 /// enough to send.
 struct QuoteRequestScreen: View {
     var contractor: Contractor? = nil
+    /// Multi-select prototype: when non-empty, the request is composed for ALL
+    /// of these businesses. In-memory only — the selection is never persisted.
+    var contractors: [Contractor] = []
+    /// True when this is a multi-business request (prototype).
+    private var isMulti: Bool { !contractors.isEmpty }
     /// Photos already captured earlier in the flow (camera + drawing, or the
     /// search bar's own picker) — shown up front so the user reviews exactly
     /// what's about to be sent, rather than picking again from scratch.
@@ -31,6 +36,12 @@ struct QuoteRequestScreen: View {
     /// empty box — but stays fully editable: the user can trim or rewrite
     /// before sending.
     var clarifyTranscript: ClarifyTranscript = .empty
+    /// The customer's resolved search city ("Daly City") — where the JOB is,
+    /// not where the business is. Sent with the lead so the texted card reads
+    /// "<job> near <city>" and the paywall/nudge copy names the right place.
+    /// nil when no location was resolved: the card then omits the location
+    /// rather than falsely showing the business's city.
+    var userCity: String? = nil
 
     @Environment(\.dismiss) private var dismiss
     @EnvironmentObject private var auth: AuthService
@@ -66,6 +77,8 @@ struct QuoteRequestScreen: View {
     struct ComposePayload: Identifiable {
         let id = UUID()
         let recipient: String
+        /// Business display name — used for the per-send toast in multi mode.
+        let businessName: String
         let body: String
         /// ALL attached photos — the MMS carries every one (unlike the email
         /// record leg, which LeadBridge caps at one).
@@ -126,11 +139,28 @@ struct QuoteRequestScreen: View {
     /// app is the reply channel — the business gets the customer's number — so no
     /// email is needed or used. Email is only the reply channel on the fallback.
     private var willText: Bool {
-        contractor?.phone != nil && Self.deviceCanText
+        if isMulti { return contractors.contains { $0.phone != nil } && Self.deviceCanText }
+        return contractor?.phone != nil && Self.deviceCanText
     }
     private var canSend: Bool {
-        (willText || emailValid) && hasDescription && contractor != nil && !sending && !savingLead
+        (willText || emailValid) && hasDescription && (contractor != nil || isMulti) && !sending && !savingLead && !multiActive
     }
+    /// Multi-send queue (prototype): SMS payloads awaiting their composer turn.
+    /// Email-only businesses send immediately during the build pass.
+    @State private var smsQueue: [ComposePayload] = []
+    /// Multi-send progress (prototype): confirmed deliveries so far and the
+    /// total selected. Email-only businesses count from the build pass; SMS
+    /// ones increment as each composer reports .sent.
+    @State private var multiDone: Int = 0
+    @State private var multiTotal: Int = 0
+    /// True while a multi-send queue is in flight (composer turns). Gates the
+    /// Send CTA and drives the progress cue between composers.
+    @State private var multiActive: Bool = false
+    /// True when the multi queue stopped early (cancel/fail) with some sends
+    /// done — the confirmation then reports the partial count, not silence.
+    @State private var multiPartial: Bool = false
+    /// Current toast (multi-send per-business confirmation), auto-dismissed.
+    @State private var toast: ToastMessage? = nil
 
     var body: some View {
         ZStack {
@@ -138,6 +168,21 @@ struct QuoteRequestScreen: View {
             if sent { sentState } else { reviewState }
             // The lead save runs in the background; no blocking overlay.
             // savingLead only disables the Continue button while the save is in flight.
+            // Multi-send progress cue between composer turns, so the sheet
+            // open/close flicker reads as one intentional flow.
+            if multiActive && !sent { multiProgressCue }
+            // Per-send toast confirmation (multi-send). Never intercepts
+            // touches — it floats over the review/sent states.
+            if let toast {
+                VStack {
+                    Spacer()
+                    ToastView(message: toast)
+                        .padding(.bottom, 48)
+                }
+                .allowsHitTesting(false)
+                .transition(.move(edge: .bottom).combined(with: .opacity))
+                .animation(.easeInOut(duration: 0.25), value: toast != nil)
+            }
         }
         .navigationBarBackButtonHidden(true)
         .toolbar(.hidden, for: .navigationBar)
@@ -418,6 +463,8 @@ struct QuoteRequestScreen: View {
         // duplicate in the background (see sendRequest).
         .sheet(item: $compose) { payload in
             MessageComposerView(recipient: payload.recipient, body: payload.body, photos: payload.photos) { result in
+                // Multi-select prototype: advance (or stop) the per-business queue.
+                if isMulti { handleMultiComposerResult(result, payload: payload); return }
                 compose = nil
                 // The blue Send INSIDE Messages: the true conversion. .sent means
                 // the text actually went; .cancelled is the abandon we couldn't
@@ -452,8 +499,22 @@ struct QuoteRequestScreen: View {
     /// name. Name in Poppins Light 17, centered; 24pt gap. The logo is 44×44 (r12) —
     /// half the Figma's 88, since resolved marks are often small/low-res and blow up
     /// badly at full size; smaller keeps a pixelated logo from dominating the screen.
+    @ViewBuilder
     private var businessHeader: some View {
-        VStack(spacing: 24) {
+        // Multi-select prototype: the selected business names at 14pt — no
+        // logos, so up to five fit comfortably.
+        if isMulti {
+            VStack(spacing: 8) {
+                ForEach(contractors) { c in
+                    Text(c.name)
+                        .font(.system(size: 14))
+                        .foregroundStyle(.white)
+                        .lineLimit(1)
+                        .multilineTextAlignment(.center)
+                }
+            }
+        } else {
+            VStack(spacing: 24) {
             if let logoURL {
                 AsyncImage(url: logoURL) { phase in
                     if case .success(let image) = phase {
@@ -473,6 +534,7 @@ struct QuoteRequestScreen: View {
                 .font(.bodyLight)
                 .foregroundStyle(.white)
                 .multilineTextAlignment(.center)
+        }
         }
     }
 
@@ -640,6 +702,37 @@ struct QuoteRequestScreen: View {
 
     // MARK: - Sent confirmation
 
+    /// Slim progress cue shown between multi-send composer turns, so the
+    /// sheet open/close flicker reads as one intentional flow.
+    private var multiProgressCue: some View {
+        VStack {
+            HStack(spacing: 10) {
+                ProgressView().tint(.white)
+                Text("Sending \(multiDone) of \(multiTotal)…")
+                    .font(.bodyLight)
+                    .foregroundStyle(.white)
+            }
+            .padding(.horizontal, 18)
+            .padding(.vertical, 10)
+            .background(Color.white.opacity(0.12))
+            .clipShape(Capsule())
+            .padding(.top, 14)
+            Spacer()
+        }
+        .frame(maxWidth: .infinity)
+    }
+
+    /// Shows a toast for ~2.2s. A newer toast replaces (never stacks with)
+    /// the previous one.
+    private func showToast(_ text: String) {
+        let msg = ToastMessage(text: text)
+        toast = msg
+        Task {
+            try? await Task.sleep(nanoseconds: 2_200_000_000)
+            await MainActor.run { if toast?.id == msg.id { toast = nil } }
+        }
+    }
+
     private var sentState: some View {
         VStack(spacing: 0) {
             // Illustration: 206×202 paper-plane artwork, centered in its
@@ -657,10 +750,14 @@ struct QuoteRequestScreen: View {
 
             // Title + body.
             VStack(spacing: 16) {
-                Text("Request sent")
+                Text(isMulti && multiPartial ? "Partially sent" : "Request sent")
                     .font(.h2)
                     .foregroundStyle(.white)
-                Text("\(contractor?.name ?? "The business") has your request. They'll reply to you directly.")
+                Text(isMulti
+                     ? (multiPartial
+                        ? "\(multiDone) of \(multiTotal) businesses have your request. They'll reply to you directly."
+                        : "\(contractors.count) businesses have your request. They'll reply to you directly.")
+                     : "\(contractor?.name ?? "The business") has your request. They'll reply to you directly.")
                     .font(.bodyLight)
                     .foregroundStyle(.white)
                     .multilineTextAlignment(.center)
@@ -735,7 +832,16 @@ struct QuoteRequestScreen: View {
     /// the first (the drawn/annotated one, when there is one) is what's sent.
     /// With none attached the lead goes as text only.
     private func sendRequest() {
-        guard canSend, let contractor else { return }
+        guard canSend else { return }
+        // Multi-select prototype: one personalized send per selected business.
+        if isMulti { sendMultiRequest(); return }
+        guard let contractor else { return }
+        // Drop the keyboard BEFORE the SMS composer sheet takes over. Otherwise
+        // its keyboard-avoidance inset is left applied when the composer is
+        // cancelled — the screen comes back with a phantom gap where the (now
+        // gone) keyboard was. Resigning first returns us to the default layout.
+        requestFocused = false
+        emailFocused = false
 #if DEBUG
         // Test-mode indicator: when smsTestRecipient is empty, the composer
         // opens addressed to the business's real number — change it to your
@@ -807,17 +913,16 @@ struct QuoteRequestScreen: View {
                 }
                 return head.trimmingCharacters(in: .whitespacesAndNewlines) + "\u{2026}"
             }()
-            let jobClause: String = {
-                guard !smsJob.isEmpty else { return "." }
-                return " for: \(smsJob)" + (smsJob.hasSuffix("\u{2026}") ? "" : ".")
-            }()
-            // The reply link stands on its own line so iMessage unfurls it
-            // as the rich preview card (photo + title), not a bare inline URL.
-            let body = "Hi \(contractor.name)! I'd like a quote\(jobClause)\n"
-                + "Photos and details here:\n\(LeadBridgeService.replyURL(publicId: publicId))\n"
-                + "If you can take this on, just reply to this text."
+            let jobClause: String = smsJob.isEmpty ? "a request" : "a request for \(smsJob)"
+            // iMessage only unfurls a URL into the rich preview card (photo +
+            // title) when it's the LAST thing in the message — any text after
+            // the URL downgrades it to a bare inline link. So the copy comes
+            // first ("...below.") and the reply link ends the body.
+            let body = "Hi \(contractor.name), I have \(jobClause) — photos and details below. "
+                + LeadBridgeService.replyURL(publicId: publicId)
             let payload = ComposePayload(
                 recipient: Self.smsTestRecipient.isEmpty ? phone : Self.smsTestRecipient,
+                businessName: contractor.name,
                 body: body,
                 photos: [],
                 uploadPhotos: photos,
@@ -868,6 +973,153 @@ struct QuoteRequestScreen: View {
                 }
             }
         }
+    }
+
+    // MARK: - Multi-select prototype (in-memory; nothing persisted)
+
+    /// Prototype multi-send: one personalized SMS per selected business,
+    /// presented sequentially in the user's own Messages app (P2P, 1:1 —
+    /// never a group text). Businesses without a textable phone send over
+    /// email immediately during the build pass. A cancel or failure stops
+    /// the queue; businesses already sent keep their leads.
+    private func sendMultiRequest() {
+        // Drop the keyboard BEFORE the SMS composer sheet takes over (same
+        // phantom-gap avoidance as the single path).
+        requestFocused = false
+        emailFocused = false
+#if DEBUG
+        if Self.smsTestRecipient.isEmpty {
+            sendError = "Test mode off: change the recipient to your own number in the Messages app."
+        }
+#endif
+        AnalyticsService.track("send_tapped", [
+            "place_id": "multi",
+            "channel": "multi",
+            "count": contractors.count,
+        ])
+        let photos = images.map { $0.brightglowWatermarked() }
+        emailFocused = false
+        requestFocused = false
+        editingEmail = false
+        sendError = nil
+
+        let base = editableRequest.trimmingCharacters(in: .whitespacesAndNewlines)
+        let description = vehicleNote.isEmpty ? base : "Vehicle: \(vehicleNote)\n\n\(base)"
+        // {job} is the clarify LLM's 3-5 word job title — shared across every
+        // recipient; only the business name is personalized per text.
+        let smsJob: String = {
+            let titled = strippingTestKeyword(clarifyTranscript.jobTitle)
+            if !titled.isEmpty { return titled }
+            let firstLine = strippingTestKeyword(
+                description.components(separatedBy: .newlines).first?
+                    .trimmingCharacters(in: .whitespacesAndNewlines) ?? "")
+            guard firstLine.count > 40 else { return firstLine }
+            let head = String(firstLine.prefix(40))
+            if let space = head.lastIndex(of: " ") {
+                return String(head[..<space]).trimmingCharacters(in: .whitespacesAndNewlines) + "\u{2026}"
+            }
+            return head.trimmingCharacters(in: .whitespacesAndNewlines) + "\u{2026}"
+        }()
+        let jobClause: String = smsJob.isEmpty ? "a request" : "a request for \(smsJob)"
+
+        sending = true
+        smsQueue = []
+        Task {
+            var queue: [ComposePayload] = []
+            var emailed = 0
+            for c in contractors {
+                if let phone = c.phone, Self.deviceCanText {
+                    // Same pre-compose lead save as the single path: the /l
+                    // link must be live before the composer opens.
+                    let publicId = LeadBridgeService.newPublicID()
+                    let body = "Hi \(c.name), I have \(jobClause) — photos and details below. "
+                        + LeadBridgeService.replyURL(publicId: publicId)
+                    let payload = ComposePayload(
+                        recipient: Self.smsTestRecipient.isEmpty ? phone : Self.smsTestRecipient,
+                        businessName: c.name,
+                        body: body,
+                        photos: [],
+                        uploadPhotos: photos,
+                        description: description,
+                        publicId: publicId
+                    )
+                    do {
+                        try await submitEmailLead(c, description: payload.description,
+                                                  photos: payload.uploadPhotos,
+                                                  publicId: payload.publicId, notify: false)
+                        queue.append(payload)
+                    } catch {
+                        print("❌ multi lead save failed for \(c.name): \(error)")
+                        await MainActor.run {
+                            sending = false
+                            sendError = "Couldn't save your request for \(c.name). Please try again."
+                        }
+                        return
+                    }
+                } else {
+                    // No textable phone — email is the only channel.
+                    do {
+                        try await submitEmailLead(c, description: description, photos: photos)
+                        emailed += 1
+                    } catch {
+                        await MainActor.run {
+                            sending = false
+                            sendError = "Couldn't send to \(c.name): \(error)"
+                        }
+                        return
+                    }
+                }
+            }
+            await MainActor.run {
+                sending = false
+                multiTotal = contractors.count
+                multiDone = emailed
+                multiActive = true
+                multiPartial = false
+                smsQueue = queue
+                advanceMultiQueue()
+            }
+        }
+    }
+
+    /// Presents the next queued SMS composer, or finishes once the queue drains.
+    private func advanceMultiQueue() {
+        guard !smsQueue.isEmpty else {
+            multiActive = false
+            withAnimation(.easeInOut(duration: 0.25)) { sent = true }
+            return
+        }
+        compose = smsQueue.removeFirst()
+    }
+
+    /// Handles one Messages composer result in a multi-send: a real send
+    /// advances to the next business; a cancel or failure retracts that lead
+    /// and stops the queue.
+    private func handleMultiComposerResult(_ result: MessageComposeResult, payload: ComposePayload) {
+        compose = nil
+        AnalyticsService.track("send_result", [
+            "place_id": "multi",
+            "channel": "text",
+            "outcome": result == .sent ? "sent" : (result == .failed ? "failed" : "cancelled"),
+        ])
+        guard result == .sent else {
+            Task { await LeadBridgeService.deleteLead(publicId: payload.publicId) }
+            if result == .failed { sendError = "Couldn't open Messages. Try again." }
+            smsQueue = []
+            multiActive = false
+            // Stopped early with some sends done: report the partial count
+            // instead of dropping back to the review screen in silence.
+            if multiDone > 0 {
+                multiPartial = true
+                withAnimation(.easeInOut(duration: 0.25)) { sent = true }
+            }
+            return
+        }
+        multiDone += 1
+        // Serial-send confirmation only — the single path already has the
+        // full-screen sent confirmation.
+        showToast("Request has been sent to \(payload.businessName)")
+        advanceMultiQueue()
     }
 
     /// Retries the pre-compose lead save, then opens the composer. Reuses the
@@ -930,7 +1182,8 @@ struct QuoteRequestScreen: View {
             // The number the user is texting — the key the business later claims by.
             contractorPhone: testMode ? "+16282029214" : contractor.phone,
             description: description,
-            city: contractor.city,
+            // The JOB's city (customer search location), never the business's.
+            city: userCity,
             photos: photos,
             publicId: publicId,
             notify: notify,
@@ -1036,5 +1289,29 @@ extension UIImage {
                                  y: target.height - textSize.height - pad)
             (text as NSString).draw(at: origin, withAttributes: attrs)
         }
+    }
+}
+
+/// Lightweight toast payload (multi-send per-business confirmation).
+struct ToastMessage: Identifiable, Equatable {
+    let id = UUID()
+    let text: String
+}
+
+/// Bottom pill toast. Fileprivate for now — promote to Components/ when a
+/// second screen needs it (requires a project.pbxproj entry then).
+fileprivate struct ToastView: View {
+    let message: ToastMessage
+
+    var body: some View {
+        Text(message.text)
+            .font(.bodyLight)
+            .foregroundStyle(.white)
+            .multilineTextAlignment(.center)
+            .padding(.horizontal, 20)
+            .padding(.vertical, 12)
+            .background(Color.white.opacity(0.14))
+            .clipShape(Capsule())
+            .shadow(radius: 8)
     }
 }
