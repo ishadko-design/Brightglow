@@ -1411,8 +1411,16 @@ struct ContractorListScreen: View {
     /// the owner's curated ones from the lead.
     private func withOwnerLead(_ id: String, _ list: [String]) -> [String] {
         guard let owner = ownerPhotosByID[id], !owner.isEmpty else { return list }
-        let have = Set(owner)
-        return owner + list.filter { !have.contains($0) }
+        let have = Set(list)
+        let fresh = owner.filter { !have.contains($0) }
+        guard !fresh.isEmpty else { return list }
+        // Owner photos are curated but unlabeled — they must not outrank a
+        // query-matching work photo. If the job vocabulary matched one of the
+        // screened photos, the owner's shots go behind it; otherwise (no match)
+        // they keep the lead as the business's chosen showcase.
+        let matched = PhotoFilter.photoMatchStrength(keptPhotos[id] ?? [], query: orderQuery,
+                                                     category: category) > 0
+        return matched ? list + fresh : fresh + list
     }
 
     /// Look up active contractor licences for businesses we haven't checked yet.
