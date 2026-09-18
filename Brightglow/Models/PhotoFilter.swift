@@ -763,9 +763,15 @@ enum PhotoFilter {
         "wiring": ["wire", "cable"],
         "outlet": ["switch"],
         "switch": ["outlet"],
-        "thermostat": ["hvac"],
-        "furnace": ["hvac", "heater"],
-        "heater": ["furnace", "hvac"],
+        "furnace": ["heater"],
+        "heater": ["furnace"],
+        // NOTE: "hvac" is deliberately NOT a synonym of anything here. It's a
+        // trade hypernym, not a visible object: a mini-split, a furnace, and a
+        // thermostat are all "hvac", so listing it made every hvac-tagged photo
+        // "match" every hvac query. That silently disabled the distractor
+        // demotion (noJobMatch never fired) and let the photo weight promote
+        // the wrong evidence. Generic hvac photos still get preferred over
+        // interiors via tradeFallbackTerms.
         "vent": ["duct"],
         "duct": ["vent"],
     ]
