@@ -363,14 +363,17 @@ struct ContractorListScreen: View {
         let total = contractors.count
         let scored = contractors.enumerated()
             .map { (offset: $0.offset, contractor: $0.element,
-                    score: relevanceScore($0.element, upstreamIndex: $0.offset, upstreamCount: total)) }
-        // Single score sort — trade match, size fit, and upstream quality
-        // compete in one number, so a 5-star plumber whose reviews name the job
-        // can still outrank a mediocre handyman on a small plumbing job.
-        // Fairness means the same factors for every business on every job: no
-        // tiers, no pre-decided winners.
+                    scored: relevanceScore($0.element, upstreamIndex: $0.offset, upstreamCount: total)) }
+        // Photo evidence is the primary sort key (Igor 2026-09-18): a business
+        // with a screened photo of the searched work always outranks one
+        // without — even a 5-star one. The photo is the strongest signal
+        // because it's the only one that says THIS business did THIS job.
+        // Within each tier the composite score still decides, so stronger
+        // evidence and better reviews win among evidenced businesses, and the
+        // no-evidence order is unchanged.
         let ranked = scored.sorted {
-            if $0.score != $1.score { return $0.score > $1.score }
+            if $0.scored.photoEvidence != $1.scored.photoEvidence { return $0.scored.photoEvidence }
+            if $0.scored.score != $1.scored.score { return $0.scored.score > $1.scored.score }
             return $0.offset < $1.offset
         }
         return Array(ranked.map(\.contractor).prefix(visibleLimit))
@@ -409,8 +412,9 @@ struct ContractorListScreen: View {
     /// The job's trade as a Category, when the search resolved to one.
     private var jobCategory: Category? { Category(rawValue: category) }
 
-    /// Composite relevance score — the single number that decides which five
-    /// lead. Job-specific proof first, upstream quality order as the base: a
+    /// Composite relevance score + photo-evidence flag. The score orders
+    /// businesses *within* a photo-evidence tier (see visibleContractors);
+    /// job-specific proof first, upstream quality order as the base: a
     /// review naming the searched work and a screened work photo of it outrank
     /// every free-signal heuristic, because they're the only signals that say
     /// THIS business does THIS job. The upstream Places order (proximity,
@@ -419,7 +423,7 @@ struct ContractorListScreen: View {
     /// size-fit factor scores whether the business is the right size for this
     /// job's price — a handyman for a small job — as one competing factor, not
     /// a pre-decided tier. All four weights are OTA-tunable (`ranking_config`).
-    private func relevanceScore(_ c: Contractor, upstreamIndex: Int, upstreamCount: Int) -> Double {
+    private func relevanceScore(_ c: Contractor, upstreamIndex: Int, upstreamCount: Int) -> (score: Double, photoEvidence: Bool) {
         let w = RankingConfigStore.current.weights
         let reviews = c.reviews.map(\.text)
         let review = PhotoFilter.reviewMatchStrength(reviews, query: matchQuery)
@@ -428,7 +432,9 @@ struct ContractorListScreen: View {
         let sizeFit = smallJobActive && takesSmallJobs(c, category: jobCategory) ? 1.0 : 0.0
         let score = w.reviewMatch * review + w.photoMatch * photo
             + w.sizeFit * sizeFit + w.upstream * upstream
-        return min(score, 1)
+        // photoEvidence: at least one screened photo matched the job vocabulary.
+        // The primary sort key in visibleContractors — see that comment.
+        return (min(score, 1), photo > 0)
     }
 
     /// Single source of truth for the "Takes small jobs" cue: true when the
