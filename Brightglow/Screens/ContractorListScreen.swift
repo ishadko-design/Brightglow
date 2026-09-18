@@ -1600,7 +1600,9 @@ struct ContractorListScreen: View {
             // waits out the backoff window instead of re-calling the model on
             // every visit.
             let gained = enriched.count != kept.count
-                || zip(enriched, kept).contains { $0.url != $1.url || Set($0.labels) != Set($1.labels) }
+                || zip(enriched, kept).contains { pair in
+                    pair.0.url != pair.1.url || Set(pair.0.labels) != Set(pair.1.labels)
+                }
             if gained {
                 keptPhotos[id] = enriched
                 // Display write goes through the freeze: if the strip already
