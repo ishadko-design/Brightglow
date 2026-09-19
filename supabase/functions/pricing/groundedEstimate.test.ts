@@ -3,7 +3,34 @@
 // web_search call can't be exercised offline.
 
 import { assert, assertEquals } from "jsr:@std/assert@1";
-import { buildGroundedSystemPrompt, parseGroundedBand, saneBand } from "./groundedEstimate.ts";
+import {
+  buildGroundedSystemPrompt,
+  canonicalJob,
+  parseGroundedBand,
+  saneBand,
+} from "./groundedEstimate.ts";
+
+Deno.test("canonicalJob collapses phrasing variants to one key", () => {
+  // The whole point: these must all hit the same cache entry.
+  const k = "kitchen:remodel";
+  assertEquals(canonicalJob("kitchen remodel"), k);
+  assertEquals(canonicalJob("remodel my kitchen"), k);
+  assertEquals(canonicalJob("kitchen renovation"), k);
+  assertEquals(canonicalJob("I want to renovate the kitchen"), k);
+});
+
+Deno.test("canonicalJob distinguishes scope and subject", () => {
+  assertEquals(canonicalJob("full gut remodel of my bathroom, ~60 sq ft"), "bathroom:gut-remodel");
+  assertEquals(canonicalJob("bathroom remodel"), "bathroom:remodel"); // gut != plain
+  assertEquals(canonicalJob("finish my basement"), "basement:remodel");
+  assertEquals(canonicalJob("build an ADU in the backyard"), "adu:addition");
+});
+
+Deno.test("canonicalJob returns null when no subject is recognized", () => {
+  // Falls back to full-text keying (safe, lower hit rate) — not a wrong collapse.
+  assertEquals(canonicalJob("respray the whole car"), null);
+  assertEquals(canonicalJob("full engine rebuild on my Ducati"), null);
+});
 
 Deno.test("parseGroundedBand: clean JSON", () => {
   const b = parseGroundedBand('{"low":12000,"typical":20000,"high":32000,"basis":"gut bath, mid-grade"}');

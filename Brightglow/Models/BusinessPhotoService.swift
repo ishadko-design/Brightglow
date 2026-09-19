@@ -52,5 +52,38 @@ enum BusinessPhotoService {
     }
 
     private struct Response: Decodable { let photos: [Photo] }
-    private struct Photo: Decodable { let url: String }
+    private struct Photo: Decodable { let url: String; let tags: [String]? }
+
+    /// Same as `fetch`, but also returns the server-side vision tags
+    /// (`photo_tags` table, attached by the `business-photos` function) for
+    /// photo URLs the server has tagged. Tags are [] when the photo was never
+    /// tagged — the caller falls back to on-device screening as before.
+    static func fetchWithTags(placeId: String, website: String?) async -> [(url: String, tags: [String])] {
+        let site = website?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        guard isConfigured, !placeId.isEmpty, !site.isEmpty,
+              let url = URL(string: "https://\(ref).supabase.co/functions/v1/business-photos")
+        else { return [] }
+
+        var req = URLRequest(url: url, timeoutInterval: 15)
+        req.httpMethod = "POST"
+        req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        req.setValue(anonKey, forHTTPHeaderField: "apikey")
+        req.setValue("Bearer \(anonKey)", forHTTPHeaderField: "Authorization")
+        if !appToken.isEmpty { req.setValue(appToken, forHTTPHeaderField: "x-app-token") }
+        req.httpBody = try? JSONSerialization.data(withJSONObject: ["place_id": placeId, "website": site])
+
+        guard let (data, resp) = try? await URLSession.shared.data(for: req),
+              (resp as? HTTPURLResponse)?.statusCode == 200,
+              let decoded = try? JSONDecoder().decode(Response.self, from: data)
+        else { return [] }
+        // Same http→https upgrade as `fetch` (see that comment): the tag join
+        // on the server ran against the pre-upgrade URL, so carry the tags
+        // across the upgrade on the pair.
+        return decoded.photos.map { photo in
+            let upgraded = photo.url.hasPrefix("http://")
+                ? "https://" + photo.url.dropFirst("http://".count)
+                : photo.url
+            return (url: upgraded, tags: photo.tags ?? [])
+        }
+    }
 }

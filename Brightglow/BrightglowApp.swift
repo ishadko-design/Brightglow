@@ -22,6 +22,7 @@ struct BrightglowApp: App {
                 .environmentObject(previewRouter)
                 .environmentObject(businessStore)
                 .task { AnalyticsService.track("app_open") }
+                .task { await AttributionReporter.reportIfNeeded() }
                 .onOpenURL { url in
                     #if DEBUG
                     print("🔗 onOpenURL: \(url.absoluteString)")

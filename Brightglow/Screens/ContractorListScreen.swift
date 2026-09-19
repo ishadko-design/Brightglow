@@ -193,13 +193,34 @@ struct ContractorListScreen: View {
     /// kept pool, the relevance score, and the cached/shared verdicts for future
     /// visits — but they must not reshuffle photos the user is already looking at.
     @State private var stripFrozenIDs: Set<String> = []
+    /// The frozen display order of the business rows, by id. Populated once the
+    /// loader hands off to the list (and grown, append-only, by "See more" /
+    /// pagination). While loading, the ranking is free to resort as photo
+    /// screening settles; the moment the user lands on the list it is locked, so
+    /// a late promotion (enrichment, website photos, a straggler screen) never
+    /// reshuffles a row the user is already looking at (Igor 2026-09-19). New
+    /// rows brought in below the fold are ranked among themselves and appended —
+    /// never inserted above an already-shown row.
+    @State private var displayOrder: [String] = []
     /// Places loaded from a cached/shared verdict that wasn't rich-tagged yet —
     /// enriched once when their row is first revealed (consumed on use), so we
     /// pay the vision cost lazily per scrolled row, not for the whole list at once.
     @State private var needsEnrich: Set<String> = []
+    /// In-flight enrichment tasks by id. The eager pre-landing pass awaits the
+    /// same task a freshly-screened row already kicked off, so the visible window
+    /// settles (rich tags + embeddings) behind the spinner without a second model
+    /// call. Self-clears on completion; reset on reload.
+    @State private var enrichTasks: [String: Task<Void, Never>] = [:]
     /// Kept work photos + their scene labels per contractor (the source of truth);
     /// `screenedByID` is this list ordered by the current query for display.
     @State private var keptPhotos: [String: [ScreenedPhoto]] = [:]
+    /// Frozen photo-relevance scores per business, snapshotted when the business
+    /// list is set. The enrich flow updates `keptPhotos` asynchronously with
+    /// richer Claude tags, which would change `photoMatchStrength` scores and
+    /// make businesses jump tiers after landing. Freezing the scores keeps the
+    /// list order stable; photo STRIPS still refine in place via setStripPhotos.
+    @State private var frozenPhotoScores: [String: Double] = [:]
+    @State private var frozenPhotoEvidence: [String: Bool] = [:]
     /// A business's OWN uploaded photos (from the app's Settings editor), by id.
     /// Owner-curated, so they lead the strip un-screened and keep a claimed
     /// business visible even when Google returns no usable work photos for it.
@@ -361,23 +382,49 @@ struct ContractorListScreen: View {
     /// user actually reaches. Scores refine as photo screening completes — a
     /// photo-confirmed match climbs without any re-fetch.
     private var visibleContractors: [Contractor] {
+        let byID = Dictionary(contractors.map { ($0.id, $0) }, uniquingKeysWith: { a, _ in a })
+        // Rows already committed to the display keep their frozen position (see
+        // `displayOrder`) — dropping any that have since left the pool. Rows not
+        // yet committed (a fresh page, or the pre-freeze first load) are ranked
+        // live and appended below, so they can settle while loading and never
+        // jump above a row the user has already seen.
+        var rows = displayOrder.compactMap { byID[$0] }
+        let committed = Set(displayOrder)
+        rows += rankedContractors().filter { !committed.contains($0.id) }
+        return Array(rows.prefix(visibleLimit))
+    }
+
+    /// The full pool ranked by composite relevance, strongest first — the order
+    /// used before anything is frozen, and to place newly-revealed rows below the
+    /// frozen block. Photo evidence is the primary sort key (Igor 2026-09-18): a
+    /// business with a screened photo of the searched work always outranks one
+    /// without — even a 5-star one. The photo is the strongest signal because
+    /// it's the only one that says THIS business did THIS job. Within each tier
+    /// the composite score (review match, photo strength, size fit,
+    /// responsiveness, upstream quality) still decides, so stronger evidence and
+    /// better reviews win among evidenced businesses, and the no-evidence order
+    /// is unchanged.
+    private func rankedContractors() -> [Contractor] {
         let total = contractors.count
         let scored = contractors.enumerated()
             .map { (offset: $0.offset, contractor: $0.element,
                     scored: relevanceScore($0.element, upstreamIndex: $0.offset, upstreamCount: total)) }
-        // Photo evidence is the primary sort key (Igor 2026-09-18): a business
-        // with a screened photo of the searched work always outranks one
-        // without — even a 5-star one. The photo is the strongest signal
-        // because it's the only one that says THIS business did THIS job.
-        // Within each tier the composite score still decides, so stronger
-        // evidence and better reviews win among evidenced businesses, and the
-        // no-evidence order is unchanged.
-        let ranked = scored.sorted {
+        return scored.sorted {
             if $0.scored.photoEvidence != $1.scored.photoEvidence { return $0.scored.photoEvidence }
             if $0.scored.score != $1.scored.score { return $0.scored.score > $1.scored.score }
             return $0.offset < $1.offset
-        }
-        return Array(ranked.map(\.contractor).prefix(visibleLimit))
+        }.map(\.contractor)
+    }
+
+    /// Freeze the currently-visible window so those rows never reshuffle again.
+    /// Called at each moment the visible set can legitimately grow — the loader
+    /// handing off to the list, "See more", and pagination — capturing the
+    /// best-available ranking at that instant. Rows past the window stay free to
+    /// rank until they too are revealed and committed. Idempotent: re-freezing an
+    /// unchanged window is a no-op.
+    @MainActor
+    private func commitDisplayOrder() {
+        displayOrder = visibleContractors.map(\.id)
     }
 
     /// Licensed-work check for this job, driven by the OTA config. Electrical
@@ -413,6 +460,18 @@ struct ContractorListScreen: View {
     /// The job's trade as a Category, when the search resolved to one.
     private var jobCategory: Category? { Category(rawValue: category) }
 
+    /// Snapshots photo-relevance scores for the given businesses. Called when
+    /// the contractor list is set (initial load, pagination, fallback) so the
+    /// ranking stays stable when background enrich later updates photo tags.
+    /// Must be called AFTER keptPhotos is populated for these businesses.
+    private func freezePhotoScores(for contractors: [Contractor]) {
+        for c in contractors {
+            let s = PhotoFilter.photoMatchStrength(keptPhotos[c.id] ?? [], query: matchQuery, category: category)
+            frozenPhotoScores[c.id] = s
+            frozenPhotoEvidence[c.id] = s > 0
+        }
+    }
+
     /// Composite relevance score + photo-evidence flag. The score orders
     /// businesses *within* a photo-evidence tier (see visibleContractors);
     /// job-specific proof first, upstream quality order as the base: a
@@ -428,7 +487,18 @@ struct ContractorListScreen: View {
         let w = RankingConfigStore.current.weights
         let reviews = c.reviews.map(\.text)
         let review = PhotoFilter.reviewMatchStrength(reviews, query: matchQuery)
-        let photo = PhotoFilter.photoMatchStrength(keptPhotos[c.id] ?? [], query: matchQuery, category: category)
+        // Use the frozen photo score if available (set when the list was built);
+        // otherwise compute from current photos (first display before freeze).
+        // This keeps business order stable when background enrich updates tags.
+        let photo: Double
+        let evidence: Bool
+        if let frozen = frozenPhotoScores[c.id] {
+            photo = frozen
+            evidence = frozenPhotoEvidence[c.id] ?? false
+        } else {
+            photo = PhotoFilter.photoMatchStrength(keptPhotos[c.id] ?? [], query: matchQuery, category: category)
+            evidence = photo > 0
+        }
         let upstream = upstreamCount > 1 ? 1 - Double(upstreamIndex) / Double(upstreamCount - 1) : 1
         let sizeFit = smallJobActive && takesSmallJobs(c, category: jobCategory) ? 1.0 : 0.0
         let responsive = responsivenessSignal(c)
@@ -436,7 +506,8 @@ struct ContractorListScreen: View {
             + w.sizeFit * sizeFit + w.responsiveness * responsive + w.upstream * upstream
         // photoEvidence: at least one screened photo matched the job vocabulary.
         // The primary sort key in visibleContractors — see that comment.
-        return (min(score, 1), photo > 0)
+        // Uses the frozen evidence flag when scores are frozen.
+        return (min(score, 1), evidence)
     }
 
     /// Single source of truth for the "Takes small jobs" cue: true when the
@@ -732,8 +803,14 @@ struct ContractorListScreen: View {
                             revealedIDs.insert(contractor.id)
                             Task { await screenIfNeeded(contractor) }
                             Task { await enrichIfNeeded(contractor) }
-                            // Pull in the business's own website portfolio (free, cached).
-                            Task { await mergeWebsitePhotos(for: contractor) }
+                            // Website portfolio for rows revealing from a CACHED verdict
+                            // only (`screenIfNeeded` returns early for those, so its
+                            // inline website fetch never runs). Fresh rows fetch the
+                            // portfolio inline in `screenIfNeeded`, before their
+                            // single strip write — never as a late reshuffle.
+                            if scannedCount[contractor.id] != nil {
+                                Task { await mergeWebsitePhotos(for: contractor) }
+                            }
                         }
                     }
 
@@ -1125,6 +1202,10 @@ struct ContractorListScreen: View {
 
         if contractors.count > visibleLimit {
             withAnimation(.easeInOut(duration: 0.2)) { visibleLimit += 5 }
+            // Freeze the five just revealed in their ranked position — they were
+            // below the fold, so ranking them now (with whatever's screened) is
+            // correct; from here they stay put like the rest.
+            commitDisplayOrder()
             return
         }
 
@@ -1141,8 +1222,11 @@ struct ContractorListScreen: View {
         guard !fresh.isEmpty else { return }
         withAnimation(.easeInOut(duration: 0.2)) {
             contractors.append(contentsOf: fresh)
+            freezePhotoScores(for: fresh)
             visibleLimit += 5
         }
+        // Commit the newly-appended page below the frozen block (append-only).
+        commitDisplayOrder()
         await loadLicenses(for: fresh)
     }
 
@@ -1325,6 +1409,10 @@ struct ContractorListScreen: View {
                     && (scannedCount[c.id] ?? 0) >= c.photos.count
                     && (screenedByID[c.id]?.isEmpty ?? true)
             }
+            // Freeze photo-relevance scores now that keptPhotos is populated and
+            // the list is final. Background enrich will update tags, but the
+            // business order stays stable.
+            freezePhotoScores(for: contractors)
             // Uncovered categories stay match-only — the price line shows the
             // "coming soon" state (with a real business count) instead. Auto &
             // moto is no longer among them; it passes its vehicle filter so a
@@ -1366,6 +1454,25 @@ struct ContractorListScreen: View {
         // loader; any stragglers keep screening in the background as before. The
         // loading animation + "Sorting photos" line cover this wait.
         await eagerlyScreenTopMatches()
+        // Then rich-tag (and embed) the rows the user is about to land on, still
+        // behind the spinner, so the matching order + strip photos settle now
+        // instead of churning a beat after landing (Igor 2026-09-19: both the
+        // pictures and the businesses shifting under the user is the confusing
+        // bug). Cost-neutral — these rows enrich anyway on reveal; this just
+        // front-loads and awaits it. Bounded by a cap so a slow tagger never
+        // hangs the loader.
+        await eagerlyEnrichTopMatches()
+        // Freeze scores AFTER the eager enrich, so the snapshot reflects the
+        // richer Claude tags rather than the on-device labels (covers the
+        // fallback path too, where contractors were set without photos).
+        freezePhotoScores(for: contractors)
+        // Lock the order the user lands on: resorting is done while the loader is
+        // up; once the list appears it stays put. Later refinements (enrichment
+        // of rows below the fold, website photos, stragglers) still feed
+        // keptPhotos / the gallery / shared verdicts, but they no longer move a
+        // visible row (Igor 2026-09-19). Must run after freezePhotoScores, since
+        // the committed order is computed from the frozen scores.
+        commitDisplayOrder()
         isLoading = false
         await loadLicenses(for: contractors)
         await loadLogos(for: contractors)
@@ -1404,43 +1511,94 @@ struct ContractorListScreen: View {
         }
     }
 
-    /// Fold the business's OWN WEBSITE photos into this row — the same free,
-    /// zero-consent enrichment the gallery uses (`business-photos`), but on the LIST
-    /// so the strip and the "did similar job" ranking see the contractor's actual
-    /// portfolio, not just Google's 10 (mostly-storefront) photos. Screened the same
-    /// way as Places (a site's hero is often a logo/van-wrap/storefront), added to
-    /// the kept pool so ranking + the badge see them, and re-ordered query-first with
-    /// any owner-uploaded photos kept on top. One call per business per session (the
-    /// function caches across users). Lazy per revealed row, so cost stays bounded.
+    /// Enrich the rows the user is about to land on (rich vision tags +
+    /// embeddings) BEFORE the order/strips freeze, so the visible window settles
+    /// behind the spinner rather than churning after landing. Awaits the same
+    /// enrichment a freshly-screened row already kicked off (`enrichInBackground`
+    /// reuses the in-flight task), so it adds no model calls — it only waits for
+    /// what would otherwise land a beat later. Bounded by `eagerEnrichTimeoutNs`:
+    /// past the cap the list lands with whatever finished, and the rest complete
+    /// in the background (dropped for the visible strip once it's frozen, but
+    /// still feeding the gallery/relevance/verdicts). Only rows that already have
+    /// kept photos are enriched; a business with nothing to tag is skipped.
+    @MainActor
+    private func eagerlyEnrichTopMatches() async {
+        let allowVehicles = allowsVehiclePhotos(effectiveSearchQuery)
+        let targets = visibleContractors.filter { !(keptPhotos[$0.id]?.isEmpty ?? true) }
+        guard !targets.isEmpty else { return }
+        await withTaskGroup(of: Void.self) { group in
+            group.addTask { @MainActor in
+                await withTaskGroup(of: Void.self) { inner in
+                    for c in targets {
+                        // The eager pass owns enrichment for this row — don't let
+                        // its reveal fire a second pass.
+                        needsEnrich.remove(c.id)
+                        guard let task = enrichInBackground(
+                            c.id, kept: keptPhotos[c.id] ?? [],
+                            scanned: scannedCount[c.id] ?? (keptPhotos[c.id]?.count ?? 0),
+                            allowVehicles: allowVehicles) else { continue }
+                        inner.addTask { await task.value }
+                    }
+                }
+            }
+            group.addTask {
+                try? await Task.sleep(nanoseconds: eagerEnrichTimeoutNs)
+            }
+            _ = await group.next()   // whichever wins: all-enriched or the cap
+            group.cancelAll()
+        }
+    }
+
+    /// Fetch, screen, and server-tag the business's website portfolio photos
+    /// (`business-photos` — the same free, zero-consent source the gallery uses).
+    /// Screened the same way as Places (a site's hero is often a
+    /// logo/van-wrap/storefront). The server-side vision tags (photo_tags) are
+    /// seeded into the labels so query matching and the photo-evidence tier see
+    /// them immediately, without waiting for the per-device phototags
+    /// enrichment round-trip; untagged photos keep their on-device labels.
+    /// Returns the screened photos UNORDERED — callers merge them into their own
+    /// pool and order once. One call per business per session (`websiteFetched`);
+    /// [] when the site has no usable photos or the fetch failed.
+    @MainActor
+    private func screenedWebsitePhotos(for contractor: Contractor, allowVehicles: Bool) async -> [ScreenedPhoto] {
+        guard !websiteFetched.contains(contractor.id) else { return [] }
+        websiteFetched.insert(contractor.id)
+        let tagged = await BusinessPhotoService.fetchWithTags(placeId: contractor.id, website: contractor.website)
+        guard !tagged.isEmpty else { return [] }
+        var screened = await PhotoFilter.screen(tagged.map(\.url), allowVehicles: allowVehicles,
+                                                limit: tagged.count, scanLimit: tagged.count)
+        if tagged.contains(where: { !$0.tags.isEmpty }) {
+            let serverTags = Dictionary(uniqueKeysWithValues: tagged.map { ($0.url, $0.tags) })
+            screened = screened.map { photo in
+                guard let tags = serverTags[photo.url], !tags.isEmpty else { return photo }
+                let merged = Array(Set(photo.labels + tags.map { $0.lowercased() }))
+                return ScreenedPhoto(url: photo.url, labels: merged, phash: photo.phash)
+            }
+        }
+        return screened
+    }
+
+    /// Fold website photos into a business whose row revealed from a CACHED
+    /// verdict (`screenIfNeeded` returned early, so its inline website fetch
+    /// never ran). Merges into `keptPhotos` for ranking/gallery/verdict — but
+    /// deliberately does NOT rewrite the strip: the row already painted from
+    /// the cached order, and a late reshuffle is the jerk Igor reported
+    /// (2026-09-19). Fresh businesses are no-ops here (`websiteFetched` was
+    /// consumed by their inline fetch in `screenIfNeeded`).
     @MainActor
     private func mergeWebsitePhotos(for contractor: Contractor) async {
-        guard !websiteFetched.contains(contractor.id) else { return }
-        websiteFetched.insert(contractor.id)
-        let urls = await BusinessPhotoService.fetch(placeId: contractor.id, website: contractor.website)
-        guard !urls.isEmpty, contractors.contains(where: { $0.id == contractor.id }) else {
-            if urls.isEmpty { dropIfTrulyPhotoless(contractor) }
-            return
-        }
-
         let allowVehicles = allowsVehiclePhotos(effectiveSearchQuery)
-        let screened = await PhotoFilter.screen(urls, allowVehicles: allowVehicles,
-                                                limit: urls.count, scanLimit: urls.count)
-        guard !screened.isEmpty, contractors.contains(where: { $0.id == contractor.id }) else {
-            if screened.isEmpty { dropIfTrulyPhotoless(contractor) }
+        let website = await screenedWebsitePhotos(for: contractor, allowVehicles: allowVehicles)
+        guard !website.isEmpty, contractors.contains(where: { $0.id == contractor.id }) else {
+            if website.isEmpty { dropIfTrulyPhotoless(contractor) }
             return
         }
-
-        // Add the site's work photos to the kept pool (so the relevance score
-        // and the ordering see them), de-duped against what's already there.
-        let existing = keptPhotos[contractor.id] ?? []
-        let have = Set(existing.map(\.url))
-        let fresh = screened.filter { !have.contains($0.url) }
-        guard !fresh.isEmpty else { return }
-        let merged = fresh + existing
+        // Cross-source dedup: a portfolio shot that's the same image as a
+        // Google photo (different URL) must not tile twice. `deduped` drops
+        // near-duplicates by perceptual hash; website photos lead the merged
+        // pool so the curated shot wins ties.
+        let merged = PhotoFilter.deduped(website + (keptPhotos[contractor.id] ?? []))
         keptPhotos[contractor.id] = merged
-        revealedIDs.insert(contractor.id)
-        setStripPhotos(contractor.id, withOwnerLead(contractor.id,
-            PhotoFilter.order(merged, query: orderQuery, category: category, capPremises: stripMaxPremises, vehicle: photoVehicle)))
         // Rich-tag the new photos so specific queries ("bumper", "hardwood") rank them.
         enrichInBackground(contractor.id, kept: merged,
                            scanned: scannedCount[contractor.id] ?? merged.count,
@@ -1529,10 +1687,15 @@ struct ContractorListScreen: View {
         contractors = []
         screenedByID = [:]
         keptPhotos = [:]
+        frozenPhotoScores = [:]
+        frozenPhotoEvidence = [:]
         ownerPhotosByID = [:]
         scannedCount = [:]
         revealedIDs = []
         stripFrozenIDs = []
+        displayOrder = []
+        enrichTasks.values.forEach { $0.cancel() }
+        enrichTasks = [:]
         needsEnrich = []
         websiteFetched = []
         nextPageToken = nil
@@ -1569,7 +1732,8 @@ struct ContractorListScreen: View {
     private func dropIfTrulyPhotoless(_ c: Contractor) {
         guard contractors.contains(where: { $0.id == c.id }),
               c.photos.isEmpty,
-              ownerPhotosByID[c.id] == nil
+              ownerPhotosByID[c.id] == nil,
+              (keptPhotos[c.id] ?? []).isEmpty
         else { return }
         dropPhotolessBusiness(c.id)
     }
@@ -1614,6 +1778,11 @@ struct ContractorListScreen: View {
         // into the pool if early photos are rejected, so a business whose first
         // shots are logos/people still surfaces its work photos.
         let allowVehicles = allowsVehiclePhotos(effectiveSearchQuery)
+        // The business's own website portfolio, fetched in PARALLEL with the
+        // Google screen below — merged (cross-source deduped) before the single
+        // strip write, so the row paints once with everything and never
+        // reshuffles when the portfolio lands late (Igor 2026-09-19).
+        async let websitePhotos = screenedWebsitePhotos(for: c, allowVehicles: allowVehicles)
         var kept: [ScreenedPhoto] = []
         var scanned = 0
         while kept.count < stripInitialFill && scanned < c.photos.count {
@@ -1624,7 +1793,11 @@ struct ContractorListScreen: View {
             kept.append(contentsOf: batch)
             scanned += slice.count
         }
-        kept = Array(kept.prefix(stripMaxKept))
+        // Website portfolio leads the pool (curated shots win dedup ties), then
+        // `deduped` drops cross-source near-duplicates by perceptual hash — a
+        // portfolio shot that's the same image as a Google photo (different URL)
+        // must not tile twice (Igor 2026-09-19).
+        kept = Array(PhotoFilter.deduped(await websitePhotos + kept).prefix(stripMaxKept))
         scannedCount[c.id] = scanned
         ScreeningStore.shared.save(c.id, allowVehicles: allowVehicles, kept: kept, scanned: scanned)
         // Share this verdict so other users skip screening this place.
@@ -1636,13 +1809,9 @@ struct ContractorListScreen: View {
                 // those instead of dropping the claimed business.
                 setStripPhotos(c.id, withOwnerLead(c.id, []))
                 revealedIDs.insert(c.id)
-            } else if c.photos.isEmpty && c.website != nil {
-                // No Google photos at all, but a website is on file: don't drop
-                // yet — the website-photo merge fired on this same reveal may
-                // still supply portfolio shots, and removes the business itself
-                // when the site yields nothing usable.
             } else {
-                // Whole pool was non-work imagery → drop the business rather than
+                // Whole pool was non-work imagery (Google + the website fetch
+                // above both yielded nothing) → drop the business rather than
                 // show a blank strip (mirrors the gallery).
                 contractors.removeAll { $0.id == c.id }
                 stripFrozenIDs.remove(c.id)
@@ -1682,13 +1851,31 @@ struct ContractorListScreen: View {
     /// so without this, query ranking can't work for auto or specific home
     /// searches. Runs detached so the strip shows immediately on the on-device
     /// ordering; this only refines it a beat later (and once per place, shared).
+    @MainActor
+    @discardableResult
     private func enrichInBackground(_ id: String, kept: [ScreenedPhoto],
-                                    scanned: Int, allowVehicles: Bool) {
+                                    scanned: Int, allowVehicles: Bool) -> Task<Void, Never>? {
         // Back off when the last attempt gained no tags — the tagger had
         // nothing for these photos; retry after the window (or a prompt
         // upgrade) rather than burning a model call on every visit.
-        guard !ScreeningStore.shared.recentEmptyEnrich(id, allowVehicles: allowVehicles) else { return }
-        Task { @MainActor in
+        guard !ScreeningStore.shared.recentEmptyEnrich(id, allowVehicles: allowVehicles) else { return nil }
+        // Reuse an enrichment already in flight for this id (e.g. one the eager
+        // pass and the row reveal both request) so we never fire two model calls
+        // for the same business.
+        if let existing = enrichTasks[id] { return existing }
+        let task = Task { @MainActor in
+            defer { enrichTasks[id] = nil }
+            await enrichNow(id, kept: kept, scanned: scanned, allowVehicles: allowVehicles)
+        }
+        enrichTasks[id] = task
+        return task
+    }
+
+    /// The enrichment work itself (see `enrichInBackground`), factored out so it
+    /// can be awaited by the eager pre-landing pass as well as run detached.
+    @MainActor
+    private func enrichNow(_ id: String, kept: [ScreenedPhoto],
+                           scanned: Int, allowVehicles: Bool) async {
             // nil = the tagger didn't run (off / network / error) → leave the
             // verdict un-enriched so a later visit retries it.
             guard let enriched = await PhotoTagService.enrich(kept, allowVehicles: allowVehicles) else { return }
@@ -1706,6 +1893,10 @@ struct ContractorListScreen: View {
                 || zip(enriched, kept).contains { pair in
                     pair.0.url != pair.1.url || Set(pair.0.labels) != Set(pair.1.labels)
                 }
+            // The photos to persist: enriched when tags were gained, otherwise the
+            // original kept pool. Replaced with the fingerprinted versions below
+            // when the embedding fetch succeeds.
+            var finalKept = gained ? enriched : kept
             if gained {
                 keptPhotos[id] = enriched
                 // Photos the enrich pass DROPPED as non-photos (illustrations,
@@ -1726,6 +1917,12 @@ struct ContractorListScreen: View {
                     stripFrozenIDs.remove(id)
                     revealedIDs.remove(id)
                 } else {
+                    // Attach meaning fingerprints best-effort, then re-rank by
+                    // holistic scene similarity (exterior vs interior) instead of
+                    // word overlap. Failures leave photos without fingerprints and
+                    // `order` falls back to word matching — never worse than before.
+                    let (withFingerprints, queryFingerprint) =
+                        await PhotoEmbeddingService.enrich(enriched, query: orderQuery)
                     // Push the enriched order through `setStripPhotos` WITHOUT
                     // unfreezing. For a row the user hasn't reached yet (not frozen)
                     // this corrects the lead photo before it ever paints. For a row
@@ -1736,18 +1933,22 @@ struct ContractorListScreen: View {
                     // score, and the shared verdict still get the enriched order via
                     // `keptPhotos` and the upload below, so nothing is lost — only the
                     // visible strip stays put.
-                    setStripPhotos(id, withOwnerLead(id, PhotoFilter.order(enriched, query: orderQuery, category: category,
-                                                         capPremises: stripMaxPremises, vehicle: photoVehicle)))
+                    setStripPhotos(id, withOwnerLead(id, PhotoFilter.order(withFingerprints, query: orderQuery, category: category,
+                                                         capPremises: stripMaxPremises, vehicle: photoVehicle,
+                                                         queryEmbedding: queryFingerprint)))
+                    // Persist fingerprints with the verdict so repeat visits skip
+                    // the embedding fetch.
+                    keptPhotos[id] = withFingerprints
+                    finalKept = withFingerprints
                 }
             } else {
                 ScreeningStore.shared.noteEmptyEnrich(id, allowVehicles: allowVehicles)
             }
-            ScreeningStore.shared.save(id, allowVehicles: allowVehicles, kept: gained ? enriched : kept,
+            ScreeningStore.shared.save(id, allowVehicles: allowVehicles, kept: finalKept,
                                        scanned: scanned, enriched: gained,
                                        tagVersion: gained ? PhotoTagService.tagVersion : nil)
-            VerdictService.upload(id: id, allowVehicles: allowVehicles, kept: gained ? enriched : kept,
+            VerdictService.upload(id: id, allowVehicles: allowVehicles, kept: finalKept,
                                   scanned: scanned, enriched: gained)
-        }
     }
 }
 
@@ -1769,6 +1970,10 @@ private let eagerScreenDepth = 10
 /// Wall-clock cap on the pre-reveal eager screen (nanoseconds). Past this the
 /// list reveals with whatever screened in time; the rest promote in background.
 private let eagerScreenTimeoutNs: UInt64 = 3_500_000_000
+/// Wall-clock cap on the pre-landing enrichment of the visible window
+/// (nanoseconds). Warm cache is near-instant; on a cold tagger the list lands
+/// after this and the rest enriches in the background.
+private let eagerEnrichTimeoutNs: UInt64 = 3_000_000_000
 
 /// Screening budget per row: scan `stripBatchScan` source photos at a time,
 /// deeper into the pool only if early shots are rejected, keeping up to
