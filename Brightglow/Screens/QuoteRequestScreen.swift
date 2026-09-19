@@ -235,7 +235,10 @@ struct QuoteRequestScreen: View {
                 let lowerReq = trimmedReq.lowercased()
                 let alreadyAsked = lowerReq.contains("how much") || lowerReq.contains("can you") || lowerReq.contains("thank") || lowerReq.contains("estimate")
                 if !alreadyAsked {
-                    editableRequest = trimmedReq + " Can you take this on? How much would it cost? Thank you!"
+                    // Paragraph break, not a space: when the description ends in
+                    // a bare answer ("Vinyl") a space join slams the sentences
+                    // together ("Vinyl Can you take this on?").
+                    editableRequest = trimmedReq + "\n\nCan you take this on? How much would it cost? Thank you!"
                 }
             }
             if images.isEmpty { images = initialImages }
