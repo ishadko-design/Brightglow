@@ -200,6 +200,13 @@ struct ContractorListScreen: View {
     /// Kept work photos + their scene labels per contractor (the source of truth);
     /// `screenedByID` is this list ordered by the current query for display.
     @State private var keptPhotos: [String: [ScreenedPhoto]] = [:]
+    /// Frozen photo-relevance scores per business, snapshotted when the business
+    /// list is set. The enrich flow updates `keptPhotos` asynchronously with
+    /// richer Claude tags, which would change `photoMatchStrength` scores and
+    /// make businesses jump tiers after landing. Freezing the scores keeps the
+    /// list order stable; photo STRIPS still refine in place via setStripPhotos.
+    @State private var frozenPhotoScores: [String: Double] = [:]
+    @State private var frozenPhotoEvidence: [String: Bool] = [:]
     /// A business's OWN uploaded photos (from the app's Settings editor), by id.
     /// Owner-curated, so they lead the strip un-screened and keep a claimed
     /// business visible even when Google returns no usable work photos for it.
@@ -413,6 +420,18 @@ struct ContractorListScreen: View {
     /// The job's trade as a Category, when the search resolved to one.
     private var jobCategory: Category? { Category(rawValue: category) }
 
+    /// Snapshots photo-relevance scores for the given businesses. Called when
+    /// the contractor list is set (initial load, pagination, fallback) so the
+    /// ranking stays stable when background enrich later updates photo tags.
+    /// Must be called AFTER keptPhotos is populated for these businesses.
+    private func freezePhotoScores(for contractors: [Contractor]) {
+        for c in contractors {
+            let s = PhotoFilter.photoMatchStrength(keptPhotos[c.id] ?? [], query: matchQuery, category: category)
+            frozenPhotoScores[c.id] = s
+            frozenPhotoEvidence[c.id] = s > 0
+        }
+    }
+
     /// Composite relevance score + photo-evidence flag. The score orders
     /// businesses *within* a photo-evidence tier (see visibleContractors);
     /// job-specific proof first, upstream quality order as the base: a
@@ -428,7 +447,18 @@ struct ContractorListScreen: View {
         let w = RankingConfigStore.current.weights
         let reviews = c.reviews.map(\.text)
         let review = PhotoFilter.reviewMatchStrength(reviews, query: matchQuery)
-        let photo = PhotoFilter.photoMatchStrength(keptPhotos[c.id] ?? [], query: matchQuery, category: category)
+        // Use the frozen photo score if available (set when the list was built);
+        // otherwise compute from current photos (first display before freeze).
+        // This keeps business order stable when background enrich updates tags.
+        let photo: Double
+        let evidence: Bool
+        if let frozen = frozenPhotoScores[c.id] {
+            photo = frozen
+            evidence = frozenPhotoEvidence[c.id] ?? false
+        } else {
+            photo = PhotoFilter.photoMatchStrength(keptPhotos[c.id] ?? [], query: matchQuery, category: category)
+            evidence = photo > 0
+        }
         let upstream = upstreamCount > 1 ? 1 - Double(upstreamIndex) / Double(upstreamCount - 1) : 1
         let sizeFit = smallJobActive && takesSmallJobs(c, category: jobCategory) ? 1.0 : 0.0
         let responsive = responsivenessSignal(c)
@@ -436,7 +466,8 @@ struct ContractorListScreen: View {
             + w.sizeFit * sizeFit + w.responsiveness * responsive + w.upstream * upstream
         // photoEvidence: at least one screened photo matched the job vocabulary.
         // The primary sort key in visibleContractors — see that comment.
-        return (min(score, 1), photo > 0)
+        // Uses the frozen evidence flag when scores are frozen.
+        return (min(score, 1), evidence)
     }
 
     /// Single source of truth for the "Takes small jobs" cue: true when the
@@ -1147,6 +1178,7 @@ struct ContractorListScreen: View {
         guard !fresh.isEmpty else { return }
         withAnimation(.easeInOut(duration: 0.2)) {
             contractors.append(contentsOf: fresh)
+            freezePhotoScores(for: fresh)
             visibleLimit += 5
         }
         await loadLicenses(for: fresh)
@@ -1331,6 +1363,10 @@ struct ContractorListScreen: View {
                     && (scannedCount[c.id] ?? 0) >= c.photos.count
                     && (screenedByID[c.id]?.isEmpty ?? true)
             }
+            // Freeze photo-relevance scores now that keptPhotos is populated and
+            // the list is final. Background enrich will update tags, but the
+            // business order stays stable.
+            freezePhotoScores(for: contractors)
             // Uncovered categories stay match-only — the price line shows the
             // "coming soon" state (with a real business count) instead. Auto &
             // moto is no longer among them; it passes its vehicle filter so a
@@ -1372,6 +1408,9 @@ struct ContractorListScreen: View {
         // loader; any stragglers keep screening in the background as before. The
         // loading animation + "Sorting photos" line cover this wait.
         await eagerlyScreenTopMatches()
+        // Freeze scores after screening (covers the fallback path where
+        // contractors were set without photos).
+        freezePhotoScores(for: contractors)
         isLoading = false
         await loadLicenses(for: contractors)
         await loadLogos(for: contractors)
@@ -1548,6 +1587,8 @@ struct ContractorListScreen: View {
         contractors = []
         screenedByID = [:]
         keptPhotos = [:]
+        frozenPhotoScores = [:]
+        frozenPhotoEvidence = [:]
         ownerPhotosByID = [:]
         scannedCount = [:]
         revealedIDs = []
@@ -1731,7 +1772,10 @@ struct ContractorListScreen: View {
                 || zip(enriched, kept).contains { pair in
                     pair.0.url != pair.1.url || Set(pair.0.labels) != Set(pair.1.labels)
                 }
-            let finalKept = gained ? enriched : kept
+            // The photos to persist: enriched when tags were gained, otherwise the
+            // original kept pool. Replaced with the fingerprinted versions below
+            // when the embedding fetch succeeds.
+            var finalKept = gained ? enriched : kept
             if gained {
                 keptPhotos[id] = enriched
                 // Photos the enrich pass DROPPED as non-photos (illustrations,
@@ -1752,11 +1796,12 @@ struct ContractorListScreen: View {
                     stripFrozenIDs.remove(id)
                     revealedIDs.remove(id)
                 } else {
-                    // TEMPORARILY DISABLED 2026-09-19: semantic re-ranking caused
-                    // business list instability (rearranging after landing).
-                    // Re-enable after root cause is found.
-                    // let (withFingerprints, queryFingerprint) =
-                    //     await PhotoEmbeddingService.enrich(enriched, query: orderQuery)
+                    // Attach meaning fingerprints best-effort, then re-rank by
+                    // holistic scene similarity (exterior vs interior) instead of
+                    // word overlap. Failures leave photos without fingerprints and
+                    // `order` falls back to word matching — never worse than before.
+                    let (withFingerprints, queryFingerprint) =
+                        await PhotoEmbeddingService.enrich(enriched, query: orderQuery)
                     // Push the enriched order through `setStripPhotos` WITHOUT
                     // unfreezing. For a row the user hasn't reached yet (not frozen)
                     // this corrects the lead photo before it ever paints. For a row
@@ -1767,9 +1812,13 @@ struct ContractorListScreen: View {
                     // score, and the shared verdict still get the enriched order via
                     // `keptPhotos` and the upload below, so nothing is lost — only the
                     // visible strip stays put.
-                    setStripPhotos(id, withOwnerLead(id, PhotoFilter.order(enriched, query: orderQuery, category: category,
-                                                         capPremises: stripMaxPremises, vehicle: photoVehicle)))
-                    keptPhotos[id] = enriched
+                    setStripPhotos(id, withOwnerLead(id, PhotoFilter.order(withFingerprints, query: orderQuery, category: category,
+                                                         capPremises: stripMaxPremises, vehicle: photoVehicle,
+                                                         queryEmbedding: queryFingerprint)))
+                    // Persist fingerprints with the verdict so repeat visits skip
+                    // the embedding fetch.
+                    keptPhotos[id] = withFingerprints
+                    finalKept = withFingerprints
                 }
             } else {
                 ScreeningStore.shared.noteEmptyEnrich(id, allowVehicles: allowVehicles)
