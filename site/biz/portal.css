@@ -311,7 +311,7 @@ input[type=number], textarea, select {
   border: var(--input-border);
   border-radius: var(--radius-input);
   color: var(--white);
-  font-family: inherit; font-size: 17px; font-weight: 300;
+  font-family: inherit; font-size: 17px; font-weight: 400;
   padding: 16px 20px;
   transition: border-color .15s ease;
 }
@@ -578,12 +578,13 @@ select { appearance: none; background-image: none; }
   z-index: 1;
   touch-action: pan-y; transition: transform .18s ease; }
 .lead-row.open .lead-card { transform: translateX(-134px); }   /* 118 pill + 16 gap (Figma 1140:2933) */
-/* Reviewed requests: no card background, title de-bolds to Poppins 300 17
-   (Figma 1984:5579 "Variant3"), badge gone. The Delete button behind the card
+/* Reviewed requests: no card background, title de-bolds to Poppins 400 17
+   (Figma 1984:5579 "Variant3" specifies 300 — bumped to 400 for legibility),
+   badge gone. The Delete button behind the card
    stays invisible at rest — with a transparent card it would otherwise ghost
    through — and appears only once the swipe reveals it. */
 .lead-row.read .lead-card { background: transparent; }
-.lead-row.read .lead-title { font-family: "Poppins"; font-weight: 300; }
+.lead-row.read .lead-title { font-family: "Poppins"; font-weight: 400; }
 /* Figma 1984:5579: 44px thumbnail, 12px radius. Holds the customer's photo when
    the request has one (popped in async); otherwise the initial placeholder. */
 .lead-avatarwrap { position: relative; width: 44px; height: 44px; flex-shrink: 0; }
@@ -606,6 +607,15 @@ select { appearance: none; background-image: none; }
 .lead-dot::after { content: ""; position: absolute; left: 2px; top: 2px;
   width: 8px; height: 8px; border-radius: 50%; background: var(--gold); }
 
+/* Paywall: an over-quota request looks like a regular unread row — customer
+   photo thumbnail, normal card — plus a small red lock badge on the avatar.
+   Tapping the row routes to Billing via the openThread() guard; the thread
+   itself never opens. */
+.lead-lockbadge { position: absolute; right: -4px; top: -4px; width: 20px; height: 20px;
+  border-radius: 50%; background: var(--danger); display: flex; align-items: center;
+  justify-content: center; box-shadow: 0 1px 4px rgba(0, 0, 0, 0.45); }
+.lead-lockbadge svg { display: block; }
+
 /* ── Open chat — Figma 2020:6841, built element-for-element ──────────────────
    Header row: bare 44×44 back-arrow icon (no background) + job title (Lato 800/24)
    over a timestamp (Poppins 300/14 @ 60%), 8px inset, 4px gap. Then the guidance
@@ -621,14 +631,20 @@ select { appearance: none; background-image: none; }
    other back button in the portal (billing/auth backs are already transparent). */
 /* Job title (Headline 3) over a timestamp (Body 2), per the Figma header. */
 .thread-titlewrap { flex: 1; min-width: 0; display: flex; flex-direction: column; }
-.thread-title { margin: 0; font-family: "Lato"; font-weight: 800; font-size: 24px;
-  line-height: 1.33; color: var(--white); }
+.thread-title {
+  margin: 0; font-family: "Lato"; font-weight: 800; font-size: 24px;
+  line-height: 1.33; color: var(--white);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
 .thread-time { font-family: "Poppins"; font-weight: 300; font-size: 14px; color: rgba(255,255,255,0.6); }
 /* "Send to top 5" — not in the node; hidden. */
 .thread-broadcast { flex-shrink: 0; background: var(--gray20); color: var(--white); border-radius: 32px;
   padding: 4px 16px; font-family: "Lato"; font-weight: 700; font-size: 14px; white-space: nowrap; cursor: pointer; }
 .thread-sub { margin: 0 16px 24px; font-family: "Poppins"; font-weight: 400; font-size: 14px;
-  line-height: 1.5; color: rgba(255, 255, 255, 0.5); }
+  line-height: 1.5; color: rgba(255, 255, 255, 0.6); text-align: center; }
+.thread-sub strong { font-weight: 700; }
 /* Request + reply bubbles sit inset 16 (Figma Frame 36985 pad 0/16). */
 .thread-msgs { display: flex; flex-direction: column; gap: 16px; padding: 0 16px; }
 .bubble { padding: 16px; border-radius: 24px; font-family: "Poppins"; font-weight: 300;
@@ -645,6 +661,26 @@ select { appearance: none; background-image: none; }
 .thread-photos { display: flex; flex-direction: column; gap: 8px; margin: 8px 16px 0; }
 .thread-photo { width: 100%; aspect-ratio: 370 / 449; border-radius: 16px; object-fit: cover; cursor: zoom-in; }
 .thread-empty { color: var(--gray50); font-size: 14px; text-align: center; padding: 20px 0; }
+/* Thread footer: the low-quality report CTA. Quiet by design — a small muted
+   note and a text button under the request photos, using the existing
+   .linklike treatment; reason choices are compact pills. Never competes with
+   the reply guidance above it. */
+.thread-foot { margin: 24px 16px 0; text-align: center; }
+.thread-foot-note {
+  font-family: "Poppins", sans-serif; font-weight: 400; font-size: 13px;
+  line-height: 1.5; color: var(--gray60); margin: 0 0 4px;
+}
+.thread-foot-actions { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; }
+.thread-foot .linklike { margin-top: 8px; }
+.thread-foot-reason {
+  appearance: none; -webkit-appearance: none;
+  border: var(--input-border); border-radius: 999px;
+  background: transparent; color: var(--white);
+  font-family: "Poppins", sans-serif; font-weight: 500; font-size: 13px;
+  min-height: 44px; padding: 10px 18px; cursor: pointer;
+}
+.thread-foot-reason:active { background: var(--gray05); }
+.thread-foot-cancel { border-style: dashed; }
 
 .composer { display: flex; gap: 10px; align-items: flex-end; padding-top: 14px; border-top: 1px solid var(--gray10); }
 .composer textarea { flex: 1; resize: none; }
@@ -723,7 +759,7 @@ select { appearance: none; background-image: none; }
 .renewal-terms li { margin: 4px 0; }
 .consent { display: flex; gap: 10px; align-items: flex-start; font-size: 14px;
   color: var(--gray60); line-height: 1.45; margin-bottom: 16px; cursor: pointer; }
-.consent input { margin-top: 2px; width: 18px; height: 18px; flex: none; accent-color: var(--accent); }
+.consent input { margin-top: 2px; width: 22px; height: 22px; flex: none; accent-color: var(--accent); }
 .consent a { color: var(--white); }
 
 .pill { font-size: 11px; font-weight: 700; padding: 3px 10px; border-radius: 999px; font-family: "Lato"; }
@@ -838,15 +874,28 @@ select { appearance: none; background-image: none; }
 .billing-avatars span {
   width: 32px; height: 32px; border-radius: 50%;
   background: var(--gray20);
+  background-size: cover;
+  background-position: center;
   border: 2px solid #18191b;
   margin-left: -8px; flex: none;
 }
+.billing-avatars span:nth-child(1) { background-image: url("../media/billing-avatars/avatar-1.png"); }
+.billing-avatars span:nth-child(2) { background-image: url("../media/billing-avatars/avatar-2.png"); }
+.billing-avatars span:nth-child(3) { background-image: url("../media/billing-avatars/avatar-3.png"); }
+.billing-avatars span:nth-child(4) { background-image: url("../media/billing-avatars/avatar-4.png"); }
 .billing-avatars span:first-child { margin-left: 0; }
 .billing-lead {
   /* Figma body: Poppins 400 14px, white, 21px line-height. CENTER aligned. 32px to button. */
   font-family: "Poppins", sans-serif; font-weight: 400; font-size: 14px;
   line-height: 1.5; color: var(--white); text-align: center;
   margin: 0 0 32px;
+}
+.billing-lead-value {
+  /* Paywall value message (unsubscribed state): the business-facing promise,
+     set large — 22px semibold, centered. Inherits the theme's ink color via
+     .billing-lead; the light theme inversion applies automatically. */
+  font-weight: 600; font-size: 22px; line-height: 1.35;
+  margin-bottom: 24px;
 }
 .billing-caption {
   /* Figma caption under the CTA: Poppins 400 14px, white, centered. 32px below button. */

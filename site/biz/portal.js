@@ -27,6 +27,7 @@ const esc = (s) => (s ?? "").replace(/[&<>"']/g, (c) => (
 
 // ── app state ───────────────────────────────────────────────
 let businesses = [];      // [{ place_id, name, city, leads: [...] }]
+let hiddenLeads = [];     // dismissed leads' keys — the /l gate counts them, so the portal must too
 let current = null;       // the selected business
 let profile = null;       // its business_profiles row (working copy)
 let signedInEmail = "";   // shown in the editor's account section
@@ -264,11 +265,33 @@ async function enterDashboard() {
   // a null place_id can't be claim-checked, so they're skipped for management.
   const { data: leads, error } = await sb
     .from("leads")
-    .select("id, place_id, business_name, city, status, public_id, created_at, website, user_email_initial, business_last_read_at, messages(direction, body_text, created_at)")
+    .select("id, place_id, business_name, city, status, public_id, created_at, website, user_email_initial, business_last_read_at, job_title, quality_reported_at, messages(direction, body_text, created_at)")
     .is("business_hidden_at", null)   // hide requests the business dismissed
     .order("created_at", { ascending: false });
 
   if (error) { fail(error.message); return; }
+
+  // Link-open tracking: the /l page's JS beacon stamps leads.link_opened_at
+  // when a contractor actually opens the SMS link in a real browser
+  // (preview fetchers don't run JS). Separate fail-open query so a missing
+  // column — pre-migration — can never break the requests list.
+  try {
+    const { data: opened } = await sb.from("leads")
+      .select("id, link_opened_at")
+      .is("business_hidden_at", null);
+    const openedById = new Map((opened || []).map((r) => [r.id, r.link_opened_at]));
+    for (const l of leads || []) l.link_opened_at = openedById.get(l.id) || null;
+  } catch (err) { console.error("link-opened fetch failed:", err); }
+
+  // Dismissed requests still occupy paywall positions — the /l gate counts
+  // every lead row for the place, hidden or not — so fetch just their keys
+  // for exact position parity. Never displayed; a failure here fails open.
+  try {
+    const { data: hk } = await sb.from("leads")
+      .select("id, place_id, created_at, quality_reported_at")
+      .not("business_hidden_at", "is", null);
+    hiddenLeads = hk || [];
+  } catch (err) { console.error("hidden lead keys failed:", err); hiddenLeads = []; }
 
   const byPlace = new Map();
   for (const l of leads || []) {
@@ -326,8 +349,16 @@ async function enterDashboard() {
     : null;
   await selectBusiness(target || businesses[0]);
   if (target) {
+    // A ?lead= deep link needs the paywall state before opening: a locked
+    // lead routes to Billing instead of its thread.
+    await loadBilling();
+    applyLocks();
     const lead = target.leads.find((l) => l.public_id === wantLead);
-    if (lead) await openThread(lead);   // straight into the conversation
+    if (lead && lead._locked) showView("billing");
+    else {
+      if (lead) await openThread(lead);   // straight into the conversation
+      showView("chats");
+    }
   }
 
   show($("bootView"), false);
@@ -335,11 +366,15 @@ async function enterDashboard() {
   // Landing view: a `?lead=` deep link (from a job email) opened a thread above, so
   // stay on it; a just-created business goes to Settings to fill its page in;
   // everyone else lands on Requests (the Dashboard is gone).
-  if (target) showView("chats");
-  else if (landOnEditor) { landOnEditor = false; openEditor(); }
-  else showView("chats");
+  if (!target) {
+    if (landOnEditor) { landOnEditor = false; openEditor(); }
+    else showView("chats");
+  }
   renderSwitcher();
-  loadBilling();   // not awaited: the dashboard is usable while this resolves
+  // Not awaited: the dashboard is usable while billing resolves. Locks are
+  // re-applied when it lands (see loadBilling). The ?lead= path above already
+  // loaded it.
+  if (!target) loadBilling();
 }
 
 // ── billing ─────────────────────────────────────────────────
@@ -381,6 +416,10 @@ async function loadBilling() {
   // just leave `billing` null and openBilling() retries / surfaces an error.
   if (!billing) return;
   renderBilling();
+  // The Requests list renders before billing resolves — now that the quota is
+  // known, stamp the locks and re-render so over-quota rows show locked.
+  applyLocks();
+  if (current) renderLeads();
 
   const params = new URLSearchParams(location.search);
 
@@ -403,6 +442,37 @@ async function loadBilling() {
   // Coming back from Stripe (?billing=success|cancelled) — land on Billing so
   // the outcome is the first thing seen, rather than the profile editor.
   if (params.get("billing")) showView("billing");
+}
+
+// Paywall gate for the portal thread view. Mirrors the public /l gate
+// (LeadBridge placeGateForLead): the first `free_lead_limit` requests per
+// business, in (created_at, id) order, open freely; the rest are locked until
+// the business subscribes. The portal reads leads straight from Supabase via
+// RLS, so the gate lives here client-side, driven by the billing status
+// loadBilling() already fetches. Fail-open by design: no billing (yet) or a
+// disabled/subscription-entitled account locks nothing.
+function applyLocks() {
+  const inbox = businesses[0] ? businesses[0].leads : [];
+  const gated = billing && billing.enabled !== false && !billing.subscribed;
+  const limit = billing && billing.free_lead_limit ? billing.free_lead_limit : 0;
+  const groups = new Map();
+  const push = (placeId, createdAt, id, lead, reported) => {
+    const k = placeId || "__none";
+    if (!groups.has(k)) groups.set(k, []);
+    groups.get(k).push({ c: createdAt || "", id: String(id), lead, reported: !!reported });
+  };
+  for (const l of inbox) push(l.place_id, l.created_at, l.id, l, l.quality_reported_at);
+  for (const h of hiddenLeads) push(h.place_id, h.created_at, h.id, null, h.quality_reported_at);
+  for (const arr of groups.values()) {
+    // /l orders by (created_at, id) — leads.id is a UUID, so the id is only a
+    // deterministic tiebreak.
+    arr.sort((a, b) => (a.c < b.c ? -1 : a.c > b.c ? 1 : (a.id < b.id ? -1 : a.id > b.id ? 1 : 0)));
+    // A reported low-quality lead doesn't occupy a paywall position — the
+    // quota was refunded — so it neither counts nor locks (same rule as /l).
+    const countable = arr.filter((e) => !e.reported);
+    countable.forEach((e, i) => { if (e.lead) e.lead._locked = gated && (i + 1) > limit; });
+    for (const e of arr) if (e.reported && e.lead) e.lead._locked = false;
+  }
 }
 
 function renderBilling() {
@@ -456,10 +526,12 @@ function unsubscribedHTML() {
     <div class="billing-avatars" aria-hidden="true">
       <span></span><span></span><span></span><span></span>
     </div>
-    <p class="billing-lead">
+    <p class="billing-lead billing-lead-value">
       ${outOfLeads
-        ? `You're out of free leads \u2014 new customer requests are waiting, but we can't pass them along until you subscribe.`
-        : `After your ${limit} free leads (${left} left), your business will no longer be shown to potential clients. A subscription keeps customer requests coming.`}
+        ? `New customer requests are waiting for you \u2014 real jobs with photos, from customers ready to hire. Subscribe to unlock them and keep them coming.`
+        : limit === 1
+          ? `Your first customer request is free. After that, your business will no longer be shown to potential clients \u2014 subscribe to keep new requests coming.`
+          : `After your ${limit} free leads (${left} left), your business will no longer be shown to potential clients. A subscription keeps customer requests coming.`}
     </p>
     <label class="field-label" for="billingEmail">Email (required)</label>
     <input type="email" id="billingEmail" autocomplete="email" inputmode="email" maxlength="200"
@@ -1022,6 +1094,7 @@ async function uploadImage(file, prefix = "") {
 function renderLeads() {
   const list = $("leadsList");
   const leads = current.leads || [];
+  applyLocks();   // quota may have resolved since the last render
   show($("leadsEmpty"), leads.length === 0);
   list.innerHTML = leads.map((l, i) => {
     const msgs = sortMsgs(l.messages || []);
@@ -1034,17 +1107,25 @@ function renderLeads() {
     const stamp = fmtStamp((req && req.created_at) || l.created_at);
     const initial = esc((l.user_email_initial || l.city || "?").slice(0, 1));
     const unread = hasUnread(l, msgs);
+    // A locked (over-quota) request looks like a regular unread row — customer
+    // photo thumbnail and all — with a red lock badge on the avatar. Tapping
+    // routes to Billing instead of the thread (openThread guard).
+    const locked = !!l._locked;
+    const lockBadge = locked
+      ? `<span class="lead-lockbadge" aria-label="Locked — subscribe to view"><svg viewBox="0 0 24 24" width="11" height="11" fill="none" aria-hidden="true"><rect x="5.5" y="10.5" width="13" height="9.5" rx="2.5" fill="#fff"/><path d="M8.5 10.5V8a3.5 3.5 0 0 1 7 0v2.5" stroke="#fff" stroke-width="2.4" stroke-linecap="round"/></svg></span>`
+      : "";
     // Row wraps a red Delete behind the cell; the cell swipes left to reveal it.
-    return `<div class="lead-row${unread ? "" : " read"}" data-i="${i}">
+    return `<div class="lead-row${unread ? "" : " read"}${locked ? " locked" : ""}" data-i="${i}">
       <button type="button" class="lead-delete" data-i="${i}">Delete</button>
       <div class="lead-card">
         <div class="lead-avatarwrap">
           <div class="lead-avatar" data-lead="${l.id}">${initial}</div>
+          ${lockBadge}
           ${unread ? `<span class="lead-dot"></span>` : ""}
         </div>
         <div class="lead-main">
           <div class="lead-title">${esc(jobTitle(l))}</div>
-          <div class="lead-sub">${esc(stamp)}</div>
+          <div class="lead-sub">${esc(stamp)}${l.link_opened_at ? " · Opened" : ""}</div>
         </div>
       </div>
     </div>`;
@@ -1203,7 +1284,6 @@ async function deleteLead(lead, row) {
       try { detail = " " + JSON.stringify(await resp.json()); } catch (e) {}
       throw new Error(`hide failed (${resp.status})${detail}`);
     }
-    showToast("Request deleted.");
   } catch (err) {
     // Revert the optimistic removal — put the row back.
     console.error("delete request failed:", err);
@@ -1224,6 +1304,10 @@ let thread = null;   // the lead whose thread is open
 // request: strip the channel prefix the app prepends ("Vehicle: Car "), drop a
 // common lead-in, take the first sentence, cap it.
 function jobTitle(lead) {
+  // The app's clarify LLM names the job in a few words ("metal trim
+  // replacement") — prefer it so the title doesn't duplicate the request text
+  // 1:1. Older leads carry none; fall back to deriving from the description.
+  if (lead.job_title && String(lead.job_title).trim()) return String(lead.job_title).trim();
   const req = (lead.messages || []).find((m) => m.direction === "outbound");
   let t = (req && req.body_text ? req.body_text : "").trim().replace(/\s+/g, " ");
   if (!t) return lead.business_name || current?.name || "Request";
@@ -1241,6 +1325,8 @@ function jobTitle(lead) {
 }
 
 async function openThread(lead) {
+  // Paywall: an over-quota request opens Billing, not the thread.
+  if (lead && lead._locked) { showView("billing"); return; }
   thread = lead;
   // Node header title = the job (derived), never the business name; the subhead is
   // the request's timestamp (Figma 2020:6841).
@@ -1249,12 +1335,13 @@ async function openThread(lead) {
   $("threadTime").textContent = fmtStamp((req && req.created_at) || lead.created_at);
   // Figma 2020:6841 guidance line. The customer texted the business from their own
   // Messages, so the reply channel is that same SMS thread.
-  $("threadSub").textContent = "Reply in the SMS thread the customer started.";
+  $("threadSub").innerHTML = "<strong>Reply in the SMS thread</strong> where you received the request, it\u2019s started by a customer.";
   $("threadMsg").textContent = "";
   $("threadPhotos").innerHTML = "";   // clear the previous thread's photos
   show($("leadsCard"), false);
   show($("threadCard"), true);
   renderThread(sortMsgs(lead.messages || []));
+  renderQualityFooter("cta");
   await refreshThread();
   loadThreadPhotos(lead);   // not awaited — the text shows immediately
   // Opening marks the request read, clearing the inbox "new" dot (see hasUnread).
@@ -1272,6 +1359,77 @@ function closeThread() {
   renderLeads();
 }
 $("threadBack").addEventListener("click", closeThread);
+
+// ── low-quality lead report ─────────────────────────────────────
+// Footer CTA on an opened request: the business flags a junk lead (wrong
+// number, spam, …). The server refunds the free-lead quota and stamps
+// leads.quality_reported_at, which drops the lead out of paywall position
+// counting (here and on /l) — a reported lead "won't count".
+const QUALITY_REASONS = [
+  ["wrong_number", "Wrong number"],
+  ["spam", "Spam"],
+  ["no_real_job", "Not a real job"],
+  ["unreachable", "Couldn't reach them"],
+  ["other", "Something else"],
+];
+
+function renderQualityFooter(mode) {
+  // mode: "cta" (default) | "pick" | "sending" | "reported" | "error"
+  const foot = $("threadFoot");
+  if (!foot || !thread) { if (foot) show(foot, false); return; }
+  const note = $("threadFootNote"), acts = $("threadFootActions");
+  show(foot, true);
+  if (thread.quality_reported_at || mode === "reported") {
+    note.textContent = "Reported \u2014 this request won't count toward your free leads.";
+    acts.innerHTML = "";
+    return;
+  }
+  if (mode === "pick") {
+    note.textContent = "What made this lead low quality?";
+    acts.innerHTML =
+      QUALITY_REASONS.map(([v, label]) =>
+        `<button type="button" class="thread-foot-reason" data-reason="${v}">${esc(label)}</button>`
+      ).join("") +
+      `<button type="button" class="thread-foot-reason thread-foot-cancel" data-reason="">Cancel</button>`;
+    acts.querySelectorAll("button").forEach((b) =>
+      b.addEventListener("click", () =>
+        b.dataset.reason ? submitQualityReport(b.dataset.reason) : renderQualityFooter("cta")));
+    return;
+  }
+  if (mode === "sending") {
+    note.textContent = "Reporting\u2026";
+    acts.innerHTML = "";
+    return;
+  }
+  // "cta" and "error": the CTA again; on error the note already carries the
+  // server's message, so don't overwrite it.
+  if (mode !== "error") note.textContent = "Wrong number, spam, or not a real job?";
+  acts.innerHTML = `<button type="button" class="linklike" id="reportQualityBtn">Report low-quality lead</button>`;
+  $("reportQualityBtn").addEventListener("click", () => renderQualityFooter("pick"));
+}
+
+async function submitQualityReport(reason) {
+  renderQualityFooter("sending");
+  try {
+    const resp = await authedFetch(`/api/leads/${encodeURIComponent(thread.public_id)}/report-quality`, {
+      method: "POST",
+      body: JSON.stringify({ reason }),
+    });
+    const data = await resp.json().catch(() => ({}));
+    if (!resp.ok) throw new Error(data.error || `Couldn't submit (${resp.status}). Try again.`);
+    // The quota was refunded server-side; mirror the stamp locally so the
+    // footer, the locks, and the list all agree without a reload. thread is
+    // the same object the requests list holds, so renderLeads picks it up.
+    thread.quality_reported_at = new Date().toISOString();
+    renderLeads();            // re-runs applyLocks: positions shift down
+    loadBilling().catch(() => {});  // refresh the free-lead counter
+    renderQualityFooter("reported");
+  } catch (err) {
+    console.error("quality report failed:", err);
+    $("threadFootNote").textContent = err.message || "Couldn't submit. Try again.";
+    renderQualityFooter("error");
+  }
+}
 
 // Messages come straight from Supabase — RLS already limits them to threads this
 // business is a participant on (same policy the app relies on).

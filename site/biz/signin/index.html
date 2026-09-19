@@ -9,11 +9,15 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, interactive-widget=resizes-content">
   <title>Brightglow for Business — manage your page</title>
   <meta name="description" content="Claim and manage your Brightglow business page — your services and prices, photos of your work, and the job requests customers send you.">
-  <meta name="theme-color" content="#131315">
+  <meta name="theme-color" content="#faf1df">
   <meta name="robots" content="noindex">
   <link rel="icon" type="image/png" href="../../favicon.png">
   <link rel="apple-touch-icon" href="../../apple-touch-icon.png">
-  <link rel="stylesheet" href="../portal.css?v=79">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500..800&display=swap">
+  <link rel="stylesheet" href="../portal.css?v=84">
+  <link rel="stylesheet" href="../v5-theme.css?v=12">
 </head>
 <body class="portal">
   <header class="topbar">
@@ -42,7 +46,7 @@
          opening one drills into its thread. Hidden until there's a business. -->
     <nav class="tabs" id="tabs" hidden>
       <button type="button" class="tab is-active" data-view="chats">Requests</button>
-      <button type="button" class="tab" data-view="editor">Settings</button>
+      <button type="button" class="tab" data-view="editor">Profile</button>
     </nav>
     <!-- Boot / loading: spinner only, no card container. -->
     <section id="bootView" class="center">
@@ -59,7 +63,7 @@
            have no email for. -->
       <div id="phoneStep" class="auth-step" hidden>
         <div class="auth-hero">
-          <h2 class="card-title">Sign up</h2>
+          <h2 class="card-title">Sign in</h2>
           <p class="auth-sub">
             Enter the phone customers call or text you on. We'll text a 6-digit code —
             no password. Only that number can manage the page.
@@ -80,7 +84,7 @@
            matched, or whose phone we never recorded. -->
       <div id="emailStep" class="auth-step" hidden>
         <div class="auth-hero">
-          <h2 class="card-title">Sign up</h2>
+          <h2 class="card-title">Sign in</h2>
           <p class="auth-sub">
             Enter the email where you received your Brightglow request. We'll email a
             6-digit sign-in code — no password. Only that inbox can manage the page.
@@ -158,6 +162,13 @@
              photos stacked below it (Figma 2020:6841). -->
         <div class="thread-msgs" id="threadMsgs"></div>
         <div class="thread-photos" id="threadPhotos"></div>
+        <!-- Low-quality report footer: quiet CTA under the request. The business
+             flags a junk lead (wrong number, spam, …) — a reported lead is
+             refunded and won't count toward the free-lead quota. -->
+        <div class="thread-foot" id="threadFoot" hidden>
+          <p class="thread-foot-note" id="threadFootNote"></p>
+          <div class="thread-foot-actions" id="threadFootActions"></div>
+        </div>
         <p class="form-msg" id="threadMsg" aria-live="polite" hidden></p>
       </div>
     </section>
@@ -173,7 +184,7 @@
         <span class="accept-label">Accepting new work</span>
       </label>
 
-      <!-- No page title here: the active "Settings" tab already labels this view. -->
+      <!-- No page title here: the active "Profile" tab already labels this view. -->
       <h2 class="section-head">Profile</h2>
         <div class="card">
           <!-- Logo: 104px preview, then button above caption — the app's layout. -->
@@ -354,6 +365,6 @@
     <span>© 2026 Brightglow Technologies LLC</span>
   </footer>
 
-  <script type="module" src="../portal.js?v=37"></script>
+  <script type="module" src="../portal.js?v=42"></script>
 </body>
 </html>
