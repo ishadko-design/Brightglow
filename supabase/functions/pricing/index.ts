@@ -62,7 +62,7 @@ import {
   type JobTypeEntry,
 } from "./pricingEngine.ts";
 import { estimateInHouse, estimateJobsInHouse, type JobScope } from "./estimatePipeline.ts";
-import { groundedBand, type GroundedKind } from "./groundedEstimate.ts";
+import { canonicalJob, groundedBand, type GroundedKind } from "./groundedEstimate.ts";
 
 const ANTHROPIC_API_KEY = Deno.env.get("ANTHROPIC_API_KEY") ?? "";
 const APP_TOKEN = Deno.env.get("APP_TOKEN") ?? "";
@@ -196,10 +196,12 @@ async function classifyLLMCached(
 const GROUNDED_TTL_MS = 7 * 24 * 60 * 60 * 1000; // remodel costs move slowly
 
 function groundedCacheKey(zip: string | undefined, kind: GroundedKind, description: string): string {
-  const norm = description.toLowerCase().replace(/\s+/g, " ").trim();
+  // Canonical key when we recognize the job; else the normalized full text.
+  const base = canonicalJob(description) ??
+    description.toLowerCase().replace(/\s+/g, " ").trim();
   // Kind is in the key: "replace tires" grounds differently for a car (4) than
   // a motorcycle (2), so the two must not share a cached band.
-  return `${zip ?? "us"}:${kind}:${norm}`.slice(0, 300);
+  return `${zip ?? "us"}:${kind}:${base}`.slice(0, 300);
 }
 
 /** Web-search-grounded band for jobs the catalog doesn't model, with a 7-day

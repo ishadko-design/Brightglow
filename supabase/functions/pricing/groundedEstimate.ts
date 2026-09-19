@@ -2,17 +2,18 @@
 //
 // The catalog prices a fixed taxonomy of discrete jobs. Whole-room remodels
 // ("full gut remodel of my bathroom, ~60 sq ft") have no entry, so the engine
-// honestly declines — but a homeowner still wants a ballpark. This asks Opus,
-// with the web_search tool, for a TYPICAL local low/typical/high for the
-// described project, and returns it as a WIDE, low-confidence band labelled as
-// an estimate to confirm with bids. It is the coverage tier of last resort:
-// only runs after the modelled path declines, gated to substantial home jobs,
-// and cached hard because it's the function's most expensive call.
+// honestly declines — but a homeowner still wants a ballpark. This asks the
+// model (Sonnet 5, low effort) for a TYPICAL local low/typical/high from its
+// own knowledge of current costs, and returns it as a WIDE, low-confidence band
+// labelled as an estimate to confirm with bids. It is the coverage tier of last
+// resort: only runs after the modelled path declines, gated to substantial
+// jobs, and cached by a canonical job key so common phrasings reuse one answer.
 //
-// The number is grounded (a real search), never a catalog number — so it can't
-// pretend to catalog precision. The guardrail below rejects anything that isn't
-// a plausible, self-consistent home-project range; a rejected band means we go
-// back to declining, never to a fabricated figure.
+// Knowledge-based, not live-searched: cost ranges move slowly, so a fast
+// (~2s) knowledge estimate is a fine ballpark and avoids the 20-30s + per-
+// request cost of web search (which added little to a figure the model already
+// knows). The guardrail below rejects anything that isn't a plausible,
+// self-consistent range; a rejected band means we decline, never fabricate.
 
 import Anthropic from "npm:@anthropic-ai/sdk";
 
@@ -103,12 +104,12 @@ export function buildGroundedSystemPrompt(locationLabel: string, kind: GroundedK
   return [
     `You estimate ${subject.payer} for ${subject.work} in ${locationLabel}.`,
     "",
-    `Use the web_search tool to find RECENT, LOCAL cost data for this specific ${subject.noun}`,
-    "and scope — cost guides, industry reports, local shop/contractor ranges.",
-    "Prefer sources that match the location and the stated scope.",
+    `Price it from your own knowledge of typical current costs for this ${subject.noun}`,
+    "and scope — the ranges cost guides, industry reports, and local shops or",
+    "contractors generally quote. Adjust for this location's cost level.",
     "",
-    "Then answer with ONLY a JSON object, no prose around it:",
-    '{"low": <number>, "typical": <number>, "high": <number>, "basis": "<one short line: what drives this range + a source type>"}',
+    "Answer with ONLY a JSON object, no prose around it:",
+    '{"low": <number>, "typical": <number>, "high": <number>, "basis": "<one short line: what drives this range>"}',
     "",
     "Rules:",
     `- Whole dollars, all-in for the WHOLE ${subject.noun} as described (not per`,
@@ -130,10 +131,61 @@ export function buildGroundedSystemPrompt(locationLabel: string, kind: GroundedK
   ].join("\n");
 }
 
-/** Runs the grounded estimate. Returns a sane band, or null when the model
- *  declined, the search failed, or the band didn't pass the guardrail — all of
- *  which the caller renders as the honest "get bids" decline. Never throws to
- *  the caller: a grounded-tier failure must not fail the whole request. */
+// Rooms/areas a whole-project request names. Used to collapse phrasings to one
+// canonical cache key — see canonicalJob.
+export const CANONICAL_SUBJECTS = [
+  "bathroom", "kitchen", "basement", "garage", "attic", "bedroom", "living room",
+  "laundry room", "closet", "deck", "patio", "whole house", "whole home", "adu",
+  "accessory dwelling",
+];
+
+/** Collapse the many ways to phrase one job to a single canonical key, so common
+ *  requests reuse ONE cached grounded band instead of paying per phrasing —
+ *  "kitchen remodel", "remodel my kitchen", "kitchen renovation" all key to
+ *  "kitchen:remodel". This is what makes the grounded tier financially scalable:
+ *  real traffic collapses onto a handful of keys. Returns null when no subject
+ *  is recognized, and the caller falls back to the full normalized text (the
+ *  old per-phrasing behavior — safe, just a lower hit rate). Tradeoff: a stated
+ *  size (a 60 sq ft bath vs a bare bathroom remodel) collapses into the same
+ *  bucket — acceptable for a wide "confirm with bids" ballpark. */
+export function canonicalJob(description: string): string | null {
+  const d = description.toLowerCase();
+  const subject = CANONICAL_SUBJECTS.find((s) => d.includes(s));
+  if (!subject) return null;
+  const ptype = /\bgut\b/.test(d)
+    ? "gut-remodel"
+    : /remodel|renovat|\breno\b/.test(d)
+    ? "remodel"
+    : /addition|adu|accessory dwelling/.test(d)
+    ? "addition"
+    : /rebuild|reconstruct/.test(d)
+    ? "rebuild"
+    : "remodel";
+  const subjectKey = subject.replace(/\s+/g, "-").replace("whole-home", "whole-house");
+  return `${subjectKey}:${ptype}`;
+}
+
+/** Structured-output schema — the model returns exactly this, so there's no
+ *  JSON-in-prose to fish out. */
+const BAND_SCHEMA = {
+  type: "object",
+  properties: {
+    low: { type: "number" },
+    typical: { type: "number" },
+    high: { type: "number" },
+    basis: { type: "string" },
+  },
+  required: ["low", "typical", "high", "basis"],
+  additionalProperties: false,
+} as const;
+
+/** Prices the job from the model's own knowledge — fast (~2s) and cheap, no
+ *  live web search. Cost ranges move slowly, so a knowledge estimate is a solid
+ *  ballpark "confirm with bids" number; live search cost 20-30s and a per-
+ *  request API bill for little gain on a figure the model already knows well
+ *  (verified 2026-09-19: knowledge-only priced a terse kitchen remodel in 1.3s
+ *  vs 30s for a searched bathroom, comparable ranges). Returns a sane band or
+ *  null (→ the honest decline). Never throws to the caller. */
 export async function groundedBand(
   description: string,
   locationLabel: string,
@@ -142,58 +194,32 @@ export async function groundedBand(
 ): Promise<GroundedBand | null> {
   if (!apiKey || description.trim().length < 12) return null;
   // A key that isn't scoped to a workspace must send the workspace id as a
-  // header (Anthropic rejects the request otherwise). Optional: a workspace-
-  // scoped key needs nothing here, so this is a no-op unless the env is set.
+  // header (Anthropic rejects the request otherwise). No-op unless the env is
+  // set / when the key is already workspace-scoped.
   const workspaceId = Deno.env.get("ANTHROPIC_WORKSPACE_ID");
   const client = new Anthropic({
-    // 4 serial web searches routinely take 30-60s; a 30s cap timed out on real
-    // remodel/engine-rebuild queries and declined a job the model could price
-    // (verified 2026-09-19). 90s gives the search loop room — this is the rare
-    // uncovered-job fallback, cached after the first hit, so the latency is
-    // paid once per unique job, not per request.
-    timeout: 90_000,
+    timeout: 20_000,
     maxRetries: 1,
+    apiKey,
     ...(workspaceId ? { defaultHeaders: { "anthropic-workspace-id": workspaceId } } : {}),
   });
-  // web_search_20260209 (dynamic filtering) is supported on Opus 4.6+ — the
-  // classifier already runs claude-opus-4-8, so the same model serves here.
-  // Capped at 3: enough to triangulate a range, and one fewer round-trip keeps
-  // the tail latency down (each search adds seconds).
-  const tools = [{ type: "web_search_20260209", name: "web_search", max_uses: 3 }];
-  const system = buildGroundedSystemPrompt(locationLabel, kind);
-  const messages: Anthropic.MessageParam[] = [{ role: "user", content: `Project: ${description}` }];
-
   try {
-    // Server-tool turns can pause_turn while the search runs; resume by echoing
-    // the assistant's partial content back until it finishes.
-    let resp = await client.messages.create({
-      model: "claude-opus-4-8",
-      max_tokens: 1500,
-      system,
-      // deno-lint-ignore no-explicit-any
-      tools: tools as any,
-      messages,
+    // Sonnet 5 at low effort: a cost ballpark doesn't need Opus or deep thinking,
+    // and this is the request-path latency the user waits on. ~1/5 the Opus cost.
+    const resp = await client.messages.create({
+      model: "claude-sonnet-5",
+      max_tokens: 500,
+      output_config: { effort: "low", format: { type: "json_schema", schema: BAND_SCHEMA } },
+      system: buildGroundedSystemPrompt(locationLabel, kind),
+      messages: [{ role: "user", content: `Project: ${description}` }],
     });
-    let guard = 0;
-    while (resp.stop_reason === "pause_turn" && guard++ < 4) {
-      messages.push({ role: "assistant", content: resp.content });
-      resp = await client.messages.create({
-        model: "claude-opus-4-8",
-        max_tokens: 1500,
-        system,
-        // deno-lint-ignore no-explicit-any
-        tools: tools as any,
-        messages,
-      });
-    }
     const text = resp.content
       .filter((b): b is Anthropic.TextBlock => b.type === "text")
       .map((b) => b.text)
       .join("\n");
-    const band = saneBand(parseGroundedBand(text));
-    // "insufficient data" comes back as an all-zero band, which saneBand
-    // already rejects (low > 0 fails) — so it lands as null here, correctly.
-    return band;
+    // "insufficient data" comes back as an all-zero band, which saneBand rejects
+    // (low > 0 fails) — so it lands as null here, correctly.
+    return saneBand(parseGroundedBand(text));
   } catch (err) {
     console.error("pricing: grounded estimate failed", err);
     return null;
