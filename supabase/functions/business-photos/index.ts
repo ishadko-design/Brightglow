@@ -7,7 +7,9 @@
 // read and its images are cacheable — so this is the highest-yield free source.
 //
 //   POST { place_id, website }
-//        -> { photos: [{ url, w, h }], ok }
+//        -> { photos: [{ url, w, h, tags? }], ok }
+// `tags` are the server-side vision tags from the photo_tags table when the
+// exact photo URL was tagged (http/https variants included); absent otherwise.
 //
 // FAN-IN so the app never over-calls: results are cached per place_id and reused
 // by every later viewer, so the external website fetch happens once per business
@@ -41,12 +43,55 @@ const GALLERY_PATHS = ["/gallery", "/projects", "/portfolio", "/work", "/our-wor
 // Filename/URL fragments that mark chrome rather than work photos.
 const JUNK_RE = /(logo|icon|sprite|favicon|avatar|badge|placeholder|spinner|loader|pixel|1x1|banner-ad)/i;
 
-interface Photo { url: string; w: number | null; h: number | null; }
+interface Photo { url: string; w: number | null; h: number | null; tags?: string[]; }
 
 function json(payload: unknown, status = 200): Response {
   return new Response(JSON.stringify(payload), {
     status,
     headers: { "Content-Type": "application/json" },
+  });
+}
+
+/**
+ * Server-side photo tags (photo_tags table) for website photo URLs, so the app
+ * can match them against the job vocabulary without a per-device vision call.
+ * Joins on the photo URL itself — no place_id linkage needed, which also covers
+ * rows the backfill couldn't attribute to a business.
+ *
+ * URL fragility note: the tagger and the scraper don't always produce
+ * byte-identical URLs (http vs https, CDN query params). Match on the exact URL
+ * plus its http/https-swapped variant; anything still unmatched simply gets no
+ * tags and the client falls back to its on-device screening as before.
+ */
+async function tagsFor(urls: string[]): Promise<Map<string, string[]>> {
+  const out = new Map<string, string[]>();
+  if (!db || urls.length === 0) return out;
+  const variants = new Map<string, string>(); // variant -> original url
+  for (const u of urls) {
+    variants.set(u, u);
+    if (u.startsWith("http://")) variants.set("https://" + u.slice(7), u);
+    else if (u.startsWith("https://")) variants.set("http://" + u.slice(8), u);
+  }
+  const { data, error } = await db.from("photo_tags")
+    .select("photo_name, tags")
+    .in("photo_name", [...variants.keys()]);
+  if (error || !data) return out;
+  for (const row of data as { photo_name: string; tags: string[] }[]) {
+    const original = variants.get(row.photo_name);
+    if (original && Array.isArray(row.tags) && row.tags.length > 0) {
+      out.set(original, row.tags);
+    }
+  }
+  return out;
+}
+
+/** Attach server tags to a photo list (mutates a shallow copy, never the cache). */
+async function withTags(photos: Photo[]): Promise<Photo[]> {
+  const tags = await tagsFor(photos.map((p) => p.url));
+  if (tags.size === 0) return photos;
+  return photos.map((p) => {
+    const t = tags.get(p.url);
+    return t ? { ...p, tags: t } : p;
   });
 }
 
@@ -229,11 +274,13 @@ Deno.serve(async (req) => {
   if (!website) return json({ photos: [], ok: false });
 
   // Cache hit within the TTL → serve it, zero external fetch.
+  // Server tags are looked up live (not cached) so newly tagged photos light up
+  // without waiting for the 30-day photo cache to lapse.
   const { data: cached } = await db.from("business_website_photos")
     .select("photos, ok, fetched_at").eq("place_id", placeId).maybeSingle();
   if (cached && cached.fetched_at &&
       Date.now() - new Date(cached.fetched_at).getTime() < CACHE_TTL_MS) {
-    return json({ photos: cached.photos ?? [], ok: cached.ok ?? false });
+    return json({ photos: await withTags((cached.photos ?? []) as Photo[]), ok: cached.ok ?? false });
   }
 
   // Miss (or stale) → scrape once, store, share with every later viewer.
@@ -245,5 +292,5 @@ Deno.serve(async (req) => {
     ok: photos.length > 0,
     fetched_at: new Date().toISOString(),
   });
-  return json({ photos, ok: photos.length > 0 });
+  return json({ photos: await withTags(photos), ok: photos.length > 0 });
 });
