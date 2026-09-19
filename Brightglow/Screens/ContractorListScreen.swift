@@ -1,5 +1,6 @@
 import SwiftUI
 import CoreLocation
+import Combine
 
 // ─────────────────────────────────────────────────────────────────────────────
 // MARK: - ContractorListScreen
@@ -430,8 +431,9 @@ struct ContractorListScreen: View {
         let photo = PhotoFilter.photoMatchStrength(keptPhotos[c.id] ?? [], query: matchQuery, category: category)
         let upstream = upstreamCount > 1 ? 1 - Double(upstreamIndex) / Double(upstreamCount - 1) : 1
         let sizeFit = smallJobActive && takesSmallJobs(c, category: jobCategory) ? 1.0 : 0.0
+        let responsive = responsivenessSignal(c)
         let score = w.reviewMatch * review + w.photoMatch * photo
-            + w.sizeFit * sizeFit + w.upstream * upstream
+            + w.sizeFit * sizeFit + w.responsiveness * responsive + w.upstream * upstream
         // photoEvidence: at least one screened photo matched the job vocabulary.
         // The primary sort key in visibleContractors — see that comment.
         return (min(score, 1), photo > 0)
@@ -476,6 +478,44 @@ struct ContractorListScreen: View {
                         "tiny job", "small repair", "little job"]
         let hits = texts.reduce(0) { total, text in total + positive.filter { p in text.contains(p) }.count }
         return hits >= 2
+    }
+
+    /// "Will actually reply" score in 0…1, from two independent sources:
+    ///   • server: the business claimed its page and is accepting work
+    ///     (`contractor.responsive`) — the strongest, most direct signal;
+    ///   • reviews: reviewers describing fast, communicative service.
+    /// Either alone is a meaningful boost; both together saturate. One-directional
+    /// like `takesSmallJobs` — a review complaining about no-shows vetoes the
+    /// review half (never renders a negative), but a claimed+accepting business
+    /// still keeps the server half. Kept out of `photoEvidence` on purpose: this
+    /// nudges order within a tier, it doesn't fabricate job-specific proof.
+    private func responsivenessSignal(_ c: Contractor) -> Double {
+        let claimed = c.responsive ? 1.0 : 0.0
+        return max(claimed, reviewResponsiveness(c.reviews.map(\.text)))
+    }
+
+    /// Review-mined responsiveness in 0…1. Positive phrases about speed and
+    /// communication add up (two independent hits saturate); an explicit
+    /// unresponsiveness complaint vetoes it to 0 — we never boost a business
+    /// reviewers say ghosted them.
+    private func reviewResponsiveness(_ reviews: [String]) -> Double {
+        let texts = reviews.map { " \($0.lowercased()) " }
+        guard !texts.isEmpty else { return 0 }
+        let negative = ["never called back", "never got back", "didn't respond",
+                        "did not respond", "didn't call back", "did not call back",
+                        "no show", "no-show", "didn't show up", "did not show up",
+                        "hard to reach", "unresponsive", "ghosted", "never returned",
+                        "still waiting", "wouldn't respond"]
+        if negative.contains(where: { s in texts.contains(where: { $0.contains(s) }) }) { return 0 }
+        let positive = ["responded quickly", "quick to respond", "quick response",
+                        "responsive", "got right back", "got back to me quickly",
+                        "returned my call", "called me back", "great communication",
+                        "easy to reach", "prompt", "showed up on time", "on time",
+                        "same day", "answered right away", "replied quickly",
+                        "quick to reply", "communicative"]
+        let hits = texts.reduce(0) { total, text in total + positive.filter { p in text.contains(p) }.count }
+        // One hit is a real signal (0.6); two or more saturates.
+        return hits >= 2 ? 1.0 : (hits == 1 ? 0.6 : 0.0)
     }
 
     /// Repair-language phrases for the job's own trade — one hit is a strong
@@ -546,8 +586,8 @@ struct ContractorListScreen: View {
             ZStack(alignment: .top) {
                 AppColors.bg.ignoresSafeArea()
 
-                if isLoading && contractors.isEmpty {
-                    statusView(spinner: true, text: "Finding businesses near you")
+                if isLoading {
+                    loadingView
                 } else if contractors.isEmpty {
                     notFoundView
                 } else {
@@ -846,22 +886,38 @@ struct ContractorListScreen: View {
     }
 
     // ── Infinite scroll — reveals held-back matches, then pages, on approach ───
-    // Replaces the old "See more" button: this sentinel sits at the tail of the
-    // list and, when it scrolls into view, pulls the next batch. Cost is
-    // unchanged — photos still screen lazily per row (see `screenIfNeeded`), so
-    // revealing/paging only downloads photos for rows the user actually reaches;
-    // the sentinel only removes the extra tap, it doesn't screen ahead.
+    // Explicit "See more" CTA (Igor 2026-09-19): the list intentionally STOPS at
+    // the top 5 matches so attention concentrates on the strongest candidates —
+    // the user opts in to a wider pool with a tap, rather than the list auto-
+    // paging forever. (This replaced an invisible auto-load sentinel.) Photos
+    // still screen lazily per revealed row, so a tap only costs the next 5 rows'
+    // photos as they scroll in. Uses the same secondary-pill recipe as the
+    // multiselect Cancel button (white 20% over background blur, Capsule).
     private var loadMoreTrigger: some View {
-        HStack {
-            if isLoadingMore { ProgressView().tint(.white) }
+        Button(action: { Task { await showMore() } }) {
+            HStack(spacing: 8) {
+                if isLoadingMore {
+                    ProgressView().tint(.white)
+                } else {
+                    Text("See more")
+                        .font(.h4)                       // Lato bold / 14
+                        .foregroundStyle(.white)
+                }
+            }
+            .frame(height: 32)
+            .padding(.horizontal, 20)
+            .background {
+                ZStack {
+                    Capsule().fill(.ultraThinMaterial)
+                    Capsule().fill(.white.opacity(0.2))
+                }
+            }
+            .contentShape(Capsule())
         }
+        .buttonStyle(.plain)
+        .disabled(isLoadingMore)
         .frame(maxWidth: .infinity)
-        .frame(height: 44)
         .padding(.top, 8)
-        // Fires as the tail is approached. showMore() self-guards against
-        // re-entrancy and no-ops once there's nothing left, so repeated
-        // appearances are safe.
-        .onAppear { Task { await showMore() } }
     }
 
     // ── Auto/Moto segmented filter (pill) ─────────────────────────────────────
@@ -986,14 +1042,26 @@ struct ContractorListScreen: View {
         .background(alignment: .top) { BlurredHeaderBackground(style: .dark) }
     }
 
-    private func statusView(spinner: Bool, text: String) -> some View {
-        VStack(spacing: 16) {
-            if spinner { ThinkingOrb(size: 52, color: .white) }
-            Text(text)
-                .font(.h3)
-                .foregroundStyle(AppColors.textSecondary)
+    /// Loading state: the white ThinkingOrb over the subtle brand-blue VoiceGlow
+    /// wash, with a status line that cycles through the real work happening so the
+    /// wait explains itself (Igor 2026-09-19 — "so people understand why it takes
+    /// time"). The phrases name the actual pipeline: search → estimate → reviews →
+    /// photos.
+    private var loadingView: some View {
+        ZStack {
+            AppColors.bg.ignoresSafeArea()
+            VStack(spacing: 16) {
+                ThinkingOrb(size: 52, color: .white)
+                CyclingStatusText(phrases: [
+                    "Finding matching businesses",
+                    "Estimating price",
+                    "Digging through reviews",
+                    "Sorting photos",
+                ])
+                .padding(.horizontal, 24)
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
     private var notFoundView: some View {
@@ -1288,13 +1356,17 @@ struct ContractorListScreen: View {
             contractors = ContractorLoader.fallback(
                 category: category, searchQuery: query)
         }
+        // Screen the top slice BEFORE revealing the list, and AWAIT it — so the
+        // very first render already shows the true similar-job order in the top
+        // 5. Previously this was fire-and-forget over just the top 5 AFTER the
+        // reveal, so a stronger match at position 6+ had no photo-evidence to
+        // rank on and only surfaced once "See more" scrolled it into view and
+        // screened it (Igor 2026-09-19 — this defeats the core matching idea).
+        // Bounded by a timeout inside, so a slow/uncached pool never hangs the
+        // loader; any stragglers keep screening in the background as before. The
+        // loading animation + "Sorting photos" line cover this wait.
+        await eagerlyScreenTopMatches()
         isLoading = false
-        // Photos are screened lazily per row (see `screenIfNeeded`) so we only pay
-        // for the businesses the user actually scrolls to. Exception: eagerly
-        // screen the top slice now so "did a similar job" is known for the
-        // visible window and those businesses lead from the first render, not
-        // only once their row happens to scroll into view.
-        eagerlyScreenTopMatches()
         await loadLicenses(for: contractors)
         await loadLogos(for: contractors)
     }
@@ -1308,9 +1380,27 @@ struct ContractorListScreen: View {
     /// the first page would have cost anyway, just front-loaded. Non-blocking:
     /// each promotion lands as its screening completes.
     @MainActor
-    private func eagerlyScreenTopMatches() {
-        for c in contractors.prefix(eagerScreenDepth) where scannedCount[c.id] == nil {
-            Task { await screenIfNeeded(c) }
+    private func eagerlyScreenTopMatches() async {
+        let targets = Array(contractors.prefix(eagerScreenDepth)).filter { scannedCount[$0.id] == nil }
+        guard !targets.isEmpty else { return }
+        // Race "all screened" against a wall-clock cap: the loader reveals as
+        // soon as every target is screened, or after the cap if the pool is slow
+        // (stragglers finish in the background and promote as they land). A cap,
+        // not a hang: an uncached area with many unscreened businesses must not
+        // hold the user on the loader indefinitely.
+        await withTaskGroup(of: Bool.self) { group in
+            group.addTask {
+                await withTaskGroup(of: Void.self) { inner in
+                    for c in targets { inner.addTask { @MainActor in await screenIfNeeded(c) } }
+                }
+                return true
+            }
+            group.addTask {
+                try? await Task.sleep(nanoseconds: eagerScreenTimeoutNs)
+                return false
+            }
+            _ = await group.next()   // whichever wins: all-screened or the cap
+            group.cancelAll()
         }
     }
 
@@ -1618,13 +1708,37 @@ struct ContractorListScreen: View {
                 }
             if gained {
                 keptPhotos[id] = enriched
-                // The freeze stops reshuffling while scrolling — but an enrich
-                // that gained semantic tags (the furnace photo is now tagged
-                // "furnace") is a correction, not a reshuffle. Unfreeze so the
-                // right lead photo actually reaches the display.
-                stripFrozenIDs.remove(id)
-                setStripPhotos(id, withOwnerLead(id, PhotoFilter.order(enriched, query: orderQuery, category: category,
-                                                     capPremises: stripMaxPremises, vehicle: photoVehicle)))
+                // Photos the enrich pass DROPPED as non-photos (illustrations,
+                // renders, trust badges the on-device screen missed) must leave
+                // the VISIBLE strip too, even when it's frozen — removing junk is
+                // a correction like a dead photo, not a reshuffle. Filter them out
+                // in place so the surviving photos keep their painted order.
+                let dropped = Set(kept.map(\.url)).subtracting(enriched.map(\.url))
+                if !dropped.isEmpty {
+                    screenedByID[id] = (screenedByID[id] ?? []).filter { !dropped.contains($0) }
+                }
+                if enriched.isEmpty && ownerPhotosByID[id] == nil {
+                    // Its whole pool was non-photos → nothing real to show, drop it
+                    // (mirrors dropPhotolessBusiness).
+                    contractors.removeAll { $0.id == id }
+                    screenedByID[id] = nil
+                    keptPhotos[id] = nil
+                    stripFrozenIDs.remove(id)
+                    revealedIDs.remove(id)
+                } else {
+                    // Push the enriched order through `setStripPhotos` WITHOUT
+                    // unfreezing. For a row the user hasn't reached yet (not frozen)
+                    // this corrects the lead photo before it ever paints. For a row
+                    // already on screen the write is dropped by the freeze — a strip
+                    // the user is looking at must never reshuffle, even for a
+                    // "correction" (Igor 2026-09-19: late web-scraped/enriched photos
+                    // jerking the visible strip is the bug). The gallery, relevance
+                    // score, and the shared verdict still get the enriched order via
+                    // `keptPhotos` and the upload below, so nothing is lost — only the
+                    // visible strip stays put.
+                    setStripPhotos(id, withOwnerLead(id, PhotoFilter.order(enriched, query: orderQuery, category: category,
+                                                         capPremises: stripMaxPremises, vehicle: photoVehicle)))
+                }
             } else {
                 ScreeningStore.shared.noteEmptyEnrich(id, allowVehicles: allowVehicles)
             }
@@ -1644,7 +1758,17 @@ private let initialVisibleCount = 5
 /// signals are settled for the visible window before the user scrolls.
 /// Matches `initialVisibleCount` — screening below this stays lazy (per-row on
 /// reveal), which is what keeps the 5-at-a-time paging cheap.
-private let eagerScreenDepth = 5
+// Screen this many top businesses before the first render so the top-5 order is
+// evidence-complete — covers the initial 5 plus the first "See more" batch, so a
+// stronger match in positions 6-10 leads from the start instead of jumping up
+// after a scroll. Screening reuses the same 512px rendition the list would fetch
+// on scroll anyway, so for a pool the user browses this front-loads rather than
+// adds cost; the extra cost is only businesses screened but never scrolled to,
+// and every screen is cached + shared so it's one-time per business globally.
+private let eagerScreenDepth = 10
+/// Wall-clock cap on the pre-reveal eager screen (nanoseconds). Past this the
+/// list reveals with whatever screened in time; the rest promote in background.
+private let eagerScreenTimeoutNs: UInt64 = 3_500_000_000
 
 /// Screening budget per row: scan `stripBatchScan` source photos at a time,
 /// deeper into the pool only if early shots are rejected, keeping up to
@@ -2016,6 +2140,39 @@ private func roundSig2(_ v: Int) -> Int {
     guard v >= 100 else { return v }
     let magnitude = Int(pow(10.0, floor(log10(Double(v))) - 1))
     return Int((Double(v) / Double(magnitude)).rounded()) * magnitude
+}
+
+/// A status line that cross-fades through a sequence of phrases on a timer, so a
+/// multi-second wait shows the work in progress ("Finding matching businesses" →
+/// "Estimating price" → …) instead of one frozen label. Loops until removed.
+private struct CyclingStatusText: View {
+    let phrases: [String]
+    @State private var index = 0
+    private let timer = Timer.publish(every: 1.9, on: .main, in: .common).autoconnect()
+
+    var body: some View {
+        ZStack {
+            Text(phrases.isEmpty ? "" : phrases[index])
+                .font(.bodyLight)                        // Poppins Light 300, 17pt — thin
+                .foregroundStyle(AppColors.textSecondary) // gray60
+                .multilineTextAlignment(.center)
+                .lineLimit(1)
+                .minimumScaleFactor(0.8)
+                .fixedSize(horizontal: false, vertical: true)
+                .frame(maxWidth: .infinity)
+                .id(index)
+                .transition(.asymmetric(
+                    insertion: .move(edge: .bottom).combined(with: .opacity),
+                    removal: .opacity
+                ))
+        }
+        .onReceive(timer) { _ in
+            guard phrases.count > 1 else { return }
+            withAnimation(.easeInOut(duration: 0.45)) {
+                index = (index + 1) % phrases.count
+            }
+        }
+    }
 }
 
 /// A very light "Estimating price…" placeholder shown in the header while the

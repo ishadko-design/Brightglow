@@ -65,9 +65,13 @@ enum PhotoFilter {
     private static let rejectTokens: Set<String> = [
         // people
         "people", "person", "portrait", "selfie", "crowd", "face",
-        // signage / documents
+        // signage / documents / trust seals — third-party "screened & approved"
+        // badges (HomeAdvisor/Angi/BBB) are glossy seals the flat-graphic gate
+        // misses; these back up the server-side URL filter for badges served
+        // under an opaque CDN name (reported 2026-09-19).
         "logo", "text", "document", "screenshot", "poster", "sign",
         "signage", "menu", "advertisement", "label",
+        "badge", "emblem", "award", "medal", "trophy", "certificate", "stamp",
         // illustrations / clip-art / cartoons — a drawn mascot is not a work photo
         // (the pixel-based `isFlatGraphic` gate is the primary catch; these tokens
         // back it up when Vision confidently recognises the drawing).

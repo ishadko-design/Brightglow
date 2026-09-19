@@ -252,6 +252,21 @@ async function groundedCached(
  *  sharing at least two significant words with it. A hallucinated scope would
  *  price numbers the user never stated; when the detail fails this check the
  *  job falls back to the full description (the pre-multi-job behavior). */
+// Big-scope project phrasings that are groundable even when terse. A bare
+// "kitchen remodel" (15 chars) falls under the 20-char grounding gate below,
+// but unlike a short vague "fix my roof" it has a well-documented cost ballpark
+// — so these keywords are let through so a remodel always shows a number
+// (reported 2026-09-19: kitchen remodel returned no price). Mirrors
+// BIG_SCOPE_SIGNALS in pricingEngine.ts.
+const BROAD_PROJECT_WORDS = [
+  "remodel", "renovation", "renovate", "addition", "adu", "accessory dwelling",
+  "full gut", "gut ", "rebuild", "reconstruct", "whole house", "whole-house",
+];
+function isBroadProject(description: string): boolean {
+  const d = description.toLowerCase();
+  return BROAD_PROJECT_WORDS.some((w) => d.includes(w));
+}
+
 function validJobDetail(detail: string, description: string): boolean {
   const d = detail.trim();
   if (d.length < 8) return false;
@@ -264,6 +279,38 @@ function validJobDetail(detail: string, description: string): boolean {
     if (sw.has(w) && ++shared >= 2) return true;
   }
   return false;
+}
+
+/** Web-search-grounded band as a JSON Response, or null when grounding is not
+ *  attempted (short/vague, non-broad, no key) or the model declined. Shared by
+ *  BOTH decline paths — the unclassified early-out AND the classified-but-
+ *  unpriceable path — so a broad project ("kitchen remodel") that classifies to
+ *  nothing still gets a ballpark instead of a blank "get bids". */
+async function groundedResponse(
+  zip: string | undefined,
+  kind: GroundedKind,
+  trimmedDesc: string,
+): Promise<Response | null> {
+  if (!ANTHROPIC_API_KEY) return null;
+  // Gated to substantial descriptions (a short vague "fix my roof" would only
+  // buy a useless wide band at real API cost) — EXCEPT broad-project phrasings
+  // ("kitchen remodel"), which have a real ballpark even when terse.
+  if (!(trimmedDesc.length >= 20 || isBroadProject(trimmedDesc))) return null;
+  const band = await groundedCached(zip, kind, trimmedDesc);
+  if (!band) return null;
+  return json({
+    range: {
+      all_in_low: band.low,
+      all_in_high: band.high,
+      all_in_typical: band.typical,
+      confidence: "low",
+      label: band.basis
+        ? `Estimated from current local prices — ${band.basis}. Confirm with bids.`
+        : "Estimated from current local prices. Confirm with bids.",
+      grounded: true,
+      data_points: 0,
+    },
+  }, 200, "grounded");
 }
 
 Deno.serve(async (req) => {
@@ -386,6 +433,22 @@ Deno.serve(async (req) => {
     // The backlog for the mapping layer: every description that reached us
     // and classified to nothing (visible in `supabase functions logs pricing`).
     console.log("pricing: unclassified", JSON.stringify({ category, description }));
+    // Before declining, try the grounded fallback — a broad project like
+    // "kitchen remodel" classifies to NOTHING (it isn't in the anchored
+    // taxonomy), so without this it returned a blank "get bids" and no price
+    // ever showed (reported 2026-09-19). Kind is resolved from the app filter /
+    // model / category the same way the classified path does it below.
+    const earlyVehicle = vehicle ?? llmVehicle ?? keywordVehicle;
+    const earlyVertical = (typeof category === "string" && category
+      ? (AUTO_CATEGORIES.has(category) ? "auto" : "home")
+      : null) ?? llmVertical;
+    const earlyKind: GroundedKind = earlyVehicle === "moto"
+      ? "moto"
+      : earlyVertical === "auto"
+      ? "auto"
+      : "home";
+    const grounded = await groundedResponse(zip, earlyKind, trimmedDesc);
+    if (grounded) return grounded;
     const result: InsufficientDataResult = { error: "Insufficient data", fallback: "Get 3 bids" };
     return json({ range: result, display: `${result.error}. ${result.fallback}.` });
   }
@@ -441,24 +504,8 @@ Deno.serve(async (req) => {
         : verticalResolved === "auto"
         ? "auto"
         : "home";
-      if (ANTHROPIC_API_KEY && trimmedDesc.length >= 20) {
-        const band = await groundedCached(zip, groundedKind, trimmedDesc);
-        if (band) {
-          return json({
-            range: {
-              all_in_low: band.low,
-              all_in_high: band.high,
-              all_in_typical: band.typical,
-              confidence: "low",
-              label: band.basis
-                ? `Estimated from current local prices — ${band.basis}. Confirm with bids.`
-                : "Estimated from current local prices. Confirm with bids.",
-              grounded: true,
-              data_points: 0,
-            },
-          }, 200, "grounded");
-        }
-      }
+      const grounded = await groundedResponse(zip, groundedKind, trimmedDesc);
+      if (grounded) return grounded;
       const result: InsufficientDataResult = { error: "Insufficient data", fallback: "Get 3 bids" };
       return json({ range: result, display: `${result.error}. ${result.fallback}.` });
     }

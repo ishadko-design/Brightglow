@@ -16,6 +16,11 @@ struct RankingConfig: Codable {
         var photoMatch: Double = 0.30
         /// Right-sized business for the job's price (handyman for small jobs).
         var sizeFit: Double = 0.25
+        /// Will-actually-reply signal: the business claimed its page + is accepting
+        /// work (server), OR its reviewers describe fast, communicative service
+        /// (on-device review mining). Boosts the businesses that respond — and hit
+        /// the paywall — without gating out strong-evidence unclaimed ones.
+        var responsiveness: Double = 0.15
         /// Upstream Places order (proximity, rating quality, prominence).
         var upstream: Double = 0.20
     }

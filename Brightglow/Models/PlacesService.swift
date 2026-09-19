@@ -131,6 +131,7 @@ enum PlacesService {
             phone: place.nationalPhoneNumber,
             website: place.websiteUri,
             contactEmail: place.contactEmail,
+            responsive: place.responsive ?? false,
             licenseNumber: nil,
             isVerified: (place.businessStatus ?? "OPERATIONAL") == "OPERATIONAL",
             reviews: reviews(from: place.reviews),
@@ -478,6 +479,7 @@ enum PlacesService {
             phone: place.nationalPhoneNumber,
             website: place.websiteUri,
             contactEmail: place.contactEmail,
+            responsive: place.responsive ?? false,
             licenseNumber: nil,
             isVerified: (place.businessStatus ?? "OPERATIONAL") == "OPERATIONAL",
             reviews: reviews(from: place.reviews),
@@ -672,6 +674,11 @@ private struct Place: Decodable {
     /// not a Google Places field. Present when we've resolved an email for this
     /// business; drives the "Request quote" vs "Call" CTA.
     let contactEmail: String?
+    /// Injected by our `search` Edge function: true when this business has claimed
+    /// its page and is accepting work — the strongest "will actually reply" signal.
+    /// Not a Google field; absent (→ false) for the direct-Google fallback path.
+    /// Feeds the OTA `responsiveness` ranking weight, alongside review mining.
+    let responsive: Bool?
 }
 
 private struct LatLng: Decodable {

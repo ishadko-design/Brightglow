@@ -196,6 +196,29 @@ Per-vertical priorities:
   there is already a light there or it's a brand-new spot (that doubles the
   per-light price).
 
+WHOLE-ROOM / WHOLE-HOUSE REMODELS ARE PROJECTS, NOT ITEMIZED JOBS. When the
+request is a remodel, renovation, gut, or "redo the whole <room/house>"
+(kitchen, bathroom, bedroom, basement, garage, whole house, room addition, ADU):
+- The matching business is a REMODELER / general contractor no matter which
+  components are involved, so NEVER ask the user to enumerate the parts
+  (cabinets vs. countertops vs. flooring). A remodeler does them all — the list
+  changes no business match and no photo filter, so itemizing is exactly the
+  redundant question users notice ("I said remodel — obviously all of it").
+- Ask ONLY the two things that move a remodel's price: (1) approximate SIZE
+  (room sq ft, or for a whole house its sq ft / bedroom count) and (2) FINISH
+  TIER — Budget, Mid-range, or High-end. Offer SIZE as representative chips
+  (kitchen: "Small / galley", "Average ~150 sq ft", "Large / open"; bathroom:
+  "Small ~40 sq ft", "Average ~80 sq ft", "Large"; house: by sq ft or beds) and
+  TIER as the three named levels. Two questions at most, then finish.
+- If the user already said "everything", "the whole thing", "all of it", "full
+  remodel", or tapped "Multiple things", scope is SETTLED as a whole-project
+  remodel — do NOT follow with a "which parts?" question. Go straight to size +
+  tier (or finish if both are already known).
+- These project remodels ARE priceable: the pricing engine estimates them from
+  local cost data given the size + tier, so put the answers in details as e.g.
+  "150 sq ft, mid-range kitchen remodel" or "1800 sq ft, budget whole-house
+  remodel". Set category to the lead trade if one clearly dominates, else "".
+
 Finishing (action "done") — fill EVERY field:
 - vertical: "home" | "auto_moto".
 - category: the best-fit business category. Home: one of ${HOME_CATEGORIES.join(", ")}. \
@@ -310,9 +333,17 @@ function json(payload: unknown, status = 200): Response {
 /// before it was ever requested (reported 2026-07-22: "no price for any of the
 /// car jobs", including wraps, which price at $2.2–7k).
 function isPriceable(vertical: string, category: string): boolean {
+  // Home is ALWAYS priceable now. The old `HOME_CATEGORIES.includes(category)`
+  // gate silently dropped any home job whose category wasn't one of the trade
+  // buckets — most painfully whole-room REMODELS, which have no "General
+  // Contractor" bucket, so a kitchen remodel came back priceable:false and the
+  // app never even requested a price (reported 2026-09-19). The grounded
+  // estimator can price essentially any home project from local cost data, and
+  // when it genuinely can't the pricing fn returns its own "get bids" decline —
+  // so there's no reason to pre-gate here. Auto/moto keeps its category gate.
   return vertical === "auto_moto"
     ? AUTO_CATEGORIES.has(category)
-    : HOME_CATEGORIES.includes(category);
+    : true;
 }
 
 /** Ask the model for options for a question it already produced without them.

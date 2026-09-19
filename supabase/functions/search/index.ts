@@ -86,13 +86,35 @@ async function enrichContacts(responseObj: unknown): Promise<unknown> {
     }
   } catch (_) { /* best-effort */ }
 
+  // Responsiveness signal: a business that has CLAIMED its page and is accepting
+  // work is the one most likely to reply — and the one that hits the paywall, so
+  // the app boosts it in the ranking (an OTA-tunable `responsiveness` weight).
+  // Server-owned so the signal reaches every build without a release; the client
+  // also mines reviews for responsiveness, so the two combine into one weight.
+  // Best-effort: any failure just leaves `responsive` false (no boost).
+  const responsiveIds = new Set<string>();
+  try {
+    const { data } = await db
+      .from("business_profiles")
+      .select("place_id, accepting_work")
+      .in("place_id", ids);
+    for (const row of data ?? []) {
+      // A claimed profile counts as responsive unless it explicitly turned work
+      // off (accepting_work defaults true, so a null/absent flag still counts).
+      if (row.accepting_work !== false) responsiveIds.add(row.place_id);
+    }
+  } catch (_) { /* best-effort */ }
+
   // Drop paywalled-and-lapsed businesses entirely — they're hidden from search
   // until they subscribe (see the LeadBridge paywall sweep). Demand re-routes to
   // businesses that are actually reachable/paying.
   const visible = places.filter((p) => !hidden.has(p.id as string));
   (obj as { places?: unknown }).places = visible;
 
-  for (const p of visible) p.contactEmail = emailById.get(p.id as string) ?? null;
+  for (const p of visible) {
+    p.contactEmail = emailById.get(p.id as string) ?? null;
+    p.responsive = responsiveIds.has(p.id as string);
+  }
 
   const toResolve = visible
     .filter((p) => p.id && p.websiteUri && !checked.has(p.id as string))
