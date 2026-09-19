@@ -836,7 +836,7 @@ export const JOB_TYPE_TAXONOMY: JobTypeEntry[] = [
   // whole-project item — wide but real; revisit when a source covers it.
   { job_type: "roofing.shingle", category: "Roofing", keywords: ["shingle", "asphalt", "architectural"], trade: "roofing", itemId: "architectural-installed", unit: "sq ft", defaultQuantity: 1700, notIfContains: ["missing", "blown off", "came off", "damaged", "a few", "repair", "inspection", "flashing"] },
   { job_type: "roofing.metal", category: "Roofing", keywords: ["metal roof", "standing seam"], trade: "roofing", itemId: "metal-roofing-installed", unit: "sq ft", defaultQuantity: 1700, priority: 1 },
-  { job_type: "roofing.flat", category: "Roofing", keywords: ["flat roof", "tpo", "epdm", "torch down", "membrane", "rolled roofing"], trade: "roofing", itemId: "roof-replacement-total", unit: "project", defaultQuantity: 1 },
+  { job_type: "roofing.flat", category: "Roofing", keywords: ["flat roof", "tpo", "epdm", "torch down", "membrane", "rolled roofing"], trade: "roofing", itemId: "roof-replacement-total", unit: "project", defaultQuantity: 1, notIfContains: ["repair", "leak", "patch"] },
   { job_type: "roofing.replacement", category: "Roofing", keywords: ["replace", "replacement", "new roof", "reroof"], trade: "roofing", itemId: "roof-replacement-total", unit: "project", defaultQuantity: 1 },
   { job_type: "roofing.repair", category: "Roofing", keywords: ["repair", "patch", "leak"], trade: "roofing", itemId: "roof-repair-patch", unit: "sq ft", defaultQuantity: 50,
     guidance: "Roof repair over a STATED AREA (tens to hundreds of sq ft, e.g. '300 sq ft damaged'). A few missing or damaged shingles with no large area stated is roofing.shingle_repair." },
