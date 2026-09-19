@@ -308,10 +308,31 @@ Deno.test("classifyJobType with a category keeps the original behavior", () => {
 Deno.test("classifyJobType infers the category from a stem in the description", () => {
   // "floor" stem -> Flooring, then "hardwood" -> the specific job
   assertEquals(classifyJobType("", "replaced hardwood floor 300 sq ft")?.job_type, "flooring.hardwood");
-  // stem + no job keyword -> that category's general entry
-  assertEquals(classifyJobType("", "fix up my roof")?.job_type, "roofing.general");
+  // "fix" is a repair-intent keyword (within-category only), so this lands on
+  // the repair entry — same item and price as the old general bucket
+  // (roof-repair-patch, per sq ft), just the honest label.
+  assertEquals(classifyJobType("", "fix up my roof")?.job_type, "roofing.repair");
   // within-category-only keyword ("repair") is safe once the stem picked the category
   assertEquals(classifyJobType("", "repair roof")?.job_type, "roofing.repair");
+});
+
+Deno.test("repair intent outranks material keywords", () => {
+  // Live 2026-09-19: "flat roof" (9 chars) outscored "repair" (6) and quoted
+  // $6.4k–$17k of full replacement for a patch. Repair entries carry
+  // priority 1 so intent beats material regardless of keyword length.
+  assertEquals(classifyJobType("Roofing", "repair flat roof patch")?.job_type, "roofing.repair");
+  assertEquals(classifyJobType("Roofing", "flat roof leak, 10 sq ft")?.job_type, "roofing.repair");
+  assertEquals(classifyJobType("Roofing", "fix my flat roof")?.job_type, "roofing.repair");
+  assertEquals(classifyJobType("Roofing", "repair metal roof")?.job_type, "roofing.repair");
+  assertEquals(classifyJobType("HVAC", "repair my furnace")?.job_type, "hvac.repair");
+  // Replacement intent still prices as replacement.
+  assertEquals(classifyJobType("Roofing", "replace flat roof")?.job_type, "roofing.flat");
+  assertEquals(classifyJobType("Roofing", "new TPO roof")?.job_type, "roofing.flat");
+  assertEquals(classifyJobType("Roofing", "metal roof replacement")?.job_type, "roofing.metal");
+  assertEquals(classifyJobType("HVAC", "new furnace install")?.job_type, "hvac.furnace");
+  // A more specific repair entry still beats the general repair entry.
+  assertEquals(classifyJobType("Roofing", "repair flashing")?.job_type, "roofing.flashing");
+  assertEquals(classifyJobType("HVAC", "furnace wont ignite")?.job_type, "hvac.ignitor");
 });
 
 Deno.test("classifyJobType falls back to the most specific job keyword without a stem", () => {

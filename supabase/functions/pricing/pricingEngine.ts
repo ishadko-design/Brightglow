@@ -752,7 +752,7 @@ export const JOB_TYPE_TAXONOMY: JobTypeEntry[] = [
   // The generic repair entry keeps ONLY the words that mean "something is wrong
   // and I can't name the part". Every specific symptom below outranks it, so
   // "AC not cooling" stops quoting a furnace job (reported 2026-07-23).
-  { job_type: "hvac.repair", category: "HVAC", keywords: ["repair", "service"], trade: "hvac", itemId: "furnace-repair", unit: "project", defaultQuantity: 1, notIfContains: ["not cooling", "no cold air", "blowing warm", "blowing hot", "capacitor", "contactor", "refrigerant", "freon", "recharge", "blower", "condensate", "leaking water", "ignitor", "igniter", "flame sensor", "thermostat", "evaporator", "coil", "tune-up", "tune up", "maintenance"] },
+  { job_type: "hvac.repair", category: "HVAC", keywords: ["repair", "service"], trade: "hvac", itemId: "furnace-repair", unit: "project", defaultQuantity: 1, priority: 1, notIfContains: ["not cooling", "no cold air", "blowing warm", "blowing hot", "capacitor", "contactor", "refrigerant", "freon", "recharge", "blower", "condensate", "leaking water", "ignitor", "igniter", "flame sensor", "thermostat", "evaporator", "coil", "tune-up", "tune up", "maintenance"] },
   // HVAC symptom routing. People describe what the house is doing, not which
   // part failed, so the keywords are symptoms first and part names second.
   { job_type: "hvac.ac_repair", category: "HVAC", keywords: ["not cooling", "ac not cooling", "no cold air", "blowing warm", "blowing hot air", "ac broken", "ac not working", "air conditioner not working", "ac stopped"], trade: "hvac", itemId: "ac-repair-diagnostic", unit: "project", defaultQuantity: 1, priority: 1 },
@@ -835,10 +835,14 @@ export const JOB_TYPE_TAXONOMY: JobTypeEntry[] = [
   // no TPO/EPDM/torch-down in any trade), so flat roofs classify to the
   // whole-project item — wide but real; revisit when a source covers it.
   { job_type: "roofing.shingle", category: "Roofing", keywords: ["shingle", "asphalt", "architectural"], trade: "roofing", itemId: "architectural-installed", unit: "sq ft", defaultQuantity: 1700, notIfContains: ["missing", "blown off", "came off", "damaged", "a few", "repair", "inspection", "flashing"] },
-  { job_type: "roofing.metal", category: "Roofing", keywords: ["metal roof", "standing seam"], trade: "roofing", itemId: "metal-roofing-installed", unit: "sq ft", defaultQuantity: 1700, priority: 1 },
+  { job_type: "roofing.metal", category: "Roofing", keywords: ["metal roof", "standing seam"], trade: "roofing", itemId: "metal-roofing-installed", unit: "sq ft", defaultQuantity: 1700, priority: 1, notIfContains: ["repair", "leak", "patch", "fix"] },
   { job_type: "roofing.flat", category: "Roofing", keywords: ["flat roof", "tpo", "epdm", "torch down", "membrane", "rolled roofing"], trade: "roofing", itemId: "roof-replacement-total", unit: "project", defaultQuantity: 1 },
   { job_type: "roofing.replacement", category: "Roofing", keywords: ["replace", "replacement", "new roof", "reroof"], trade: "roofing", itemId: "roof-replacement-total", unit: "project", defaultQuantity: 1 },
-  { job_type: "roofing.repair", category: "Roofing", keywords: ["repair", "patch", "leak"], trade: "roofing", itemId: "roof-repair-patch", unit: "sq ft", defaultQuantity: 50,
+  // Repair intent outranks material: every other repair entry carries
+  // priority 1 so a symptom beats the bare noun; roofing.repair was the one
+  // missing it, so "repair flat roof" lost to "flat roof" on length and
+  // quoted a full replacement for a patch (live 2026-09-19).
+  { job_type: "roofing.repair", category: "Roofing", keywords: ["repair", "patch", "leak", "fix"], trade: "roofing", itemId: "roof-repair-patch", unit: "sq ft", defaultQuantity: 50, priority: 1,
     guidance: "Roof repair over a STATED AREA (tens to hundreds of sq ft, e.g. '300 sq ft damaged'). A few missing or damaged shingles with no large area stated is roofing.shingle_repair." },
   { job_type: "roofing.gutter", category: "Roofing", keywords: ["gutter"], trade: "roofing", itemId: "gutter-install-aluminum", unit: "linear foot", defaultQuantity: 150, notIfContains: ["clean", "cleaning", "clogged", "overflowing", "repair", "sagging", "leaking seam", "downspout"] },
   // Roofing maintenance. These outrank the install and whole-roof entries,
@@ -1122,7 +1126,7 @@ const CATEGORY_STEMS: Record<string, string[]> = {
 // because "skylight" contains it.
 const WITHIN_CATEGORY_ONLY = new Set([
   "repair", "replace", "replacement", "service", "tune-up", "tune up",
-  "patch", "leak", "fixture", "interior", "exterior", "room", "light",
+  "patch", "leak", "fix", "fixture", "interior", "exterior", "room", "light",
   "lighting", "sand", "cabinet",
 ]);
 
