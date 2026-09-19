@@ -62,6 +62,7 @@ import {
   type JobTypeEntry,
 } from "./pricingEngine.ts";
 import { estimateInHouse, estimateJobsInHouse, type JobScope } from "./estimatePipeline.ts";
+import { groundedBand } from "./groundedEstimate.ts";
 
 const ANTHROPIC_API_KEY = Deno.env.get("ANTHROPIC_API_KEY") ?? "";
 const APP_TOKEN = Deno.env.get("APP_TOKEN") ?? "";
@@ -190,6 +191,58 @@ async function classifyLLMCached(
   }
 
   return result;
+}
+
+const GROUNDED_TTL_MS = 7 * 24 * 60 * 60 * 1000; // remodel costs move slowly
+
+function groundedCacheKey(zip: string | undefined, description: string): string {
+  const norm = description.toLowerCase().replace(/\s+/g, " ").trim();
+  return `${zip ?? "us"}:${norm}`.slice(0, 300);
+}
+
+/** Web-search-grounded band for jobs the catalog doesn't model, with a 7-day
+ *  cache. Returns null when the model declined / the guardrail rejected the
+ *  band — the caller then keeps the honest "get 3 bids" decline. A miss is not
+ *  cached (a transient search failure shouldn't pin "no estimate" for a week);
+ *  a hit is, because the grounded call is the function's most expensive path. */
+async function groundedCached(
+  zip: string | undefined,
+  description: string,
+): Promise<{ low: number; typical: number; high: number; basis: string } | null> {
+  const key = groundedCacheKey(zip, description);
+  if (db) {
+    try {
+      const { data } = await db.from("grounded_estimate_cache")
+        .select("low, typical, high, basis, created_at").eq("cache_key", key).maybeSingle();
+      if (data && Date.now() - new Date(data.created_at as string).getTime() < GROUNDED_TTL_MS) {
+        return {
+          low: Number(data.low),
+          typical: Number(data.typical),
+          high: Number(data.high),
+          basis: typeof data.basis === "string" ? data.basis : "",
+        };
+      }
+    } catch (_) { /* fall through to a live call */ }
+  }
+
+  const locationLabel = zip ? `the ${zip} ZIP code area (US)` : "the United States";
+  const band = await groundedBand(description, locationLabel, ANTHROPIC_API_KEY);
+  if (!band) return null;
+  console.log("pricing: grounded-estimated", JSON.stringify({ zip, description, ...band }));
+
+  if (db) {
+    try {
+      await db.from("grounded_estimate_cache").upsert({
+        cache_key: key,
+        low: band.low,
+        typical: band.typical,
+        high: band.high,
+        basis: band.basis,
+        created_at: new Date().toISOString(),
+      });
+    } catch (_) { /* best-effort cache write */ }
+  }
+  return band;
 }
 
 /** The LLM's per-job detail must be grounded in the request: non-empty and
@@ -371,6 +424,30 @@ Deno.serve(async (req) => {
       });
     if (r.kind === "insufficient") {
       console.log(`pricing: ${r.reason}`, JSON.stringify({ category, description, job_type: r.entry?.job_type ?? null }));
+      // Coverage tier of last resort: the catalog doesn't model this job (whole-
+      // room remodels have no entry), so instead of a blank decline, try a
+      // web-search-grounded band. Gated to substantial HOME jobs — auto already
+      // has its labor-only path, and a short/vague query ("fix my roof") would
+      // only produce a useless wide band at real cost. Shown as a low-confidence
+      // estimate, never catalog-precise. Failure keeps the honest decline.
+      if (ANTHROPIC_API_KEY && verticalResolved !== "auto" && trimmedDesc.length >= 20) {
+        const band = await groundedCached(zip, trimmedDesc);
+        if (band) {
+          return json({
+            range: {
+              all_in_low: band.low,
+              all_in_high: band.high,
+              all_in_typical: band.typical,
+              confidence: "low",
+              label: band.basis
+                ? `Estimated from current local prices — ${band.basis}. Confirm with bids.`
+                : "Estimated from current local prices. Confirm with bids.",
+              grounded: true,
+              data_points: 0,
+            },
+          }, 200, "grounded");
+        }
+      }
       const result: InsufficientDataResult = { error: "Insufficient data", fallback: "Get 3 bids" };
       return json({ range: result, display: `${result.error}. ${result.fallback}.` });
     }
