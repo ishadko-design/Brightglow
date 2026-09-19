@@ -193,10 +193,24 @@ struct ContractorListScreen: View {
     /// kept pool, the relevance score, and the cached/shared verdicts for future
     /// visits — but they must not reshuffle photos the user is already looking at.
     @State private var stripFrozenIDs: Set<String> = []
+    /// The frozen display order of the business rows, by id. Populated once the
+    /// loader hands off to the list (and grown, append-only, by "See more" /
+    /// pagination). While loading, the ranking is free to resort as photo
+    /// screening settles; the moment the user lands on the list it is locked, so
+    /// a late promotion (enrichment, website photos, a straggler screen) never
+    /// reshuffles a row the user is already looking at (Igor 2026-09-19). New
+    /// rows brought in below the fold are ranked among themselves and appended —
+    /// never inserted above an already-shown row.
+    @State private var displayOrder: [String] = []
     /// Places loaded from a cached/shared verdict that wasn't rich-tagged yet —
     /// enriched once when their row is first revealed (consumed on use), so we
     /// pay the vision cost lazily per scrolled row, not for the whole list at once.
     @State private var needsEnrich: Set<String> = []
+    /// In-flight enrichment tasks by id. The eager pre-landing pass awaits the
+    /// same task a freshly-screened row already kicked off, so the visible window
+    /// settles (rich tags + embeddings) behind the spinner without a second model
+    /// call. Self-clears on completion; reset on reload.
+    @State private var enrichTasks: [String: Task<Void, Never>] = [:]
     /// Kept work photos + their scene labels per contractor (the source of truth);
     /// `screenedByID` is this list ordered by the current query for display.
     @State private var keptPhotos: [String: [ScreenedPhoto]] = [:]
@@ -368,23 +382,49 @@ struct ContractorListScreen: View {
     /// user actually reaches. Scores refine as photo screening completes — a
     /// photo-confirmed match climbs without any re-fetch.
     private var visibleContractors: [Contractor] {
+        let byID = Dictionary(contractors.map { ($0.id, $0) }, uniquingKeysWith: { a, _ in a })
+        // Rows already committed to the display keep their frozen position (see
+        // `displayOrder`) — dropping any that have since left the pool. Rows not
+        // yet committed (a fresh page, or the pre-freeze first load) are ranked
+        // live and appended below, so they can settle while loading and never
+        // jump above a row the user has already seen.
+        var rows = displayOrder.compactMap { byID[$0] }
+        let committed = Set(displayOrder)
+        rows += rankedContractors().filter { !committed.contains($0.id) }
+        return Array(rows.prefix(visibleLimit))
+    }
+
+    /// The full pool ranked by composite relevance, strongest first — the order
+    /// used before anything is frozen, and to place newly-revealed rows below the
+    /// frozen block. Photo evidence is the primary sort key (Igor 2026-09-18): a
+    /// business with a screened photo of the searched work always outranks one
+    /// without — even a 5-star one. The photo is the strongest signal because
+    /// it's the only one that says THIS business did THIS job. Within each tier
+    /// the composite score (review match, photo strength, size fit,
+    /// responsiveness, upstream quality) still decides, so stronger evidence and
+    /// better reviews win among evidenced businesses, and the no-evidence order
+    /// is unchanged.
+    private func rankedContractors() -> [Contractor] {
         let total = contractors.count
         let scored = contractors.enumerated()
             .map { (offset: $0.offset, contractor: $0.element,
                     scored: relevanceScore($0.element, upstreamIndex: $0.offset, upstreamCount: total)) }
-        // Photo evidence is the primary sort key (Igor 2026-09-18): a business
-        // with a screened photo of the searched work always outranks one
-        // without — even a 5-star one. The photo is the strongest signal
-        // because it's the only one that says THIS business did THIS job.
-        // Within each tier the composite score still decides, so stronger
-        // evidence and better reviews win among evidenced businesses, and the
-        // no-evidence order is unchanged.
-        let ranked = scored.sorted {
+        return scored.sorted {
             if $0.scored.photoEvidence != $1.scored.photoEvidence { return $0.scored.photoEvidence }
             if $0.scored.score != $1.scored.score { return $0.scored.score > $1.scored.score }
             return $0.offset < $1.offset
-        }
-        return Array(ranked.map(\.contractor).prefix(visibleLimit))
+        }.map(\.contractor)
+    }
+
+    /// Freeze the currently-visible window so those rows never reshuffle again.
+    /// Called at each moment the visible set can legitimately grow — the loader
+    /// handing off to the list, "See more", and pagination — capturing the
+    /// best-available ranking at that instant. Rows past the window stay free to
+    /// rank until they too are revealed and committed. Idempotent: re-freezing an
+    /// unchanged window is a no-op.
+    @MainActor
+    private func commitDisplayOrder() {
+        displayOrder = visibleContractors.map(\.id)
     }
 
     /// Licensed-work check for this job, driven by the OTA config. Electrical
@@ -1162,6 +1202,10 @@ struct ContractorListScreen: View {
 
         if contractors.count > visibleLimit {
             withAnimation(.easeInOut(duration: 0.2)) { visibleLimit += 5 }
+            // Freeze the five just revealed in their ranked position — they were
+            // below the fold, so ranking them now (with whatever's screened) is
+            // correct; from here they stay put like the rest.
+            commitDisplayOrder()
             return
         }
 
@@ -1181,6 +1225,8 @@ struct ContractorListScreen: View {
             freezePhotoScores(for: fresh)
             visibleLimit += 5
         }
+        // Commit the newly-appended page below the frozen block (append-only).
+        commitDisplayOrder()
         await loadLicenses(for: fresh)
     }
 
@@ -1408,9 +1454,25 @@ struct ContractorListScreen: View {
         // loader; any stragglers keep screening in the background as before. The
         // loading animation + "Sorting photos" line cover this wait.
         await eagerlyScreenTopMatches()
-        // Freeze scores after screening (covers the fallback path where
-        // contractors were set without photos).
+        // Then rich-tag (and embed) the rows the user is about to land on, still
+        // behind the spinner, so the matching order + strip photos settle now
+        // instead of churning a beat after landing (Igor 2026-09-19: both the
+        // pictures and the businesses shifting under the user is the confusing
+        // bug). Cost-neutral — these rows enrich anyway on reveal; this just
+        // front-loads and awaits it. Bounded by a cap so a slow tagger never
+        // hangs the loader.
+        await eagerlyEnrichTopMatches()
+        // Freeze scores AFTER the eager enrich, so the snapshot reflects the
+        // richer Claude tags rather than the on-device labels (covers the
+        // fallback path too, where contractors were set without photos).
         freezePhotoScores(for: contractors)
+        // Lock the order the user lands on: resorting is done while the loader is
+        // up; once the list appears it stays put. Later refinements (enrichment
+        // of rows below the fold, website photos, stragglers) still feed
+        // keptPhotos / the gallery / shared verdicts, but they no longer move a
+        // visible row (Igor 2026-09-19). Must run after freezePhotoScores, since
+        // the committed order is computed from the frozen scores.
+        commitDisplayOrder()
         isLoading = false
         await loadLicenses(for: contractors)
         await loadLogos(for: contractors)
@@ -1445,6 +1507,44 @@ struct ContractorListScreen: View {
                 return false
             }
             _ = await group.next()   // whichever wins: all-screened or the cap
+            group.cancelAll()
+        }
+    }
+
+    /// Enrich the rows the user is about to land on (rich vision tags +
+    /// embeddings) BEFORE the order/strips freeze, so the visible window settles
+    /// behind the spinner rather than churning after landing. Awaits the same
+    /// enrichment a freshly-screened row already kicked off (`enrichInBackground`
+    /// reuses the in-flight task), so it adds no model calls — it only waits for
+    /// what would otherwise land a beat later. Bounded by `eagerEnrichTimeoutNs`:
+    /// past the cap the list lands with whatever finished, and the rest complete
+    /// in the background (dropped for the visible strip once it's frozen, but
+    /// still feeding the gallery/relevance/verdicts). Only rows that already have
+    /// kept photos are enriched; a business with nothing to tag is skipped.
+    @MainActor
+    private func eagerlyEnrichTopMatches() async {
+        let allowVehicles = allowsVehiclePhotos(effectiveSearchQuery)
+        let targets = visibleContractors.filter { !(keptPhotos[$0.id]?.isEmpty ?? true) }
+        guard !targets.isEmpty else { return }
+        await withTaskGroup(of: Void.self) { group in
+            group.addTask { @MainActor in
+                await withTaskGroup(of: Void.self) { inner in
+                    for c in targets {
+                        // The eager pass owns enrichment for this row — don't let
+                        // its reveal fire a second pass.
+                        needsEnrich.remove(c.id)
+                        guard let task = enrichInBackground(
+                            c.id, kept: keptPhotos[c.id] ?? [],
+                            scanned: scannedCount[c.id] ?? (keptPhotos[c.id]?.count ?? 0),
+                            allowVehicles: allowVehicles) else { continue }
+                        inner.addTask { await task.value }
+                    }
+                }
+            }
+            group.addTask {
+                try? await Task.sleep(nanoseconds: eagerEnrichTimeoutNs)
+            }
+            _ = await group.next()   // whichever wins: all-enriched or the cap
             group.cancelAll()
         }
     }
@@ -1593,6 +1693,9 @@ struct ContractorListScreen: View {
         scannedCount = [:]
         revealedIDs = []
         stripFrozenIDs = []
+        displayOrder = []
+        enrichTasks.values.forEach { $0.cancel() }
+        enrichTasks = [:]
         needsEnrich = []
         websiteFetched = []
         nextPageToken = nil
@@ -1748,13 +1851,31 @@ struct ContractorListScreen: View {
     /// so without this, query ranking can't work for auto or specific home
     /// searches. Runs detached so the strip shows immediately on the on-device
     /// ordering; this only refines it a beat later (and once per place, shared).
+    @MainActor
+    @discardableResult
     private func enrichInBackground(_ id: String, kept: [ScreenedPhoto],
-                                    scanned: Int, allowVehicles: Bool) {
+                                    scanned: Int, allowVehicles: Bool) -> Task<Void, Never>? {
         // Back off when the last attempt gained no tags — the tagger had
         // nothing for these photos; retry after the window (or a prompt
         // upgrade) rather than burning a model call on every visit.
-        guard !ScreeningStore.shared.recentEmptyEnrich(id, allowVehicles: allowVehicles) else { return }
-        Task { @MainActor in
+        guard !ScreeningStore.shared.recentEmptyEnrich(id, allowVehicles: allowVehicles) else { return nil }
+        // Reuse an enrichment already in flight for this id (e.g. one the eager
+        // pass and the row reveal both request) so we never fire two model calls
+        // for the same business.
+        if let existing = enrichTasks[id] { return existing }
+        let task = Task { @MainActor in
+            defer { enrichTasks[id] = nil }
+            await enrichNow(id, kept: kept, scanned: scanned, allowVehicles: allowVehicles)
+        }
+        enrichTasks[id] = task
+        return task
+    }
+
+    /// The enrichment work itself (see `enrichInBackground`), factored out so it
+    /// can be awaited by the eager pre-landing pass as well as run detached.
+    @MainActor
+    private func enrichNow(_ id: String, kept: [ScreenedPhoto],
+                           scanned: Int, allowVehicles: Bool) async {
             // nil = the tagger didn't run (off / network / error) → leave the
             // verdict un-enriched so a later visit retries it.
             guard let enriched = await PhotoTagService.enrich(kept, allowVehicles: allowVehicles) else { return }
@@ -1828,7 +1949,6 @@ struct ContractorListScreen: View {
                                        tagVersion: gained ? PhotoTagService.tagVersion : nil)
             VerdictService.upload(id: id, allowVehicles: allowVehicles, kept: finalKept,
                                   scanned: scanned, enriched: gained)
-        }
     }
 }
 
@@ -1850,6 +1970,10 @@ private let eagerScreenDepth = 10
 /// Wall-clock cap on the pre-reveal eager screen (nanoseconds). Past this the
 /// list reveals with whatever screened in time; the rest promote in background.
 private let eagerScreenTimeoutNs: UInt64 = 3_500_000_000
+/// Wall-clock cap on the pre-landing enrichment of the visible window
+/// (nanoseconds). Warm cache is near-instant; on a cold tagger the list lands
+/// after this and the rest enriches in the background.
+private let eagerEnrichTimeoutNs: UInt64 = 3_000_000_000
 
 /// Screening budget per row: scan `stripBatchScan` source photos at a time,
 /// deeper into the pool only if early shots are rejected, keeping up to
