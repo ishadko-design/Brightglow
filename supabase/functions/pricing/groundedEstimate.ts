@@ -71,25 +71,51 @@ export function saneBand(b: GroundedBand | null): GroundedBand | null {
   return b;
 }
 
-export function buildGroundedSystemPrompt(locationLabel: string): string {
+/** What domain the request belongs to — sets who pays whom and what "all-in"
+ *  means (materials for a home job, parts for a vehicle), and keeps a car job
+ *  from being priced as home work. */
+export type GroundedKind = "home" | "auto" | "moto";
+
+export function buildGroundedSystemPrompt(locationLabel: string, kind: GroundedKind): string {
+  const subject = kind === "moto"
+    ? {
+      payer: "what a rider typically pays a shop, all-in (labor + parts),",
+      work: "the described work on their motorcycle",
+      noun: "job",
+      scope:
+        "Respect the stated scope, model and parts — a minor service is not a major job, and the specific motorcycle changes the parts.",
+    }
+    : kind === "auto"
+    ? {
+      payer: "what a vehicle owner typically pays a shop, all-in (labor + parts),",
+      work: "the described work on their car or truck",
+      noun: "job",
+      scope:
+        "Respect the stated scope, model and parts — a minor service is not a major job, and the specific vehicle changes the parts.",
+    }
+    : {
+      payer: "what a homeowner typically pays a contractor, all-in (labor + materials),",
+      work: "a described home project",
+      noun: "project",
+      scope:
+        "Respect the stated size and scope — a 60 sq ft gut bath is not a 200 sq ft one; a partial refresh is not a full gut.",
+    };
   return [
-    "You estimate what a homeowner typically pays a contractor, all-in (labor +",
-    `materials), for a described home project in ${locationLabel}.`,
+    `You estimate ${subject.payer} for ${subject.work} in ${locationLabel}.`,
     "",
-    "Use the web_search tool to find RECENT, LOCAL cost data for this specific",
-    "project and scope — cost guides, remodeling reports, local contractor",
-    "ranges. Prefer sources that match the location and the stated size/scope.",
+    `Use the web_search tool to find RECENT, LOCAL cost data for this specific ${subject.noun}`,
+    "and scope — cost guides, industry reports, local shop/contractor ranges.",
+    "Prefer sources that match the location and the stated scope.",
     "",
     "Then answer with ONLY a JSON object, no prose around it:",
     '{"low": <number>, "typical": <number>, "high": <number>, "basis": "<one short line: what drives this range + a source type>"}',
     "",
     "Rules:",
-    "- Whole dollars, all-in for the WHOLE project as described (not per unit,",
-    "  not per sq ft, not labor-only).",
+    `- Whole dollars, all-in for the WHOLE ${subject.noun} as described (not per`,
+    "  unit, not labor-only).",
     "- low/typical/high are the realistic spread for this scope in this area —",
     "  wide is fine and honest, but low <= typical <= high.",
-    "- Respect the stated size and scope: a 60 sq ft gut bath is not a 200 sq ft",
-    "  one; a partial refresh is not a full gut.",
+    `- ${subject.scope}`,
     "- If you genuinely cannot find enough to estimate, return",
     '  {"low": 0, "typical": 0, "high": 0, "basis": "insufficient data"} — do',
     "  not guess a number with no basis.",
@@ -104,13 +130,14 @@ export async function groundedBand(
   description: string,
   locationLabel: string,
   apiKey: string,
+  kind: GroundedKind,
 ): Promise<GroundedBand | null> {
   if (!apiKey || description.trim().length < 12) return null;
   const client = new Anthropic({ apiKey, timeout: 30_000, maxRetries: 1 });
   // web_search_20260209 (dynamic filtering) is supported on Opus 4.6+ — the
   // classifier already runs claude-opus-4-8, so the same model serves here.
   const tools = [{ type: "web_search_20260209", name: "web_search", max_uses: 4 }];
-  const system = buildGroundedSystemPrompt(locationLabel);
+  const system = buildGroundedSystemPrompt(locationLabel, kind);
   const messages: Anthropic.MessageParam[] = [{ role: "user", content: `Project: ${description}` }];
 
   try {

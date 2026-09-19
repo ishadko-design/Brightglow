@@ -62,7 +62,7 @@ import {
   type JobTypeEntry,
 } from "./pricingEngine.ts";
 import { estimateInHouse, estimateJobsInHouse, type JobScope } from "./estimatePipeline.ts";
-import { groundedBand } from "./groundedEstimate.ts";
+import { groundedBand, type GroundedKind } from "./groundedEstimate.ts";
 
 const ANTHROPIC_API_KEY = Deno.env.get("ANTHROPIC_API_KEY") ?? "";
 const APP_TOKEN = Deno.env.get("APP_TOKEN") ?? "";
@@ -195,9 +195,11 @@ async function classifyLLMCached(
 
 const GROUNDED_TTL_MS = 7 * 24 * 60 * 60 * 1000; // remodel costs move slowly
 
-function groundedCacheKey(zip: string | undefined, description: string): string {
+function groundedCacheKey(zip: string | undefined, kind: GroundedKind, description: string): string {
   const norm = description.toLowerCase().replace(/\s+/g, " ").trim();
-  return `${zip ?? "us"}:${norm}`.slice(0, 300);
+  // Kind is in the key: "replace tires" grounds differently for a car (4) than
+  // a motorcycle (2), so the two must not share a cached band.
+  return `${zip ?? "us"}:${kind}:${norm}`.slice(0, 300);
 }
 
 /** Web-search-grounded band for jobs the catalog doesn't model, with a 7-day
@@ -207,9 +209,10 @@ function groundedCacheKey(zip: string | undefined, description: string): string 
  *  a hit is, because the grounded call is the function's most expensive path. */
 async function groundedCached(
   zip: string | undefined,
+  kind: GroundedKind,
   description: string,
 ): Promise<{ low: number; typical: number; high: number; basis: string } | null> {
-  const key = groundedCacheKey(zip, description);
+  const key = groundedCacheKey(zip, kind, description);
   if (db) {
     try {
       const { data } = await db.from("grounded_estimate_cache")
@@ -226,7 +229,7 @@ async function groundedCached(
   }
 
   const locationLabel = zip ? `the ${zip} ZIP code area (US)` : "the United States";
-  const band = await groundedBand(description, locationLabel, ANTHROPIC_API_KEY);
+  const band = await groundedBand(description, locationLabel, ANTHROPIC_API_KEY, kind);
   if (!band) return null;
   console.log("pricing: grounded-estimated", JSON.stringify({ zip, description, ...band }));
 
@@ -425,13 +428,21 @@ Deno.serve(async (req) => {
     if (r.kind === "insufficient") {
       console.log(`pricing: ${r.reason}`, JSON.stringify({ category, description, job_type: r.entry?.job_type ?? null }));
       // Coverage tier of last resort: the catalog doesn't model this job (whole-
-      // room remodels have no entry), so instead of a blank decline, try a
-      // web-search-grounded band. Gated to substantial HOME jobs — auto already
-      // has its labor-only path, and a short/vague query ("fix my roof") would
-      // only produce a useless wide band at real cost. Shown as a low-confidence
-      // estimate, never catalog-precise. Failure keeps the honest decline.
-      if (ANTHROPIC_API_KEY && verticalResolved !== "auto" && trimmedDesc.length >= 20) {
-        const band = await groundedCached(zip, trimmedDesc);
+      // room remodels, and the long tail of auto/moto work), so instead of a
+      // blank decline, try a web-search-grounded band. This only runs when the
+      // modelled path produced NOTHING — an auto job with a labor-only figure
+      // returned "labor" above and never reaches here, so grounding never
+      // competes with it. Gated to substantial descriptions (a short/vague
+      // "fix my roof" would only produce a useless wide band at real cost).
+      // Vehicle-aware so a car job isn't priced as home work. Shown as a
+      // low-confidence estimate; failure keeps the honest decline.
+      const groundedKind: GroundedKind = vehicleResolved === "moto"
+        ? "moto"
+        : verticalResolved === "auto"
+        ? "auto"
+        : "home";
+      if (ANTHROPIC_API_KEY && trimmedDesc.length >= 20) {
+        const band = await groundedCached(zip, groundedKind, trimmedDesc);
         if (band) {
           return json({
             range: {

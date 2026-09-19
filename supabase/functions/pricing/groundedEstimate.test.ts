@@ -3,7 +3,7 @@
 // web_search call can't be exercised offline.
 
 import { assert, assertEquals } from "jsr:@std/assert@1";
-import { parseGroundedBand, saneBand } from "./groundedEstimate.ts";
+import { buildGroundedSystemPrompt, parseGroundedBand, saneBand } from "./groundedEstimate.ts";
 
 Deno.test("parseGroundedBand: clean JSON", () => {
   const b = parseGroundedBand('{"low":12000,"typical":20000,"high":32000,"basis":"gut bath, mid-grade"}');
@@ -22,6 +22,20 @@ Deno.test("parseGroundedBand: missing/garbage returns null", () => {
   assertEquals(parseGroundedBand(undefined), null);
   assertEquals(parseGroundedBand("no json here"), null);
   assertEquals(parseGroundedBand('{"low":"cheap","high":5}'), null); // non-numeric
+});
+
+Deno.test("prompt is domain-aware (home vs auto vs moto)", () => {
+  const home = buildGroundedSystemPrompt("the 94014 area (US)", "home");
+  assert(home.includes("homeowner") && home.includes("contractor"));
+  assert(home.includes("sq ft")); // home scope example
+
+  const auto = buildGroundedSystemPrompt("the 94014 area (US)", "auto");
+  assert(auto.includes("car or truck") && auto.includes("parts"));
+  assert(!auto.includes("homeowner"));
+
+  const moto = buildGroundedSystemPrompt("the 94014 area (US)", "moto");
+  assert(moto.includes("motorcycle"));
+  assert(!moto.includes("car or truck"));
 });
 
 Deno.test("saneBand: a plausible range passes", () => {
