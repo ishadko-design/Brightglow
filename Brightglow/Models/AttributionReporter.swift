@@ -24,11 +24,15 @@ import Foundation
 ///       reinstall — the server dedupes first-write-wins on device_id, so a
 ///       reinstall can never create a second attribution row for one device.
 ///   (d) EDGE CASES:
-///       - Simulator / restricted device: `attributionToken()` throws; we mark
-///         reported so we never spam retries for a token that can't exist.
-///       - Network flake at token fetch or POST (incl. HTTP 5xx): we do NOT
-///         mark reported, so the next launch retries with a FRESH token
-///         (tokens are single-use and expire after ~24h — never reuse one).
+///       - Simulator / restricted device: `attributionToken()` throws; the
+///         framework exposes no typed error (`AAAttribution` has no
+///         `AttributionError` member — verified by the compiler), so a flake
+///         is indistinguishable from a device that will never yield a token.
+///         Attempts are therefore capped (`bg_ad_attribution_attempts`, 3):
+///         after that we mark reported and stop trying.
+///       - Network flake at POST (incl. HTTP 5xx): we do NOT mark reported,
+///         so the next launch retries with a FRESH token (tokens are
+///         single-use and expire after ~24h — never reuse one).
 ///       - HTTP 4xx: the request was rejected; retrying won't help, so we
 ///         mark reported.
 ///       - Apple-side "not ready yet" (their API can 404 for up to ~24h after
@@ -46,6 +50,17 @@ enum AttributionReporter {
     private static let appToken: String =
         (Bundle.main.object(forInfoDictionaryKey: "APP_TOKEN") as? String) ?? ""
     private static let reportedKey = "bg_ad_attribution_reported"
+    private static let attemptsKey = "bg_ad_attribution_attempts"
+    private static let maxAttempts = 3
+
+    /// Records a failed token-fetch attempt. Returns true once we've tried
+    /// enough times that further attempts are pointless (e.g. the simulator,
+    /// which throws on every launch).
+    private static func noteAttempt() -> Bool {
+        let n = UserDefaults.standard.integer(forKey: attemptsKey) + 1
+        UserDefaults.standard.set(n, forKey: attemptsKey)
+        return n >= maxAttempts
+    }
 
     /// Call once at launch (see BrightglowApp). Reports at most once per
     /// install; every failure mode either retries next launch or marks
@@ -56,25 +71,21 @@ enum AttributionReporter {
 
         // AdServices is iOS 14.3+; the app floor is iOS 18. Throws on
         // simulator and when no token can be issued for this install.
+        // The framework exposes no typed error, so a transient flake and a
+        // device that will never yield a token look identical. Retry the next
+        // few launches, then give up — a simulator throws on every launch and
+        // must not spin forever.
         let token: String
         do {
             token = try AAAttribution.attributionToken()
-        } catch let err as AAAttribution.AttributionError {
-            switch err {
-            case .networkError:
-                return // flaky first-launch network — retry next launch
-            case .internalError:
-                markReported() // no token will ever exist here — don't spam
-                return
-            @unknown default:
-                markReported()
-                return
-            }
         } catch {
-            markReported() // simulator / unknown throw — nothing to retry
+            if noteAttempt() { markReported() }
             return
         }
-        guard !token.isEmpty else { return } // useless to the server — retry next launch
+        guard !token.isEmpty else {
+            if noteAttempt() { markReported() } // useless to the server
+            return
+        }
 
         guard let url = URL(string: "https://\(ref).supabase.co/functions/v1/attribution") else { return }
         var req = URLRequest(url: url, timeoutInterval: 15)
