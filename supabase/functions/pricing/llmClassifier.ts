@@ -250,7 +250,17 @@ export async function classifyWithLLM(
   categoryHint?: string,
 ): Promise<Classification> {
   if (pool.length === 0 || !apiKey) return { jobs: [], vehicle: null, vertical: null };
-  const client = new Anthropic({ apiKey, timeout: 15_000, maxRetries: 1 });
+  // A key not scoped to a workspace is rejected unless the workspace id rides
+  // along as a header. Optional: a workspace-scoped key needs nothing, so this
+  // is a no-op unless ANTHROPIC_WORKSPACE_ID is set. Without it, an unscoped key
+  // 400s and the classifier silently degrades to keyword-only.
+  const workspaceId = Deno.env.get("ANTHROPIC_WORKSPACE_ID");
+  const client = new Anthropic({
+    apiKey,
+    timeout: 15_000,
+    maxRetries: 1,
+    ...(workspaceId ? { defaultHeaders: { "anthropic-workspace-id": workspaceId } } : {}),
+  });
   const response = await client.messages.create({
     model: "claude-opus-4-8",
     max_tokens: 600,
