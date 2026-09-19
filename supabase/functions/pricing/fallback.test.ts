@@ -123,8 +123,8 @@ const CASES: Case[] = [
   {
     category: "",
     description: "fix my roof",
-    expect: null,
-    why: "bare vague search still declines — behavior unchanged",
+    expect: "roofing.repair",
+    why: "'fix' is a repair-intent keyword now — same as 'repair roof', which already classified",
   },
   {
     category: "",
@@ -142,7 +142,7 @@ const CASES: Case[] = [
     category: "",
     description: "my roof is leaking",
     expect: "roofing.repair",
-    why: "p1 pre-scan only fires on priority >= 1; 'leak' is p0 so the stem path is untouched",
+    why: "stem path returns the in-category repair match directly; the p1 rescue never fires over a real answer",
   },
   {
     category: "Plumbing",
