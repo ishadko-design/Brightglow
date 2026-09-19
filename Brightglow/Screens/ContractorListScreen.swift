@@ -732,8 +732,14 @@ struct ContractorListScreen: View {
                             revealedIDs.insert(contractor.id)
                             Task { await screenIfNeeded(contractor) }
                             Task { await enrichIfNeeded(contractor) }
-                            // Pull in the business's own website portfolio (free, cached).
-                            Task { await mergeWebsitePhotos(for: contractor) }
+                            // Website portfolio for rows revealing from a CACHED verdict
+                            // only (`screenIfNeeded` returns early for those, so its
+                            // inline website fetch never runs). Fresh rows fetch the
+                            // portfolio inline in `screenIfNeeded`, before their
+                            // single strip write — never as a late reshuffle.
+                            if scannedCount[contractor.id] != nil {
+                                Task { await mergeWebsitePhotos(for: contractor) }
+                            }
                         }
                     }
 
@@ -1404,33 +1410,24 @@ struct ContractorListScreen: View {
         }
     }
 
-    /// Fold the business's OWN WEBSITE photos into this row — the same free,
-    /// zero-consent enrichment the gallery uses (`business-photos`), but on the LIST
-    /// so the strip and the "did similar job" ranking see the contractor's actual
-    /// portfolio, not just Google's 10 (mostly-storefront) photos. Screened the same
-    /// way as Places (a site's hero is often a logo/van-wrap/storefront), added to
-    /// the kept pool so ranking + the badge see them, and re-ordered query-first with
-    /// any owner-uploaded photos kept on top. One call per business per session (the
-    /// function caches across users). Lazy per revealed row, so cost stays bounded.
+    /// Fetch, screen, and server-tag the business's website portfolio photos
+    /// (`business-photos` — the same free, zero-consent source the gallery uses).
+    /// Screened the same way as Places (a site's hero is often a
+    /// logo/van-wrap/storefront). The server-side vision tags (photo_tags) are
+    /// seeded into the labels so query matching and the photo-evidence tier see
+    /// them immediately, without waiting for the per-device phototags
+    /// enrichment round-trip; untagged photos keep their on-device labels.
+    /// Returns the screened photos UNORDERED — callers merge them into their own
+    /// pool and order once. One call per business per session (`websiteFetched`);
+    /// [] when the site has no usable photos or the fetch failed.
     @MainActor
-    private func mergeWebsitePhotos(for contractor: Contractor) async {
-        guard !websiteFetched.contains(contractor.id) else { return }
+    private func screenedWebsitePhotos(for contractor: Contractor, allowVehicles: Bool) async -> [ScreenedPhoto] {
+        guard !websiteFetched.contains(contractor.id) else { return [] }
         websiteFetched.insert(contractor.id)
         let tagged = await BusinessPhotoService.fetchWithTags(placeId: contractor.id, website: contractor.website)
-        let urls = tagged.map(\.url)
-        guard !urls.isEmpty, contractors.contains(where: { $0.id == contractor.id }) else {
-            if urls.isEmpty { dropIfTrulyPhotoless(contractor) }
-            return
-        }
-
-        let allowVehicles = allowsVehiclePhotos(effectiveSearchQuery)
-        var screened = await PhotoFilter.screen(urls, allowVehicles: allowVehicles,
-                                                limit: urls.count, scanLimit: urls.count)
-        // Seed the server-side vision tags (photo_tags, attached by
-        // business-photos) into the labels, so query matching and the
-        // photo-evidence tier see them immediately — without waiting for the
-        // per-device phototags enrichment round-trip. Untagged photos keep
-        // their on-device labels; the enrichment below still runs for them.
+        guard !tagged.isEmpty else { return [] }
+        var screened = await PhotoFilter.screen(tagged.map(\.url), allowVehicles: allowVehicles,
+                                                limit: tagged.count, scanLimit: tagged.count)
         if tagged.contains(where: { !$0.tags.isEmpty }) {
             let serverTags = Dictionary(uniqueKeysWithValues: tagged.map { ($0.url, $0.tags) })
             screened = screened.map { photo in
@@ -1439,22 +1436,30 @@ struct ContractorListScreen: View {
                 return ScreenedPhoto(url: photo.url, labels: merged, phash: photo.phash)
             }
         }
-        guard !screened.isEmpty, contractors.contains(where: { $0.id == contractor.id }) else {
-            if screened.isEmpty { dropIfTrulyPhotoless(contractor) }
+        return screened
+    }
+
+    /// Fold website photos into a business whose row revealed from a CACHED
+    /// verdict (`screenIfNeeded` returned early, so its inline website fetch
+    /// never ran). Merges into `keptPhotos` for ranking/gallery/verdict — but
+    /// deliberately does NOT rewrite the strip: the row already painted from
+    /// the cached order, and a late reshuffle is the jerk Igor reported
+    /// (2026-09-19). Fresh businesses are no-ops here (`websiteFetched` was
+    /// consumed by their inline fetch in `screenIfNeeded`).
+    @MainActor
+    private func mergeWebsitePhotos(for contractor: Contractor) async {
+        let allowVehicles = allowsVehiclePhotos(effectiveSearchQuery)
+        let website = await screenedWebsitePhotos(for: contractor, allowVehicles: allowVehicles)
+        guard !website.isEmpty, contractors.contains(where: { $0.id == contractor.id }) else {
+            if website.isEmpty { dropIfTrulyPhotoless(contractor) }
             return
         }
-
-        // Add the site's work photos to the kept pool (so the relevance score
-        // and the ordering see them), de-duped against what's already there.
-        let existing = keptPhotos[contractor.id] ?? []
-        let have = Set(existing.map(\.url))
-        let fresh = screened.filter { !have.contains($0.url) }
-        guard !fresh.isEmpty else { return }
-        let merged = fresh + existing
+        // Cross-source dedup: a portfolio shot that's the same image as a
+        // Google photo (different URL) must not tile twice. `deduped` drops
+        // near-duplicates by perceptual hash; website photos lead the merged
+        // pool so the curated shot wins ties.
+        let merged = PhotoFilter.deduped(website + (keptPhotos[contractor.id] ?? []))
         keptPhotos[contractor.id] = merged
-        revealedIDs.insert(contractor.id)
-        setStripPhotos(contractor.id, withOwnerLead(contractor.id,
-            PhotoFilter.order(merged, query: orderQuery, category: category, capPremises: stripMaxPremises, vehicle: photoVehicle)))
         // Rich-tag the new photos so specific queries ("bumper", "hardwood") rank them.
         enrichInBackground(contractor.id, kept: merged,
                            scanned: scannedCount[contractor.id] ?? merged.count,
@@ -1583,7 +1588,8 @@ struct ContractorListScreen: View {
     private func dropIfTrulyPhotoless(_ c: Contractor) {
         guard contractors.contains(where: { $0.id == c.id }),
               c.photos.isEmpty,
-              ownerPhotosByID[c.id] == nil
+              ownerPhotosByID[c.id] == nil,
+              (keptPhotos[c.id] ?? []).isEmpty
         else { return }
         dropPhotolessBusiness(c.id)
     }
@@ -1628,6 +1634,11 @@ struct ContractorListScreen: View {
         // into the pool if early photos are rejected, so a business whose first
         // shots are logos/people still surfaces its work photos.
         let allowVehicles = allowsVehiclePhotos(effectiveSearchQuery)
+        // The business's own website portfolio, fetched in PARALLEL with the
+        // Google screen below — merged (cross-source deduped) before the single
+        // strip write, so the row paints once with everything and never
+        // reshuffles when the portfolio lands late (Igor 2026-09-19).
+        async let websitePhotos = screenedWebsitePhotos(for: c, allowVehicles: allowVehicles)
         var kept: [ScreenedPhoto] = []
         var scanned = 0
         while kept.count < stripInitialFill && scanned < c.photos.count {
@@ -1638,7 +1649,11 @@ struct ContractorListScreen: View {
             kept.append(contentsOf: batch)
             scanned += slice.count
         }
-        kept = Array(kept.prefix(stripMaxKept))
+        // Website portfolio leads the pool (curated shots win dedup ties), then
+        // `deduped` drops cross-source near-duplicates by perceptual hash — a
+        // portfolio shot that's the same image as a Google photo (different URL)
+        // must not tile twice (Igor 2026-09-19).
+        kept = Array(PhotoFilter.deduped(await websitePhotos + kept).prefix(stripMaxKept))
         scannedCount[c.id] = scanned
         ScreeningStore.shared.save(c.id, allowVehicles: allowVehicles, kept: kept, scanned: scanned)
         // Share this verdict so other users skip screening this place.
@@ -1650,13 +1665,9 @@ struct ContractorListScreen: View {
                 // those instead of dropping the claimed business.
                 setStripPhotos(c.id, withOwnerLead(c.id, []))
                 revealedIDs.insert(c.id)
-            } else if c.photos.isEmpty && c.website != nil {
-                // No Google photos at all, but a website is on file: don't drop
-                // yet — the website-photo merge fired on this same reveal may
-                // still supply portfolio shots, and removes the business itself
-                // when the site yields nothing usable.
             } else {
-                // Whole pool was non-work imagery → drop the business rather than
+                // Whole pool was non-work imagery (Google + the website fetch
+                // above both yielded nothing) → drop the business rather than
                 // show a blank strip (mirrors the gallery).
                 contractors.removeAll { $0.id == c.id }
                 stripFrozenIDs.remove(c.id)
