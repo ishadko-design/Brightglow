@@ -1731,10 +1731,7 @@ struct ContractorListScreen: View {
                 || zip(enriched, kept).contains { pair in
                     pair.0.url != pair.1.url || Set(pair.0.labels) != Set(pair.1.labels)
                 }
-            // The photos to persist: enriched when tags were gained, otherwise the
-            // original kept pool. Replaced with the fingerprinted versions below
-            // when the embedding fetch succeeds.
-            var finalKept = gained ? enriched : kept
+            let finalKept = gained ? enriched : kept
             if gained {
                 keptPhotos[id] = enriched
                 // Photos the enrich pass DROPPED as non-photos (illustrations,
@@ -1755,12 +1752,11 @@ struct ContractorListScreen: View {
                     stripFrozenIDs.remove(id)
                     revealedIDs.remove(id)
                 } else {
-                    // Attach meaning fingerprints best-effort, then re-rank by
-                    // holistic scene similarity (exterior vs interior) instead of
-                    // word overlap. Failures leave photos without fingerprints and
-                    // `order` falls back to word matching — never worse than before.
-                    let (withFingerprints, queryFingerprint) =
-                        await PhotoEmbeddingService.enrich(enriched, query: orderQuery)
+                    // TEMPORARILY DISABLED 2026-09-19: semantic re-ranking caused
+                    // business list instability (rearranging after landing).
+                    // Re-enable after root cause is found.
+                    // let (withFingerprints, queryFingerprint) =
+                    //     await PhotoEmbeddingService.enrich(enriched, query: orderQuery)
                     // Push the enriched order through `setStripPhotos` WITHOUT
                     // unfreezing. For a row the user hasn't reached yet (not frozen)
                     // this corrects the lead photo before it ever paints. For a row
@@ -1771,13 +1767,9 @@ struct ContractorListScreen: View {
                     // score, and the shared verdict still get the enriched order via
                     // `keptPhotos` and the upload below, so nothing is lost — only the
                     // visible strip stays put.
-                    setStripPhotos(id, withOwnerLead(id, PhotoFilter.order(withFingerprints, query: orderQuery, category: category,
-                                                         capPremises: stripMaxPremises, vehicle: photoVehicle,
-                                                         queryEmbedding: queryFingerprint)))
-                    // Persist fingerprints with the verdict so repeat visits skip
-                    // the embedding fetch.
-                    keptPhotos[id] = withFingerprints
-                    finalKept = withFingerprints
+                    setStripPhotos(id, withOwnerLead(id, PhotoFilter.order(enriched, query: orderQuery, category: category,
+                                                         capPremises: stripMaxPremises, vehicle: photoVehicle)))
+                    keptPhotos[id] = enriched
                 }
             } else {
                 ScreeningStore.shared.noteEmptyEnrich(id, allowVehicles: allowVehicles)
