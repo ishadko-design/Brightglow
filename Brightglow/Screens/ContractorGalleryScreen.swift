@@ -977,7 +977,8 @@ struct ContractorGalleryScreen: View {
                 screenedByID[id] = PhotoFilter.order(enriched, query: orderQuery, category: category, capPremises: galleryPremisesCap, vehicle: photoVehicle)
             }
             ScreeningStore.shared.save(id, allowVehicles: allowVehicles, kept: enriched,
-                                       scanned: scanned, enriched: true)
+                                       scanned: scanned, enriched: true,
+                                       tagVersion: PhotoTagService.tagVersion)
             VerdictService.upload(id: id, allowVehicles: allowVehicles, kept: enriched,
                                   scanned: scanned, enriched: true)
         }

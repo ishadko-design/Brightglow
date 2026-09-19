@@ -27,7 +27,19 @@ enum PhotoEmbeddingService {
 
     /// In-memory cache: the query text is identical for every business in a
     /// search, so embed it once and reuse. Cleared when the query changes.
+    /// `enrich` runs off the main actor and concurrently for several businesses
+    /// (the list's eager pre-landing pass), so all access is lock-guarded — an
+    /// unsynchronized static var here raced and could tear the [Float] buffer.
     private static var queryCache: (text: String, embedding: [Float])?
+    private static let cacheLock = NSLock()
+
+    private static func cachedQueryEmbedding(for query: String) -> [Float]? {
+        cacheLock.lock(); defer { cacheLock.unlock() }
+        return queryCache?.text == query ? queryCache?.embedding : nil
+    }
+    private static func storeQueryEmbedding(_ embedding: [Float], for query: String) {
+        cacheLock.lock(); queryCache = (query, embedding); cacheLock.unlock()
+    }
 
     /// Returns `photos` with `embedding` filled in where the service had one,
     /// plus the query's fingerprint (cached per query text). Either may be
@@ -42,8 +54,7 @@ enum PhotoEmbeddingService {
         else { return (photos, nil) }
 
         // Reuse the cached query fingerprint when the query hasn't changed.
-        let cachedQuery: [Float]? =
-            (queryCache?.text == query) ? queryCache?.embedding : nil
+        let cachedQuery: [Float]? = cachedQueryEmbedding(for: query)
 
         // Skip the network call when there's nothing to do.
         let needsPhotos = photos.contains { $0.embedding == nil }
@@ -76,7 +87,7 @@ enum PhotoEmbeddingService {
         else { return (photos, cachedQuery) }
 
         if let qe = decoded.queryEmbedding {
-            queryCache = (query, qe)
+            storeQueryEmbedding(qe, for: query)
         }
         let enriched = photos.map { photo -> ScreenedPhoto in
             guard photo.embedding == nil,
@@ -89,7 +100,9 @@ enum PhotoEmbeddingService {
     }
 
     /// Clears the cached query fingerprint (call when the search query changes).
-    static func invalidateQueryCache() { queryCache = nil }
+    static func invalidateQueryCache() {
+        cacheLock.lock(); queryCache = nil; cacheLock.unlock()
+    }
 
     private struct Response: Decodable {
         let embeddings: [String: [Float]]
