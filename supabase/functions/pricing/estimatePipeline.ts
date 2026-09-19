@@ -47,6 +47,17 @@ import {
   type Vertical,
 } from "./pricingEngine.ts";
 
+/** Authoritative scope the LLM classifier read off the request, each field
+ *  present only when the request stated it. Every field is one the engine
+ *  already prices (unit count, area, grade); a field the model didn't fill
+ *  falls back to the deterministic prose parser, so the harness's keyword-only
+ *  path (no scope) is unchanged. */
+export interface JobScope {
+  quantity?: number;
+  areaSqFt?: number;
+  tier?: "premium" | "standard" | "budget";
+}
+
 export interface EstimateInput {
   category: string;
   description: string;
@@ -54,6 +65,9 @@ export interface EstimateInput {
   /** Job type chosen by the LLM classifier in index.ts; overrides the keyword
    *  match when present. Absent in the harness, which scores keyword routing. */
   entryOverride?: JobTypeEntry | null;
+  /** Structured scope for this job, from the LLM classifier. Absent on the
+   *  keyword/harness path, which parses scope from the prose instead. */
+  scope?: JobScope | null;
   /** Which vehicle, for the Auto & moto vertical. The app sends its Moto/Auto
    *  filter; when it doesn't, the description is checked for a moto word. */
   vehicle?: Vehicle | null;
@@ -116,7 +130,8 @@ export function estimateInHouse(input: EstimateInput): EstimateResult {
   entry = maybeSmallTrim(entry, description);
 
   const trimmedDesc = description.trim();
-  const { quantity, isDefaulted } = resolveQuantity(entry, description);
+  const jobScope = input.scope ?? null;
+  const { quantity, isDefaulted } = resolveQuantity(entry, description, jobScope?.quantity);
   const isGeneral = entry.keywords.length === 0;
 
   // The user described a specific job and the best we could do was a
@@ -156,8 +171,8 @@ export function estimateInHouse(input: EstimateInput): EstimateResult {
     return { kind: "insufficient", reason: "general_suppressed", entry };
   }
 
-  const tier = qualityTier(description);
-  const size = sizeScale(entry.itemId, description);
+  const tier = qualityTier(description, jobScope?.tier);
+  const size = sizeScale(entry.itemId, description, jobScope?.areaSqFt);
   const scope = windowScopeScale(entry.itemId, description) ??
     recessedInstallScale(entry.itemId, description);
   const vehicleSize = vehicleSizeScale(entry.itemId, description);
@@ -228,6 +243,9 @@ export function estimateInHouse(input: EstimateInput): EstimateResult {
 export interface JobRequest {
   entry: JobTypeEntry;
   description: string;
+  /** Structured scope for this job (see JobScope). Priced in isolation with
+   *  its own scope, never a sibling job's. */
+  scope?: JobScope | null;
 }
 
 export interface JobsCommon {
@@ -263,10 +281,16 @@ export function estimateJobsInHouse(jobs: JobRequest[], common: JobsCommon): Est
       ...common,
       description: jobs[0].description,
       entryOverride: jobs[0].entry,
+      scope: jobs[0].scope ?? null,
     });
   }
   const results = jobs.map((j) =>
-    estimateInHouse({ ...common, description: j.description, entryOverride: j.entry })
+    estimateInHouse({
+      ...common,
+      description: j.description,
+      entryOverride: j.entry,
+      scope: j.scope ?? null,
+    })
   );
 
   const insufficient = results.find((r) => r.kind === "insufficient");

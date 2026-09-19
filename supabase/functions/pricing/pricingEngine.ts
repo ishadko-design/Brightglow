@@ -1564,6 +1564,11 @@ const COUNT_AFTER_NOUN = new RegExp(
 export function resolveQuantity(
   entry: JobTypeEntry,
   description: string,
+  /** Authoritative unit count from the LLM's structured scope, used over the
+   *  prose parsing below when present. Still passes through the guards above it
+   *  (a project stays 1; solar keeps its kW→panel conversion), so a structured
+   *  count can never re-introduce the whole-project multiply bug. */
+  override?: number,
 ): { quantity: number; isDefaulted: boolean } {
   // A project-priced item is the whole job — never scale it by a size the
   // user mentioned. "replace flat roof 1070 sq ft" must not multiply the
@@ -1571,6 +1576,14 @@ export function resolveQuantity(
   // "estimate", verified live 2026-07-06).
   if (entry.unit === "project") {
     return { quantity: 1, isDefaulted: false };
+  }
+  // Solar is stated in kW, not panel count, so let the kW parser below own it
+  // even when a structured count arrives. Everywhere else the structured count
+  // is the model's clean read of the request and beats the regex.
+  const solarKw = entry.itemId === "solar-panel-install" &&
+    /(kw|kilowatt)/i.test(description);
+  if (override !== undefined && override > 0 && !solarKw) {
+    return { quantity: Math.round(override), isDefaulted: false };
   }
   if (entry.unit === "each" || entry.unit === "pair") {
     // Solar is the one item people size in system watts rather than in units

@@ -62,6 +62,13 @@ export function buildSystemPrompt(pool: JobTypeEntry[], categoryHint?: string): 
     "  wrong price, which is worse than showing no price.",
     '- Match on the work, not incidental words ("water pooling under the',
     '  dishwasher" is a plumbing leak, not an appliance job).',
+    "- For each job, also capture the SCOPE the request explicitly states, and",
+    "  only then: quantity (a stated count of units — windows, doors, panels,",
+    "  deck boards, fixtures), area_sqft (a stated area, e.g. \"300 sq ft deck\"),",
+    "  and tier (premium/budget when the request signals a grade like \"luxury\"",
+    "  or \"builder-grade\"). OMIT any field you would have to guess — a scope",
+    "  number the request never gave prices a job the user never described,",
+    "  which is the same failure as a wrong job_type.",
     ...(categoryHint
       ? [
         "",
@@ -112,6 +119,24 @@ export function buildSchema(pool: JobTypeEntry[]): Record<string, unknown> {
               description:
                 "The words of the request describing this job, quoted contiguously when possible.",
             },
+            quantity: {
+              type: "integer",
+              minimum: 1,
+              description:
+                "Count of units (windows, doors, panels, boards, fixtures) ONLY when the request states or plainly implies it. Omit if unstated.",
+            },
+            area_sqft: {
+              type: "number",
+              minimum: 1,
+              description:
+                "Area in square feet ONLY when the request states one. Omit if unstated.",
+            },
+            tier: {
+              type: "string",
+              enum: ["premium", "standard", "budget"],
+              description:
+                "Material/finish grade ONLY when the request signals one. Omit if unstated.",
+            },
           },
           required: ["job_type", "detail"],
           additionalProperties: false,
@@ -136,6 +161,14 @@ export interface ClassifiedJob {
   jobType: string | null;
   /** The request's own words describing this job; priced in isolation. */
   detail: string;
+  /** Structured scope the model read off the request, each present only when
+   *  the request stated it. These are the engine's priced dimensions (see
+   *  resolveQuantity / sizeScale / qualityTier): a count of units, a stated
+   *  area, and a material grade. Absent = the deterministic prose parsers run,
+   *  exactly as before this field existed. */
+  quantity?: number;
+  areaSqFt?: number;
+  tier?: "premium" | "standard" | "budget";
 }
 
 export interface Classification {
@@ -174,11 +207,29 @@ export function parseClassification(
     const jobs: ClassifiedJob[] = [];
     for (const j of rawJobs) {
       if (typeof j !== "object" || j === null) continue;
-      const jt = (j as { job_type?: unknown }).job_type;
-      const detail = (j as { detail?: unknown }).detail;
+      const jj = j as {
+        job_type?: unknown;
+        detail?: unknown;
+        quantity?: unknown;
+        area_sqft?: unknown;
+        tier?: unknown;
+      };
+      const jt = jj.job_type;
+      const detail = jj.detail;
+      // Scope is trusted only as a positive finite number / known enum; anything
+      // else is dropped so a malformed field degrades to the prose parser, never
+      // to a wrong quantity.
+      const posNum = (v: unknown): number | undefined =>
+        typeof v === "number" && Number.isFinite(v) && v > 0 ? v : undefined;
+      const tier = jj.tier === "premium" || jj.tier === "budget" || jj.tier === "standard"
+        ? jj.tier
+        : undefined;
       jobs.push({
         jobType: pool.some((e) => e.job_type === jt) ? jt as string : null,
         detail: typeof detail === "string" ? detail : "",
+        quantity: posNum(jj.quantity),
+        areaSqFt: posNum(jj.area_sqft),
+        tier,
       });
       if (jobs.length >= 3) break;
     }

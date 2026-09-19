@@ -61,7 +61,7 @@ import {
   type InsufficientDataResult,
   type JobTypeEntry,
 } from "./pricingEngine.ts";
-import { estimateInHouse, estimateJobsInHouse } from "./estimatePipeline.ts";
+import { estimateInHouse, estimateJobsInHouse, type JobScope } from "./estimatePipeline.ts";
 
 const ANTHROPIC_API_KEY = Deno.env.get("ANTHROPIC_API_KEY") ?? "";
 const APP_TOKEN = Deno.env.get("APP_TOKEN") ?? "";
@@ -276,7 +276,7 @@ Deno.serve(async (req) => {
   let llmVertical: "home" | "auto" | null = null;
   // Multi-job: the classifier may return several jobs, each validated and
   // priced separately below. Empty = "none", the keyword result stands.
-  let llmJobs: Array<{ entry: JobTypeEntry; description: string }> = [];
+  let llmJobs: Array<{ entry: JobTypeEntry; description: string; scope: JobScope }> = [];
   if (ANTHROPIC_API_KEY && trimmedDesc.length >= 3) {
     const llm = await classifyLLMCached(category, trimmedDesc);
     const generalEntries = Object.values(CATEGORY_GENERAL)
@@ -302,7 +302,11 @@ Deno.serve(async (req) => {
       );
       if (vetoed) continue;
       seen.add(job.jobType);
-      llmJobs.push({ entry: picked, description: detail });
+      llmJobs.push({
+        entry: picked,
+        description: detail,
+        scope: { quantity: job.quantity, areaSqFt: job.areaSqFt, tier: job.tier },
+      });
     }
     // One LLM job keeps the exact historical path: entry override, full
     // description. Only genuinely multi-job requests take the new path.
@@ -361,6 +365,9 @@ Deno.serve(async (req) => {
         vehicle: vehicleResolved,
         vertical: verticalResolved,
         entryOverride: entry,
+        // A single LLM job carries its structured scope; a keyword-only entry
+        // (no LLM job) has none, and the prose parsers run as before.
+        scope: llmJobs.length === 1 ? llmJobs[0].scope : null,
       });
     if (r.kind === "insufficient") {
       console.log(`pricing: ${r.reason}`, JSON.stringify({ category, description, job_type: r.entry?.job_type ?? null }));
