@@ -67,6 +67,12 @@ porcelain, concrete, brick, stucco, asphalt shingle, metal
 
   return `${domain}
 
+- If the image is NOT a real photograph of real work — an illustration, cartoon, \
+drawing, 3D render, clip-art, stock graphic, mascot, logo, or a trust badge / \
+seal (e.g. a "screened & approved" award) — tag it EXACTLY \`not_a_photo\` and \
+nothing else. A cartoon can look convincing (smooth shading, a drawn "person"); \
+judge whether it is a real camera photograph. These are never real work and must \
+be removed from the results entirely.
 - If the photo is the SHOP ITSELF rather than a specific job — the business's \
 storefront, building exterior, garage bay / shop interior, signage, or logo \
 board (even if parked cars or a work area are visible) — tag it \`storefront\` \

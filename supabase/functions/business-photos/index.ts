@@ -38,8 +38,14 @@ const FETCH_TIMEOUT_MS = 6000;
 const UA = "BrightglowBot/1.0 (+https://brightglow.co/bot; photo enrichment for the business's own listing)";
 // Pages beyond the homepage that tend to hold the actual work photos.
 const GALLERY_PATHS = ["/gallery", "/projects", "/portfolio", "/work", "/our-work", "/photos"];
-// Filename/URL fragments that mark chrome rather than work photos.
-const JUNK_RE = /(logo|icon|sprite|favicon|avatar|badge|placeholder|spinner|loader|pixel|1x1|banner-ad)/i;
+// Filename/URL fragments that mark chrome rather than work photos. Includes
+// third-party trust seals (HomeAdvisor/Angi/BBB/Google-Guarantee "screened &
+// approved" badges) — contractor sites plaster these, and they're glossy
+// photographic seals the on-device work-photo screen doesn't catch, so a
+// "SCREENED & APPROVED" badge was reaching the results grid (reported
+// 2026-09-19). Match on the image URL/alt/class; the on-device rejectTokens
+// are the second net for badges served under an opaque CDN name.
+const JUNK_RE = /(logo|icon|sprite|favicon|avatar|badge|emblem|accredited|placeholder|spinner|loader|pixel|1x1|banner-ad|homeadvisor|angi(es)?|\bbbb\b|better.?business.?bureau|google.?guarantee|thumbtack|nextdoor|houzz.?badge|porch\.com|yelp.?badge)/i;
 
 interface Photo { url: string; w: number | null; h: number | null; }
 

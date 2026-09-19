@@ -33,7 +33,14 @@ enum PhotoTagService {
     /// (supabase/functions/_shared/photo-tagging.ts) — bump in lockstep with
     /// it. Verdicts tagged under an older version are re-tagged on next view,
     /// so a prompt upgrade reaches photos already on the phone.
-    static let tagVersion = "claude-sonnet-5/p2"
+    static let tagVersion = "claude-sonnet-5/p3"
+
+    /// Marker tag the model returns for an image that isn't a real work photo
+    /// (illustration, cartoon, 3D render, clip-art, logo, trust badge). Such a
+    /// photo is dropped in `enrich`, so it never reaches the strip or gallery —
+    /// the reliable backstop for graphics the on-device screen (Apple Vision)
+    /// can't catch, e.g. a gradient-shaded cartoon (reported 2026-09-19).
+    static let notAPhotoTag = "not_a_photo"
 
     /// Tag at most this many photos per place — the pool Places returns is ≤10 and
     /// the strip/gallery only need a handful ranked well.
@@ -84,12 +91,18 @@ enum PhotoTagService {
               let decoded = try? JSONDecoder().decode(Response.self, from: data)
         else { return nil }   // couldn't reach / parse → not enriched; caller retries later
 
-        // Reached the model — union any tags in. A place the model had nothing
-        // for keeps its labels but still counts as enriched (a non-nil return),
-        // so we don't re-tag it every visit.
-        return photos.map { photo in
-            guard let tags = decoded.tags[photo.url], !tags.isEmpty else { return photo }
-            let merged = Array(Set(photo.labels + tags.map { $0.lowercased() }))
+        // Reached the model — union any tags in, and DROP anything the model
+        // flagged as not a real work photo (illustration / render / badge). A
+        // dropped photo simply vanishes from the returned pool, so the caller
+        // removes it from the strip, the gallery, and the shared verdict. A place
+        // the model had nothing for keeps its labels but still counts as enriched
+        // (a non-nil return), so we don't re-tag it every visit. An all-dropped
+        // place returns [] (still non-nil) — the caller drops the business.
+        return photos.compactMap { photo in
+            let tags = (decoded.tags[photo.url] ?? []).map { $0.lowercased() }
+            if tags.contains(notAPhotoTag) { return nil }   // not real work → drop
+            guard !tags.isEmpty else { return photo }
+            let merged = Array(Set(photo.labels + tags))
             return ScreenedPhoto(url: photo.url, labels: merged, phash: photo.phash)
         }
     }

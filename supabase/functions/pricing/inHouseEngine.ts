@@ -159,10 +159,17 @@ export interface SizeScale {
  *  sliders: unit $750 each, installed $2-3k each): area ratio 4 → materials
  *  x1.74 ($450 → $783, vs the $750 actual). Clamped so a mis-parsed dimension
  *  can never produce a wild number. */
-export function sizeScale(itemId: string, description: string): SizeScale | null {
+export function sizeScale(
+  itemId: string,
+  description: string,
+  /** Stated area from the LLM's structured scope; used over the prose parse
+   *  when present. */
+  areaOverride?: number,
+): SizeScale | null {
   const reference = REFERENCE_AREA_SQFT[itemId];
   if (!reference) return null;
-  const area = parseFaceAreaSqFt(description);
+  const area = (areaOverride && areaOverride > 0 ? areaOverride : null) ??
+    parseFaceAreaSqFt(description);
   if (!area) return null;
   const ratio = Math.min(5, Math.max(0.4, area / reference));
   if (Math.abs(ratio - 1) < 0.05) return null; // already the reference size
@@ -295,7 +302,16 @@ export function combineSizeScope(
  *  Bounded and modest — it nudges within the realistic band, on top of the
  *  material-specific job types the taxonomy already distinguishes (hardwood
  *  vs laminate); it never invents a figure. `tier` is surfaced in the label. */
-export function qualityTier(description: string): { factor: number; tier: "premium" | "budget" | null } {
+export function qualityTier(
+  description: string,
+  /** Grade from the LLM's structured scope; used over the keyword scan when
+   *  present. "standard" pins the neutral factor so an explicit standard grade
+   *  can't be re-read as premium/budget by an incidental word. */
+  tierOverride?: "premium" | "standard" | "budget",
+): { factor: number; tier: "premium" | "budget" | null } {
+  if (tierOverride === "premium") return { factor: 1.4, tier: "premium" };
+  if (tierOverride === "budget") return { factor: 0.75, tier: "budget" };
+  if (tierOverride === "standard") return { factor: 1, tier: null };
   const t = ` ${description.toLowerCase()} `;
   const has = (words: string[]) => words.some((w) => t.includes(w));
   const premium = [

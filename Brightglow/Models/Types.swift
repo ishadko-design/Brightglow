@@ -202,6 +202,11 @@ struct Contractor: Codable, Identifiable {
     /// nil when none is known. Gates the "Request quote" CTA — the async photo
     /// thread needs an email, so businesses we can't email show "Call" only.
     var contactEmail: String? = nil
+    /// True when the business has claimed its page and is accepting work (resolved
+    /// server-side by the search fn). The strongest "will reply" signal; feeds the
+    /// OTA `responsiveness` ranking weight. Defaults false so older cached payloads
+    /// and the direct-Google fallback still decode.
+    var responsive: Bool = false
     let licenseNumber: String?
     let isVerified: Bool
     /// Real Google reviews (populated on the live path; empty for the snapshot).
