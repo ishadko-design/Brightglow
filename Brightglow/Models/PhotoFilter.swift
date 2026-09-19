@@ -14,11 +14,18 @@ struct ScreenedPhoto: Codable, Hashable {
     /// through before. Optional: photos from a shared verdict or an older cache
     /// carry none, and dedup falls back to URL equality for those.
     var phash: UInt64?
+    /// 384-dim meaning fingerprint (bge-small-en-v1.5 via the brightglow-embed
+    /// Worker), computed from the photo's tags. Lets `order` rank by holistic
+    /// scene similarity (exterior vs interior) instead of isolated word matches.
+    /// Nil for photos from before fingerprints existed or when the embedding
+    /// service was unreachable — `order` falls back to word matching then.
+    var embedding: [Float]?
 
-    init(url: String, labels: [String], phash: UInt64? = nil) {
+    init(url: String, labels: [String], phash: UInt64? = nil, embedding: [Float]? = nil) {
         self.url = url
         self.labels = labels
         self.phash = phash
+        self.embedding = embedding
     }
 }
 
@@ -569,8 +576,20 @@ enum PhotoFilter {
     /// The list strip passes 1 (a card led with the shopfront twice — one big
     /// storefront tile plus a repeat — instead of the actual work); the gallery
     /// leaves it nil to page through everything.
+    /// Async entry point: ensures meaning fingerprints are attached (fetching
+    /// them best-effort via ``PhotoEmbeddingService``) and the query is
+    /// embedded, then ranks with ``order(_:query:category:capPremises:vehicle:queryEmbedding:)``.
+    /// When fingerprints are unavailable it behaves exactly like ``order``.
+    static func orderAsync(_ photos: [ScreenedPhoto], query: String, category: String = "",
+                           capPremises: Int? = nil, vehicle: VehicleFilter? = nil) async -> [String] {
+        let (enriched, queryEmbedding) = await PhotoEmbeddingService.enrich(photos, query: query)
+        return order(enriched, query: query, category: category, capPremises: capPremises,
+                     vehicle: vehicle, queryEmbedding: queryEmbedding)
+    }
+
     static func order(_ photos: [ScreenedPhoto], query: String, category: String = "",
-                      capPremises: Int? = nil, vehicle: VehicleFilter? = nil) -> [String] {
+                      capPremises: Int? = nil, vehicle: VehicleFilter? = nil,
+                      queryEmbedding: [Float]? = nil) -> [String] {
         // Segregate by the Auto ⇄ Moto toggle first: a Moto search must never show
         // a car (even from a shop that services both), and vice-versa.
         let photos = matchingVehicle(photos, vehicle)
@@ -582,10 +601,23 @@ enum PhotoFilter {
         // needs. Empty when the query has no subject term — scoring then falls
         // back to the raw terms, exactly as before.
         let visual = visualQuery(category: category, job: query)
+        // Holistic path: when we have a meaning fingerprint for the query and
+        // for every photo, rank by scene similarity (cosine) instead of word
+        // overlap. This is what keeps an interior "wall" photo from outranking
+        // an exterior "siding" photo for "repaint exterior wood siding" — the
+        // words overlap, but the scenes don't. Falls back to word matching when
+        // any fingerprint is missing (old cache, service unreachable).
+        let semanticScores: [Double]? = {
+            guard let qe = queryEmbedding, !photos.isEmpty,
+                  photos.allSatisfy({ $0.embedding != nil }) else { return nil }
+            return photos.map { cosineSimilarity(qe, $0.embedding!) }
+        }()
         // Score once per photo (the old code re-scored inside the comparator).
-        let jobScores = photos.map {
-            visual.isEmpty ? matchScore($0.labels, terms)
-                           : conceptMatchScore($0.labels, visual)
+        // Semantic scores are cosine similarities (higher = more similar);
+        // word scores are match counts. Both sort descending.
+        let jobScores: [Double] = semanticScores ?? photos.map {
+            Double(visual.isEmpty ? matchScore($0.labels, terms)
+                                 : conceptMatchScore($0.labels, visual))
         }
         // Whether the job vocabulary matched nothing at all — the tiebreaks
         // below only apply then; a real job match always outranks them.
@@ -1011,6 +1043,20 @@ enum PhotoFilter {
         return terms.reduce(0) { acc, t in
             acc + (labels.contains { matches($0, t) } ? 1 : 0)
         }
+    }
+
+    /// Cosine similarity between two meaning fingerprints. 1 = same direction
+    /// (same scene meaning), 0 = unrelated, -1 = opposite. Used as the primary
+    /// ranking score when fingerprints are available for the query and photos.
+    nonisolated static func cosineSimilarity(_ a: [Float], _ b: [Float]) -> Double {
+        guard a.count == b.count, !a.isEmpty else { return 0 }
+        var dot: Double = 0, na: Double = 0, nb: Double = 0
+        for i in 0..<a.count {
+            let x = Double(a[i]), y = Double(b[i])
+            dot += x * y; na += x * x; nb += y * y
+        }
+        guard na > 0, nb > 0 else { return 0 }
+        return dot / (na.squareRoot() * nb.squareRoot())
     }
 
     /// One label token vs. one query term. Equal, or either is a prefix of the
