@@ -1416,15 +1416,29 @@ struct ContractorListScreen: View {
     private func mergeWebsitePhotos(for contractor: Contractor) async {
         guard !websiteFetched.contains(contractor.id) else { return }
         websiteFetched.insert(contractor.id)
-        let urls = await BusinessPhotoService.fetch(placeId: contractor.id, website: contractor.website)
+        let tagged = await BusinessPhotoService.fetchWithTags(placeId: contractor.id, website: contractor.website)
+        let urls = tagged.map(\.url)
         guard !urls.isEmpty, contractors.contains(where: { $0.id == contractor.id }) else {
             if urls.isEmpty { dropIfTrulyPhotoless(contractor) }
             return
         }
 
         let allowVehicles = allowsVehiclePhotos(effectiveSearchQuery)
-        let screened = await PhotoFilter.screen(urls, allowVehicles: allowVehicles,
+        var screened = await PhotoFilter.screen(urls, allowVehicles: allowVehicles,
                                                 limit: urls.count, scanLimit: urls.count)
+        // Seed the server-side vision tags (photo_tags, attached by
+        // business-photos) into the labels, so query matching and the
+        // photo-evidence tier see them immediately — without waiting for the
+        // per-device phototags enrichment round-trip. Untagged photos keep
+        // their on-device labels; the enrichment below still runs for them.
+        if tagged.contains(where: { !$0.tags.isEmpty }) {
+            let serverTags = Dictionary(uniqueKeysWithValues: tagged.map { ($0.url, $0.tags) })
+            screened = screened.map { photo in
+                guard let tags = serverTags[photo.url], !tags.isEmpty else { return photo }
+                let merged = Array(Set(photo.labels + tags.map { $0.lowercased() }))
+                return ScreenedPhoto(url: photo.url, labels: merged, phash: photo.phash)
+            }
+        }
         guard !screened.isEmpty, contractors.contains(where: { $0.id == contractor.id }) else {
             if screened.isEmpty { dropIfTrulyPhotoless(contractor) }
             return
