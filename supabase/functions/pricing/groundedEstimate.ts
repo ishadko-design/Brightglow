@@ -133,10 +133,25 @@ export async function groundedBand(
   kind: GroundedKind,
 ): Promise<GroundedBand | null> {
   if (!apiKey || description.trim().length < 12) return null;
-  const client = new Anthropic({ apiKey, timeout: 30_000, maxRetries: 1 });
+  // A key that isn't scoped to a workspace must send the workspace id as a
+  // header (Anthropic rejects the request otherwise). Optional: a workspace-
+  // scoped key needs nothing here, so this is a no-op unless the env is set.
+  const workspaceId = Deno.env.get("ANTHROPIC_WORKSPACE_ID");
+  const client = new Anthropic({
+    // 4 serial web searches routinely take 30-60s; a 30s cap timed out on real
+    // remodel/engine-rebuild queries and declined a job the model could price
+    // (verified 2026-09-19). 90s gives the search loop room — this is the rare
+    // uncovered-job fallback, cached after the first hit, so the latency is
+    // paid once per unique job, not per request.
+    timeout: 90_000,
+    maxRetries: 1,
+    ...(workspaceId ? { defaultHeaders: { "anthropic-workspace-id": workspaceId } } : {}),
+  });
   // web_search_20260209 (dynamic filtering) is supported on Opus 4.6+ — the
   // classifier already runs claude-opus-4-8, so the same model serves here.
-  const tools = [{ type: "web_search_20260209", name: "web_search", max_uses: 4 }];
+  // Capped at 3: enough to triangulate a range, and one fewer round-trip keeps
+  // the tail latency down (each search adds seconds).
+  const tools = [{ type: "web_search_20260209", name: "web_search", max_uses: 3 }];
   const system = buildGroundedSystemPrompt(locationLabel, kind);
   const messages: Anthropic.MessageParam[] = [{ role: "user", content: `Project: ${description}` }];
 
