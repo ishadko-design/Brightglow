@@ -28,7 +28,8 @@
 //           fallback classifier (llmClassifier.ts) for phrasings the keyword
 //           matcher misses; unset, keyword matching alone decides>
 // Tables:   supabase/migrations/*_epci_cache.sql,
-//           *_classification_cache.sql (run via `supabase db push`)
+//           *_classification_cache.sql, *_price_estimate_cache.sql
+//           (run via `supabase db push`)
 
 import { createClient } from "jsr:@supabase/supabase-js@2";
 import {
@@ -62,6 +63,8 @@ import {
   type JobTypeEntry,
 } from "./pricingEngine.ts";
 import { estimateInHouse, estimateJobsInHouse } from "./estimatePipeline.ts";
+import { estimateWithLLM, type LLMEstimate } from "./llmEstimate.ts";
+import { stateForZip } from "./zipState.ts";
 
 const ANTHROPIC_API_KEY = Deno.env.get("ANTHROPIC_API_KEY") ?? "";
 const APP_TOKEN = Deno.env.get("APP_TOKEN") ?? "";
@@ -125,6 +128,87 @@ async function fetchEPCICached(
 function classificationCacheKey(category: string, description: string): string {
   const norm = description.toLowerCase().replace(/\s+/g, " ").trim();
   return `${category}:${norm}`.slice(0, 300);
+}
+
+function estimateCacheKey(category: string, description: string, zip: string | undefined, vehicle: string | null): string {
+  const norm = description.toLowerCase().replace(/\s+/g, " ").trim();
+  const region = zip && zip.length >= 3 ? zip.slice(0, 3) : "national";
+  return `${region}:${vehicle ?? ""}:${category}:${norm}`.slice(0, 300);
+}
+
+/** LLM price range with a 24h cache, keyed per zip3 region. A model decline
+ *  (null) is cached too, so unpriceable text costs one call, not one per
+ *  retry; an API failure is not cached. */
+async function estimateLLMCached(
+  category: string,
+  description: string,
+  zip: string | undefined,
+  vehicle: "auto" | "moto" | null,
+): Promise<LLMEstimate | null> {
+  const key = estimateCacheKey(category, description, zip, vehicle);
+  if (db) {
+    try {
+      const { data } = await db.from("price_estimate_cache")
+        .select("low, typical, high, created_at").eq("cache_key", key).maybeSingle();
+      if (data && Date.now() - new Date(data.created_at as string).getTime() < TTL_MS) {
+        return typeof data.low === "number" && typeof data.typical === "number" && typeof data.high === "number"
+          ? { low: data.low, typical: data.typical, high: data.high }
+          : null;
+      }
+    } catch (_) { /* ignore, fall through to a live call */ }
+  }
+  let est: LLMEstimate | null;
+  try {
+    est = await estimateWithLLM(
+      { description, category, zip, state: stateForZip(zip), vehicle },
+      ANTHROPIC_API_KEY,
+    );
+  } catch (err) {
+    console.error("pricing: LLM estimate failed", err);
+    return null;
+  }
+  if (db) {
+    try {
+      await db.from("price_estimate_cache").upsert({
+        cache_key: key,
+        low: est?.low ?? null,
+        typical: est?.typical ?? null,
+        high: est?.high ?? null,
+        created_at: new Date().toISOString(),
+      });
+    } catch (_) { /* ignore, cache write is best-effort */ }
+  }
+  return est;
+}
+
+/** Every path that has no catalog price ends here. Default to the model's
+ *  local range (see llmEstimate.ts); only when the model can't price it
+ *  either — no key, API failure, "not priceable", or an implausible reply —
+ *  does the request decline to "Get 3 bids". */
+async function declineOrEstimate(
+  category: string,
+  description: string,
+  zip: string | undefined,
+  vehicle: "auto" | "moto" | null,
+): Promise<Response> {
+  const est = ANTHROPIC_API_KEY && description.trim().length >= 3
+    ? await estimateLLMCached(category, description.trim(), zip, vehicle)
+    : null;
+  if (est) {
+    console.log("pricing: llm-estimate", JSON.stringify({ category, description, ...est }));
+    return json({
+      range: {
+        all_in_low: est.low,
+        all_in_high: est.high,
+        all_in_typical: est.typical,
+        confidence: "low",
+        label: "AI estimate",
+        data_points: 0,
+      },
+    }, 200, "llm");
+  }
+  const result: InsufficientDataResult = { error: "Insufficient data", fallback: "Get 3 bids" };
+  return json({ range: result, display: `${result.error}. ${result.fallback}.` });
 }
 
 /** Semantic classification with a 24h cache. Returns the taxonomy job types
@@ -326,8 +410,7 @@ Deno.serve(async (req) => {
     // The backlog for the mapping layer: every description that reached us
     // and classified to nothing (visible in `supabase functions logs pricing`).
     console.log("pricing: unclassified", JSON.stringify({ category, description }));
-    const result: InsufficientDataResult = { error: "Insufficient data", fallback: "Get 3 bids" };
-    return json({ range: result, display: `${result.error}. ${result.fallback}.` });
+    return await declineOrEstimate(typeof category === "string" ? category : "", description, zip, vehicle);
   }
 
   // Live path: delegate to the shared pipeline, which accuracy.test.ts scores.
@@ -364,8 +447,7 @@ Deno.serve(async (req) => {
       });
     if (r.kind === "insufficient") {
       console.log(`pricing: ${r.reason}`, JSON.stringify({ category, description, job_type: r.entry?.job_type ?? null }));
-      const result: InsufficientDataResult = { error: "Insufficient data", fallback: "Get 3 bids" };
-      return json({ range: result, display: `${result.error}. ${result.fallback}.` });
+      return await declineOrEstimate(typeof category === "string" ? category : "", description, zip, vehicle);
     }
     if (r.kind === "labor") {
       console.log("pricing: labor-only", JSON.stringify({ category, description, trade: r.entry.trade, typical: r.typical }));
@@ -409,8 +491,7 @@ Deno.serve(async (req) => {
     // where it is gated to Auto & moto. EPCI is a home-cost dataset, so an
     // unmodelled job on this branch has no labor fallback at all.
     console.log("pricing: general-fallback suppressed", JSON.stringify({ category, description, job_type: entry.job_type }));
-    const result: InsufficientDataResult = { error: "Insufficient data", fallback: "Get 3 bids" };
-    return json({ range: result, display: `${result.error}. ${result.fallback}.` });
+    return await declineOrEstimate(typeof category === "string" ? category : "", description, zip, vehicle);
   }
 
   // Cross-trade companion items (e.g. a vanity's countertop + faucet) need
@@ -497,6 +578,5 @@ Deno.serve(async (req) => {
   // No fallback source: SF permit data was removed from the formula
   // entirely (unreliable self-reported valuations), so the honest answer
   // is no number at all.
-  const result: InsufficientDataResult = { error: "Insufficient data", fallback: "Get 3 bids" };
-  return json({ range: result, display: `${result.error}. ${result.fallback}.` });
+  return await declineOrEstimate(typeof category === "string" ? category : "", description, zip, vehicle);
 });
