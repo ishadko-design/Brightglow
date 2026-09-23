@@ -507,3 +507,19 @@ Deno.test("maybeSmallTrim is a no-op off the siding/rot entries", () => {
   const desc = "replace 8 ft of baseboard trim";
   assertEquals(maybeSmallTrim(trim, desc).job_type, "carpentry.trim");
 });
+
+Deno.test("outdoor sauna / hot tub circuit is not priced as a breaker swap", () => {
+  // Reported 2026-09-23: the breaker named in the request routed the whole
+  // outdoor 50A run to electrical.breaker ($150–610).
+  assertEquals(
+    classifyJobType("Electrical", "Install outdoor sauna 9kwt, with 50a circuit breaker")?.job_type,
+    "electrical.outdoor_high_amp",
+  );
+  assertEquals(classifyJobType("Electrical", "wire hot tub 50 amp")?.job_type, "electrical.outdoor_high_amp");
+  assertEquals(classifyJobType("", "hot tub electrical hookup")?.job_type, "electrical.outdoor_high_amp");
+  // A tripping sauna/tub breaker is still a breaker job.
+  assertEquals(classifyJobType("Electrical", "hot tub breaker keeps tripping")?.job_type, "electrical.breaker");
+  assertEquals(classifyJobType("Electrical", "replace circuit breaker")?.job_type, "electrical.breaker");
+  // With no trade signal, a bare sauna is the whole install — not ours to price.
+  assertEquals(classifyJobType("", "install sauna"), null);
+});
