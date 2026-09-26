@@ -54,6 +54,7 @@ import {
   detectScopeAddOns,
   detectVehicle,
   fetchEPCIRaw,
+  isWholeUnmodelledInstall,
   JOB_TYPE_TAXONOMY,
   resolveJobComponents,
   resolveQuantity,
@@ -334,6 +335,12 @@ Deno.serve(async (req) => {
   // below work on moto phrasings. The authoritative vehicle is resolved after
   // the model has spoken (see vehicleResolved further down): an explicit app
   // filter first, then the model, then this word list as a last resort.
+  // Whole sauna / hot tub installs skip the catalog (it only prices their
+  // circuit) and the classifier call, straight to the whole-job estimate.
+  if (isWholeUnmodelledInstall(description)) {
+    console.log("pricing: whole-install unmodelled", JSON.stringify({ category, description }));
+    return await declineOrEstimate(category, description, zip, vehicle);
+  }
   const keywordVehicle = vehicle ?? detectVehicle(description);
   const classifyText = keywordVehicle === "moto" ? stripVehicleWords(description) : description;
   // Wrong-category requests get a second chance without the category before

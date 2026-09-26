@@ -36,6 +36,7 @@ import {
   classifyJobType,
   detectScopeAddOns,
   detectVehicle,
+  isWholeUnmodelledInstall,
   maybeSmallTrim,
   maybeUpgradeSiding,
   resolveJobComponents,
@@ -88,7 +89,7 @@ export type EstimateResult =
   | {
     kind: "insufficient";
     /** Why we declined, for the harness's coverage breakdown and the logs. */
-    reason: "unclassified" | "general_suppressed" | "no_items";
+    reason: "unclassified" | "general_suppressed" | "no_items" | "whole_install_unmodelled";
     entry: JobTypeEntry | null;
   };
 
@@ -100,6 +101,14 @@ export function estimateInHouse(input: EstimateInput): EstimateResult {
   // vehicle noun removed, so "replace motorcycle tires" matches the same
   // "replace tires" keyword a car request would.
   const vehicle = input.vehicle ?? detectVehicle(description);
+
+  // A sauna / hot tub install is priced as the whole job or not at all: the
+  // catalog only holds its circuit, and the circuit alone read as the job's
+  // price (see isWholeUnmodelledInstall). Before classification, so neither
+  // the keyword match nor an LLM override can land it on a wiring entry.
+  if (isWholeUnmodelledInstall(description)) {
+    return { kind: "insufficient", reason: "whole_install_unmodelled", entry: null };
+  }
   const classifyText = vehicle === "moto" ? stripVehicleWords(description) : description;
 
   let entry = input.entryOverride ??

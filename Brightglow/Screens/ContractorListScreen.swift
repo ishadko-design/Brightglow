@@ -270,8 +270,17 @@ struct ContractorListScreen: View {
     /// bare category browse, which the server answers with its typical-job
     /// figure. Home is untouched — there `effectiveSearchQuery` is already
     /// either the chat's refined phrase or the raw typed text.
+    ///
+    /// Home prices from the user's OWN request when there is one, not the
+    /// chat's `search_terms`. Those are a phrase for finding BUSINESSES, and
+    /// they drop the job: "Install sauna with electric 9kw heater" became an
+    /// electrician search phrase and priced as a $240–1.5k circuit (2026-09-26).
+    /// The chat's confirmed facts still travel in `photoDetails`.
     private var pricingDescription: String {
-        guard let auto = autoCategory else { return effectiveSearchQuery }
+        guard let auto = autoCategory else {
+            let typed = searchQuery.trimmingCharacters(in: .whitespacesAndNewlines)
+            return typed.isEmpty ? effectiveSearchQuery : typed
+        }
         let typed = searchQuery.trimmingCharacters(in: .whitespacesAndNewlines)
         // A grid-card tap puts the synthetic phrase in `searchQuery`; a search
         // puts the user's request there. Only the latter describes a job.

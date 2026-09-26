@@ -383,3 +383,11 @@ Deno.test("end-to-end: flooring add-ons raise the lvp range", () => {
   const without = calculateComposedRange(itemsByTrade, entry!, quantity, description, []);
   assert(withAddOn!.all_in_typical > without!.all_in_typical, "removal add-on must raise the price");
 });
+
+Deno.test("estimateInHouse declines a whole sauna install instead of pricing its circuit", () => {
+  const r = estimateInHouse({ category: "Electrical", description: "Install sauna with electric 9kw heater. New circuit needed", zip: "94110" });
+  assertEquals(r.kind, "insufficient");
+  if (r.kind === "insufficient") assertEquals(r.reason, "whole_install_unmodelled");
+  // The wiring alone still prices from the catalog.
+  assertEquals(estimateInHouse({ category: "Electrical", description: "wire hot tub 50 amp", zip: "94110" }).kind, "range");
+});

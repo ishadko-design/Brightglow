@@ -199,14 +199,27 @@ Per-vertical priorities:
 Finishing (action "done") — fill EVERY field:
 - vertical: "home" | "auto_moto".
 - category: the best-fit business category. Home: one of ${HOME_CATEGORIES.join(", ")}. \
-Auto: one of ${AUTO_SERVICES.join(", ")}. Use "" only if nothing fits.
+Auto: one of ${AUTO_SERVICES.join(", ")}. Use "" only if nothing fits. The list
+  is coarse: a specialty job (a sauna, a hot tub) takes the closest category,
+  and search_terms — not the category — carries what the business must do.
 - search_terms: a short Google-Maps-style phrase to FIND the business, e.g.
   "tankless water heater installer", "motorcycle brake repair shop",
   "auto body dent repair", "hardwood flooring contractor". Include the vehicle
   type for auto. Keep it to the trade/service — no location, no brand.
+  It MUST name the work item the user asked for, in their word for it. Never
+  shrink a job to one of its component trades: "install sauna with electric
+  heater" is "sauna installation contractor", not "electrician" — a sauna
+  builder does the wiring too, and an electrician search returns breaker-panel
+  shops with no sauna in sight (reported 2026-09-26). The same goes for hot
+  tubs, pools, kitchens, ADUs, and any specialty item: search for who installs
+  the thing, not for one trade it touches. Only when the user asks for JUST
+  one trade's part ("wire my existing sauna") does the trade lead.
 - photo_terms: 2-6 words describing what a matching WORK PHOTO shows, used to
   rank each business's photos. E.g. "tankless water heater wall", "motorcycle
   brake caliper disc", "dented car bumper", "hardwood floor living room".
+  Describe the FINISHED work item the customer wants ("cedar sauna interior
+  heater", "backyard hot tub"), never the component gear (a breaker panel is
+  not a picture of a sauna).
 - details: HOME ONLY — a short comma-separated summary of the cost-relevant
   facts the user confirmed, phrased canonically so the pricing engine can parse
   them: areas as "N sq ft", lengths as "N linear ft", counts as "N <thing>"
@@ -250,8 +263,14 @@ Auto: one of ${AUTO_SERVICES.join(", ")}. Use "" only if nothing fits.
 When asking (action "ask"): also return your best-so-far vertical and category
 (use "" if not yet known); leave search_terms, photo_terms, details, summary as "".
 
-The pricing engine covers these home jobs — for home requests, aim toward them
-and note each one's pricing unit (the quantity worth clarifying):
+The pricing engine covers these home jobs. When the request IS one of them,
+aim your questions at its pricing unit (the quantity worth clarifying). When
+the request is BIGGER than any of them — installing a sauna, a hot tub, a
+kitchen — do NOT shrink it to fit a listed job: ask about the whole job's cost
+drivers (size, indoor/outdoor, type, what's already there), and leave the
+listed component (a circuit, a breaker) as just one of those facts. A price for
+the whole job comes from elsewhere; a component's price shown as the job's is
+the failure users screenshot:
 ${TAXONOMY_LINES}`;
 }
 
@@ -302,10 +321,12 @@ function json(payload: unknown, status = 200): Response {
 /// engine could price came back match-only and the number was thrown away
 /// before it was ever requested (reported 2026-07-22: "no price for any of the
 /// car jobs", including wraps, which price at $2.2–7k).
-function isPriceable(vertical: string, category: string): boolean {
-  return vertical === "auto_moto"
-    ? AUTO_CATEGORIES.has(category)
-    : HOME_CATEGORIES.includes(category);
+///
+/// Since 2026-09-23 every job the catalog can't price falls back to the
+/// pricing function's LLM estimate, so a category outside the catalog (or
+/// none) is no longer a reason to skip the price: any resolved vertical asks.
+function isPriceable(vertical: string, _category: string): boolean {
+  return vertical === "home" || vertical === "auto_moto";
 }
 
 /** Ask the model for options for a question it already produced without them.
