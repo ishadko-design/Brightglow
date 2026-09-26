@@ -5,6 +5,7 @@
 import { assert, assertEquals, assertExists } from "jsr:@std/assert@1";
 import {
   applyServiceMinimum,
+  circuitRunScale,
   combineSizeScope,
   computeInHouseItems,
   laborOnlyEstimate,
@@ -382,4 +383,25 @@ Deno.test("end-to-end: flooring add-ons raise the lvp range", () => {
   const withAddOn = calculateComposedRange(itemsByTrade, entry!, quantity, description, addOns.map((a) => a.itemId));
   const without = calculateComposedRange(itemsByTrade, entry!, quantity, description, []);
   assert(withAddOn!.all_in_typical > without!.all_in_typical, "removal add-on must raise the price");
+});
+
+Deno.test("estimateInHouse declines a whole sauna install instead of pricing its circuit", () => {
+  const r = estimateInHouse({ category: "Electrical", description: "Install sauna with electric 9kw heater. New circuit needed", zip: "94110" });
+  assertEquals(r.kind, "insufficient");
+  if (r.kind === "insufficient") assertEquals(r.reason, "whole_install_unmodelled");
+  // The wiring alone still prices from the catalog.
+  assertEquals(estimateInHouse({ category: "Electrical", description: "wire hot tub 50 amp", zip: "94110" }).kind, "range");
+});
+
+Deno.test("circuitRunScale: sauna / hot tub circuit prices by its run", () => {
+  assertEquals(circuitRunScale("dedicated-circuit", "100 ft run"), null);
+  assertEquals(circuitRunScale("outdoor-high-amp-circuit", "wire hot tub 50 amp"), null);
+  const long = circuitRunScale("outdoor-high-amp-circuit", "wire hot tub, 120 ft run")!;
+  assert(long.materials > 1.5 && long.labor > 1.3);
+  const short = circuitRunScale("outdoor-high-amp-circuit", "wire hot tub, 25 ft run")!;
+  assert(short.materials < 1 && short.labor < 1);
+  const trench = circuitRunScale("outdoor-high-amp-circuit", "wire hot tub, trench to the yard")!;
+  assertEquals(trench.scope, "trenched run");
+  // 50 in "50 amp" is not a length.
+  assertEquals(circuitRunScale("outdoor-high-amp-circuit", "50 amp breaker for sauna"), null);
 });

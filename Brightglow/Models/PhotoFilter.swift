@@ -655,6 +655,13 @@ enum PhotoFilter {
         "contractor", "contractors", "company", "companies", "business",
         "service", "services", "professional", "professionals",
         "specialist", "specialists", "expert", "experts",
+        // Trade words name who does the job, not what it is — and they sit in
+        // business names. "outdoor sauna electrical wiring" prefix-matched the
+        // "Electric" in "Max Electric provided great service for our office",
+        // so that sentence was quoted as the reason for a sauna match
+        // (2026-09-23). No photo is labeled "electrician" either.
+        "electric", "electrical", "electrician", "electricians",
+        "plumber", "plumbers", "handyman", "handymen",
         // Type/state adjectives Vision never emits as labels — "leaky"
         // describes the problem, not a visible object, so it can only dilute
         // the denominator ("sliding" is a door type no label names).
@@ -898,16 +905,18 @@ enum PhotoFilter {
         return focusedSnippet(reviews[i], terms: subjectTerms(query))
     }
 
-    /// The sentence within a review that names a subject term, so the quoted line
-    /// shows the relevant words rather than a truncated opener. Falls back to the
-    /// whole review if no single sentence isolates the match.
+    /// The sentence within a review that names the most subject terms, so the
+    /// quoted line shows the relevant words rather than a truncated opener. The
+    /// FIRST sentence with any hit used to win, so a one-term opener beat the
+    /// sentence that actually described the job. Ties keep the earliest
+    /// sentence. Falls back to the whole review if no single sentence matches.
     private nonisolated static func focusedSnippet(_ text: String, terms: [String]) -> String {
+        var best: (sentence: Substring, score: Int)?
         for sentence in text.split(whereSeparator: { ".!?\n".contains($0) }) {
-            if matchScore(reviewTokens(String(sentence)), terms) > 0 {
-                return String(sentence).trimmingCharacters(in: .whitespaces)
-            }
+            let score = matchScore(reviewTokens(String(sentence)), terms)
+            if score > (best?.score ?? 0) { best = (sentence, score) }
         }
-        return text.trimmingCharacters(in: .whitespaces)
+        return String(best?.sentence ?? Substring(text)).trimmingCharacters(in: .whitespaces)
     }
 
     /// Empty `terms` scores every photo 0, so ordering falls through to the

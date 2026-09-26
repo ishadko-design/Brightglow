@@ -687,11 +687,21 @@ export const JOB_TYPE_TAXONOMY: JobTypeEntry[] = [
   // Electrical repairs and small jobs. Symptoms first: "breaker keeps tripping"
   // and "outlet not working" are how these arrive, and neither classified at all
   // before (2026-07-23).
-  { job_type: "electrical.breaker", category: "Electrical", keywords: ["breaker", "breaker tripping", "keeps tripping", "circuit breaker", "fuse keeps blowing", "tripping"], trade: "electrical", itemId: "circuit-breaker-replacement", unit: "each", defaultQuantity: 1, priority: 1 },
+  // A breaker named as PART of a new outdoor sauna / hot tub circuit is not a
+  // breaker swap — see electrical.outdoor_high_amp. The veto only removes this
+  // entry for installs; a sauna or tub breaker that trips stays here.
+  { job_type: "electrical.breaker", category: "Electrical", keywords: ["breaker", "breaker tripping", "keeps tripping", "circuit breaker", "fuse keeps blowing", "tripping"], trade: "electrical", itemId: "circuit-breaker-replacement", unit: "each", defaultQuantity: 1, priority: 1, notIfContains: ["install sauna", "install outdoor sauna", "install a sauna", "install an outdoor sauna", "install hot tub", "install a hot tub", "new sauna", "new hot tub", "sauna install", "hot tub install", "wire sauna", "wire the sauna", "wire a sauna", "wire hot tub", "wire the hot tub", "wire a hot tub"] },
   { job_type: "electrical.switch", category: "Electrical", keywords: ["switch", "light switch", "dimmer", "switch not working", "replace switch"], trade: "electrical", itemId: "switch-dimmer-replacement", unit: "each", defaultQuantity: 1, priority: 1 },
   { job_type: "electrical.gfci", category: "Electrical", keywords: ["gfci", "gfi", "ground fault", "bathroom outlet", "kitchen outlet"], trade: "electrical", itemId: "gfci-outlet", unit: "each", defaultQuantity: 1, priority: 1 },
   { job_type: "electrical.recessed", category: "Electrical", keywords: ["recessed", "can light", "can lights", "pot light", "downlight", "recessed lighting"], trade: "electrical", itemId: "recessed-light-install", unit: "each", defaultQuantity: 4, priority: 1 },
   { job_type: "electrical.detector", category: "Electrical", keywords: ["smoke detector", "smoke alarm", "carbon monoxide", "co detector", "chirping", "detector beeping"], trade: "electrical", itemId: "smoke-detector-install", unit: "each", defaultQuantity: 1, priority: 1 },
+  // Outdoor sauna / hot tub circuit. Priority 2 so it outranks the p1
+  // breaker and dedicated-circuit entries: "install outdoor sauna 9kW with 50A
+  // circuit breaker" is a heavy outdoor run, not a breaker swap (reported
+  // 2026-09-23). The bare nouns are within-category only — a sauna or hot tub
+  // typed with no trade is the whole install, which this entry does not price.
+  { job_type: "electrical.outdoor_high_amp", category: "Electrical", keywords: ["sauna", "hot tub", "hottub", "jacuzzi", "spa heater", "spa pack", "swim spa"], trade: "electrical", itemId: "outdoor-high-amp-circuit", unit: "each", defaultQuantity: 1, priority: 2, notIfContains: ["tripping", "keeps tripping", "trips", "not working", "no power", "not heating", "won't heat", "repair", "troubleshoot"],
+    guidance: "ONLY the WIRING for an existing or separately-supplied sauna heater or hot tub/spa: a new 240V circuit (typically 40–60A), the run from the panel, breaker, disconnect, permit. NOT installing the sauna or hot tub itself (answer with no job for that — it is not in this taxonomy), NOT a breaker swap (electrical.breaker), NOT a short indoor dryer/range outlet (electrical.dedicated_circuit)." },
   { job_type: "electrical.dedicated_circuit", category: "Electrical", keywords: ["dedicated circuit", "new circuit", "240v", "220v", "dryer outlet", "range outlet", "subpanel"], trade: "electrical", itemId: "dedicated-circuit", unit: "each", defaultQuantity: 1, priority: 1 },
   { job_type: "electrical.doorbell", category: "Electrical", keywords: ["doorbell", "video doorbell", "ring doorbell", "nest doorbell"], trade: "electrical", itemId: "doorbell-install", unit: "each", defaultQuantity: 1, priority: 1 },
   { job_type: "electrical.outlet_repair", category: "Electrical", keywords: ["outlet not working", "dead outlet", "outlet no power", "outlet sparking", "outlet repair", "plug not working"], trade: "electrical", itemId: "outlet-repair", unit: "each", defaultQuantity: 1, priority: 1 },
@@ -1128,7 +1138,34 @@ const WITHIN_CATEGORY_ONLY = new Set([
   "repair", "replace", "replacement", "service", "tune-up", "tune up",
   "patch", "leak", "fix", "fixture", "interior", "exterior", "room", "light",
   "lighting", "sand", "cabinet",
+  // Bare outdoor-load nouns: within Electrical they mean the circuit; typed
+  // with no trade they mean the whole sauna / tub install, which we don't price.
+  "sauna", "hot tub", "hottub", "jacuzzi", "swim spa",
 ]);
+
+// Installing the sauna / hot tub ITSELF is a job the catalog doesn't model:
+// the unit, its assembly or build-out, and the circuit together. The taxonomy
+// only prices the circuit (electrical.outdoor_high_amp), so matching a whole
+// install to it, or to a breaker or dedicated-circuit entry, shows the wiring
+// line as if it were the job. "Install sauna with electric 9kw heater" +
+// "New circuit needed" priced $240–1.5k (2026-09-26). Callers route these to
+// the whole-job estimate instead. Only modifiers may sit between the verb and
+// the item, so "install a new circuit for my sauna" stays a wiring job.
+const WHOLE_INSTALL_ITEM = "(?:sauna|hot\\s*tub|jacuzzi|swim\\s*spa|steam\\s*room)";
+const WHOLE_INSTALL_MODIFIER =
+  "(?:an?|the|my|new|outdoor|indoor|backyard|barrel|cedar|infrared|traditional|electric|custom|prefab|\\d+\\s*-?\\s*(?:person|people|kw\\w*))";
+const WHOLE_INSTALL_RE = new RegExp(
+  `\\b(?:install(?:ing|ed)?|build(?:ing)?|put(?:ting)?\\s+in|add(?:ing)?|set\\s*up)\\s+(?:${WHOLE_INSTALL_MODIFIER}\\s+)*${WHOLE_INSTALL_ITEM}\\b` +
+    `|\\b${WHOLE_INSTALL_ITEM}\\s+(?:install(?:ation|ed)?|buil[dt]|kit)\\b` +
+    `|\\bnew\\s+(?:${WHOLE_INSTALL_MODIFIER}\\s+)*${WHOLE_INSTALL_ITEM}\\b`,
+  "i",
+);
+
+/** True when the request is to install a sauna / hot tub itself — a job no
+ *  catalog entry prices whole. */
+export function isWholeUnmodelledInstall(description: string): boolean {
+  return WHOLE_INSTALL_RE.test(description);
+}
 
 export type Vehicle = "auto" | "moto";
 export type Vertical = "home" | "auto";

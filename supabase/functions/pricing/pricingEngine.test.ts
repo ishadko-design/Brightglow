@@ -4,6 +4,7 @@
 
 import { assertEquals, assertExists } from "jsr:@std/assert@1";
 import {
+  isWholeUnmodelledInstall,
   buildLocalRange,
   buildPermitOnlyRange,
   calculateEPCIRange,
@@ -506,4 +507,35 @@ Deno.test("maybeSmallTrim is a no-op off the siding/rot entries", () => {
   const trim = JOB_TYPE_TAXONOMY.find((e) => e.job_type === "carpentry.trim")!;
   const desc = "replace 8 ft of baseboard trim";
   assertEquals(maybeSmallTrim(trim, desc).job_type, "carpentry.trim");
+});
+
+Deno.test("outdoor sauna / hot tub circuit is not priced as a breaker swap", () => {
+  // Reported 2026-09-23: the breaker named in the request routed an outdoor
+  // 50A run to electrical.breaker ($150–610).
+  assertEquals(classifyJobType("Electrical", "50a circuit breaker and wiring for outdoor sauna")?.job_type, "electrical.outdoor_high_amp");
+  assertEquals(classifyJobType("Electrical", "wire hot tub 50 amp")?.job_type, "electrical.outdoor_high_amp");
+  assertEquals(classifyJobType("", "hot tub electrical hookup")?.job_type, "electrical.outdoor_high_amp");
+  // A tripping sauna/tub breaker is still a breaker job.
+  assertEquals(classifyJobType("Electrical", "hot tub breaker keeps tripping")?.job_type, "electrical.breaker");
+  assertEquals(classifyJobType("Electrical", "replace circuit breaker")?.job_type, "electrical.breaker");
+  // With no trade signal, a bare sauna is the whole install — not ours to price.
+  assertEquals(classifyJobType("", "install sauna"), null);
+});
+
+Deno.test("isWholeUnmodelledInstall: installing the sauna itself vs. just its wiring", () => {
+  // Reported 2026-09-26: a whole sauna install priced as its circuit ($240–1.5k).
+  for (const d of [
+    "Install sauna with electric 9kw heater. New circuit needed",
+    "Install outdoor sauna 9kwt, with 50a circuit breaker",
+    "hot tub installation",
+    "new 2 person infrared sauna",
+    "put in a hot tub",
+    "I need a sauna installed with a 9kW electric heater",
+  ]) assertEquals(isWholeUnmodelledInstall(d), true, d);
+  for (const d of [
+    "install a new circuit for my sauna",
+    "wire hot tub 50 amp",
+    "sauna breaker keeps tripping",
+    "electrician 240v circuit for sauna heater",
+  ]) assertEquals(isWholeUnmodelledInstall(d), false, d);
 });

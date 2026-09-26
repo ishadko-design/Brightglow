@@ -188,7 +188,7 @@ export interface ScopeScale {
   materials: number;
   labor: number;
   /** Canonical label surfaced to the user, e.g. "glass only". */
-  scope: "glass only" | "full-frame replacement" | "new install" | "full-size vehicle" | "SUV/truck" | "compact car";
+  scope: "glass only" | "full-frame replacement" | "new install" | "full-size vehicle" | "SUV/truck" | "compact car" | `${string} run`;
 }
 
 /** Which replacement scope the words assert, as multipliers off the item's
@@ -230,6 +230,32 @@ export function recessedInstallScale(itemId: string, description: string): Scope
     /\b(no light there|no existing (light|fixture)|no existing|from scratch|brand[- ]new spot|add lights|adding lights|never had a light|no power there)\b/;
   if (newInstall.test(t)) return { materials: 1.5, labor: 2.6, scope: "new install" };
   return null;
+}
+
+/** A high-amp circuit to an outdoor sauna / hot tub is priced mostly by its
+ *  RUN: 6 AWG copper, conduit and labor all grow with distance from the panel,
+ *  and a buried run adds a trench. The catalog band assumes ~50 ft through
+ *  accessible framing; this reads a stated length ("80 ft", "120 feet") and a
+ *  trench / underground / finished-wall signal. Wire and conduit scale almost
+ *  linearly, labor sublinearly (setup and terminations don't grow). Clamped
+ *  so a mis-parsed number can't produce a wild figure. */
+const CIRCUIT_RUN_REFERENCE_FT = 50;
+export function circuitRunScale(itemId: string, description: string): ScopeScale | null {
+  if (itemId !== "outdoor-high-amp-circuit") return null;
+  const t = ` ${description.toLowerCase()} `;
+  const m = t.match(/\b(\d{1,4})\s*(?:-\s*)?(?:ft|feet|foot|')(?![a-z])/);
+  const feet = m ? Number(m[1]) : null;
+  const trenched = /\b(trench|trenching|underground|buried|bury|dig)\b/.test(t);
+  const walls = /\b(finished walls?|through (the )?walls|drywall|fish(ing)? (the )?wire|across the house|other side of the house)\b/.test(t);
+  if (!feet && !trenched && !walls) return null;
+  const ratio = feet ? Math.min(4, Math.max(0.5, feet / CIRCUIT_RUN_REFERENCE_FT)) : 1;
+  let materials = Math.pow(ratio, 0.85);
+  let labor = Math.pow(ratio, 0.55);
+  if (trenched) { materials *= 1.2; labor *= 1.5; }
+  if (walls) labor *= 1.25;
+  const parts = [feet ? `${feet} ft` : null, trenched ? "trenched" : null, walls ? "through walls" : null]
+    .filter(Boolean).join(", ");
+  return { materials, labor, scope: `${parts} run` };
 }
 
 /** Auto jobs whose cost scales with the VEHICLE'S SIZE — wrap film and detail
