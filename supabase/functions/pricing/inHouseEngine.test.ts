@@ -5,6 +5,7 @@
 import { assert, assertEquals, assertExists } from "jsr:@std/assert@1";
 import {
   applyServiceMinimum,
+  circuitRunScale,
   combineSizeScope,
   computeInHouseItems,
   laborOnlyEstimate,
@@ -390,4 +391,17 @@ Deno.test("estimateInHouse declines a whole sauna install instead of pricing its
   if (r.kind === "insufficient") assertEquals(r.reason, "whole_install_unmodelled");
   // The wiring alone still prices from the catalog.
   assertEquals(estimateInHouse({ category: "Electrical", description: "wire hot tub 50 amp", zip: "94110" }).kind, "range");
+});
+
+Deno.test("circuitRunScale: sauna / hot tub circuit prices by its run", () => {
+  assertEquals(circuitRunScale("dedicated-circuit", "100 ft run"), null);
+  assertEquals(circuitRunScale("outdoor-high-amp-circuit", "wire hot tub 50 amp"), null);
+  const long = circuitRunScale("outdoor-high-amp-circuit", "wire hot tub, 120 ft run")!;
+  assert(long.materials > 1.5 && long.labor > 1.3);
+  const short = circuitRunScale("outdoor-high-amp-circuit", "wire hot tub, 25 ft run")!;
+  assert(short.materials < 1 && short.labor < 1);
+  const trench = circuitRunScale("outdoor-high-amp-circuit", "wire hot tub, trench to the yard")!;
+  assertEquals(trench.scope, "trenched run");
+  // 50 in "50 amp" is not a length.
+  assertEquals(circuitRunScale("outdoor-high-amp-circuit", "50 amp breaker for sauna"), null);
 });

@@ -20,6 +20,7 @@
 
 import {
   applyServiceMinimum,
+  circuitRunScale,
   combineSizeScope,
   computeInHouseItems,
   emergencyFactor,
@@ -168,7 +169,8 @@ export function estimateInHouse(input: EstimateInput): EstimateResult {
   const tier = qualityTier(description);
   const size = sizeScale(entry.itemId, description);
   const scope = windowScopeScale(entry.itemId, description) ??
-    recessedInstallScale(entry.itemId, description);
+    recessedInstallScale(entry.itemId, description) ??
+    circuitRunScale(entry.itemId, description);
   const vehicleSize = vehicleSizeScale(entry.itemId, description);
   const sizing = combineSizeScope(entry.itemId, size, scope, vehicleSize);
 

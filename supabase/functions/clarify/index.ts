@@ -192,6 +192,10 @@ Per-vertical priorities:
   old floor is removed; roof -> material + approx area; vanity -> width +
   whether faucet/top are replaced; exterior trim / flashing -> length in
   linear feet (it prices per foot, so length is the whole question);
+  sauna / hot tub / spa circuit -> how far the unit is from the panel and
+  whether the run is trenched underground or goes through finished walls
+  (distance is the whole price: write "N ft run", plus "trench" or "through
+  finished walls" when true);
   recessed lighting -> how many, AND whether
   there is already a light there or it's a brand-new spot (that doubles the
   per-light price).

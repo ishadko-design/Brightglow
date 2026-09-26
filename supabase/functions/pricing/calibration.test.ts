@@ -67,7 +67,7 @@ const REFERENCE: Record<string, Ref> = {
   "recessed-light-install": { low: 125, high: 330 },
   "smoke-detector-install": { low: 70, high: 250 },
   "dedicated-circuit": { low: 250, high: 1100 },
-  "outdoor-high-amp-circuit": { low: 800, high: 2500 },
+  "outdoor-high-amp-circuit": { low: 2000, high: 4500 },
   "doorbell-install": { low: 150, high: 500 },
   "outlet-repair": { low: 80, high: 350 },
   "electrical-diagnostic": { low: 75, high: 160, loose: true },

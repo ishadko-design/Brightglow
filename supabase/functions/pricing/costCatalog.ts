@@ -282,8 +282,13 @@ export const COST_CATALOG: CostCatalogEntry[] = [
   // breaker, full circuit wiring" priced as a $150–610 breaker swap, or as
   // the $240–1.5k generic circuit via the model (2026-09-23). The heater or
   // tub itself is not included — the request priced here is the wiring.
-  // sanity: hot tub / sauna electrical hookup $800–2,500 (HomeGuide/Angi 2026)
-  { itemId: "outdoor-high-amp-circuit", trade: "electrical", description: "50A-class 240V circuit to an outdoor sauna or hot tub, incl. heavy-gauge run, disconnect and permit", unit: "each", soc: ELECTRICIAN, laborHours: b(5.5, 8, 13), materials: b(400, 650, 1300), setup: { hours: b(1, 1.5, 2.5), materials: b(100, 180, 350) } },
+  // The national aggregator band ($800–2,500 hookup, HomeGuide/Angi) is a
+  // short run next to the panel; a Bay Area owner who has priced this job
+  // put the electrical alone at $3–5k depending on wire length, breakers and
+  // walls (2026-09-26). The band is set to that field figure for a ~50 ft run
+  // and circuitRunScale moves it with the stated length / trench / walls.
+  // sanity: 50A outdoor sauna / hot tub circuit, ~50 ft, $2,000–4,500 national
+  { itemId: "outdoor-high-amp-circuit", trade: "electrical", description: "50A-class 240V circuit to an outdoor sauna or hot tub, incl. heavy-gauge run, disconnect and permit", unit: "each", soc: ELECTRICIAN, laborHours: b(13, 16, 20), materials: b(1000, 1300, 1750), setup: { hours: b(1.8, 2, 2.6), materials: b(300, 400, 550) } },
   // sanity: doorbell / video doorbell installation $150–500
   { itemId: "doorbell-install", trade: "electrical", description: "Doorbell or video doorbell installation", unit: "each", soc: ELECTRICIAN, laborHours: b(0.35, 0.6, 1), materials: b(25, 60, 140), setup: { hours: b(0.6, 1.1, 1.9), materials: b(18, 42, 95) } },
   // Distinct from outlet-installation, which is a NEW outlet: this is a dead or
