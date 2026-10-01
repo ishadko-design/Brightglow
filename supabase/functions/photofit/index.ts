@@ -39,6 +39,8 @@ const MAX_PHOTOS = 12;
 const MAX_TAGS = 16;
 const MAX_REVIEWS = 5;
 const MAX_REVIEW_CHARS = 280;
+// Businesses per model call; calls run in parallel (see the handler).
+const CHUNK = 3;
 
 const SYSTEM = `You are the final check on a list of local businesses shown to a \
 customer for ONE specific job. For each business you get its work photos (as \
@@ -65,8 +67,8 @@ a correct, expected answer — the business is then shown without photos.
 for a sauna, or reviews about comparable scope).
    1 = right trade, no evidence of this kind of job.
    0 = wrong kind of business for this job.
-   reason: one short plain line of the evidence ("reviews mention wiring 2 hot \
-tubs"), or "" when fit is 1 or 0. Never invent evidence.
+   A store or showroom that SELLS the product is not the contractor for the \
+work unless its reviews show it doing that work. Never invent evidence.
 
 Return every business, in the order given, photos referenced by their number.`;
 
@@ -81,9 +83,11 @@ const SCHEMA = {
           index: { type: "integer" },
           relevant_photos: { type: "array", items: { type: "integer" } },
           fit: { type: "integer", enum: [0, 1, 2, 3] },
-          reason: { type: "string" },
         },
-        required: ["index", "relevant_photos", "fit", "reason"],
+        // No free-text reason: it was most of the output tokens, nothing shows
+        // it, and output time pushed a 10-business list past the app's cap
+        // (~6s, 2026-09-30 — the list fell back to keyword photos).
+        required: ["index", "relevant_photos", "fit"],
         additionalProperties: false,
       },
     },
@@ -182,7 +186,7 @@ export function mapVerdicts(text: string, businesses: Business[]) {
       .filter((j): j is number => typeof j === "number" && Number.isInteger(j) && j >= 0 && j < b.photos.length)
       .map((j) => b.photos[j].url);
     const fit = typeof o.fit === "number" && o.fit >= 0 && o.fit <= 3 ? Math.round(o.fit) : 1;
-    out.push({ id: b.id, fit, relevant, reason: fit >= 2 ? str(o.reason, 160) : "" });
+    out.push({ id: b.id, fit, relevant, reason: "" });
   }
   return out;
 }
@@ -206,33 +210,43 @@ if (import.meta.main) {
     if (businesses.length === 0) return json({ businesses: [] });
     if (!str(job.summary) && !str(job.title)) return json({ error: "missing job" }, 400);
 
-    try {
-      const client = new Anthropic({
-        apiKey: ANTHROPIC_API_KEY,
-        timeout: 15_000,
-        maxRetries: 0,
-        ...(WORKSPACE_ID ? { defaultHeaders: { "anthropic-workspace-id": WORKSPACE_ID } } : {}),
-      });
+    // Judge in parallel chunks: latency is dominated by output length, so a
+    // few calls of CHUNK businesses finish in about the time of one — well
+    // under the app's cap. A failed chunk just yields no verdicts for its
+    // businesses (the app keeps keyword ordering for those); all failing = 502.
+    const client = new Anthropic({
+      apiKey: ANTHROPIC_API_KEY,
+      timeout: 12_000,
+      maxRetries: 0,
+      ...(WORKSPACE_ID ? { defaultHeaders: { "anthropic-workspace-id": WORKSPACE_ID } } : {}),
+    });
+    const judgeChunk = async (chunk: Business[]) => {
       const response = await client.messages.create({
         model: "claude-sonnet-5",
-        max_tokens: 1500,
+        max_tokens: 600,
         thinking: { type: "disabled" },
         system: [{ type: "text", text: SYSTEM, cache_control: { type: "ephemeral" } }],
         output_config: { format: { type: "json_schema", schema: SCHEMA } },
-        messages: [{ role: "user", content: buildPrompt(job, businesses) }],
+        messages: [{ role: "user", content: buildPrompt(job, chunk) }],
       });
       const text = response.content.find((b) => b.type === "text")?.text ?? "";
-      const verdicts = mapVerdicts(text, businesses);
-      console.log("photofit", JSON.stringify({
-        job: str(job.title, 80),
-        n: businesses.length,
-        kept: verdicts.reduce((a, v) => a + v.relevant.length, 0),
-        total: businesses.reduce((a, b) => a + b.photos.length, 0),
-      }));
-      return json({ businesses: verdicts });
-    } catch (err) {
-      console.error("photofit: model call failed", err);
+      return mapVerdicts(text, chunk);
+    };
+    const chunks: Business[][] = [];
+    for (let i = 0; i < businesses.length; i += CHUNK) chunks.push(businesses.slice(i, i + CHUNK));
+    const settled = await Promise.allSettled(chunks.map(judgeChunk));
+    const verdicts = settled.flatMap((r) => r.status === "fulfilled" ? r.value : []);
+    if (verdicts.length === 0) {
+      console.error("photofit: all chunks failed",
+        JSON.stringify(settled.map((r) => r.status === "rejected" ? String(r.reason).slice(0, 200) : "ok")));
       return json({ error: "photofit failed" }, 502);
     }
+    console.log("photofit", JSON.stringify({
+      job: str(job.title, 80),
+      n: businesses.length,
+      judged: verdicts.length,
+      kept: verdicts.reduce((a, v) => a + v.relevant.length, 0),
+    }));
+    return json({ businesses: verdicts });
   });
 }

@@ -26,7 +26,7 @@ Deno.test("mapVerdicts maps indices to urls and drops out-of-range", () => {
     { index: 9, relevant_photos: [0], fit: 3, reason: "" },
   ] }), biz);
   assertEquals(v, [
-    { id: "a", fit: 3, relevant: ["u2"], reason: "hot tub wiring in reviews" },
+    { id: "a", fit: 3, relevant: ["u2"], reason: "" },
     { id: "b", fit: 1, relevant: [], reason: "" },
   ]);
 });

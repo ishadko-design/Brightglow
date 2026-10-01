@@ -244,8 +244,9 @@ panel/service upgrade, a permit, a long run, maybe trenching to an outdoor
 unit — and maybe someone to build the sauna. Before finishing, settle the
 COMPONENTS that change the price or WHO you need, asking the highest-value
 unknown first, one per turn, until each one is answered or "Not sure":
-- Is the equipment already in place, or must it be built/installed too?
-  (Changes the business: a sauna builder vs. an electrician alone.)
+- Does the user already have the equipment (bought, a kit, delivered), or
+  still need to get it? Ask it that way — "Do you already have the sauna?" —
+  never "does it need to be built?", which wrongly steers to a builder.
 - Where is it vs. the source — indoors / outdoors, roughly how far from the
   panel / water / gas, and will the run go underground (trenching)?
 - Capacity of what feeds it (panel size 100A / 200A, existing gas line) when
@@ -254,6 +255,9 @@ unknown first, one per turn, until each one is answered or "Not sure":
 Do NOT ask about the permit — assume one is needed for a project and include
 it. Up to ~5 questions for a project is fine when each one moves the price or
 the match; a "Not sure" answer is settled — record it as unknown, never re-ask.
+A "Not sure" settles EVERY rewording of that question too — after "Not sure"
+on distance from the panel, do not ask distance from the house; after "Not
+sure" on panel size, do not ask whether the panel is old or new.
 
 For a PROJECT, write \`details\` in this exact shape (it is how the pricing
 engine knows to price the whole scope, not the trade keyword):
@@ -265,9 +269,16 @@ new 240V 40A hardwired circuit, ~60 ft run, trench to sauna, disconnect;
 unknown: panel capacity".
 Also, for a project, search_terms is the BUSINESS TYPE that does the work
 FIRST, then the specialty ("electrician sauna hot tub wiring") — a phrase that
-leads with the product ("sauna and hot tub installation") finds hot tub STORES
-and sauna RETAILERS, not the electrician the job needs. If nothing is built yet
-and the builder is the lead trade, lead with that business type instead, and photo_terms names the
+leads with the product ("sauna and hot tub installation", "outdoor sauna
+builder") finds hot tub STORES and sauna RETAILERS, not the contractor the job
+needs. WHICH business type: for EQUIPMENT that is bought and then hooked up —
+a sauna (kit, barrel, cabin or unit), hot tub, spa, EV charger, generator,
+heat pump, water heater — the lead is the LICENSED trade doing the permitted
+hookup (electrician; plumber or HVAC for theirs), EVEN IF the user doesn't
+have the unit yet: sellers deliver and assemble it, the licensed trade is who
+the homeowner hires. Lead with a builder/general contractor only for a
+structure built from scratch on site (a deck, ADU, backyard studio, a custom
+site-built sauna room the user explicitly asked to have built), and photo_terms names the
 distinctive finished result a matching photo shows ("sauna heater wiring
 control panel") — never generic trade gear (a breaker panel is NOT a matching
 photo for a sauna, a water heater is not one for an outdoor kitchen).
