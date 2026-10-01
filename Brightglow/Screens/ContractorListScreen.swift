@@ -766,11 +766,16 @@ struct ContractorListScreen: View {
             }
         }
         .animation(.interpolatingSpring(stiffness: 320, damping: 32), value: callContractor?.id)
-        .alert("How we estimate", isPresented: $showEstimateInfo) {
-            Button("OK", role: .cancel) {}
-        } message: {
-            Text(estimateInfoText)
+        // "How we estimate" — itemized parts for an AI estimate, the plain
+        // explainer for a formula one (replaces the old system alert).
+        .overlay {
+            if showEstimateInfo, let tier = estimate {
+                PriceBreakdownSheet(tier: tier, fallbackText: estimateInfoText) {
+                    showEstimateInfo = false
+                }
+            }
         }
+        .animation(.interpolatingSpring(stiffness: 320, damping: 32), value: showEstimateInfo)
     }
 
     /// Hands off to the system dialer with the business's number pre-filled (the

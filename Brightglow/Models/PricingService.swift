@@ -85,7 +85,9 @@ enum PricingService {
                          typical: range.all_in_typical.map { Int($0.rounded()) },
                          laborOnly: range.labor_only ?? false,
                          sources: range.sources?.isEmpty == false ? range.sources : nil,
-                         basis: range.basis)
+                         basis: range.basis,
+                         components: range.components?.isEmpty == false ? range.components : nil,
+                         searched: range.searched)
     }
 
     /// Only decodes the success shape; the {error, fallback} shape decodes
@@ -107,6 +109,9 @@ enum PricingService {
             /// absent on formula estimates.
             let sources: [String]?
             let basis: String?
+            /// AI itemized estimates: the parts the total is summed from.
+            let components: [PriceComponent]?
+            let searched: Bool?
         }
 
         init(from decoder: Decoder) throws {

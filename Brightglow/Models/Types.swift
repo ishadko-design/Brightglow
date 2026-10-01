@@ -163,6 +163,21 @@ struct PriceTier: Codable, Identifiable {
     /// For a web-grounded estimate: a one-line driver of the number (e.g. "tear-off
     /// + 2-story access + solar detach/reset at SF rates"). Nil for the formula.
     var basis: String? = nil
+    /// AI itemized estimate: the billed parts the total is summed from (shown
+    /// in the "How we estimate" sheet). Nil for formula estimates.
+    var components: [PriceComponent]? = nil
+    /// True when the itemized estimate was checked against live web prices.
+    var searched: Bool? = nil
+}
+
+/// One billed part of an itemized estimate (permit, circuit, trench…).
+struct PriceComponent: Codable, Equatable {
+    let name: String
+    let low: Double
+    let typical: Double
+    let high: Double
+    /// False = "if needed" — may not happen; counts toward the high end.
+    let certain: Bool
 }
 
 /// A single Google review (testimonial) shown on the contractor card.
