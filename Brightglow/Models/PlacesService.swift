@@ -26,6 +26,31 @@ enum PlacesService {
         (Bundle.main.object(forInfoDictionaryKey: "APP_TOKEN") as? String) ?? ""
     private static var useBackend: Bool { !supabaseRef.isEmpty && !supabaseAnonKey.isEmpty }
 
+    /// The clarified job a results list is searching for. When set, the backend
+    /// `search` drops places that are the wrong KIND of business for it (a sauna
+    /// retailer for a sauna electrical hookup, a supply showroom for a leaky
+    /// faucet) before they reach the app — see supabase/functions/search/gate.ts.
+    /// Task-local so every search a results list makes (first page, pool
+    /// supplements, retries, "See more") carries it without threading a
+    /// parameter through each layer. Nil = ungated, exactly as before.
+    struct JobGate: Sendable, Equatable {
+        let title: String
+        let summary: String
+        let complexity: String
+        let trades: [String]
+        let components: [String]
+        let specialties: [String]
+
+        var body: [String: Any] {
+            ["title": title, "summary": summary,
+             "spec": ["complexity": complexity, "trades": trades,
+                      "components": components, "specialties": specialties]]
+        }
+        /// Distinguishes gated pages in the client page cache.
+        var cacheKey: String { "\(title)|\(trades.joined(separator: ","))|\(complexity)" }
+    }
+    @TaskLocal static var jobGate: JobGate?
+
     private static let searchRadius: Double = 40_000   // metres (~25 mi)
     private static let responseTimes: [ResponseTime] = [.fast, .normal, .slow]
 
@@ -180,6 +205,7 @@ enum PlacesService {
         let lngBucket = (coord.longitude / 0.05).rounded() * 0.05
         let cacheKey: String? = pageToken == nil
             ? "\(textQuery)|\(String(format: "%.2f", latBucket))|\(String(format: "%.2f", lngBucket))|\(pageSize)"
+                + (jobGate.map { "|gate:\($0.cacheKey)" } ?? "")
             : nil
         if let cacheKey, let cached = SearchCache.shared.page(for: cacheKey) { return cached }
 
@@ -337,6 +363,7 @@ enum PlacesService {
             "pageSize": pageSize,
         ]
         if let pageToken { body["pageToken"] = pageToken }
+        if let jobGate { body["job"] = jobGate.body }
         req.httpBody = try? JSONSerialization.data(withJSONObject: body)
         guard let (data, resp) = try? await URLSession.shared.data(for: req),
               (resp as? HTTPURLResponse)?.statusCode == 200 else { return nil }

@@ -17,6 +17,7 @@
 // quota cap. Real auth is a Phase 4 hardening step. See docs/cheap-api-plan.md.
 
 import { createClient } from "jsr:@supabase/supabase-js@2";
+import { gatePlaces, type GateJob } from "./gate.ts";
 
 const GOOGLE_KEY = Deno.env.get("GOOGLE_PLACES_KEY") ?? "";
 // Shared-token gate (Phase 4). Enforced only when APP_TOKEN is set as a secret,
@@ -137,6 +138,28 @@ async function enrichContacts(responseObj: unknown): Promise<unknown> {
   return responseObj;
 }
 
+const ANTHROPIC_API_KEY = Deno.env.get("ANTHROPIC_API_KEY") ?? "";
+
+/** Drop places that are the wrong KIND of business for the clarified job
+ *  (see gate.ts). Runs per request on a structuredClone so the cached raw
+ *  Google response is never mutated. No job / no key / gate failure -> the
+ *  response passes through untouched (fail open: today's behavior). */
+async function gate(responseObj: unknown, job: unknown): Promise<unknown> {
+  if (!job || typeof job !== "object" || !ANTHROPIC_API_KEY) return responseObj;
+  const obj = structuredClone(responseObj) as { places?: Array<Record<string, unknown>> };
+  if (!Array.isArray(obj?.places) || obj.places.length === 0) return responseObj;
+  const keep = await gatePlaces(job as GateJob, obj.places, ANTHROPIC_API_KEY);
+  if (!keep) return responseObj;
+  const before = obj.places.length;
+  obj.places = obj.places.filter((p) => keep.has(p.id as string));
+  console.log("search: gate", JSON.stringify({
+    job: (job as GateJob).title ?? "",
+    kept: obj.places.length,
+    dropped: before - obj.places.length,
+  }));
+  return obj;
+}
+
 Deno.serve(async (req) => {
   if (req.method !== "POST") return json({ error: "method not allowed" }, 405);
   if (APP_TOKEN && req.headers.get("x-app-token") !== APP_TOKEN) {
@@ -173,7 +196,7 @@ Deno.serve(async (req) => {
       const { data } = await db.from("search_cache")
         .select("response, created_at").eq("cache_key", key).maybeSingle();
       if (data && Date.now() - new Date(data.created_at as string).getTime() < TTL_MS) {
-        return json(await enrichContacts(data.response), 200, "hit");
+        return json(await enrichContacts(await gate(data.response, payload.job)), 200, "hit");
       }
     } catch (_) { /* ignore, fall through to Google */ }
   }
@@ -226,5 +249,5 @@ Deno.serve(async (req) => {
     } catch (_) { /* ignore */ }
   }
 
-  return json(await enrichContacts(parsed), 200, key ? "miss" : "bypass");
+  return json(await enrichContacts(await gate(parsed, payload.job)), 200, key ? "miss" : "bypass");
 });

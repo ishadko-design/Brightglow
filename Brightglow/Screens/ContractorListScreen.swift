@@ -1227,6 +1227,11 @@ struct ContractorListScreen: View {
     /// per row, so revealing rows costs nothing until the user scrolls to them.
     @MainActor
     private func showMore() async {
+        await PlacesService.$jobGate.withValue(searchGate) { await showMoreGated() }
+    }
+
+    @MainActor
+    private func showMoreGated() async {
         guard !isLoadingMore else { return }
 
         if contractors.count > visibleLimit {
@@ -1316,8 +1321,26 @@ struct ContractorListScreen: View {
         return .standard
     }
 
+    /// The clarified job, as the search gate's input — nil for a category browse
+    /// or an unclarified search (searches stay ungated, as before).
+    private var searchGate: PlacesService.JobGate? {
+        guard jobCheckActive else { return nil }
+        let spec = clarifyTranscript.jobSpec
+        return PlacesService.JobGate(
+            title: clarifyTranscript.jobTitle, summary: clarifyTranscript.summary,
+            complexity: spec?.complexity ?? "", trades: spec?.trades ?? [],
+            components: spec?.components ?? [], specialties: spec?.specialties ?? [])
+    }
+
+    /// Every search this list makes carries the job, so the backend drops
+    /// wrong-kind businesses before they're ever shown.
     @MainActor
     private func load() async {
+        await PlacesService.$jobGate.withValue(searchGate) { await loadGated() }
+    }
+
+    @MainActor
+    private func loadGated() async {
         guard contractors.isEmpty else { return }
         isLoading = true
 
@@ -1755,6 +1778,10 @@ struct ContractorListScreen: View {
         }
         guard let verdicts else { return }
         for (id, v) in verdicts { photoFit[id] = v }
+        // Fit 0 = the wrong KIND of business for this job (the search gate's
+        // second line of defense — e.g. a showroom whose reviews gave it away).
+        // Never shown: one wrong business costs trust in every result.
+        contractors.removeAll { photoFit[$0.id]?.fit == 0 }
     }
 
     /// Whether this search carries a clarified job to check photos against.
