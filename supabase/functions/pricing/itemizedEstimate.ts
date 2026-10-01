@@ -68,15 +68,17 @@ const textOf = (r: Anthropic.Message) =>
 
 // ── 1. canonicalize ─────────────────────────────────────────────────────────
 
-const CANON_SYSTEM = `Normalize a home-service request into a stable key for a \
+const CANON_SYSTEM = `Normalize a home-service or vehicle-service request into a stable key for a \
 price cache. Two requests for the same work with the same price-relevant facts \
 MUST produce the identical output.
 
 job: the work as a short lowercase noun phrase in a fixed form: \
 "<action> <item>" — action is one of install, replace, repair, remodel, \
-build, remove, paint, clean, inspect; then the item with only the qualifiers \
-that change the price (e.g. "install owned outdoor sauna", "replace 40 gal gas \
-water heater", "repair leaking kitchen faucet", "remodel bathroom"). \
+build, remove, paint, clean, inspect, service, detail, wrap; then the item with \
+only the qualifiers that change the price (e.g. "install owned outdoor sauna", \
+"replace 40 gal gas water heater", "repair leaking kitchen faucet", "remodel \
+bathroom", "replace front brake pads and rotors car", "repair motorcycle \
+clutch"). For a vehicle include car/truck/motorcycle and any stated make/model. \
 "Owned" when the customer already has the unit and it is not included.
 facts: only facts STATED in the request that move the price, each lowercase \
 "<name> <value>" with units normalized: sizes ("area 200 sq ft", "run 25-60 \
@@ -121,19 +123,26 @@ export async function canonicalize(description: string, apiKey: string): Promise
 
 // ── 2/3. itemize (knowledge or web-searched) ────────────────────────────────
 
-export function itemizeSystem(locationLabel: string, searched: boolean): string {
+export type ItemizeKind = "home" | "auto" | "moto";
+
+export function itemizeSystem(locationLabel: string, searched: boolean, kind: ItemizeKind = "home"): string {
+  const who = kind === "home"
+    ? ["a home-service job for a homeowner", "a licensed contractor, all-in (labor + materials +\npermit)"]
+    : kind === "moto"
+    ? ["a motorcycle service/repair job for a rider", "an independent motorcycle shop, all-in (parts +\nlabor + shop fees)"]
+    : ["a car/truck service/repair job for a driver", "an independent repair or body shop, all-in (parts +\nlabor + shop fees)"];
   return [
-    `You price a home-service job for a homeowner in ${locationLabel}: what they`,
-    "would typically pay a licensed contractor, all-in (labor + materials +",
-    "permit), for the WHOLE job as described.",
+    `You price ${who[0]} in ${locationLabel}: what they`,
+    `would typically pay ${who[1]}, for the WHOLE job as described.`,
     "",
     searched
       ? "First use web_search (at most 2 searches) for CURRENT cost data for this job and its main components in or near this area — cost guides and local contractor pricing. Then price from that evidence."
       : "Price from your knowledge of current typical costs in this area.",
     "",
     "List the COMPONENTS of the work — every distinct piece that is billed",
-    "(e.g. permit; new 240V circuit; wire run / trenching; disconnect; equipment",
-    "placement and assembly; base or pad; haul-away; finish work). For each:",
+    kind === "home"
+      ? "(e.g. permit; new 240V circuit; wire run / trenching; disconnect; equipment\nplacement and assembly; base or pad; haul-away; finish work). For each:"
+      : "(e.g. parts; labor hours at shop rate; diagnostic; fluids/consumables;\nalignment or programming; disposal / shop fees). For each:",
     "low / typical / high in whole dollars for this area, and certain=false when",
     "the request marks it maybe / possible / unknown.",
     "",
@@ -232,8 +241,9 @@ export async function itemize(
   apiKey: string,
   searched: boolean,
   searchTool = SEARCH_TOOL,
+  kind: ItemizeKind = "home",
 ): Promise<ItemizedEstimate | null> {
-  const system = itemizeSystem(locationLabel, searched);
+  const system = itemizeSystem(locationLabel, searched, kind);
   const user = `Job: ${description.slice(0, 1500)}`;
   try {
     let components: Component[] = [];

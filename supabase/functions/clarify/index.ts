@@ -477,9 +477,10 @@ function isPriceable(vertical: string, category: string): boolean {
   // estimator can price essentially any home project from local cost data, and
   // when it genuinely can't the pricing fn returns its own "get bids" decline —
   // so there's no reason to pre-gate here. Auto/moto keeps its category gate.
-  return vertical === "auto_moto"
-    ? AUTO_CATEGORIES.has(category)
-    : true;
+  // Every job gets a price now (2026-09-30): pricing has an AI estimator for
+  // anything the catalog doesn't model, cars and motorcycles included.
+  void vertical; void category;
+  return true;
 }
 
 /** Ask the model for options for a question it already produced without them.

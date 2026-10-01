@@ -1,28 +1,29 @@
 // AI-vs-formula accuracy on the held-out home ground truth (groundTruth.ts).
 // COSTS REAL API CALLS (~19 searched estimates, cached after). Run:
-//   SUPABASE_ANON_KEY=… APP_TOKEN=… deno run --allow-net --allow-env --allow-read _ai_accuracy.ts
+//   SUPABASE_ANON_KEY=… APP_TOKEN=… deno run --allow-net --allow-env --allow-read _ai_accuracy.ts [home|auto]
 import { estimateInHouse } from "./estimatePipeline.ts";
 import { GROUND_TRUTH } from "./groundTruth.ts";
 
 const URL_ = "https://qxoseyrlbvblpwqzwvvk.supabase.co/functions/v1/pricing";
 const anon = Deno.env.get("SUPABASE_ANON_KEY")!, tok = Deno.env.get("APP_TOKEN")!;
-const cases = GROUND_TRUTH.filter((c) => c.vertical === "home");
+const VERT = Deno.args[0] ?? "home";
+const cases = GROUND_TRUTH.filter((c) => c.vertical === VERT);
 
-async function ai(q: string, category: string) {
+async function ai(q: string, category: string, vehicle?: string) {
   const r = await fetch(URL_, {
     method: "POST",
     headers: { "Content-Type": "application/json", Authorization: `Bearer ${anon}`, "x-app-token": tok },
-    body: JSON.stringify({ category, description: q }),
+    body: JSON.stringify({ category, description: q, force_ai: true, ...(vehicle ? { vehicle } : {}) }),
   });
   const d = (await r.json()).range;
   return { low: d.all_in_low, typical: d.all_in_typical, high: d.all_in_high, searched: !!d.searched, src: r.headers.get("x-cache") };
 }
 
 const rows = await Promise.all(cases.map(async (c) => {
-  const f = estimateInHouse({ category: c.category, description: c.query, vehicle: null });
+  const f = estimateInHouse({ category: c.category, description: c.query, vehicle: c.vehicle ?? null });
   const formula = f.kind === "range" ? { low: f.low, typical: f.typical, high: f.high } : null;
   let a = null;
-  try { a = await ai(c.query, c.category); } catch { /* none */ }
+  try { a = await ai(c.query, c.category, c.vehicle); } catch { /* none */ }
   return { c, formula, a };
 }));
 

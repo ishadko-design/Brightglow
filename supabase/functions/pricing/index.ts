@@ -63,7 +63,7 @@ import {
 } from "./pricingEngine.ts";
 import { estimateInHouse, estimateJobsInHouse, type JobScope } from "./estimatePipeline.ts";
 import { canonicalJob, groundedBand, type GroundedKind } from "./groundedEstimate.ts";
-import { canonicalize, canonicalKey, type CanonicalJob, itemize, type ItemizedEstimate } from "./itemizedEstimate.ts";
+import { canonicalize, canonicalKey, type CanonicalJob, itemize, type ItemizedEstimate, type ItemizeKind } from "./itemizedEstimate.ts";
 
 const ANTHROPIC_API_KEY = Deno.env.get("ANTHROPIC_API_KEY") ?? "";
 const APP_TOKEN = Deno.env.get("APP_TOKEN") ?? "";
@@ -417,19 +417,29 @@ function itemizedJson(e: ItemizedEstimate, cacheState: string): Response {
 /** Fast: cached band, else a knowledge itemization now (the searched one fills
  *  the cache in the background). Full: cached SEARCHED band, else search now
  *  within budget, else the knowledge band. Null -> formula fallback. */
-async function itemizedResponse(zip: string | undefined, description: string, fast: boolean): Promise<Response | null> {
+async function itemizedResponse(
+  zip: string | undefined, description: string, fast: boolean, kind: ItemizeKind = "home",
+): Promise<Response | null> {
+  const r = await itemizedEstimateFor(zip, description, fast, kind);
+  return r ? itemizedJson(r.estimate, r.cacheState) : null;
+}
+
+async function itemizedEstimateFor(
+  zip: string | undefined, description: string, fast: boolean, kind: ItemizeKind = "home",
+): Promise<{ estimate: ItemizedEstimate; cacheState: string } | null> {
   const canon = await canonicalCached(description);
   if (!canon) return null;
-  const key = `it1:${area(zip)}:${canonicalKey(canon)}`;
+  // Kind in the key: "replace tires" is 4 for a car and 2 for a motorcycle.
+  const key = `it1:${area(zip)}:${kind === "home" ? "" : `${kind}:`}${canonicalKey(canon)}`;
   // The canonical form is what gets priced: stable across phrasings, and it
   // carries every price fact. The original text rides along for nuance.
   const priced = `${canon.job}${canon.facts.length ? ` (${canon.facts.join("; ")})` : ""}. Request: ${description}`;
   const label = zip ? `the ${zip} ZIP code area (US)` : "the United States";
   const cached = await readItemized(key);
-  if (cached && (fast || cached.searched)) return itemizedJson(cached, "it-hit");
+  if (cached && (fast || cached.searched)) return { estimate: cached, cacheState: "it-hit" };
 
   const searchAndStore = async () => {
-    const s = await itemize(priced, label, ANTHROPIC_API_KEY, true);
+    const s = await itemize(priced, label, ANTHROPIC_API_KEY, true, undefined, kind);
     if (s) {
       await writeItemized(key, s);
       console.log("pricing: itemized-searched", JSON.stringify({ key, low: s.low, typical: s.typical, high: s.high }));
@@ -438,12 +448,12 @@ async function itemizedResponse(zip: string | undefined, description: string, fa
   };
 
   if (fast) {
-    const k = await itemize(priced, label, ANTHROPIC_API_KEY, false);
+    const k = await itemize(priced, label, ANTHROPIC_API_KEY, false, undefined, kind);
     if (!k) return null;
     await writeItemized(key, k);
     (globalThis as { EdgeRuntime?: { waitUntil?: (p: Promise<unknown>) => void } })
       .EdgeRuntime?.waitUntil?.(searchAndStore());
-    return itemizedJson(k, "it-knowledge");
+    return { estimate: k, cacheState: "it-knowledge" };
   }
 
   // Keep the search alive past the response (it fills the cache even when it
@@ -455,14 +465,14 @@ async function itemizedResponse(zip: string | undefined, description: string, fa
     searchTask,
     new Promise<null>((r) => setTimeout(() => r(null), SEARCH_BUDGET_MS)),
   ]);
-  if (searched) return itemizedJson(searched, "it-searched");
+  if (searched) return { estimate: searched, cacheState: "it-searched" };
   // Search slow/failed: serve knowledge (cached or fresh); the search keeps
   // running and fills the cache for the next request.
-  if (cached) return itemizedJson(cached, "it-hit");
-  const k = await itemize(priced, label, ANTHROPIC_API_KEY, false);
+  if (cached) return { estimate: cached, cacheState: "it-hit" };
+  const k = await itemize(priced, label, ANTHROPIC_API_KEY, false, undefined, kind);
   if (!k) return null;
   await writeItemized(key, k);
-  return itemizedJson(k, "it-knowledge");
+  return { estimate: k, cacheState: "it-knowledge" };
 }
 
 async function groundedResponse(
@@ -616,12 +626,23 @@ Deno.serve(async (req) => {
   // the itemized, web-grounded AI is the estimator for everything else —
   // projects, multi-component scopes, long-tail jobs the catalog doesn't know
   // or only matches by a generic entry (a sauna install was priced as a bare
-  // circuit). Home only; auto keeps its pipeline.
+  // circuit). Same rule for cars and motorcycles (2026-09-30: "all should
+  // have a price") — and the AI is also the fallback wherever the formula
+  // declines or can only give labor (see aiPrice below).
+  const aiKind: ItemizeKind = (vehicle ?? llmVehicle ?? keywordVehicle) === "moto"
+    ? "moto"
+    : (isAutoRequest || llmVertical === "auto") ? "auto" : "home";
+  const aiPrice = () =>
+    ANTHROPIC_API_KEY && trimmedDesc.length >= 3 && AI_FIRST_HOME
+      ? itemizedResponse(zip, trimmedDesc, payload.fast === true, aiKind)
+      : Promise.resolve(null);
   const specificTask = llmJobs.length > 1 ||
     (!!entry && entry.keywords.length > 0 && !llmProject &&
       !isWholeProject(trimmedDesc) && !hasProjectScope(trimmedDesc));
-  if (!isAutoRequest && !specificTask && ANTHROPIC_API_KEY && trimmedDesc.length >= 3 && AI_FIRST_HOME) {
-    const ai = await itemizedResponse(zip, trimmedDesc, payload.fast === true);
+  // force_ai: measurement-only (the accuracy harness compares both estimators
+  // on the same job); the app never sends it.
+  if (!specificTask || payload.force_ai === true) {
+    const ai = await aiPrice();
     if (ai) return ai;
   }
 
@@ -717,6 +738,8 @@ Deno.serve(async (req) => {
         : verticalResolved === "auto"
         ? "auto"
         : "home";
+      const aiFallback = await aiPrice();
+      if (aiFallback) return aiFallback;
       const grounded = await groundedResponse(zip, groundedKind, trimmedDesc);
       if (grounded) return grounded;
       const result: InsufficientDataResult = { error: "Insufficient data", fallback: "Get 3 bids" };
@@ -724,6 +747,10 @@ Deno.serve(async (req) => {
     }
     if (r.kind === "labor") {
       console.log("pricing: labor-only", JSON.stringify({ category, description, trade: r.entry.trade, typical: r.typical }));
+      // A labor-only figure isn't a price the user can act on — the AI prices
+      // the whole job (parts included); labor-only stays as the fallback.
+      const aiAllIn = await aiPrice();
+      if (aiAllIn) return aiAllIn;
       return json({
         range: {
           all_in_low: r.low,
@@ -735,6 +762,24 @@ Deno.serve(async (req) => {
           data_points: 0,
         },
       }, 200, "inhouse");
+    }
+    // Misclassification guard (full requests only — the fast phase answers
+    // instantly from the formula): the AI prices the same job, and when the
+    // two disagree by more than 3x the formula almost certainly matched the
+    // wrong catalog entry ("replace AC compressor" -> an AC recharge, $321 vs
+    // ~$1.3k, 2026-09-30) — serve the AI. On the held-out sets honest
+    // disagreements stayed under ~2.6x, so 3x leaves the formula's wins alone.
+    if (payload.fast !== true && ANTHROPIC_API_KEY && AI_FIRST_HOME && trimmedDesc.length >= 3) {
+      const ai = await itemizedEstimateFor(zip, trimmedDesc, false, aiKind);
+      if (ai && r.typical > 0) {
+        const ratio = ai.estimate.typical / r.typical;
+        if (ratio > 3 || ratio < 1 / 3) {
+          console.log("pricing: formula overruled", JSON.stringify({
+            description, job_type: r.entry.job_type, formula: r.typical, ai: ai.estimate.typical,
+          }));
+          return itemizedJson(ai.estimate, "it-overrule");
+        }
+      }
     }
     return json({
       range: {

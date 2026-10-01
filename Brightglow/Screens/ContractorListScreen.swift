@@ -1053,6 +1053,25 @@ struct ContractorListScreen: View {
         .fixedSize()
     }
 
+    /// "Typically $X–$Y ⓘ" — the ⓘ opens the "How we estimate" sheet.
+    private func estimateLine(_ tier: PriceTier) -> some View {
+        HStack(alignment: .center, spacing: 4) {
+            Text(headerEstimateText(tier))
+                .font(.bodySmall)
+                .foregroundStyle(.white)
+                .lineLimit(1)
+
+            Button(action: { showEstimateInfo = true }) {
+                Image(systemName: "info.circle")
+                    .font(.system(size: 14, weight: .regular))
+                    .foregroundStyle(.white)
+                    .frame(width: 24, height: 24)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+        }
+    }
+
     /// Header price line — one calm, rounded number: "Typically around $1.5k".
     /// Falls back to the plain range only for sources with no central estimate
     /// (mocks / permit-only), which have no typical to lead with.
@@ -1121,25 +1140,20 @@ struct ContractorListScreen: View {
             // range — and nothing at all when there isn't.
             if !contractors.isEmpty {
                 if autoCategory != nil {
-                    vehicleFilter
-                        .padding(.leading, 16)
-                } else if let tier = estimate {
-                    HStack(alignment: .center, spacing: 4) {
-                        Text(headerEstimateText(tier))
-                            .font(.bodySmall)
-                            .foregroundStyle(.white)
-                            .lineLimit(1)
-
-                        Button(action: { showEstimateInfo = true }) {
-                            Image(systemName: "info.circle")
-                                .font(.system(size: 14, weight: .regular))
-                                .foregroundStyle(.white)
-                                .frame(width: 24, height: 24)
-                                .contentShape(Rectangle())
+                    // Car/Moto toggle + the price on the same row: every job
+                    // has a price now, vehicles included (2026-09-30).
+                    HStack(alignment: .center, spacing: 12) {
+                        vehicleFilter
+                        if let tier = estimate {
+                            estimateLine(tier)
+                        } else if estimating {
+                            EstimatingLabel()
                         }
-                        .buttonStyle(.plain)
                     }
                     .padding(.leading, 16)
+                } else if let tier = estimate {
+                    estimateLine(tier)
+                        .padding(.leading, 16)
                 } else if estimating {
                     EstimatingLabel()
                         .padding(.leading, 16)
