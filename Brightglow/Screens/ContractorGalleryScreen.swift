@@ -68,6 +68,9 @@ struct ContractorGalleryScreen: View {
     /// The landing clarifying Q&A, carried through to the quote-request screen so
     /// the message a business receives includes the AI-clarified details.
     var clarifyTranscript: ClarifyTranscript = .empty
+    /// The list's job-check verdicts (`PhotoFitService`), handed over so the
+    /// gallery shows only photos of THIS job — same rule as the list strip.
+    var photoFit: [String: PhotoFitService.Verdict] = [:]
     /// The customer's resolved search city ("Daly City"), threaded to the
     /// quote-request screen so the texted lead is tagged with the JOB's city
     /// (not the business's). nil when no location was resolved.
@@ -116,6 +119,11 @@ struct ContractorGalleryScreen: View {
     /// (show loading); [] = no work photos (show placeholder). Populated ahead of
     /// time so a newly-surfaced contractor doesn't stall on the screen.
     @State private var screenedByID: [String: [String]] = [:]
+    /// Verdicts the gallery judged itself — businesses the list never checked
+    /// (paged in past the list's window). Looked up after the handed-over ones.
+    @State private var galleryFit: [String: PhotoFitService.Verdict] = [:]
+    /// Businesses with a job check in flight, so one isn't judged twice.
+    @State private var fitPending: Set<String> = []
     /// Pagination — keep loading more contractors as the stack runs low.
     @State private var nextPageToken: String? = nil
     @State private var pagingCoord: CLLocationCoordinate2D? = nil
@@ -180,7 +188,7 @@ struct ContractorGalleryScreen: View {
 
                     // ── Photo + thumbnail strip (resets per contractor) ───────
                     GalleryPhotoView(
-                        photos: screenedByID[contractor.id],
+                        photos: shownPhotos(contractor.id),
                         width: proxy.size.width,
                         imageHeight: imageHeight,
                         stripBottomPadding: collapsedSheetH + 12,
@@ -728,11 +736,21 @@ struct ContractorGalleryScreen: View {
                 if let first = existing.first, let u = URL(string: first) {
                     await ImageCache.shared.prefetch(u)
                 }
+                // Handed over from the list but outside its checked window.
+                if verdict(contractor.id) == nil,
+                   let v = ScreeningStore.shared.get(contractor.id, allowVehicles: allowVehicles),
+                   v.enriched {
+                    judgeIfNeeded(contractor, kept: v.kept)
+                }
                 continue
             }
             // Persisted verdict from a previous launch — reuse, no download.
             if let v = ScreeningStore.shared.get(contractor.id, allowVehicles: allowVehicles) {
                 let ordered = PhotoFilter.order(v.kept, query: orderQuery, category: category, capPremises: galleryPremisesCap, vehicle: photoVehicle)
+                // Rich-tagged already → judge now; otherwise the enrich pass below
+                // judges once the tags land (generic on-device labels can't tell
+                // a sauna hookup from a panel swap).
+                if v.enriched { judgeIfNeeded(contractor, kept: v.kept) }
                 screenedByID[contractor.id] = ordered
                 if ordered.isEmpty && !previewMode {
                     contractors.removeAll { $0.id == contractor.id }
@@ -752,6 +770,10 @@ struct ContractorGalleryScreen: View {
                 ScreeningStore.shared.save(contractor.id, allowVehicles: allowVehicles,
                                            kept: v.kept, scanned: v.scanned, enriched: v.enriched)
                 let ordered = PhotoFilter.order(v.kept, query: orderQuery, category: category, capPremises: galleryPremisesCap, vehicle: photoVehicle)
+                // Rich-tagged already → judge now; otherwise the enrich pass below
+                // judges once the tags land (generic on-device labels can't tell
+                // a sauna hookup from a panel swap).
+                if v.enriched { judgeIfNeeded(contractor, kept: v.kept) }
                 screenedByID[contractor.id] = ordered
                 if ordered.isEmpty && !previewMode {
                     contractors.removeAll { $0.id == contractor.id }
@@ -960,6 +982,43 @@ struct ContractorGalleryScreen: View {
         if !ordered.isEmpty { screenedByID[contractor.id] = ordered }
     }
 
+    /// The job check's verdict for a business — the list's, else one judged here.
+    private func verdict(_ id: String) -> PhotoFitService.Verdict? {
+        galleryFit[id] ?? photoFit[id]
+    }
+
+    /// The photos the gallery shows: only those the job check judged to show
+    /// THIS job, plus the owner's own uploads. An owner-CURATED set is shown
+    /// verbatim (the business chose it), and a business with no verdict keeps
+    /// every screened photo, as before. None relevant → [] → the gallery's
+    /// existing "no work photos" placeholder, never an off-job shot.
+    private func shownPhotos(_ id: String) -> [String]? {
+        guard let urls = screenedByID[id] else { return nil }
+        guard let v = verdict(id), ownerInfoByID[id]?.curatedPhotos == nil else { return urls }
+        let uploads = Set((ownerInfoByID[id]?.photos ?? [])
+            .compactMap { BusinessService.publicURL($0)?.absoluteString })
+        return urls.filter { v.relevant.contains($0) || uploads.contains($0) }
+    }
+
+    /// Judge a business the list never checked (paged in past its window), once,
+    /// from its screened photos' tags. Only for a clarified request; fails open
+    /// (no verdict → every photo shows, as before).
+    private func judgeIfNeeded(_ contractor: Contractor, kept: [ScreenedPhoto]) {
+        let id = contractor.id
+        let job = clarifyTranscript
+        guard job.jobSpec != nil || !job.summary.isEmpty,
+              verdict(id) == nil, !fitPending.contains(id), !kept.isEmpty else { return }
+        fitPending.insert(id)
+        let business = PhotoFitService.Business(id: id, name: contractor.name, photos: kept,
+                                                reviews: contractor.reviews.map(\.text))
+        Task { @MainActor in
+            defer { fitPending.remove(id) }
+            if let v = await PhotoFitService.judge(job: job, businesses: [business])?[id] {
+                galleryFit[id] = v
+            }
+        }
+    }
+
     /// Ask the vision model for rich, query-independent tags for a freshly-screened
     /// business's photos, then re-order and re-share the enriched verdict. On-device
     /// labels are only generic scene tokens (no "bumper", no car make), so query
@@ -981,6 +1040,10 @@ struct ContractorGalleryScreen: View {
                                        tagVersion: PhotoTagService.tagVersion)
             VerdictService.upload(id: id, allowVehicles: allowVehicles, kept: enriched,
                                   scanned: scanned, enriched: true)
+            // Rich tags are in — now the job check can tell this job's photos apart.
+            if let c = contractors.first(where: { $0.id == id }) {
+                judgeIfNeeded(c, kept: enriched)
+            }
         }
     }
 

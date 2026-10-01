@@ -726,6 +726,7 @@ struct ContractorListScreen: View {
                 photoMatchTerms: photoMatchTerms,
                 pinnedReviewID: pinnedReviewID,
                 clarifyTranscript: clarifyTranscript,
+                photoFit: photoFit,
                 userCity: userCity,
                 vehicleNote: quoteVehicleNote
             )
@@ -1229,6 +1230,16 @@ struct ContractorListScreen: View {
         guard !isLoadingMore else { return }
 
         if contractors.count > visibleLimit {
+            // Prepare the next candidates first (screen → tag → judge), so the
+            // rows about to appear show only photos of this job. Ten, not five:
+            // the verdict can reorder them, and the best five should surface.
+            if jobCheckActive {
+                let committed = Set(displayOrder)
+                let next = Array(rankedContractors().filter { !committed.contains($0.id) }.prefix(10))
+                isLoadingMore = true
+                await prepareForReveal(next)
+                isLoadingMore = false
+            }
             withAnimation(.easeInOut(duration: 0.2)) { visibleLimit += 5 }
             // Freeze the five just revealed in their ranked position — they were
             // below the fold, so ranking them now (with whatever's screened) is
@@ -1248,9 +1259,14 @@ struct ContractorListScreen: View {
         let fresh = page.contractors.filter { !existing.contains($0.id) }
         nextPageToken = page.nextPageToken
         guard !fresh.isEmpty else { return }
+        // Append first (rows past `visibleLimit` aren't shown), prepare them
+        // like the landing window, THEN reveal — so a new page's rows also show
+        // only photos of this job. freezePhotoScores below skips nothing: rows
+        // with a verdict freeze on it (prepareForReveal), the rest on keywords.
+        contractors.append(contentsOf: fresh)
+        await prepareForReveal(Array(fresh.prefix(10)))
         withAnimation(.easeInOut(duration: 0.2)) {
-            contractors.append(contentsOf: fresh)
-            freezePhotoScores(for: fresh)
+            freezePhotoScores(for: fresh.filter { photoFit[$0.id] == nil })
             visibleLimit += 5
         }
         // Commit the newly-appended page below the frozen block (append-only).
@@ -1715,10 +1731,10 @@ struct ContractorListScreen: View {
     /// or a failed/slow call keeps today's keyword ordering. Bounded by
     /// `photoFitTimeoutNs`.
     @MainActor
-    private func judgePhotoFit() async {
+    private func judgePhotoFit(_ candidates: [Contractor]? = nil) async {
         let job = clarifyTranscript
-        guard job.jobSpec != nil || !job.summary.isEmpty else { return }
-        let targets = Array(contractors.prefix(eagerScreenDepth))
+        guard jobCheckActive else { return }
+        let targets = (candidates ?? Array(contractors.prefix(eagerScreenDepth)))
             .filter { !(keptPhotos[$0.id]?.isEmpty ?? true) && photoFit[$0.id] == nil }
         guard !targets.isEmpty else { return }
         let businesses = targets.map {
@@ -1739,6 +1755,60 @@ struct ContractorListScreen: View {
         }
         guard let verdicts else { return }
         for (id, v) in verdicts { photoFit[id] = v }
+    }
+
+    /// Whether this search carries a clarified job to check photos against.
+    private var jobCheckActive: Bool {
+        clarifyTranscript.jobSpec != nil || !clarifyTranscript.summary.isEmpty
+    }
+
+    /// "See more" for a clarified job: screen, rich-tag and judge the next rows
+    /// BEFORE they're revealed — the same sequence `load()` runs behind the
+    /// loader — so revealed rows show only photos of THIS job and rank on the
+    /// verdict, instead of falling back to keyword overlap past the first
+    /// window. Each step is capped (same caps as the landing pass) and fails
+    /// open. Only rows not yet committed and not yet judged are prepared.
+    @MainActor
+    private func prepareForReveal(_ candidates: [Contractor]) async {
+        guard jobCheckActive else { return }
+        let targets = candidates.filter { photoFit[$0.id] == nil }
+        guard !targets.isEmpty else { return }
+        let allowVehicles = allowsVehiclePhotos(effectiveSearchQuery)
+        // 1. Screen (cached/shared verdicts return instantly).
+        await withTaskGroup(of: Void.self) { group in
+            group.addTask { @MainActor in
+                await withTaskGroup(of: Void.self) { inner in
+                    for c in targets where scannedCount[c.id] == nil {
+                        inner.addTask { @MainActor in await screenIfNeeded(c) }
+                    }
+                }
+            }
+            group.addTask { try? await Task.sleep(nanoseconds: eagerScreenTimeoutNs) }
+            _ = await group.next()
+            group.cancelAll()
+        }
+        // 2. Rich tags — the judge can't tell jobs apart from generic labels.
+        let alive = targets.filter { c in contractors.contains { $0.id == c.id } }
+        await withTaskGroup(of: Void.self) { group in
+            group.addTask { @MainActor in
+                await withTaskGroup(of: Void.self) { inner in
+                    for c in alive where !(keptPhotos[c.id]?.isEmpty ?? true) {
+                        needsEnrich.remove(c.id)
+                        guard let task = enrichInBackground(
+                            c.id, kept: keptPhotos[c.id] ?? [],
+                            scanned: scannedCount[c.id] ?? (keptPhotos[c.id]?.count ?? 0),
+                            allowVehicles: allowVehicles) else { continue }
+                        inner.addTask { await task.value }
+                    }
+                }
+            }
+            group.addTask { try? await Task.sleep(nanoseconds: eagerEnrichTimeoutNs) }
+            _ = await group.next()
+            group.cancelAll()
+        }
+        // 3. Judge, then re-freeze these rows' scores on the verdict.
+        await judgePhotoFit(alive)
+        freezePhotoScores(for: alive.filter { photoFit[$0.id] != nil })
     }
 
     /// Prepend a business's owner-uploaded photos ahead of `list`, de-duped. The
