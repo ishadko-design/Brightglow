@@ -404,6 +404,18 @@ const SCHEMA = {
   additionalProperties: false,
 } as const;
 
+/** SCHEMA with `action` pinned to "ask" — a project that tried to finish too early. */
+const ASK_SCHEMA = {
+  ...SCHEMA,
+  properties: { ...SCHEMA.properties, action: { type: "string", enum: ["ask"] } },
+};
+
+/** A PROJECT must settle at least this many components before finishing: the
+ *  model kept stopping after 2 ("have it?" + distance) and skipped the route
+ *  (trenching) and panel capacity — the two biggest price swings (on-device
+ *  test 2026-09-30, "Install 9kw outdoor sauna for 4"). */
+const MIN_PROJECT_QUESTIONS = 3;
+
 /** SCHEMA with `action` pinned to "done" — used when the model must finish. */
 const FINISH_SCHEMA = {
   ...SCHEMA,
@@ -573,7 +585,7 @@ Deno.serve(async (req) => {
   // task and just as accurate against the fixed schema. `mustFinish` forces the
   // "you MUST finish now" prompt, used to recover a proper `done` (with all the
   // match/detail fields) when the model tries to re-ask an answered question.
-  const runModel = async (mustFinish: boolean) => {
+  const runModel = async (mustFinish: boolean, mustAskNote = "") => {
     const client = new Anthropic({ apiKey: ANTHROPIC_API_KEY, timeout: 20_000, maxRetries: 1 });
     const response = await client.messages.create({
       model: "claude-sonnet-5",
@@ -582,11 +594,16 @@ Deno.serve(async (req) => {
       // Sonnet 5 runs adaptive thinking when `thinking` is omitted — off here:
       // a quick schema-bound routing call, thinking only adds latency and cost.
       thinking: { type: "disabled" },
-      system: systemPrompt(mustFinish ? 0 : remaining),
+      system: systemPrompt(mustFinish ? 0 : remaining) + mustAskNote,
       // A forced finish constrains `action` to "done" in the schema itself: the
       // prompt alone lost to the PROJECT "keep asking" rules and the retry came
       // back "ask", shipping a done with every field empty (seen 2026-09-30).
-      output_config: { format: { type: "json_schema", schema: mustFinish ? FINISH_SCHEMA : SCHEMA } },
+      output_config: {
+        format: {
+          type: "json_schema",
+          schema: mustFinish ? FINISH_SCHEMA : mustAskNote ? ASK_SCHEMA : SCHEMA,
+        },
+      },
       messages: modelMessages,
     });
     const text = response.content.find((b) => b.type === "text")?.text ?? "";
@@ -603,6 +620,31 @@ Deno.serve(async (req) => {
   // Out of questions -> the model was told to finish; coerce if it didn't. We
   // keep whatever match fields it produced so results still get search terms.
   let path = "normal";
+  // Project floor: a PROJECT that tries to finish before MIN_PROJECT_QUESTIONS
+  // asks the next unsettled component instead. Deterministic (schema pins
+  // "ask") because the prompt alone lost. The dup guard below still applies,
+  // so this can't loop on a reworded question.
+  if (
+    parsed.action === "done" && parsed.job_spec?.complexity === "project" &&
+    asked < MIN_PROJECT_QUESTIONS && remaining > 0
+  ) {
+    try {
+      const more = await runModel(false, `
+
+PROJECT FLOOR: you tried to finish a PROJECT after only ${asked} question${asked === 1 ? "" : "s"}.
+Ask ONE more question now — the highest-value component still unsettled by
+the request and the answers above (e.g. the route of the run: underground /
+along the house / indoors; the panel's capacity; whether the unit is already
+on site). Never re-ask or reword anything already answered or "Not sure".`);
+      if (more?.action === "ask" && more.question) {
+        parsed = more;
+        path = "project-floor";
+      }
+    } catch (err) {
+      console.error("clarify: project floor retry failed", err);
+    }
+  }
+
   if (parsed.action !== "done" && remaining === 0) {
     parsed.action = "done";
   }

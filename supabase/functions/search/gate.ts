@@ -51,14 +51,30 @@ KIND. A general contractor or handyman stays only when the job is within its \
 normal scope (a handyman is fine for a small repair, not for a permitted \
 240V circuit). When genuinely unsure, keep.
 
+If the job lists no trades, decide them yourself first: for equipment that is \
+bought and then hooked up (a sauna, hot tub, EV charger, generator, heat pump, \
+water heater) the business hired is the LICENSED trade doing the hookup \
+(electrician; plumber or HVAC for theirs) — the store that sells it is not.
+For such equipment, a company built around the PRODUCT (a sauna, spa, hot \
+tub, charger or generator company — seller, maker, dealer or "custom" \
+builder, even one whose crew delivers and assembles units) is keep=false \
+whenever the job is the hookup/installation of it: assembly is not the \
+licensed electrical/plumbing/gas work. Keep it only when its Google types \
+show it IS that licensed trade (e.g. "electrician").
+
+Also return better_query: a short Google Maps search naming the business type \
+a homeowner should hire for this job plus its specialty (e.g. "electrician \
+sauna hot tub wiring", "plumber faucet repair") — never a product or a store.
+
 Return every business in the order given.`;
 
 const SCHEMA = {
   type: "object",
   properties: {
     keep: { type: "array", items: { type: "boolean" } },
+    better_query: { type: "string" },
   },
-  required: ["keep"],
+  required: ["keep", "better_query"],
   additionalProperties: false,
 } as const;
 
@@ -100,6 +116,13 @@ export function describePlace(p: Record<string, unknown>, i: number): string {
   return out.join("\n");
 }
 
+/** The business-type query the gate suggested for a job (memoized per job) —
+ *  the caller re-searches with it when the gate leaves too few places. */
+const betterQueries = new Map<string, string>();
+export function betterQueryFor(job: GateJob): string {
+  return betterQueries.get(jobKey(job)) ?? "";
+}
+
 /** Ids of places to KEEP, or null when the gate couldn't run (caller passes
  *  everything through). */
 export async function gatePlaces(
@@ -109,6 +132,8 @@ export async function gatePlaces(
 ): Promise<Set<string> | null> {
   if (!s(job.title, 120) && !s(job.summary, 500)) return null;
   const jk = jobKey(job);
+  // The better query is only ever needed on a thin result, which by then has
+  // been gated at least once — so a full memo hit still has one stored.
   const keep = new Set<string>();
   const todo: Array<Record<string, unknown>> = [];
   for (const p of places) {
@@ -144,7 +169,13 @@ export async function gatePlaces(
       }],
     });
     const text = r.content.find((b) => b.type === "text")?.text ?? "";
-    const arr = (JSON.parse(text) as { keep?: unknown }).keep;
+    const parsedOut = JSON.parse(text) as { keep?: unknown; better_query?: unknown };
+    const bq = s(parsedOut.better_query, 80);
+    if (bq) {
+      if (betterQueries.size > MEMO_MAX) betterQueries.clear();
+      betterQueries.set(jk, bq);
+    }
+    const arr = parsedOut.keep;
     if (!Array.isArray(arr) || arr.length !== chunk.length) throw new Error("gate: length mismatch");
     return chunk.map((p, i) => [String(p.id), arr[i] !== false] as const);
   }));
@@ -165,4 +196,66 @@ export async function gatePlaces(
     }
   });
   return anyOk ? keep : null;
+}
+
+// ── Unclarified searches: derive the job's trade + search phrase ────────────
+//
+// Without the clarify chat the app only has the raw typed sentence ("Install
+// 9kw outdoor sauna for 4"). Searching Google with it finds sauna SHOPS, and
+// gating ambiguous text gave run-to-run different verdicts (2026-09-30). So
+// derive once — which trade a homeowner hires, and the Maps phrase that finds
+// it — and persist it (caller caches it), so the first page, every later page
+// (Google page tokens require the same query) and the gate all agree.
+
+export interface DerivedJob { trades: string[]; query: string }
+
+const DERIVE_SYSTEM = `A homeowner typed a request into a local-services app. \
+Decide which kind of business they should HIRE and how to find it on Google Maps.
+
+- trades: 1-2 business types, best first ("electrician", "plumber", "roofer", \
+"handyman", "general contractor", "auto body shop"...).
+- query: a short Google Maps search: the business type FIRST, then the \
+specialty ("electrician sauna hot tub wiring"). Never a product, store, or brand.
+
+For equipment that is bought and then hooked up — a sauna (any kind), hot tub, \
+spa, EV charger, generator, heat pump, water heater — the hire is the LICENSED \
+trade doing the hookup (electrician; plumber or HVAC for theirs), never the \
+company that sells, makes or assembles the product. A builder/general \
+contractor only for a structure built from scratch on site (deck, ADU, room).`;
+
+const DERIVE_SCHEMA = {
+  type: "object",
+  properties: {
+    trades: { type: "array", items: { type: "string" } },
+    query: { type: "string" },
+  },
+  required: ["trades", "query"],
+  additionalProperties: false,
+} as const;
+
+export async function deriveJob(text: string, apiKey: string): Promise<DerivedJob | null> {
+  const t = s(text, 300);
+  if (!t) return null;
+  const workspaceId = Deno.env.get("ANTHROPIC_WORKSPACE_ID") ?? "";
+  try {
+    const client = new Anthropic({
+      apiKey, timeout: 6_000, maxRetries: 0,
+      ...(workspaceId ? { defaultHeaders: { "anthropic-workspace-id": workspaceId } } : {}),
+    });
+    const r = await client.messages.create({
+      model: "claude-sonnet-5",
+      max_tokens: 120,
+      thinking: { type: "disabled" },
+      system: DERIVE_SYSTEM,
+      output_config: { format: { type: "json_schema", schema: DERIVE_SCHEMA } },
+      messages: [{ role: "user", content: t }],
+    });
+    const out = JSON.parse(r.content.find((b) => b.type === "text")?.text ?? "{}");
+    const trades = list(out.trades).slice(0, 2);
+    const query = s(out.query, 80);
+    return trades.length && query ? { trades, query } : null;
+  } catch (err) {
+    console.error("search: derive failed", String(err).slice(0, 200));
+    return null;
+  }
 }

@@ -17,7 +17,7 @@
 // quota cap. Real auth is a Phase 4 hardening step. See docs/cheap-api-plan.md.
 
 import { createClient } from "jsr:@supabase/supabase-js@2";
-import { gatePlaces, type GateJob } from "./gate.ts";
+import { betterQueryFor, deriveJob, type DerivedJob, gatePlaces, type GateJob } from "./gate.ts";
 
 const GOOGLE_KEY = Deno.env.get("GOOGLE_PLACES_KEY") ?? "";
 // Shared-token gate (Phase 4). Enforced only when APP_TOKEN is set as a secret,
@@ -140,6 +140,27 @@ async function enrichContacts(responseObj: unknown): Promise<unknown> {
 
 const ANTHROPIC_API_KEY = Deno.env.get("ANTHROPIC_API_KEY") ?? "";
 
+/** deriveJob, persisted in search_cache (key "derive:<text>", no TTL — a
+ *  trade decision doesn't go stale) so every isolate and every page agrees. */
+async function derivedCached(text: string): Promise<DerivedJob | null> {
+  const key = `derive:${text.toLowerCase().replace(/\s+/g, " ").trim()}`.slice(0, 300);
+  if (db) {
+    try {
+      const { data } = await db.from("search_cache").select("response").eq("cache_key", key).maybeSingle();
+      const r = data?.response as DerivedJob | undefined;
+      if (r?.query && Array.isArray(r.trades)) return r;
+    } catch (_) { /* fall through */ }
+  }
+  const d = await deriveJob(text, ANTHROPIC_API_KEY);
+  if (d && db) {
+    try {
+      await db.from("search_cache").upsert({ cache_key: key, response: d, created_at: new Date().toISOString() });
+    } catch (_) { /* ignore */ }
+  }
+  if (d) console.log("search: derived", JSON.stringify({ text, ...d }));
+  return d;
+}
+
 /** Drop places that are the wrong KIND of business for the clarified job
  *  (see gate.ts). Runs per request on a structuredClone so the cached raw
  *  Google response is never mutated. No job / no key / gate failure -> the
@@ -174,7 +195,7 @@ Deno.serve(async (req) => {
     return json({ error: "invalid json body" }, 400);
   }
 
-  const textQuery = payload.textQuery;
+  let textQuery = payload.textQuery;
   const latitude = payload.latitude;
   const longitude = payload.longitude;
   const pageToken = payload.pageToken;
@@ -185,10 +206,23 @@ Deno.serve(async (req) => {
     return json({ error: "missing textQuery / latitude / longitude" }, 400);
   }
 
+  // Unclarified job (no chat → no trades): derive the trade + the Maps phrase
+  // once, persist it, and search with THAT phrase instead of the raw sentence
+  // (which finds product shops). Applied to every page, so a page token always
+  // continues the same query. Fail open: no derivation → raw text, as before.
+  const job = payload.job as GateJob | undefined;
+  if (job && typeof job === "object" && !(job.spec?.trades?.length) && ANTHROPIC_API_KEY) {
+    const derived = await derivedCached(String(job.title || job.summary || textQuery));
+    if (derived) {
+      job.spec = { ...(job.spec ?? {}), trades: derived.trades };
+      textQuery = derived.query;
+    }
+  }
+
   // Only first pages are cacheable (continuation tokens are one-shot).
   const key = (typeof pageToken === "string" && pageToken.length > 0)
     ? null
-    : cacheKey(textQuery, latitude, longitude, pageSize);
+    : cacheKey(textQuery as string, latitude, longitude, pageSize);
 
   // 1. Cache read (best-effort — a failure just falls through to Google).
   if (key && db) {
@@ -196,12 +230,27 @@ Deno.serve(async (req) => {
       const { data } = await db.from("search_cache")
         .select("response, created_at").eq("cache_key", key).maybeSingle();
       if (data && Date.now() - new Date(data.created_at as string).getTime() < TTL_MS) {
-        return json(await enrichContacts(await gate(data.response, payload.job)), 200, "hit");
+        const gated = await gate(data.response, payload.job);
+        return json(await enrichContacts(
+          await widenIfThin(gated, payload, latitude, longitude, pageSize, pageToken)), 200, "hit");
       }
     } catch (_) { /* ignore, fall through to Google */ }
   }
 
   // 2. Google Text Search.
+  const result = await googleSearch(textQuery as string, latitude, longitude, pageSize, pageToken, key);
+  if (result instanceof Response) return result;
+  const gated = await gate(result, payload.job);
+  return json(await enrichContacts(await widenIfThin(gated, payload, latitude, longitude, pageSize, pageToken)),
+    200, key ? "miss" : "bypass");
+});
+
+/** Google Text Search + first-page cache write. Returns the parsed response,
+ *  or a Response to hand straight back (an upstream error / non-JSON). */
+async function googleSearch(
+  textQuery: string, latitude: number, longitude: number, pageSize: number,
+  pageToken: unknown, key: string | null,
+): Promise<unknown | Response> {
   const body: Record<string, unknown> = {
     textQuery,
     maxResultCount: pageSize,
@@ -249,5 +298,42 @@ Deno.serve(async (req) => {
     } catch (_) { /* ignore */ }
   }
 
-  return json(await enrichContacts(await gate(parsed, payload.job)), 200, key ? "miss" : "bypass");
-});
+  return parsed;
+}
+
+/** A gated FIRST page that kept fewer than THIN_MIN places means the query
+ *  itself was wrong (a raw "install 9kw outdoor sauna" finds sauna shops, all
+ *  correctly dropped). Re-search once with the business-type query the gate
+ *  suggested ("electrician sauna wiring"), gate that too, and append — so the
+ *  user gets the right businesses instead of a near-empty list. */
+const THIN_MIN = 5;
+async function widenIfThin(
+  gated: unknown, payload: Record<string, unknown>,
+  latitude: number, longitude: number, pageSize: number, pageToken: unknown,
+): Promise<unknown> {
+  const job = payload.job as GateJob | undefined;
+  const obj = gated as { places?: Array<Record<string, unknown>>; nextPageToken?: string };
+  if (!job || pageToken || !Array.isArray(obj?.places) || obj.places.length >= THIN_MIN) return gated;
+  const better = betterQueryFor(job);
+  if (!better || better.toLowerCase() === String(payload.textQuery).toLowerCase()) return gated;
+  const altKey = cacheKey(better, latitude, longitude, pageSize);
+  let alt: unknown = null;
+  if (db) {
+    try {
+      const { data } = await db.from("search_cache")
+        .select("response, created_at").eq("cache_key", altKey).maybeSingle();
+      if (data && Date.now() - new Date(data.created_at as string).getTime() < TTL_MS) alt = data.response;
+    } catch (_) { /* fall through */ }
+  }
+  if (!alt) {
+    const r = await googleSearch(better, latitude, longitude, pageSize, undefined, altKey);
+    if (r instanceof Response) return gated;
+    alt = r;
+  }
+  const altGated = await gate(alt, job) as { places?: Array<Record<string, unknown>>; nextPageToken?: string };
+  const have = new Set(obj.places.map((p) => p.id));
+  const extra = (altGated.places ?? []).filter((p) => !have.has(p.id));
+  console.log("search: widened", JSON.stringify({ from: payload.textQuery, to: better, added: extra.length }));
+  // Continue paging the better query: the original one has nothing left to give.
+  return { ...obj, places: [...obj.places, ...extra], nextPageToken: altGated.nextPageToken ?? obj.nextPageToken };
+}

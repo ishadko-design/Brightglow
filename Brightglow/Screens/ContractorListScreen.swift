@@ -1324,7 +1324,16 @@ struct ContractorListScreen: View {
     /// The clarified job, as the search gate's input — nil for a category browse
     /// or an unclarified search (searches stay ungated, as before).
     private var searchGate: PlacesService.JobGate? {
-        guard jobCheckActive else { return nil }
+        guard jobCheckActive else {
+            // Chat skipped/closed: gate on the user's own typed words — the
+            // server derives the trade + search phrase from them (a raw "install
+            // 9kw outdoor sauna" otherwise finds sauna SHOPS). Home only: auto
+            // searches keep their Car/Moto query shaping.
+            let typed = typedQuery
+            guard !typed.isEmpty, autoCategory == nil else { return nil }
+            return PlacesService.JobGate(title: typed, summary: typed, complexity: "",
+                                         trades: [], components: [], specialties: [])
+        }
         let spec = clarifyTranscript.jobSpec
         return PlacesService.JobGate(
             title: clarifyTranscript.jobTitle, summary: clarifyTranscript.summary,
