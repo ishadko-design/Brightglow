@@ -63,6 +63,7 @@ import {
 } from "./pricingEngine.ts";
 import { estimateInHouse, estimateJobsInHouse, type JobScope } from "./estimatePipeline.ts";
 import { canonicalJob, groundedBand, type GroundedKind } from "./groundedEstimate.ts";
+import { canonicalize, canonicalKey, type CanonicalJob, itemize, type ItemizedEstimate } from "./itemizedEstimate.ts";
 
 const ANTHROPIC_API_KEY = Deno.env.get("ANTHROPIC_API_KEY") ?? "";
 const APP_TOKEN = Deno.env.get("APP_TOKEN") ?? "";
@@ -332,6 +333,138 @@ function validJobDetail(detail: string, description: string): boolean {
  *  BOTH decline paths — the unclassified early-out AND the classified-but-
  *  unpriceable path — so a broad project ("kitchen remodel") that classifies to
  *  nothing still gets a ballpark instead of a blank "get bids". */
+// ── AI-first itemized estimate ──────────────────────────────────────────────
+
+/** Kill switch: set AI_FIRST_HOME=false to send everything to the formula /
+ *  older grounded path. */
+const AI_FIRST_HOME = (Deno.env.get("AI_FIRST_HOME") ?? "true") !== "false";
+const ITEMIZED_TTL_MS = 30 * 24 * 60 * 60 * 1000;   // searched bands
+const KNOWLEDGE_TTL_MS = 3 * 24 * 60 * 60 * 1000;   // until the search lands
+/** Budget for the searched pass on the request path (client waits 25s). */
+const SEARCH_BUDGET_MS = 20_000;
+
+const area = (zip?: string) => (zip && /^\d{5}$/.test(zip) ? zip.slice(0, 3) : "us");
+
+/** description -> canonical job, cached forever by exact text so a repeated
+ *  description never re-rolls its key (search_cache table, "canon1:" rows). */
+async function canonicalCached(description: string): Promise<CanonicalJob | null> {
+  const key = `canon1:${description.toLowerCase().replace(/\s+/g, " ")}`.slice(0, 300);
+  if (db) {
+    try {
+      const { data } = await db.from("search_cache").select("response").eq("cache_key", key).maybeSingle();
+      const r = data?.response as CanonicalJob | undefined;
+      if (r?.job) return r;
+    } catch (_) { /* fall through */ }
+  }
+  const c = await canonicalize(description, ANTHROPIC_API_KEY);
+  if (c && db) {
+    try {
+      await db.from("search_cache").upsert({ cache_key: key, response: c, created_at: new Date().toISOString() });
+    } catch (_) { /* ignore */ }
+  }
+  return c;
+}
+
+/** Itemized bands live in grounded_estimate_cache ("it1:" keys); the basis
+ *  column carries {basis, components, searched} as JSON (no migration). */
+async function readItemized(key: string): Promise<ItemizedEstimate | null> {
+  if (!db) return null;
+  try {
+    const { data } = await db.from("grounded_estimate_cache")
+      .select("low, typical, high, basis, created_at").eq("cache_key", key).maybeSingle();
+    if (!data) return null;
+    const meta = JSON.parse(String(data.basis ?? "{}"));
+    const age = Date.now() - new Date(data.created_at as string).getTime();
+    if (age > (meta.searched ? ITEMIZED_TTL_MS : KNOWLEDGE_TTL_MS)) return null;
+    return {
+      low: Number(data.low), typical: Number(data.typical), high: Number(data.high),
+      basis: meta.basis ?? "", components: meta.components ?? [], searched: !!meta.searched,
+    };
+  } catch (_) {
+    return null;
+  }
+}
+
+async function writeItemized(key: string, e: ItemizedEstimate): Promise<void> {
+  if (!db) return;
+  try {
+    await db.from("grounded_estimate_cache").upsert({
+      cache_key: key, low: e.low, typical: e.typical, high: e.high,
+      basis: JSON.stringify({ basis: e.basis, components: e.components, searched: e.searched }),
+      created_at: new Date().toISOString(),
+    });
+  } catch (_) { /* ignore */ }
+}
+
+function itemizedJson(e: ItemizedEstimate, cacheState: string): Response {
+  return json({
+    range: {
+      all_in_low: e.low,
+      all_in_high: e.high,
+      all_in_typical: e.typical,
+      confidence: e.searched ? "medium" : "low",
+      label: e.basis
+        ? `Estimated from ${e.searched ? "current local prices" : "typical local costs"} — ${e.basis}. Confirm with bids.`
+        : "Estimated from current local prices. Confirm with bids.",
+      grounded: true,
+      data_points: 0,
+      components: e.components,
+      searched: e.searched,
+    },
+  }, 200, cacheState);
+}
+
+/** Fast: cached band, else a knowledge itemization now (the searched one fills
+ *  the cache in the background). Full: cached SEARCHED band, else search now
+ *  within budget, else the knowledge band. Null -> formula fallback. */
+async function itemizedResponse(zip: string | undefined, description: string, fast: boolean): Promise<Response | null> {
+  const canon = await canonicalCached(description);
+  if (!canon) return null;
+  const key = `it1:${area(zip)}:${canonicalKey(canon)}`;
+  // The canonical form is what gets priced: stable across phrasings, and it
+  // carries every price fact. The original text rides along for nuance.
+  const priced = `${canon.job}${canon.facts.length ? ` (${canon.facts.join("; ")})` : ""}. Request: ${description}`;
+  const label = zip ? `the ${zip} ZIP code area (US)` : "the United States";
+  const cached = await readItemized(key);
+  if (cached && (fast || cached.searched)) return itemizedJson(cached, "it-hit");
+
+  const searchAndStore = async () => {
+    const s = await itemize(priced, label, ANTHROPIC_API_KEY, true);
+    if (s) {
+      await writeItemized(key, s);
+      console.log("pricing: itemized-searched", JSON.stringify({ key, low: s.low, typical: s.typical, high: s.high }));
+    }
+    return s;
+  };
+
+  if (fast) {
+    const k = await itemize(priced, label, ANTHROPIC_API_KEY, false);
+    if (!k) return null;
+    await writeItemized(key, k);
+    (globalThis as { EdgeRuntime?: { waitUntil?: (p: Promise<unknown>) => void } })
+      .EdgeRuntime?.waitUntil?.(searchAndStore());
+    return itemizedJson(k, "it-knowledge");
+  }
+
+  // Keep the search alive past the response (it fills the cache even when it
+  // misses this request's budget).
+  const searchTask = searchAndStore();
+  (globalThis as { EdgeRuntime?: { waitUntil?: (p: Promise<unknown>) => void } })
+    .EdgeRuntime?.waitUntil?.(searchTask);
+  const searched = await Promise.race([
+    searchTask,
+    new Promise<null>((r) => setTimeout(() => r(null), SEARCH_BUDGET_MS)),
+  ]);
+  if (searched) return itemizedJson(searched, "it-searched");
+  // Search slow/failed: serve knowledge (cached or fresh); the search keeps
+  // running and fills the cache for the next request.
+  if (cached) return itemizedJson(cached, "it-hit");
+  const k = await itemize(priced, label, ANTHROPIC_API_KEY, false);
+  if (!k) return null;
+  await writeItemized(key, k);
+  return itemizedJson(k, "it-knowledge");
+}
+
 async function groundedResponse(
   zip: string | undefined,
   kind: GroundedKind,
@@ -400,6 +533,8 @@ Deno.serve(async (req) => {
   // the model has spoken (see vehicleResolved further down): an explicit app
   // filter first, then the model, then this word list as a last resort.
   const keywordVehicle = vehicle ?? detectVehicle(description);
+
+  const isAutoRequest = !!keywordVehicle || (typeof category === "string" && AUTO_CATEGORIES.has(category));
   const classifyText = keywordVehicle === "moto" ? stripVehicleWords(description) : description;
   // Wrong-category requests get a second chance without the category before
   // the LLM runs: "replace the dishwasher" under HVAC, a downspout repair
@@ -473,6 +608,21 @@ Deno.serve(async (req) => {
     }));
   } else if (entry) {
     console.log("pricing: classified", JSON.stringify({ category, description, job_type: entry.job_type }));
+  }
+
+  // Route (2026-09-30, measured on the held-out set): the catalog formula is
+  // the better estimator for STANDARD jobs it classifies to a specific entry
+  // (18/18 in published range, 15% median error vs 13/18, 20% for the AI);
+  // the itemized, web-grounded AI is the estimator for everything else —
+  // projects, multi-component scopes, long-tail jobs the catalog doesn't know
+  // or only matches by a generic entry (a sauna install was priced as a bare
+  // circuit). Home only; auto keeps its pipeline.
+  const specificTask = llmJobs.length > 1 ||
+    (!!entry && entry.keywords.length > 0 && !llmProject &&
+      !isWholeProject(trimmedDesc) && !hasProjectScope(trimmedDesc));
+  if (!isAutoRequest && !specificTask && ANTHROPIC_API_KEY && trimmedDesc.length >= 3 && AI_FIRST_HOME) {
+    const ai = await itemizedResponse(zip, trimmedDesc, payload.fast === true);
+    if (ai) return ai;
   }
 
   // A multi-job LLM result stands on its own — the keyword layer finding
