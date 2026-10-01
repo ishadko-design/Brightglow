@@ -62,6 +62,16 @@ export function buildSystemPrompt(pool: JobTypeEntry[], categoryHint?: string): 
     "  wrong price, which is worse than showing no price.",
     '- Match on the work, not incidental words ("water pooling under the',
     '  dishwasher" is a plumbing leak, not an appliance job).',
+    '- "electric"/"gas" is a FUEL TYPE, not the trade: an "electric stove/oven/',
+    "  range/cooktop\" is an appliance install, an \"electric water heater\" is",
+    '  plumbing, an "electric car" is a vehicle. Only route to an electrical job',
+    "  when the request is about wiring itself (a panel, circuit, outlet, rewire).",
+    "- A WHOLE-PROPERTY project — a gut, structural, or whole-house renovation,",
+    "  an addition, an ADU, or new construction — is NOT a single trade job.",
+    "  Do not map it onto one trade (framing, drywall, repipe): return an empty",
+    "  jobs list so it is priced as a whole project, not as one small task. A",
+    "  SINGLE-ROOM remodel or a specific named trade job is still classified",
+    "  normally.",
     "- For each job, also capture the SCOPE the request explicitly states, and",
     "  only then: quantity (a stated count of units — windows, doors, panels,",
     "  deck boards, fixtures), area_sqft (a stated area, e.g. \"300 sq ft deck\"),",
@@ -106,7 +116,11 @@ export function buildSchema(pool: JobTypeEntry[]): Record<string, unknown> {
     properties: {
       jobs: {
         type: "array",
-        maxItems: 3,
+        // NB: no `maxItems` — output_config.format.schema rejects it on arrays
+        // with a 400 ("'maxItems' is not supported"), which threw on EVERY call
+        // and silently degraded the classifier to keyword-only (found 2026-09-20
+        // via the model-compare harness). The 3-job cap is enforced in
+        // parseClassification instead (it breaks at length 3).
         items: {
           type: "object",
           properties: {
@@ -121,13 +135,13 @@ export function buildSchema(pool: JobTypeEntry[]): Record<string, unknown> {
             },
             quantity: {
               type: "integer",
-              minimum: 1,
+              // No `minimum` — output_config.format.schema rejects it (see the
+              // jobs-array note). parseClassification drops any non-positive value.
               description:
                 "Count of units (windows, doors, panels, boards, fixtures) ONLY when the request states or plainly implies it. Omit if unstated.",
             },
             area_sqft: {
               type: "number",
-              minimum: 1,
               description:
                 "Area in square feet ONLY when the request states one. Omit if unstated.",
             },
@@ -248,6 +262,9 @@ export async function classifyWithLLM(
   description: string,
   apiKey: string,
   categoryHint?: string,
+  /** The classifier model. Defaults to Sonnet 5 (the cost-optimized choice, see
+   *  below); overridable so an A/B harness can compare models on the same pool. */
+  model = "claude-sonnet-5",
 ): Promise<Classification> {
   if (pool.length === 0 || !apiKey) return { jobs: [], vehicle: null, vertical: null };
   // A key not scoped to a workspace is rejected unless the workspace id rides
@@ -262,9 +279,23 @@ export async function classifyWithLLM(
     ...(workspaceId ? { defaultHeaders: { "anthropic-workspace-id": workspaceId } } : {}),
   });
   const response = await client.messages.create({
-    model: "claude-opus-4-8",
+    // Sonnet 5, not Opus 4.8 (2026-09-20): classification is enum-constrained
+    // structured output (the model picks a taxonomy id, never a price), which
+    // Sonnet handles as well as Opus at ~1/5 the input and ~1/8 the output cost.
+    // Opus here was the sole driver of the API-cost spikes. Revert (or pass a
+    // model arg) if a regression shows up in the compare harness.
+    model,
     max_tokens: 600,
-    system: buildSystemPrompt(pool, categoryHint),
+    // The system prompt is the whole ~8k-token taxonomy and is identical across
+    // every request of a given category, while the user message (the request
+    // text) is what varies. Cache it so we pay the full prompt only on a cache
+    // miss and ~10% on the frequent hits — the classifier is called on every
+    // typed search, so hits dominate during active use. (categoryHint is one of
+    // ~11 values, so there are only a handful of distinct cache entries, each
+    // reused heavily.) Mirrors the caching `classify` already does.
+    system: [
+      { type: "text", text: buildSystemPrompt(pool, categoryHint), cache_control: { type: "ephemeral" } },
+    ],
     output_config: { format: { type: "json_schema", schema: buildSchema(pool) } },
     messages: [{ role: "user", content: `Request: ${description}` }],
   });

@@ -1115,6 +1115,24 @@ const CATEGORY_STEMS: Record<string, string[]> = {
   "Glass": ["windshield", "windscreen"],
 };
 
+// "electric" as a FUEL-TYPE adjective on an appliance (or vehicle) is not
+// electrical work: an "electric stove/oven/range/cooktop" is an appliance
+// install, an "electric water heater" is plumbing, an "electric car" is auto.
+// The bare "electric" Electrical stem hijacked these — live 2026-09-20, "Replace
+// the oven with electric stove" routed to electrical.general and surfaced
+// electricians at a wired-circuit price, when the job is a range swap. Suppress
+// the Electrical stem ONLY when "electric" merely qualifies such a noun AND the
+// text carries no actual electrical-work signal (a panel, outlet, circuit,
+// rewire, etc. — in which case it IS an electrical job, e.g. "new circuit for
+// an electric range"), so the normal keyword scan finds the appliance entry.
+const ELECTRIC_APPLIANCE_QUALIFIER =
+  /\belectric(al)?\s+(stove|oven|range|cook\s*top|stove\s*top|dryer|washer|dishwasher|furnace|water\s*heater|fireplace|kettle|car|vehicle|scooter|moped|bike|motorcycle)\b/i;
+const ELECTRICAL_WORK_SIGNAL =
+  /\b(panel|sub-?panel|outlet|receptacle|wir(?:e|ing|ed)|circuit|breaker|re-?wire|volt|amp|gfci|conduit|electrician|junction\s*box)\b/i;
+function electricStemIsApplianceQualifierOnly(text: string): boolean {
+  return ELECTRIC_APPLIANCE_QUALIFIER.test(text) && !ELECTRICAL_WORK_SIGNAL.test(text);
+}
+
 // Keywords that disambiguate jobs only *within* a category ("repair" means
 // hvac.repair under HVAC and roofing.repair under Roofing) and so must not
 // classify on their own when no category is known — "replaced hardwood
@@ -1261,7 +1279,8 @@ export function classifyJobType(
   // "fix my roof" still lands on a real number via the category-general
   // entry even when no job keyword matches.
   const stemmed = Object.keys(CATEGORY_STEMS)
-    .filter((cat) => CATEGORY_STEMS[cat].some((s) => termMatches(text, s)));
+    .filter((cat) => CATEGORY_STEMS[cat].some((s) => termMatches(text, s)))
+    .filter((cat) => !(cat === "Electrical" && electricStemIsApplianceQualifierOnly(text)));
   if (stemmed.length === 1) {
     const inCategory = classifyJobType(stemmed[0], description, photoAttributes, null, vehicle);
     // A specific in-category result stands — the stem did its job ("build a

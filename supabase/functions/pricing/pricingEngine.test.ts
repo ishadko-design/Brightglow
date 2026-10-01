@@ -314,6 +314,18 @@ Deno.test("classifyJobType infers the category from a stem in the description", 
   assertEquals(classifyJobType("", "repair roof")?.job_type, "roofing.repair");
 });
 
+Deno.test("classifyJobType treats 'electric' as a fuel type on an appliance, not electrical work", () => {
+  // Live 2026-09-20: the bare "electric" stem hijacked a range swap onto
+  // electrical.general (electricians, wired-circuit price). "electric" here
+  // qualifies the appliance, so it must route to the appliance install.
+  assertEquals(classifyJobType("", "Replace the Owen with electric stove")?.job_type, "appliances.range_install");
+  assertEquals(classifyJobType("", "new electric range")?.job_type, "appliances.range_install");
+  assertEquals(classifyJobType("", "electric water heater replacement")?.job_type, "plumbing.water_heater");
+  // But an actual wiring signal keeps it electrical.
+  assertEquals(classifyJobType("", "new circuit for an electric range")?.job_type, "electrical.dedicated_circuit");
+  assertEquals(classifyJobType("", "electrical panel upgrade")?.job_type, "electrical.panel");
+});
+
 Deno.test("classifyJobType falls back to the most specific job keyword without a stem", () => {
   assertEquals(classifyJobType("", "water heater replacement 40 gallon")?.job_type, "plumbing.water_heater");
   assertEquals(classifyJobType("", "leaking toilet")?.job_type, "plumbing.fixture");

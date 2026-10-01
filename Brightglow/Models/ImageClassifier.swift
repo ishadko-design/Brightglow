@@ -414,10 +414,14 @@ enum ImageClassifier {
     /// unmappable, so `details`/`description` survive that case.
     private static func cloudReply(_ image: UIImage, hint: String? = nil, region: Bool = false) async throws -> CloudReply {
         guard !ref.isEmpty, !anonKey.isEmpty else { throw ClassifyError.noMatch }
-        // ~1280px long edge (up from 512): Sonnet reads fine detail — a badge, a
-        // crack, panel joints — that a 512px thumbnail blurs away, and the image
-        // still costs only ~1k tokens. JPEG 0.7 keeps the payload small.
-        guard let jpeg = image.downscaled(maxDimension: 1280).jpegData(compressionQuality: 0.7),
+        // ~1024px long edge (trimmed from 1280 for cost, 2026-09-20): vision
+        // tokens scale with pixel area (≈ w·h/750), so 1024 vs 1280 is ~36% fewer
+        // tokens per capture at negligible recognition loss — well above the old
+        // 512px that blurred badges/cracks. If fine-detail reads regress (a badge,
+        // a hairline crack, panel joints), bump back toward 1152–1280. JPEG 0.7
+        // keeps the payload small. Display is unaffected — users see the full-res
+        // photo; this downscaled copy is only what the model reads.
+        guard let jpeg = image.downscaled(maxDimension: 1024).jpegData(compressionQuality: 0.7),
               let url = URL(string: "https://\(ref).supabase.co/functions/v1/classify")
         else { throw ClassifyError.noImage }
 

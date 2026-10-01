@@ -269,6 +269,29 @@ function isBroadProject(description: string): boolean {
   return BROAD_PROJECT_WORDS.some((w) => d.includes(w));
 }
 
+// Whole-PROPERTY scope: a gut/structural/whole-house job, an addition, an ADU,
+// or a new build. Unlike a room remodel ("kitchen remodel" — which isn't in the
+// priced taxonomy and already declines to grounding), the LLM classifier can
+// map these onto a narrow single-trade entry that DOES price (framing, drywall,
+// repipe), so the modelled path emits a tiny task figure instead of declining —
+// live 2026-09-19: "Full structural renovation house 1200 sqft" showed
+// $98–$430. These are never one modeled task; they always route to the grounded
+// whole-project ballpark, overriding whatever single trade classified. Home
+// only: Auto & moto has real whole-vehicle entries (full respray, full detail).
+const WHOLE_PROJECT_SIGNALS = [
+  "whole house", "whole-house", "whole home", "whole-home", "entire house",
+  "entire home", "full house", "gut renovation", "gut remodel", "full gut",
+  "down to studs", "down to the studs", "studs out", "structural renovation",
+  "structural remodel", "full structural", "structural rebuild",
+  "house renovation", "home renovation", "full renovation", "full remodel",
+  "complete renovation", "complete remodel", "addition", "adu",
+  "accessory dwelling", "new construction", "rebuild", "reconstruct",
+];
+function isWholeProject(description: string): boolean {
+  const d = description.toLowerCase();
+  return WHOLE_PROJECT_SIGNALS.some((w) => d.includes(w));
+}
+
 function validJobDetail(detail: string, description: string): boolean {
   const d = detail.trim();
   if (d.length < 8) return false;
@@ -470,6 +493,21 @@ Deno.serve(async (req) => {
     : null) ?? llmVertical;
 
   if (!EPCI_ENABLED) {
+    // Whole-property scope overrides any single-trade classification: a gut /
+    // structural / whole-house reno, an addition, or an ADU is never one
+    // modeled task, so hand it straight to the grounded whole-project ballpark
+    // rather than let a narrow entry (framing, drywall, repipe) price it as a
+    // small job. Home only — auto has real whole-vehicle entries. Falls through
+    // to the modeled path only if grounding is unavailable (no key / declined).
+    if (
+      verticalResolved !== "auto" && vehicleResolved !== "moto" &&
+      isWholeProject(trimmedDesc)
+    ) {
+      console.log("pricing: whole-project override", JSON.stringify({ category, description }));
+      const grounded = await groundedResponse(zip, "home", trimmedDesc);
+      if (grounded) return grounded;
+    }
+
     // Multi-job requests price each job separately and sum (see
     // estimateJobsInHouse); anything else keeps the historical single path.
     const r = llmJobs.length > 1
