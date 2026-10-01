@@ -117,6 +117,12 @@ export function buildGroundedSystemPrompt(locationLabel: string, kind: GroundedK
     "- low/typical/high are the realistic spread for this scope in this area —",
     "  wide is fine and honest, but low <= typical <= high.",
     `- ${subject.scope}`,
+    `- When the description lists COMPONENTS ("includes: permit, new 240V`,
+    '  circuit, trench, …"), price EVERY listed component in the total — the',
+    "  permit, the run, the trenching, the equipment hookup — not just the",
+    "  headline trade task. Components marked \"maybe\" or \"unknown\" belong",
+    "  in the HIGH end, not the typical: widen the spread rather than drop them.",
+    "  Name the main components in the basis.",
     `- BROAD ${subject.noun}s (a remodel, renovation, addition, or other`,
     "  whole-room/whole-house job) where the user did NOT pin an exact size or",
     "  finish are still estimable: give a realistic range for a STANDARD version",
@@ -152,6 +158,17 @@ export function canonicalJob(description: string): string | null {
   const d = description.toLowerCase();
   const subject = CANONICAL_SUBJECTS.find((s) => d.includes(s));
   if (!subject) return null;
+  // Only a whole-ROOM / whole-property project may collapse onto the subject.
+  // A specific job that merely NAMES a room ("EV charger in the garage",
+  // "wire the sauna on the deck", "kitchen faucet") is not a remodel — keying it
+  // "garage:remodel" served it a cached remodel band (bug found 2026-09-30).
+  // ADU / accessory dwelling are projects by themselves.
+  const isProject = /remodel|renovat|\breno\b|\bgut\b|addition|\badu\b|accessory dwelling|rebuild|reconstruct|\bfinish(ed|ing)?\b|\bredo\b|makeover/
+    .test(d);
+  if (!isProject) return null;
+  // A clarified multi-component project ("project: …; includes: …") is priced
+  // from its own component list — never from a room bucket's cached band.
+  if (/\bincludes:\s*\S/.test(d)) return null;
   const ptype = /\bgut\b/.test(d)
     ? "gut-remodel"
     : /remodel|renovat|\breno\b/.test(d)

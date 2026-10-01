@@ -80,6 +80,10 @@ describe what a matching work photo looks like. A price is a bonus, never the go
 
 You may ask at most ${remaining} more question${remaining === 1 ? "" : "s"}\
 ${mustFinish ? ' — you MUST finish now with action "done"' : ""}.
+${mustFinish ? `FINISH NOW — this beats every "keep asking" rule below, including the
+PROJECT rules: return action "done" with EVERY field filled from what is known.
+Any component still unanswered goes under "unknown:" in details. Never ask.
+` : ""}
 
 Ask a question (action "ask") ONLY if its answer changes one of:
 - which KIND of business matches (the biggest lever, ask this first),
@@ -107,6 +111,9 @@ stupid question users screenshot (reported 2026-09-12). Ask the cost driver
 of the work item itself — for trim, its length in feet.
 
 Question style: one per turn, plain non-technical language, under 20 words.
+ONE fact per question — never bundle two ("indoors or outdoors, and how far
+from the panel?"): a chip can only answer one, and the half left unanswered
+gets re-asked, which reads as a repeat.
 Never ask for contact info, address, or timing.
 
 EVERY question MUST ship with 2-4 quick_replies. This is not optional and an
@@ -219,6 +226,49 @@ request is a remodel, renovation, gut, or "redo the whole <room/house>"
   "150 sq ft, mid-range kitchen remodel" or "1800 sq ft, budget whole-house
   remodel". Set category to the lead trade if one clearly dominates, else "".
 
+SIZE THE JOB BEFORE YOU DECIDE HOW MANY QUESTIONS IT NEEDS. Classify it:
+- TASK: one fix or swap on something that already exists (replace a breaker,
+  fix a leak, swap a faucet). 1-2 questions, as above.
+- INSTALL: one new item where the hookup already exists or is trivial (a light
+  where a light was, a dishwasher in the dishwasher spot). 1-3 questions.
+- PROJECT: new equipment or a new run plus everything that makes it work —
+  e.g. wiring a sauna, hot tub or EV charger, a generator with a transfer
+  switch, a backyard studio, an outdoor kitchen, a gas line to a new range, a
+  heat pump replacing a furnace. These are routinely 3-10x the price of the
+  trade task their keyword suggests, and often need more than one trade.
+This OVERRIDES "stop the moment you can name the business type" above: for a
+PROJECT, knowing the trade is not enough — the scope is the price.
+For a PROJECT, the trade keyword is NOT the job. "Connect sauna electrical" is
+not "a new circuit": it is a high-load hardwired 240V circuit, possibly a
+panel/service upgrade, a permit, a long run, maybe trenching to an outdoor
+unit — and maybe someone to build the sauna. Before finishing, settle the
+COMPONENTS that change the price or WHO you need, asking the highest-value
+unknown first, one per turn, until each one is answered or "Not sure":
+- Is the equipment already in place, or must it be built/installed too?
+  (Changes the business: a sauna builder vs. an electrician alone.)
+- Where is it vs. the source — indoors / outdoors, roughly how far from the
+  panel / water / gas, and will the run go underground (trenching)?
+- Capacity of what feeds it (panel size 100A / 200A, existing gas line) when
+  the load is big — offer "Not sure" (most homeowners don't know).
+- Load or size of the equipment, if the user hasn't said (they often have).
+Do NOT ask about the permit — assume one is needed for a project and include
+it. Up to ~5 questions for a project is fine when each one moves the price or
+the match; a "Not sure" answer is settled — record it as unknown, never re-ask.
+
+For a PROJECT, write \`details\` in this exact shape (it is how the pricing
+engine knows to price the whole scope, not the trade keyword):
+  "project: <what is being built/connected>; includes: <every component,
+  comma-separated, including permit>; unknown: <components the user wasn't
+  sure of>"
+e.g. "project: outdoor sauna electrical hookup, 8 kW heater; includes: permit,
+new 240V 40A hardwired circuit, ~60 ft run, trench to sauna, disconnect;
+unknown: panel capacity".
+Also, for a project, search_terms names the SPECIALTY, not just the trade
+("sauna and hot tub electrical installation"), and photo_terms names the
+distinctive finished result a matching photo shows ("sauna heater wiring
+control panel") — never generic trade gear (a breaker panel is NOT a matching
+photo for a sauna, a water heater is not one for an outdoor kitchen).
+
 Finishing (action "done") — fill EVERY field:
 - vertical: "home" | "auto_moto".
 - category: the best-fit business category. Home: one of ${HOME_CATEGORIES.join(", ")}. \
@@ -275,8 +325,23 @@ Auto: one of ${AUTO_SERVICES.join(", ")}. Use "" only if nothing fits.
   Name the work item precisely — no location, no brand, no period, no quotes.
   Use "" if the request was too vague to name.
 
+- job_spec: the structured read of the job that downstream ranking uses to
+  judge which businesses and which of their photos actually fit:
+  - complexity: "task" | "install" | "project" (see SIZE THE JOB).
+  - components: every piece of work involved, short phrases (["permit",
+    "240V 40A hardwired circuit", "~60 ft trench"]). [] for a simple task.
+  - trades: the kinds of business that can do it, best first
+    (["electrician"], or ["sauna builder", "electrician"] if nothing is built yet).
+  - specialties: experience that marks a strong fit (["sauna", "hot tub / spa",
+    "EV charger", "outdoor / trenched runs"]).
+  - photo_match: 2-5 short descriptions of photos that SHOW a similar job
+    (["sauna heater with control box", "hot tub disconnect wiring"]).
+  - photo_reject: photos that look on-trade but are NOT this job and would
+    mislead the user (["breaker panel close-up", "light fixture"]). [] if none.
+
 When asking (action "ask"): also return your best-so-far vertical and category
-(use "" if not yet known); leave search_terms, photo_terms, details, summary, job_title as "".
+(use "" if not yet known); leave search_terms, photo_terms, details, summary, job_title as "" and job_spec
+with empty fields (complexity "task", empty lists).
 
 The pricing engine covers these home jobs — for home requests, aim toward them
 and note each one's pricing unit (the quantity worth clarifying):
@@ -301,24 +366,56 @@ const SCHEMA = {
     details: { type: "string" },
     summary: { type: "string" },
     job_title: { type: "string" },
+    // Structured read of the job for business/photo fit (rerank). Returned to
+    // the client as-is; older clients ignore it. No min/maxItems — see above.
+    job_spec: {
+      type: "object",
+      properties: {
+        complexity: { type: "string", enum: ["task", "install", "project"] },
+        components: { type: "array", items: { type: "string" } },
+        trades: { type: "array", items: { type: "string" } },
+        specialties: { type: "array", items: { type: "string" } },
+        photo_match: { type: "array", items: { type: "string" } },
+        photo_reject: { type: "array", items: { type: "string" } },
+      },
+      required: ["complexity", "components", "trades", "specialties", "photo_match", "photo_reject"],
+      additionalProperties: false,
+    },
   },
   required: [
     "action", "question", "quick_replies",
     "vertical", "category", "search_terms", "photo_terms", "details", "summary",
-    "job_title",
+    "job_title", "job_spec",
   ],
   additionalProperties: false,
 } as const;
+
+/** SCHEMA with `action` pinned to "done" — used when the model must finish. */
+const FINISH_SCHEMA = {
+  ...SCHEMA,
+  properties: { ...SCHEMA.properties, action: { type: "string", enum: ["done"] } },
+};
+
+interface JobSpec {
+  complexity: "task" | "install" | "project";
+  components: string[];
+  trades: string[];
+  specialties: string[];
+  photo_match: string[];
+  photo_reject: string[];
+}
 
 interface Turn {
   role: "user" | "assistant";
   content: string;
 }
 
-function json(payload: unknown, status = 200): Response {
+function json(payload: unknown, status = 200, path = ""): Response {
+  // x-clarify-path: which recovery path produced the reply (diagnostics only —
+  // `supabase functions logs` isn't available from the CLI here).
   return new Response(JSON.stringify(payload), {
     status,
-    headers: { "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json", ...(path ? { "x-clarify-path": path } : {}) },
   });
 }
 
@@ -456,6 +553,7 @@ Deno.serve(async (req) => {
     details?: string;
     summary?: string;
     job_title?: string;
+    job_spec?: JobSpec;
   };
   // Sonnet is markedly faster than Opus for this lightweight per-turn routing
   // task and just as accurate against the fixed schema. `mustFinish` forces the
@@ -465,12 +563,16 @@ Deno.serve(async (req) => {
     const client = new Anthropic({ apiKey: ANTHROPIC_API_KEY, timeout: 20_000, maxRetries: 1 });
     const response = await client.messages.create({
       model: "claude-sonnet-5",
-      max_tokens: 600,
+      // 1000 (was 600): a project's done turn now also carries job_spec.
+      max_tokens: 1000,
       // Sonnet 5 runs adaptive thinking when `thinking` is omitted — off here:
       // a quick schema-bound routing call, thinking only adds latency and cost.
       thinking: { type: "disabled" },
       system: systemPrompt(mustFinish ? 0 : remaining),
-      output_config: { format: { type: "json_schema", schema: SCHEMA } },
+      // A forced finish constrains `action` to "done" in the schema itself: the
+      // prompt alone lost to the PROJECT "keep asking" rules and the retry came
+      // back "ask", shipping a done with every field empty (seen 2026-09-30).
+      output_config: { format: { type: "json_schema", schema: mustFinish ? FINISH_SCHEMA : SCHEMA } },
       messages: modelMessages,
     });
     const text = response.content.find((b) => b.type === "text")?.text ?? "";
@@ -478,7 +580,7 @@ Deno.serve(async (req) => {
   };
 
   try {
-    parsed = await runModel(false);
+    parsed = await runModel(remaining === 0);
   } catch (err) {
     console.error("clarify: model call failed", err);
     return json({ error: "clarify failed" }, 502);
@@ -486,6 +588,7 @@ Deno.serve(async (req) => {
 
   // Out of questions -> the model was told to finish; coerce if it didn't. We
   // keep whatever match fields it produced so results still get search terms.
+  let path = "normal";
   if (parsed.action !== "done" && remaining === 0) {
     parsed.action = "done";
   }
@@ -506,8 +609,10 @@ Deno.serve(async (req) => {
     // or somehow re-asks, fall back to a bare done rather than looping.
     try {
       const finished = await runModel(true);
+      path = `dup-retry:${finished?.action}`;
       parsed = finished?.action === "done" ? finished : { ...parsed, action: "done" };
     } catch (err) {
+      path = `dup-throw:${String(err).replace(/[^\x20-\x7e]/g, "").slice(0, 200)}`;
       console.error("clarify: finish retry failed", err);
       parsed.action = "done";
     }
@@ -565,6 +670,7 @@ Deno.serve(async (req) => {
       : vehicleSizeToken(parsed.details ?? ""),
     summary: parsed.summary ?? "",
     job_title: parsed.job_title ?? "",
+    job_spec: parsed.job_spec ?? null,
     priceable: isPriceable(vertical, category),
-  });
+  }, 200, path);
 });

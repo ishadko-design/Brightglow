@@ -84,3 +84,13 @@ Deno.test("saneBand rejects the ways a search goes wrong", () => {
   assertEquals(saneBand({ low: 1000, typical: 5000, high: 40000, basis: "" }), null);
   assertEquals(saneBand(null), null);
 });
+
+Deno.test("canonicalJob does not collapse a specific job that merely names a room", () => {
+  // Bug 2026-09-30: these keyed to "garage:remodel" / "deck:remodel" and were
+  // served a cached remodel band.
+  assertEquals(canonicalJob("install EV charger in the garage"), null);
+  assertEquals(canonicalJob("wire the outdoor sauna on the deck"), null);
+  assertEquals(canonicalJob("replace kitchen faucet"), null);
+  // A clarified multi-component project prices from its own component list.
+  assertEquals(canonicalJob("basement sauna, project: sauna electrical; includes: permit, new circuit, remodel"), null);
+});

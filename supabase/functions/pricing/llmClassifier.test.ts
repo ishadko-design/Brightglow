@@ -52,20 +52,35 @@ Deno.test("buildSystemPrompt lists every pool id", () => {
 Deno.test("buildSchema enum is the pool plus none", () => {
   const pool = buildClassifierPool(JOB_TYPE_TAXONOMY, CATEGORY_GENERAL, "HVAC");
   const schema = buildSchema(pool) as {
-    properties: { job_type: { enum: string[] } };
+    properties: { jobs: { items: { properties: { job_type: { enum: string[] } } } } };
   };
-  assertEquals(schema.properties.job_type.enum.length, pool.length + 1);
-  assert(schema.properties.job_type.enum.includes("none"));
+  const e = schema.properties.jobs.items.properties.job_type.enum;
+  assertEquals(e.length, pool.length + 1);
+  assert(e.includes("none"));
 });
 
 Deno.test("parseClassification accepts pool ids and rejects everything else", () => {
   const pool = buildClassifierPool(JOB_TYPE_TAXONOMY, CATEGORY_GENERAL, "");
-  const jt = (t: string | undefined) => parseClassification(t, pool).jobType;
+  const jt = (t: string | undefined) => parseClassification(t, pool).jobs[0]?.jobType ?? null;
   assertEquals(jt('{"job_type": "windows_doors.sliding_door", "vehicle": "none"}'), "windows_doors.sliding_door");
   assertEquals(jt('{"job_type": "none", "vehicle": "none"}'), null);
   assertEquals(jt('{"job_type": "made.up", "vehicle": "none"}'), null);
   assertEquals(jt("not json"), null);
   assertEquals(jt(undefined), null);
+});
+
+Deno.test("parseClassification reads scope_kind, defaulting to task", () => {
+  const pool = buildClassifierPool(JOB_TYPE_TAXONOMY, CATEGORY_GENERAL, "");
+  const k = (t: string) => parseClassification(t, pool).scopeKind;
+  assertEquals(k('{"jobs": [], "vehicle": "none", "vertical": "home", "scope_kind": "project"}'), "project");
+  assertEquals(k('{"jobs": [], "vehicle": "none", "vertical": "home", "scope_kind": "task"}'), "task");
+  assertEquals(k('{"jobs": [], "vehicle": "none", "vertical": "home"}'), "task");
+});
+
+Deno.test("buildSchema has no keywords output_config rejects", () => {
+  // maxItems/minItems/minimum/maximum 400 the whole call (2026-09-20).
+  const s = JSON.stringify(buildSchema(buildClassifierPool(JOB_TYPE_TAXONOMY, CATEGORY_GENERAL, "")));
+  for (const kw of ["maxItems", "minItems", "minimum", "maximum"]) assert(!s.includes(`"${kw}"`), kw);
 });
 
 Deno.test("parseClassification reads the vehicle, defaulting to null", () => {

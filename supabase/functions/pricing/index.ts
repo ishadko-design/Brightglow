@@ -123,9 +123,16 @@ async function fetchEPCICached(
   return { items, cache: db ? "miss" : "bypass" };
 }
 
+/** classification_cache.job_type value marking a "project" classification —
+ *  never a real taxonomy id (those are "<trade>.<job>"). */
+const PROJECT_SENTINEL = "__project__";
+
 function classificationCacheKey(category: string, description: string): string {
   const norm = description.toLowerCase().replace(/\s+/g, " ").trim();
-  return `${category}:${norm}`.slice(0, 300);
+  // "v2:" — rows written before scope_kind existed carry no project flag, so
+  // they must not be served (a cached "task" sauna would keep its bare-circuit
+  // price for 24h). Bump again whenever the classifier's output shape changes.
+  return `v2:${category}:${norm}`.slice(0, 300);
 }
 
 /** Semantic classification with a 24h cache. Returns the taxonomy job types
@@ -149,13 +156,16 @@ async function classifyLLMCached(
         // New shape (jobs JSON) wins; pre-multi-job rows carry one job_type.
         const jobs: ClassifiedJob[] = Array.isArray(data.jobs)
           ? (data.jobs as ClassifiedJob[]).filter((j) => j && typeof j.jobType === "string")
-          : typeof data.job_type === "string" && data.job_type
+          : typeof data.job_type === "string" && data.job_type && data.job_type !== PROJECT_SENTINEL
           ? [{ jobType: data.job_type as string, detail: "" }]
           : [];
         return {
           jobs,
           vehicle: v === "auto" || v === "moto" ? v : null,
           vertical: vert === "home" || vert === "auto" ? vert : null,
+          // No column for it: the project flag rides in job_type as a sentinel
+          // (see the write below) so the cache needs no migration.
+          scopeKind: data.job_type === PROJECT_SENTINEL ? "project" : "task",
         };
       }
     } catch (_) { /* ignore, fall through to a live call */ }
@@ -181,7 +191,9 @@ async function classifyLLMCached(
     try {
       await db.from("classification_cache").upsert({
         cache_key: key,
-        job_type: result.jobs[0]?.jobType ?? null,
+        job_type: result.scopeKind === "project"
+          ? PROJECT_SENTINEL
+          : result.jobs[0]?.jobType ?? null,
         jobs: result.jobs,
         vehicle: result.vehicle,
         vertical: result.vertical,
@@ -290,6 +302,13 @@ const WHOLE_PROJECT_SIGNALS = [
 function isWholeProject(description: string): boolean {
   const d = description.toLowerCase();
   return WHOLE_PROJECT_SIGNALS.some((w) => d.includes(w));
+}
+
+// The clarify chat marks a multi-component job explicitly in its `details`
+// ("project: …; includes: …") — see clarify's PROJECT SCOPE rules. That marker
+// is a deterministic signal, independent of the classifier call succeeding.
+function hasProjectScope(description: string): boolean {
+  return /\bproject:\s*\S/i.test(description) && /\bincludes:\s*\S/i.test(description);
 }
 
 function validJobDetail(detail: string, description: string): boolean {
@@ -402,6 +421,7 @@ Deno.serve(async (req) => {
   const trimmedDesc = description.trim();
   let llmVehicle: "auto" | "moto" | null = null;
   let llmVertical: "home" | "auto" | null = null;
+  let llmProject = false;
   // Multi-job: the classifier may return several jobs, each validated and
   // priced separately below. Empty = "none", the keyword result stands.
   let llmJobs: Array<{ entry: JobTypeEntry; description: string; scope: JobScope }> = [];
@@ -441,6 +461,7 @@ Deno.serve(async (req) => {
     if (llmJobs.length === 1) entry = llmJobs[0].entry;
     llmVehicle = llm.vehicle;
     llmVertical = llm.vertical;
+    llmProject = llm.scopeKind === "project";
   }
   if (llmJobs.length > 1) {
     console.log("pricing: classified multi", JSON.stringify({
@@ -501,9 +522,9 @@ Deno.serve(async (req) => {
     // to the modeled path only if grounding is unavailable (no key / declined).
     if (
       verticalResolved !== "auto" && vehicleResolved !== "moto" &&
-      isWholeProject(trimmedDesc)
+      (llmProject || isWholeProject(trimmedDesc) || hasProjectScope(trimmedDesc))
     ) {
-      console.log("pricing: whole-project override", JSON.stringify({ category, description }));
+      console.log("pricing: whole-project override", JSON.stringify({ category, description, llmProject }));
       const grounded = await groundedResponse(zip, "home", trimmedDesc);
       if (grounded) return grounded;
     }

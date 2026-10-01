@@ -72,6 +72,18 @@ export function buildSystemPrompt(pool: JobTypeEntry[], categoryHint?: string): 
     "  jobs list so it is priced as a whole project, not as one small task. A",
     "  SINGLE-ROOM remodel or a specific named trade job is still classified",
     "  normally.",
+    "- Report scope_kind. \"task\" = the request is ONE job a single listed",
+    "  entry prices as described (swap a breaker, add an outlet, replace a",
+    "  faucet, a dedicated circuit for a range already beside the panel).",
+    "  \"project\" = the described work spans components NO single listed entry",
+    "  covers: it adds a permit, trenching or a long new run, a panel/service",
+    "  upgrade, building or installing new equipment AND its hookup, or several",
+    "  trades — e.g. wiring a sauna, hot tub or backyard studio; an outdoor",
+    "  kitchen; a generator with a transfer switch; a whole-property project.",
+    "  Judge the WHOLE described scope, not its trade keyword: \"connect sauna",
+    "  electrical, 6-9 kW, outdoor, 60 ft from panel, permit\" is a project even",
+    "  though a dedicated-circuit entry exists. For a project, still list any",
+    "  jobs that fit, but they will not be priced as the whole.",
     "- For each job, also capture the SCOPE the request explicitly states, and",
     "  only then: quantity (a stated count of units — windows, doors, panels,",
     "  deck boards, fixtures), area_sqft (a stated area, e.g. \"300 sq ft deck\"),",
@@ -164,8 +176,12 @@ export function buildSchema(pool: JobTypeEntry[]): Record<string, unknown> {
         type: "string",
         enum: ["home", "auto", "none"],
       },
+      scope_kind: {
+        type: "string",
+        enum: ["task", "project"],
+      },
     },
-    required: ["jobs", "vehicle", "vertical"],
+    required: ["jobs", "vehicle", "vertical", "scope_kind"],
     additionalProperties: false,
   };
 }
@@ -194,6 +210,13 @@ export interface Classification {
   /** Which taxonomy the request belongs to, or null when unclear. Keeps a car
    *  window out of the home window entry. */
   vertical: "home" | "auto" | null;
+  /** "project" when the described scope spans components no single taxonomy
+   *  entry covers (permit, trenching, long run, panel upgrade, equipment +
+   *  hookup, several trades). The caller prices those as a whole project
+   *  instead of as the one task a trade keyword lands on — live 2026-09-30,
+   *  "Connect sauna electrical, 6-9 kW" priced as a bare dedicated circuit
+   *  ($240–1.5k). Absent (old cache rows, failures) = "task", the old path. */
+  scopeKind?: "task" | "project";
 }
 
 /** Parses the model's JSON reply. Anything malformed degrades to no jobs,
@@ -211,6 +234,7 @@ export function parseClassification(
       job_type?: unknown;
       vehicle?: unknown;
       vertical?: unknown;
+      scope_kind?: unknown;
     };
     // Backwards tolerance: the pre-multi-job schema returned a single job_type.
     const rawJobs = Array.isArray(o.jobs)
@@ -251,6 +275,7 @@ export function parseClassification(
       jobs,
       vehicle: o.vehicle === "auto" || o.vehicle === "moto" ? o.vehicle : null,
       vertical: o.vertical === "home" || o.vertical === "auto" ? o.vertical : null,
+      scopeKind: o.scope_kind === "project" ? "project" : "task",
     };
   } catch {
     return empty;
