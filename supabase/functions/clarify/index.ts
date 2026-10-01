@@ -41,6 +41,7 @@ import {
 import { GENERIC_REPLIES, normalizeQuickReplies } from "./quickReplies.ts";
 import { repeatsPriorQuestion } from "./repeatsPriorQuestion.ts";
 import { buildModelMessages, sanitizePhoto } from "./photoMessage.ts";
+import { asksOwnership, impliesOwned, projectDetails } from "./ownership.ts";
 
 const APP_TOKEN = Deno.env.get("APP_TOKEN") ?? "";
 const ANTHROPIC_API_KEY = Deno.env.get("ANTHROPIC_API_KEY") ?? "";
@@ -244,9 +245,19 @@ panel/service upgrade, a permit, a long run, maybe trenching to an outdoor
 unit — and maybe someone to build the sauna. Before finishing, settle the
 COMPONENTS that change the price or WHO you need, asking the highest-value
 unknown first, one per turn, until each one is answered or "Not sure":
-- Does the user already have the equipment (bought, a kit, delivered), or
-  still need to get it? Ask it that way — "Do you already have the sauna?" —
-  never "does it need to be built?", which wrongly steers to a builder.
+- "INSTALL <equipment>" means the user ALREADY HAS IT (bought, a kit, on
+  order) — NEVER ask whether they have, bought, or need to build it when the
+  request says install / hook up / connect / wire / set up. That question is
+  already answered by the verb; asking it is the redundant question users
+  notice. The job is installing their unit, priced WITHOUT the
+  unit. Ask whether they have it only when the request doesn't say install
+  ("I want a sauna", "thinking about a hot tub"), and then as "Do you already
+  have the sauna?" — never "does it need to be built?", which steers to a
+  builder.
+- Installing an owned unit is the WHOLE installation, not just the wiring:
+  placing/assembling it, a level base or pad when it's outdoors, the permit,
+  the circuit/run/trench, the disconnect and the heater/controls hookup —
+  list them all in includes.
 - Where is it vs. the source — indoors / outdoors, roughly how far from the
   panel / water / gas, and will the run go underground (trenching)?
 - Capacity of what feeds it (panel size 100A / 200A, existing gas line) when
@@ -264,9 +275,11 @@ engine knows to price the whole scope, not the trade keyword):
   "project: <what is being built/connected>; includes: <every component,
   comma-separated, including permit>; unknown: <components the user wasn't
   sure of>"
-e.g. "project: outdoor sauna electrical hookup, 8 kW heater; includes: permit,
-new 240V 40A hardwired circuit, ~60 ft run, trench to sauna, disconnect;
-unknown: panel capacity".
+e.g. "project: install customer-owned outdoor sauna, 8 kW heater (unit already
+purchased, not included); includes: placement and assembly, level gravel/paver
+base, permit, new 240V 40A hardwired circuit, ~60 ft run, trench to sauna,
+disconnect, heater and controls hookup; unknown: panel capacity".
+Whenever the user has the unit, write "(unit already purchased, not included)".
 Also, for a project, search_terms is the BUSINESS TYPE that does the work
 FIRST, then the specialty ("electrician sauna hot tub wiring") — a phrase that
 leads with the product ("sauna and hot tub installation", "outdoor sauna
@@ -345,7 +358,7 @@ Auto: one of ${AUTO_SERVICES.join(", ")}. Use "" only if nothing fits.
   - components: every piece of work involved, short phrases (["permit",
     "240V 40A hardwired circuit", "~60 ft trench"]). [] for a simple task.
   - trades: the kinds of business that can do it, best first
-    (["electrician"], or ["sauna builder", "electrician"] if nothing is built yet).
+    (["electrician"]; the licensed hookup trade first for bought equipment).
   - specialties: experience that marks a strong fit (["sauna", "hot tub / spa",
     "EV charger", "outdoor / trenched runs"]).
   - photo_match: 2-5 short descriptions of photos that SHOW a similar job
@@ -601,7 +614,7 @@ Deno.serve(async (req) => {
       output_config: {
         format: {
           type: "json_schema",
-          schema: mustFinish ? FINISH_SCHEMA : mustAskNote ? ASK_SCHEMA : SCHEMA,
+          schema: mustFinish ? FINISH_SCHEMA : mustAskNote.includes("PROJECT FLOOR") ? ASK_SCHEMA : SCHEMA,
         },
       },
       messages: modelMessages,
@@ -634,8 +647,7 @@ Deno.serve(async (req) => {
 PROJECT FLOOR: you tried to finish a PROJECT after only ${asked} question${asked === 1 ? "" : "s"}.
 Ask ONE more question now — the highest-value component still unsettled by
 the request and the answers above (e.g. the route of the run: underground /
-along the house / indoors; the panel's capacity; whether the unit is already
-on site). Never re-ask or reword anything already answered or "Not sure".`);
+along the house / indoors; the panel's capacity; the equipment's load). Never re-ask or reword anything already answered or "Not sure".`);
       if (more?.action === "ask" && more.question) {
         parsed = more;
         path = "project-floor";
@@ -671,6 +683,28 @@ on site). Never re-ask or reword anything already answered or "Not sure".`);
       path = `dup-throw:${String(err).replace(/[^\x20-\x7e]/g, "").slice(0, 200)}`;
       console.error("clarify: finish retry failed", err);
       parsed.action = "done";
+    }
+  }
+
+  // Ownership guard: "install X" already says they have X.
+  const owned = impliesOwned(messages[0].content);
+  if (owned && parsed.action === "ask" && parsed.question && asksOwnership(parsed.question)) {
+    console.log("clarify: ownership question suppressed", JSON.stringify({ question: parsed.question }));
+    try {
+      const next = await runModel(false, `
+
+The user's request says INSTALL / hook up — they ALREADY HAVE the equipment.
+Do NOT ask whether they have, bought, ordered or need to build it. Ask the next
+unsettled component instead (location/distance, the run's route, panel
+capacity, load), or finish if everything is settled.`);
+      if (next?.action === "ask" && next.question && !asksOwnership(next.question)) {
+        parsed = next;
+      } else {
+        parsed = await runModel(true);
+      }
+      path = "ownership-guard";
+    } catch (err) {
+      console.error("clarify: ownership retry failed", err);
     }
   }
 
@@ -722,7 +756,7 @@ on site). Never re-ask or reword anything already answered or "Not sure".`);
     // F-250 wrap is not a Miata wrap), so a size phrase is now allowed through.
     // Restricted to a size token so no free-text leaks into the auto path.
     details: vertical === "home"
-      ? (parsed.details ?? "")
+      ? projectDetails(parsed.details ?? "", parsed.job_title ?? "", parsed.job_spec, owned)
       : vehicleSizeToken(parsed.details ?? ""),
     summary: parsed.summary ?? "",
     job_title: parsed.job_title ?? "",

@@ -123,6 +123,20 @@ export function buildGroundedSystemPrompt(locationLabel: string, kind: GroundedK
     "  headline trade task. Components marked \"maybe\" or \"unknown\" belong",
     "  in the HIGH end, not the typical: widen the spread rather than drop them.",
     "  Name the main components in the basis.",
+    "  The LOW end is the sum of every listed component's own low cost —",
+    "  each one is real work that happens (assembly, base prep, permit, the",
+    "  circuit and the run are all billed) — never just the cheapest part.",
+    "  Only components marked possible/maybe/unknown may be left out of low.",
+    ...(kind === "home"
+      ? [
+        "- EQUIPMENT the homeowner buys separately from a retailer (a sauna, hot",
+        "  tub, spa, EV charger, appliance): \"install <it>\" prices the",
+        "  INSTALLATION ONLY — never the unit — unless the request says to buy,",
+        "  supply or include it. \"(unit already purchased, not included)\" always",
+        "  means exclude it. Contractor-supplied equipment (a water heater, furnace,",
+        "  AC, panel) is still priced with the unit, as usual.",
+      ]
+      : []),
     `- BROAD ${subject.noun}s (a remodel, renovation, addition, or other`,
     "  whole-room/whole-house job) where the user did NOT pin an exact size or",
     "  finish are still estimable: give a realistic range for a STANDARD version",

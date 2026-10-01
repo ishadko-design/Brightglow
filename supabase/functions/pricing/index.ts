@@ -213,7 +213,9 @@ function groundedCacheKey(zip: string | undefined, kind: GroundedKind, descripti
     description.toLowerCase().replace(/\s+/g, " ").trim();
   // Kind is in the key: "replace tires" grounds differently for a car (4) than
   // a motorcycle (2), so the two must not share a cached band.
-  return `${zip ?? "us"}:${kind}:${base}`.slice(0, 300);
+  // "g2:" — bands cached before the install-excludes-the-unit and
+  // price-every-component rules (2026-09-30) must not be served for 7 days.
+  return `g3:${zip ?? "us"}:${kind}:${base}`.slice(0, 300);
 }
 
 /** Web-search-grounded band for jobs the catalog doesn't model, with a 7-day
