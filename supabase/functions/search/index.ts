@@ -17,6 +17,7 @@
 // quota cap. Real auth is a Phase 4 hardening step. See docs/cheap-api-plan.md.
 
 import { createClient } from "jsr:@supabase/supabase-js@2";
+import { collapseFranchises } from "./franchise.ts";
 import { betterQueryFor, deriveJob, type DerivedJob, gatePlaces, type GateJob } from "./gate.ts";
 
 const GOOGLE_KEY = Deno.env.get("GOOGLE_PLACES_KEY") ?? "";
@@ -65,8 +66,18 @@ const LEADBRIDGE_ADMIN_TOKEN = Deno.env.get("LEADBRIDGE_ADMIN_TOKEN") ?? "";
 // we haven't checked yet are sent to LeadBridge to resolve in the background,
 // so the search latency is unaffected and the next search for them is warm.
 // Best-effort throughout: any failure just leaves contactEmail null (Call only).
-async function enrichContacts(responseObj: unknown): Promise<unknown> {
+async function enrichContacts(responseObj: unknown, lat?: number, lng?: number): Promise<unknown> {
   const obj = responseObj as { places?: Array<Record<string, unknown>> };
+  // One location per franchise brand (nearest) — siblings share a website and
+  // corporate photos and read as duplicates. Done here, the single choke point
+  // every response passes through; never mutates the cached raw response.
+  if (Array.isArray(obj?.places) && typeof lat === "number" && typeof lng === "number") {
+    const collapsed = collapseFranchises(obj.places, lat, lng);
+    if (collapsed.length !== obj.places.length) {
+      responseObj = { ...(responseObj as object), places: collapsed };
+      return enrichContacts(responseObj, undefined, undefined);
+    }
+  }
   const places = Array.isArray(obj?.places) ? obj.places : [];
   if (!places.length || !db) return responseObj;
   const ids = places.map((p) => p.id).filter(Boolean) as string[];
@@ -232,7 +243,7 @@ Deno.serve(async (req) => {
       if (data && Date.now() - new Date(data.created_at as string).getTime() < TTL_MS) {
         const gated = await gate(data.response, payload.job);
         return json(await enrichContacts(
-          await widenIfThin(gated, payload, latitude, longitude, pageSize, pageToken)), 200, "hit");
+          await widenIfThin(gated, payload, latitude, longitude, pageSize, pageToken), latitude, longitude), 200, "hit");
       }
     } catch (_) { /* ignore, fall through to Google */ }
   }
@@ -241,8 +252,8 @@ Deno.serve(async (req) => {
   const result = await googleSearch(textQuery as string, latitude, longitude, pageSize, pageToken, key);
   if (result instanceof Response) return result;
   const gated = await gate(result, payload.job);
-  return json(await enrichContacts(await widenIfThin(gated, payload, latitude, longitude, pageSize, pageToken)),
-    200, key ? "miss" : "bypass");
+  return json(await enrichContacts(await widenIfThin(gated, payload, latitude, longitude, pageSize, pageToken),
+    latitude, longitude), 200, key ? "miss" : "bypass");
 });
 
 /** Google Text Search + first-page cache write. Returns the parsed response,

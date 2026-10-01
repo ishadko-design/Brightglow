@@ -1280,7 +1280,13 @@ struct ContractorListScreen: View {
             category: category, searchQuery: effectiveSearchQuery, near: coord, pageToken: token,
             isAuto: allowsVehiclePhotos(effectiveSearchQuery))
         let existing = Set(contractors.map(\.id))
-        let fresh = page.contractors.filter { !existing.contains($0.id) }
+        // One location per franchise brand across pages too (the server
+        // collapses siblings within a page): a later page's "Miracle Method San
+        // Jose" is the same brand + photos as the one already listed.
+        let brands = Set(contractors.compactMap { brandDomain($0.website) })
+        let fresh = page.contractors.filter {
+            !existing.contains($0.id) && !(brandDomain($0.website).map(brands.contains) ?? false)
+        }
         nextPageToken = page.nextPageToken
         guard !fresh.isEmpty else { return }
         // Append first (rows past `visibleLimit` aren't shown), prepare them
@@ -1810,6 +1816,24 @@ struct ContractorListScreen: View {
         // second line of defense — e.g. a showroom whose reviews gave it away).
         // Never shown: one wrong business costs trust in every result.
         contractors.removeAll { photoFit[$0.id]?.fit == 0 }
+    }
+
+    /// A website's brand domain ("https://www.miraclemethod.com/sf" ->
+    /// "miraclemethod.com"); nil for none or a shared host (social, listing,
+    /// site builders) that unrelated businesses also use. Mirrors the server's
+    /// search/franchise.ts.
+    private func brandDomain(_ website: String?) -> String? {
+        guard let website, let host = URL(string: website)?.host?.lowercased() else { return nil }
+        let bare = host.replacingOccurrences(of: #"^www\d*\."#, with: "", options: .regularExpression)
+        let parts = bare.split(separator: ".")
+        guard parts.count >= 2 else { return nil }
+        let keep = parts.count >= 3 && parts[parts.count - 2].count <= 3 ? 3 : 2
+        let domain = parts.suffix(keep).joined(separator: ".")
+        let shared = ["facebook.com", "instagram.com", "yelp.com", "google.com", "business.site",
+                      "linktr.ee", "wixsite.com", "square.site", "godaddysites.com", "angi.com",
+                      "homeadvisor.com", "thumbtack.com", "nextdoor.com", "houzz.com", "bbb.org",
+                      "linkedin.com", "weebly.com", "wordpress.com", "squarespace.com", "porch.com"]
+        return shared.contains(domain) ? nil : domain
     }
 
     /// Whether this search carries a clarified job to check photos against.
