@@ -18,6 +18,8 @@ struct ClarifyTranscript: Equatable {
     /// 3-5 word job title from the clarify LLM ("metal trim replacement").
     /// Empty when the chat was skipped or couldn't name the request.
     var jobTitle: String = ""
+    /// The chat's structured job read, for the results list's photo/fit check.
+    var jobSpec: ClarifyService.JobSpec? = nil
 
     static let empty = ClarifyTranscript(turns: [])
 

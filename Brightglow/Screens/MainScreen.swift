@@ -1469,7 +1469,8 @@ struct MainScreen: View {
         clarifyTranscript = ClarifyTranscript(
             turns: chatMessages.map { ClarifyService.Turn(role: $0.role, content: $0.content) },
             summary: outcome?.summary ?? "",
-            jobTitle: outcome?.jobTitle ?? "")
+            jobTitle: outcome?.jobTitle ?? "",
+            jobSpec: outcome?.jobSpec)
         chatQuickReplies = []
         chatCompleted = true
         cancelPreloads()

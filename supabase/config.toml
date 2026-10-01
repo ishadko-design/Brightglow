@@ -37,3 +37,6 @@ verify_jwt = false
 # no-redundant-negation rule to the summary.
 [functions.clarify]
 verify_jwt = true
+
+[functions.photofit]
+verify_jwt = false

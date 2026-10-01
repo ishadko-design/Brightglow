@@ -49,6 +49,25 @@ enum ClarifyService {
         /// couldn't name the request (or an older payload lacks it).
         let jobTitle: String
         let priceable: Bool
+        /// Structured read of the job (complexity, components, specialties, what
+        /// a matching photo shows / doesn't) — fed to `PhotoFitService` so the
+        /// list shows only photos of THIS job. Nil from older servers.
+        var jobSpec: JobSpec? = nil
+    }
+
+    struct JobSpec: Decodable, Equatable {
+        let complexity: String
+        let components: [String]
+        let trades: [String]
+        let specialties: [String]
+        let photoMatch: [String]
+        let photoReject: [String]
+
+        enum CodingKeys: String, CodingKey {
+            case complexity, components, trades, specialties
+            case photoMatch = "photo_match"
+            case photoReject = "photo_reject"
+        }
     }
 
     /// Next chat turn. `messages` is the full history (first entry = the
@@ -102,7 +121,8 @@ enum ClarifyService {
                 // five Auto & moto categories 2026-07-20. This used to default
                 // auto to false, which was the second of two gates keeping
                 // "coming soon" on every auto result.
-                priceable: decoded.priceable ?? true
+                priceable: decoded.priceable ?? true,
+                jobSpec: decoded.job_spec
             ))
         }
         return nil
@@ -120,5 +140,6 @@ enum ClarifyService {
         let summary: String?
         let job_title: String?
         let priceable: Bool?
+        let job_spec: JobSpec?
     }
 }

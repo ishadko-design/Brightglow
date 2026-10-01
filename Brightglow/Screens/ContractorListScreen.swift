@@ -225,6 +225,11 @@ struct ContractorListScreen: View {
     /// Owner-curated, so they lead the strip un-screened and keep a claimed
     /// business visible even when Google returns no usable work photos for it.
     @State private var ownerPhotosByID: [String: [String]] = [:]
+    /// The LLM's final check for THIS job (`PhotoFitService`), keyed by place id:
+    /// which screened photos actually show the job, and how well the business
+    /// fits it. Judged once behind the loader for the landing window; a business
+    /// with no verdict keeps the keyword ordering exactly as before.
+    @State private var photoFit: [String: PhotoFitService.Verdict] = [:]
     /// Businesses whose OWN WEBSITE photos we've already fetched this session (once
     /// per business — the `business-photos` function caches across users). Google
     /// Places caps at 10 photos, mostly storefront; a contractor's site portfolio is
@@ -466,10 +471,25 @@ struct ContractorListScreen: View {
     /// Must be called AFTER keptPhotos is populated for these businesses.
     private func freezePhotoScores(for contractors: [Contractor]) {
         for c in contractors {
+            if let (s, evidence) = fitScore(c.id) {
+                frozenPhotoScores[c.id] = s
+                frozenPhotoEvidence[c.id] = evidence
+                continue
+            }
             let s = PhotoFilter.photoMatchStrength(keptPhotos[c.id] ?? [], query: matchQuery, category: category)
             frozenPhotoScores[c.id] = s
             frozenPhotoEvidence[c.id] = s > 0
         }
+    }
+
+    /// The job check's verdict as the photo signal: fit (0-3) scaled to the
+    /// photo-match weight's 0-1 range, and evidence = it has a photo of THIS
+    /// job. Replaces keyword overlap when present — the LLM judged the whole
+    /// job, where words matched "electrical" on every panel shot. Nil without a
+    /// verdict (keyword path as before).
+    private func fitScore(_ id: String) -> (Double, Bool)? {
+        guard let v = photoFit[id] else { return nil }
+        return (Double(v.fit) / 3, !v.relevant.isEmpty && v.fit >= 2)
     }
 
     /// Composite relevance score + photo-evidence flag. The score orders
@@ -495,6 +515,9 @@ struct ContractorListScreen: View {
         if let frozen = frozenPhotoScores[c.id] {
             photo = frozen
             evidence = frozenPhotoEvidence[c.id] ?? false
+        } else if let (s, e) = fitScore(c.id) {
+            photo = s
+            evidence = e
         } else {
             photo = PhotoFilter.photoMatchStrength(keptPhotos[c.id] ?? [], query: matchQuery, category: category)
             evidence = photo > 0
@@ -693,7 +716,7 @@ struct ContractorListScreen: View {
                 aiResult: aiResult,
                 presetCoordinate: resolvedCoord ?? presetCoordinate,
                 preloadedContractors: contractors,
-                preScreened: screenedByID,
+                preScreened: galleryPhotosByID,
                 startContractorID: startContractorID,
                 startPhotoIndex: startPhotoIndex,
                 initialPageToken: nextPageToken,
@@ -777,7 +800,12 @@ struct ContractorListScreen: View {
                             // (revealed); until then it shows gray placeholders — so
                             // fetching a 20-business list only downloads photos for
                             // the ~4 businesses in view, then more as the user scrolls.
-                            photos: revealedIDs.contains(contractor.id) ? screenedByID[contractor.id] : nil,
+                            photos: revealedIDs.contains(contractor.id) ? stripPhotos(contractor.id) : nil,
+                            // The job check found nothing of THIS job → no mosaic at
+                            // all. A wrong photo (breaker panels for a sauna hookup)
+                            // throws the user off; no photo doesn't.
+                            hidesPhotos: stripPhotos(contractor.id)?.isEmpty == true
+                                && photoFit[contractor.id] != nil,
                             licenseNo: licenseByID[contractor.id]?.licenseNo,
                             takesSmallJobs: takesSmallJobs(contractor, category: jobCategory),
                             // The customer's own words about this job — shown as
@@ -1462,6 +1490,10 @@ struct ContractorListScreen: View {
         // front-loads and awaits it. Bounded by a cap so a slow tagger never
         // hangs the loader.
         await eagerlyEnrichTopMatches()
+        // The LLM's final check on the window the user lands on: which photos
+        // show THIS job, and who fits it — needs the rich tags above, and must
+        // land before the freeze below so nothing moves after landing.
+        await judgePhotoFit()
         // Freeze scores AFTER the eager enrich, so the snapshot reflects the
         // richer Claude tags rather than the on-device labels (covers the
         // fallback path too, where contractors were set without photos).
@@ -1651,6 +1683,62 @@ struct ContractorListScreen: View {
             stripFrozenIDs.insert(id)
         }
         screenedByID[id] = urls
+    }
+
+    /// The strip as displayed: `screenedByID` narrowed to the photos the job
+    /// check judged relevant (plus the owner's own curated uploads, which carry
+    /// no tags to judge). Untouched when the business has no verdict. A render-
+    /// time filter, so every `screenedByID` write path stays exactly as it was.
+    private func stripPhotos(_ id: String) -> [String]? {
+        guard let urls = screenedByID[id] else { return nil }
+        guard let v = photoFit[id] else { return urls }
+        let owner = Set(ownerPhotosByID[id] ?? [])
+        return urls.filter { v.relevant.contains($0) || owner.contains($0) }
+    }
+
+    /// Gallery hand-off: the strip's photos FIRST, in strip order, then the rest
+    /// of the business's portfolio — so a tapped tile's index lands on the same
+    /// photo in the gallery, and browsing still reaches everything.
+    private var galleryPhotosByID: [String: [String]] {
+        screenedByID.reduce(into: [:]) { out, entry in
+            let shown = stripPhotos(entry.key) ?? entry.value
+            let shownSet = Set(shown)
+            out[entry.key] = shown + entry.value.filter { !shownSet.contains($0) }
+        }
+    }
+
+    /// Ask the LLM which photos show THIS job and how well each landing-window
+    /// business fits it — behind the loader, after rich tags land and before
+    /// scores/order freeze, so the list paints once with the verdict applied
+    /// and nothing reshuffles after landing. Only for a clarified request (the
+    /// chat's job read is what makes the judgment meaningful); a category browse
+    /// or a failed/slow call keeps today's keyword ordering. Bounded by
+    /// `photoFitTimeoutNs`.
+    @MainActor
+    private func judgePhotoFit() async {
+        let job = clarifyTranscript
+        guard job.jobSpec != nil || !job.summary.isEmpty else { return }
+        let targets = Array(contractors.prefix(eagerScreenDepth))
+            .filter { !(keptPhotos[$0.id]?.isEmpty ?? true) && photoFit[$0.id] == nil }
+        guard !targets.isEmpty else { return }
+        let businesses = targets.map {
+            PhotoFitService.Business(id: $0.id, name: $0.name,
+                                     photos: keptPhotos[$0.id] ?? [],
+                                     reviews: $0.reviews.map(\.text))
+        }
+        let verdicts: [String: PhotoFitService.Verdict]? = await withTaskGroup(
+            of: [String: PhotoFitService.Verdict]?.self) { group in
+            group.addTask { await PhotoFitService.judge(job: job, businesses: businesses) }
+            group.addTask {
+                try? await Task.sleep(nanoseconds: photoFitTimeoutNs)
+                return nil
+            }
+            let first = await group.next() ?? nil
+            group.cancelAll()
+            return first
+        }
+        guard let verdicts else { return }
+        for (id, v) in verdicts { photoFit[id] = v }
     }
 
     /// Prepend a business's owner-uploaded photos ahead of `list`, de-duped. The
@@ -1974,6 +2062,9 @@ private let eagerScreenTimeoutNs: UInt64 = 3_500_000_000
 /// (nanoseconds). Warm cache is near-instant; on a cold tagger the list lands
 /// after this and the rest enriches in the background.
 private let eagerEnrichTimeoutNs: UInt64 = 3_000_000_000
+/// Cap on the job check (`judgePhotoFit`) behind the loader. The call runs
+/// ~4s; past the cap the list lands on its keyword ordering.
+private let photoFitTimeoutNs: UInt64 = 7_000_000_000
 
 /// Screening budget per row: scan `stripBatchScan` source photos at a time,
 /// deeper into the pool only if early shots are rejected, keeping up to
@@ -2008,6 +2099,9 @@ private struct ContractorListRow: View {
     /// Screened work photos, or nil while screening is still in flight (the mosaic
     /// then shows gray placeholders so the row's text isn't held back).
     let photos: [String]?
+    /// The job check found no photo of THIS job — render the row without a
+    /// mosaic rather than show misleading on-trade shots.
+    var hidesPhotos: Bool = false
     /// The active CSLB licence number, or nil when none is on file — which
     /// includes every business outside California, so its absence says nothing
     /// and must never render as "Unlicensed". Non-nil ⇒ show the "Licensed
@@ -2220,9 +2314,11 @@ private struct ContractorListRow: View {
             // shots most related to the user's request. The layout adapts when
             // fewer than three exist (1 → single tile, 2 → left + one right) so no
             // empty tile is ever shown; nil means still screening → placeholders.
-            mosaic
-                .frame(height: mosaicHeight)
-                .padding(.horizontal, sideInset)
+            if !hidesPhotos {
+                mosaic
+                    .frame(height: mosaicHeight)
+                    .padding(.horizontal, sideInset)
+            }
         }
     }
 

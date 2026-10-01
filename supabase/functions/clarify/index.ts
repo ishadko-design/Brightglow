@@ -263,8 +263,11 @@ engine knows to price the whole scope, not the trade keyword):
 e.g. "project: outdoor sauna electrical hookup, 8 kW heater; includes: permit,
 new 240V 40A hardwired circuit, ~60 ft run, trench to sauna, disconnect;
 unknown: panel capacity".
-Also, for a project, search_terms names the SPECIALTY, not just the trade
-("sauna and hot tub electrical installation"), and photo_terms names the
+Also, for a project, search_terms is the BUSINESS TYPE that does the work
+FIRST, then the specialty ("electrician sauna hot tub wiring") — a phrase that
+leads with the product ("sauna and hot tub installation") finds hot tub STORES
+and sauna RETAILERS, not the electrician the job needs. If nothing is built yet
+and the builder is the lead trade, lead with that business type instead, and photo_terms names the
 distinctive finished result a matching photo shows ("sauna heater wiring
 control panel") — never generic trade gear (a breaker panel is NOT a matching
 photo for a sauna, a water heater is not one for an outdoor kitchen).
