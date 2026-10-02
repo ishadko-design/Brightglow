@@ -39,5 +39,7 @@ check "sauna install (SF)" \
   '{"category":"Electrical","description":"Install sauna with electric 9kw heater, new circuit needed","zip":"94110","city":"San Francisco, CA"}' 3000 40000
 check "sauna circuit only (Daly City)" \
   '{"category":"Electrical","description":"New 50A circuit for my existing outdoor sauna, full circuit wiring","zip":"94015","city":"Daly City, CA"}' 1500 8000
+check "flat roof patch (SF)" \
+  '{"category":"Roofing","description":"Patch flat roof","zip":"94110","city":"San Francisco, CA"}' 250 3000
 
 exit $fail

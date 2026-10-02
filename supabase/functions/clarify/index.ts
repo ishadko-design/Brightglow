@@ -40,6 +40,7 @@ import {
 } from "../pricing/pricingEngine.ts";
 import { GENERIC_REPLIES, normalizeQuickReplies } from "./quickReplies.ts";
 import { repeatsPriorQuestion } from "./repeatsPriorQuestion.ts";
+import { minHomeQuestions } from "./priceFloor.ts";
 import { buildModelMessages, sanitizePhoto } from "./photoMessage.ts";
 import { asksOwnership, impliesOwned, projectDetails } from "./ownership.ts";
 
@@ -197,7 +198,12 @@ Per-vertical priorities:
   (vinyl, wood, aluminum, fiberglass), SCOPE (just the glass/a foggy or broken
   pane vs. the whole window incl. frame vs. a full-frame tear-out), and
   approximate size (W×H) and how many; flooring -> material + area + whether the
-  old floor is removed; roof -> material + approx area; vanity -> width +
+  old floor is removed; roof -> material + approx area; roof REPAIR / patch /
+  leak -> the damaged area (a few sq ft vs a section), the roof material
+  (torch-down / modified bitumen, TPO, tar & gravel, shingle) and whether it
+  is leaking now — write "repair", "N sq ft" in details, never a replacement
+  word ("Patch flat roof" priced as a $6.4k-17k replacement, 2026-10-02);
+  vanity -> width +
   whether faucet/top are replaced; exterior trim / flashing -> length in
   linear feet (it prices per foot, so length is the whole question);
   recessed lighting -> how many, AND whether
@@ -429,6 +435,8 @@ const ASK_SCHEMA = {
  *  test 2026-09-30, "Install 9kw outdoor sauna for 4"). */
 const MIN_PROJECT_QUESTIONS = 3;
 
+
+
 /** SCHEMA with `action` pinned to "done" — used when the model must finish. */
 const FINISH_SCHEMA = {
   ...SCHEMA,
@@ -615,7 +623,7 @@ Deno.serve(async (req) => {
       output_config: {
         format: {
           type: "json_schema",
-          schema: mustFinish ? FINISH_SCHEMA : mustAskNote.includes("PROJECT FLOOR") ? ASK_SCHEMA : SCHEMA,
+          schema: mustFinish ? FINISH_SCHEMA : mustAskNote.includes("FLOOR:") ? ASK_SCHEMA : SCHEMA,
         },
       },
       messages: modelMessages,
@@ -655,6 +663,33 @@ along the house / indoors; the panel's capacity; the equipment's load). Never re
       }
     } catch (err) {
       console.error("clarify: project floor retry failed", err);
+    }
+  }
+
+  // Price floor: a HOME task/install that tries to finish before its price
+  // drivers are asked asks the most valuable one instead (same mechanics as
+  // the project floor above). A request that already states them gets a
+  // confirm-style question at most once per floor step; the dup guard below
+  // still applies.
+  if (
+    path === "normal" && parsed.action === "done" && parsed.vertical === "home" &&
+    parsed.job_spec?.complexity !== "project" &&
+    asked < minHomeQuestions(parsed.category) && remaining > 0
+  ) {
+    try {
+      const more = await runModel(false, `
+
+PRICE FLOOR: you tried to finish a home job after only ${asked} question${asked === 1 ? "" : "s"}.
+Ask ONE more question now — the cost driver the request and answers above
+leave most open: the size or area, the material, the scope (patch/repair vs
+replace, how much), or the count. Never re-ask or reword anything already
+answered or "Not sure", and never ask about timing, budget or contact info.`);
+      if (more?.action === "ask" && more.question) {
+        parsed = more;
+        path = "price-floor";
+      }
+    } catch (err) {
+      console.error("clarify: price floor retry failed", err);
     }
   }
 
