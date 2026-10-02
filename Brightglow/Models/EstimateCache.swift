@@ -34,7 +34,9 @@ actor EstimateCache {
     // v2 (2026-10-02): the server now prices every job with the local AI
     // estimate first; v1 entries hold formula numbers that must not outlive it.
     private let storeKey = "estimateCache.v2"
-    private let ttl: TimeInterval = 7 * 24 * 60 * 60   // 7 days
+    // 30 days (was 7): the server caches the AI price per metro for 180 days,
+    // so a repeat job on this phone should never hit the network again.
+    private let ttl: TimeInterval = 30 * 24 * 60 * 60   // 30 days
     private let maxEntries = 200
     private var loadedFromDisk = false
 

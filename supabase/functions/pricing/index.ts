@@ -64,6 +64,7 @@ import {
 import { estimateInHouse, estimateJobsInHouse, type JobScope } from "./estimatePipeline.ts";
 import { canonicalJob, groundedBand, type GroundedKind } from "./groundedEstimate.ts";
 import { stateForZip } from "./zipState.ts";
+import { ZIP3_CBSA } from "./metroWages.generated.ts";
 import { canonicalize, canonicalKey, type CanonicalJob, itemize, type ItemizedEstimate, type ItemizeKind } from "./itemizedEstimate.ts";
 
 const ANTHROPIC_API_KEY = Deno.env.get("ANTHROPIC_API_KEY") ?? "";
@@ -76,6 +77,9 @@ const EPCI_ENABLED = (Deno.env.get("EPCI_ENABLED") ?? "").toLowerCase() === "tru
 const db = SUPA_URL && SERVICE_KEY ? createClient(SUPA_URL, SERVICE_KEY) : null;
 
 const TTL_MS = 24 * 60 * 60 * 1000; // reuse a cached EPCI pull for a day
+/** A phrasing's job type doesn't change; 30 days (was the 24h EPCI TTL) so a
+ *  repeat search never pays the ~8k-token classifier call again. */
+const CLASSIFY_TTL_MS = 30 * 24 * 60 * 60 * 1000;
 
 function json(payload: unknown, status = 200, cache = "bypass"): Response {
   return new Response(JSON.stringify(payload), {
@@ -152,7 +156,7 @@ async function classifyLLMCached(
     try {
       const { data } = await db.from("classification_cache")
         .select("job_type, jobs, vehicle, vertical, created_at").eq("cache_key", key).maybeSingle();
-      if (data && Date.now() - new Date(data.created_at as string).getTime() < TTL_MS) {
+      if (data && Date.now() - new Date(data.created_at as string).getTime() < CLASSIFY_TTL_MS) {
         const v = data.vehicle;
         const vert = data.vertical;
         // New shape (jobs JSON) wins; pre-multi-job rows carry one job_type.
@@ -207,7 +211,7 @@ async function classifyLLMCached(
   return result;
 }
 
-const GROUNDED_TTL_MS = 7 * 24 * 60 * 60 * 1000; // remodel costs move slowly
+const GROUNDED_TTL_MS = 30 * 24 * 60 * 60 * 1000; // remodel costs move slowly (was 7 days)
 
 function groundedCacheKey(zip: string | undefined, kind: GroundedKind, description: string): string {
   // Canonical key when we recognize the job; else the normalized full text.
@@ -217,7 +221,8 @@ function groundedCacheKey(zip: string | undefined, kind: GroundedKind, descripti
   // a motorcycle (2), so the two must not share a cached band.
   // "g2:" — bands cached before the install-excludes-the-unit and
   // price-every-component rules (2026-09-30) must not be served for 7 days.
-  return `g3:${zip ?? "us"}:${kind}:${base}`.slice(0, 300);
+  // Region is the metro (see `area`), not the exact ZIP: same market, one band.
+  return `g3:${area(zip)}:${kind}:${base}`.slice(0, 300);
 }
 
 /** Web-search-grounded band for jobs the catalog doesn't model, with a 7-day
@@ -343,7 +348,10 @@ const AI_FIRST_HOME = (Deno.env.get("AI_FIRST_HOME") ?? "true") !== "false";
 /** Emergency switch only: FORMULA_FALLBACK=true lets the catalog formula answer
  *  when the AI can't. Off by default — the formula is retired from serving. */
 const FORMULA_FALLBACK = (Deno.env.get("FORMULA_FALLBACK") ?? "false") === "true";
-const ITEMIZED_TTL_MS = 30 * 24 * 60 * 60 * 1000;   // searched bands
+// Searched bands are the expensive call (~$0.05-0.12 with web search) and trade
+// prices barely move: keep them 180 days (was 30). Product call 2026-10-02:
+// "this price usually doesn't change much — cache everything".
+const ITEMIZED_TTL_MS = 180 * 24 * 60 * 60 * 1000;   // searched bands
 const KNOWLEDGE_TTL_MS = 3 * 24 * 60 * 60 * 1000;   // until the search lands
 /** Budget for the searched pass on the request path (client waits 25s). */
 const SEARCH_BUDGET_MS = 20_000;
@@ -360,7 +368,15 @@ function placeLabel(zip: string | undefined, city?: string): string {
     : "the United States";
 }
 
-const area = (zip?: string) => (zip && /^\d{5}$/.test(zip) ? zip.slice(0, 3) : "us");
+/** Cache region for AI bands: the metro when the ZIP is in one, else zip3.
+ *  A metro is one labor/price market — the Bay Area alone spans 8 zip3s
+ *  (940–949), which used to pay for the same job 8 times. Rural zip3s keep
+ *  their own key. */
+const area = (zip?: string) => {
+  if (!zip || !/^\d{5}$/.test(zip)) return "us";
+  const cbsa = ZIP3_CBSA[zip.slice(0, 3)];
+  return cbsa ? `m${cbsa}` : zip.slice(0, 3);
+};
 
 /** description -> canonical job, cached forever by exact text so a repeated
  *  description never re-rolls its key (search_cache table, "canon1:" rows). */
