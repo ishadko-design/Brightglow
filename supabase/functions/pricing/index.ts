@@ -349,8 +349,9 @@ const AI_FIRST_HOME = (Deno.env.get("AI_FIRST_HOME") ?? "true") !== "false";
  *  when the AI can't. Off by default — the formula is retired from serving. */
 const FORMULA_FALLBACK = (Deno.env.get("FORMULA_FALLBACK") ?? "false") === "true";
 // Searched bands are the expensive call (~$0.05-0.12 with web search) and trade
-// prices move over quarters, not weeks: keep them 90 days (was 30).
-const ITEMIZED_TTL_MS = 90 * 24 * 60 * 60 * 1000;   // searched bands
+// prices barely move: keep them 180 days (was 30). Product call 2026-10-02:
+// "this price usually doesn't change much — cache everything".
+const ITEMIZED_TTL_MS = 180 * 24 * 60 * 60 * 1000;   // searched bands
 const KNOWLEDGE_TTL_MS = 3 * 24 * 60 * 60 * 1000;   // until the search lands
 /** Budget for the searched pass on the request path (client waits 25s). */
 const SEARCH_BUDGET_MS = 20_000;
