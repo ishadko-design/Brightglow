@@ -380,19 +380,27 @@ const area = (zip?: string) => {
 
 /** description -> canonical job, cached forever by exact text so a repeated
  *  description never re-rolls its key (search_cache table, "canon1:" rows). */
-async function canonicalCached(description: string): Promise<CanonicalJob | null> {
-  const key = `canon1:${description.toLowerCase().replace(/\s+/g, " ")}`.slice(0, 300);
-  if (db) {
-    try {
-      const { data } = await db.from("search_cache").select("response").eq("cache_key", key).maybeSingle();
-      const r = data?.response as CanonicalJob | undefined;
-      if (r?.job) return r;
-    } catch (_) { /* fall through */ }
+const canonKey = (description: string) =>
+  `canon1:${description.toLowerCase().replace(/\s+/g, " ")}`.slice(0, 300);
+
+/** Cache read only — a DB lookup, no model call. */
+async function readCanonical(description: string): Promise<CanonicalJob | null> {
+  if (!db) return null;
+  try {
+    const { data } = await db.from("search_cache").select("response").eq("cache_key", canonKey(description)).maybeSingle();
+    const r = data?.response as CanonicalJob | undefined;
+    return r?.job ? r : null;
+  } catch (_) {
+    return null;
   }
+}
+
+/** Model call + cache write (only on a read miss). */
+async function computeCanonical(description: string): Promise<CanonicalJob | null> {
   const c = await canonicalize(description, ANTHROPIC_API_KEY);
   if (c && db) {
     try {
-      await db.from("search_cache").upsert({ cache_key: key, response: c, created_at: new Date().toISOString() });
+      await db.from("search_cache").upsert({ cache_key: canonKey(description), response: c, created_at: new Date().toISOString() });
     } catch (_) { /* ignore */ }
   }
   return c;
@@ -460,14 +468,27 @@ async function itemizedResponse(
 async function itemizedEstimateFor(
   zip: string | undefined, description: string, fast: boolean, kind: ItemizeKind = "home", city?: string,
 ): Promise<{ estimate: ItemizedEstimate; cacheState: string } | null> {
-  const canon = await canonicalCached(description);
-  if (!canon) return null;
+  const label = placeLabel(zip, city);
+  // A phrasing seen before resolves its canonical job from cache (no model
+  // call). A new phrasing needs the canonicalize call — and on the fast path
+  // the quick price no longer waits for it: both run at once, the quick price
+  // from the raw request (2026-10-02, first prices took 10s+). The canonical
+  // job still keys the cache, so a hit found once it lands is served instead.
+  let canon = await readCanonical(description);
+  let speculative: Promise<ItemizedEstimate | null> | null = null;
+  if (!canon) {
+    if (fast) speculative = itemize(`Request: ${description}`, label, ANTHROPIC_API_KEY, false, undefined, kind);
+    canon = await computeCanonical(description);
+  }
+  if (!canon) {
+    const k = speculative ? await speculative : null;
+    return k ? { estimate: k, cacheState: "it-knowledge" } : null;
+  }
   // Kind in the key: "replace tires" is 4 for a car and 2 for a motorcycle.
   const key = `it1:${area(zip)}:${kind === "home" ? "" : `${kind}:`}${canonicalKey(canon)}`;
   // The canonical form is what gets priced: stable across phrasings, and it
   // carries every price fact. The original text rides along for nuance.
   const priced = `${canon.job}${canon.facts.length ? ` (${canon.facts.join("; ")})` : ""}. Request: ${description}`;
-  const label = placeLabel(zip, city);
   const cached = await readItemized(key);
   if (cached && (fast || cached.searched)) return { estimate: cached, cacheState: "it-hit" };
 
@@ -481,7 +502,7 @@ async function itemizedEstimateFor(
   };
 
   if (fast) {
-    const k = await itemize(priced, label, ANTHROPIC_API_KEY, false, undefined, kind);
+    const k = await (speculative ?? itemize(priced, label, ANTHROPIC_API_KEY, false, undefined, kind));
     if (!k) return null;
     await writeItemized(key, k);
     (globalThis as { EdgeRuntime?: { waitUntil?: (p: Promise<unknown>) => void } })
@@ -609,7 +630,14 @@ Deno.serve(async (req) => {
   // Multi-job: the classifier may return several jobs, each validated and
   // priced separately below. Empty = "none", the keyword result stands.
   let llmJobs: Array<{ entry: JobTypeEntry; description: string; scope: JobScope }> = [];
-  if (ANTHROPIC_API_KEY && trimmedDesc.length >= 3) {
+  // The classifier only feeds the formula (retired from serving) and, here,
+  // the car/moto/home kind of the AI estimate. When the app already says the
+  // kind — a category from the chat or the Auto/Moto filter — skip it: it was
+  // an ~8k-token call (2-4s, up to ~$0.02) on every new phrasing, before the
+  // AI price could even start (2026-10-02).
+  const kindKnown = vehicle !== null || keywordVehicle !== null ||
+    (typeof category === "string" && category.length > 0);
+  if (ANTHROPIC_API_KEY && trimmedDesc.length >= 3 && (FORMULA_FALLBACK || !kindKnown)) {
     const llm = await classifyLLMCached(category, trimmedDesc);
     const generalEntries = Object.values(CATEGORY_GENERAL)
       .filter((e): e is NonNullable<typeof e> => e !== null);

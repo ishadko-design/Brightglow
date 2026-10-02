@@ -154,7 +154,9 @@ export function itemizeSystem(locationLabel: string, searched: boolean, kind: It
     "  included)\" always means exclude it. Contractor-supplied equipment (water",
     "  heater, furnace, AC, panel, fixtures) is priced WITH the unit.",
     "- A small repair is still a real visit: include the minimum service charge.",
-    "- basis: one short line naming what drives the range.",
+    "- At most 6 components, each named in 5 words or fewer; fold small items",
+    "  into the nearest component. (Output length is the user's wait.)",
+    "- basis: one short line (under 20 words) naming what drives the range.",
     "Answer with ONLY the JSON object described.",
   ].join("\n");
 }
