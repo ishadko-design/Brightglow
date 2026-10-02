@@ -12,6 +12,7 @@ import {
   qualityTier,
   sizeScale,
   stateCostFactor,
+  vehicleSizeScale,
   windowScopeScale,
 } from "./inHouseEngine.ts";
 import { estimateInHouse } from "./estimatePipeline.ts";
@@ -382,4 +383,16 @@ Deno.test("end-to-end: flooring add-ons raise the lvp range", () => {
   const withAddOn = calculateComposedRange(itemsByTrade, entry!, quantity, description, addOns.map((a) => a.itemId));
   const without = calculateComposedRange(itemsByTrade, entry!, quantity, description, []);
   assert(withAddOn!.all_in_typical > without!.all_in_typical, "removal add-on must raise the price");
+});
+
+Deno.test("motorcycle oil change scales up for a big bike, not for a year or mileage", () => {
+  // Reported 2026-10-02: Thruxton 1200R oil change priced $58–160 in SF.
+  for (const d of ["Oil change on triumph thruxton 1200r", "oil change on my harley", "oil change 1868cc"]) {
+    assertEquals(vehicleSizeScale("moto-oil-change", d)?.scope, "big bike", d);
+  }
+  for (const d of ["motorcycle oil change", "oil change on 2019 honda grom", "oil change at 1200 miles", "1985 honda oil change"]) {
+    assertEquals(vehicleSizeScale("moto-oil-change", d), null, d);
+  }
+  // Car oil changes are untouched.
+  assertEquals(vehicleSizeScale("oil-change-synthetic", "oil change on my harley"), null);
 });

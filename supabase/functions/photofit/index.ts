@@ -56,10 +56,18 @@ different job, and showing it misleads the customer. For a simple task the \
 match is literal: for "replace a breaker" a breaker panel IS the job.
    - Use the spec's photo_match as what a match looks like and photo_reject as \
 on-trade photos that do NOT count.
-   - A storefront, office, vehicle, logo, team photo, or empty room is never \
-relevant.
+   - A storefront, office, logo, team photo, empty room, or the business's own \
+work van is never relevant.
+   - VEHICLE SERVICE (car or motorcycle shops): the vehicle IS the work item. \
+For routine service — oil change, tires, brakes, chain, tune-up, inspection — \
+a photo of that kind of vehicle on a lift or stand, in the service bay, or \
+mid-repair is relevant: no shop photographs an oil change, and a bike on the \
+stand is the evidence a customer looks for. Only the OTHER vehicle type (a car \
+for a motorcycle job, a bike for a car job) and showroom / for-sale shots \
+are out. Shown as no photos at all, these shops looked empty (2026-10-02).
    - When unsure whether a photo shows this job, leave it OUT. An empty list is \
-a correct, expected answer — the business is then shown without photos.
+a correct answer for a specialized job — the business is then shown without \
+photos — but not for routine vehicle service, per the rule above.
 
 2. fit (0-3): how well this business fits THIS job.
    3 = clear evidence they do this job (relevant photos and/or reviews naming it).

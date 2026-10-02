@@ -195,7 +195,7 @@ export interface ScopeScale {
   materials: number;
   labor: number;
   /** Canonical label surfaced to the user, e.g. "glass only". */
-  scope: "glass only" | "full-frame replacement" | "new install" | "full-size vehicle" | "SUV/truck" | "compact car";
+  scope: "glass only" | "full-frame replacement" | "new install" | "full-size vehicle" | "SUV/truck" | "compact car" | "big bike";
 }
 
 /** Which replacement scope the words assert, as multipliers off the item's
@@ -264,6 +264,7 @@ const VEHICLE_SIZE_SENSITIVE = new Set([
  *  would not. Both sides scale: more body is more film AND more hours. Default
  *  (no size stated) is 1.0, the mid-size the catalog bands already assume. */
 export function vehicleSizeScale(itemId: string, description: string): ScopeScale | null {
+  if (itemId === "moto-oil-change") return motoOilScale(description);
   if (!VEHICLE_SIZE_SENSITIVE.has(itemId)) return null;
   const t = ` ${description.toLowerCase()} `;
   // Order matters: check the big tier before the plain "truck"/"suv" tier.
@@ -277,6 +278,28 @@ export function vehicleSizeScale(itemId: string, description: string): ScopeScal
     return { materials: 0.85, labor: 0.85, scope: "compact car" };
   }
   return null;
+}
+
+/** A motorcycle oil change is priced off a small bike — ~2.5 qt, often
+ *  conventional, a quarter-hour of drain-and-fill — which is what the $40–100
+ *  anchors describe. A big twin or liter bike is a different job: ~4.5 qt of
+ *  full-synthetic moto oil plus filter is $55–115 of parts alone, and fairings,
+ *  crush washers and a warm-up/level check take closer to an hour. A Triumph
+ *  Thruxton 1200R priced $58–160 in SF (2026-10-02) against $130–300 at shops.
+ *  Reads a stated displacement (650cc+) or a big-bike model name. */
+const BIG_BIKE_DISPLACEMENT =
+  /\b(6[5-9]\d|[7-9]\d\d|1\d{3}|2[0-4]\d\d)\s*(cc|r|rs|rr|s|gt|xr|xc)?\b(?!\s*(?:mi|miles|km|kms|ft|sq|\$|dollars))/g;
+/** A model year ("2019 grom", "1985 honda") is not a displacement unless it
+ *  says cc. */
+const MODEL_YEAR = /^(19[5-9]\d|20[0-3]\d)$/;
+const BIG_BIKE_MODEL =
+  /\b(thruxton|bonneville|speed twin|rocket 3|tiger|harley|sportster|softail|dyna|road glide|street glide|road king|electra glide|gold ?wing|ducati|multistrada|panigale|diavel|monster|r ?nine ?t|r ?1[0-9]{3}|gs ?adventure|super duke|1290|hayabusa|busa|africa twin|indian|goldwing|vfr|fz-?1|fz-?10|mt-?09|mt-?10|z900|ninja 1000|versys 1000)\b/;
+function motoOilScale(description: string): ScopeScale | null {
+  const t = ` ${description.toLowerCase()} `;
+  const displacement = [...t.matchAll(BIG_BIKE_DISPLACEMENT)]
+    .some((m) => m[2] === "cc" || !MODEL_YEAR.test(m[1]));
+  if (!displacement && !BIG_BIKE_MODEL.test(t)) return null;
+  return { materials: 4.4, labor: 1.7, scope: "big bike" };
 }
 
 /** Fold a stated size and a stated scope into the single SizeScale the item
