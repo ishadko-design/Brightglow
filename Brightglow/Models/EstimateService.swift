@@ -22,9 +22,10 @@ enum EstimateService {
     /// capture — see `ContractorLoader.prefetchEstimate`) is returned immediately,
     /// and a still-in-flight prefetch is awaited rather than duplicated.
     static func estimate(category: String, description: String, zip: String?,
-                         vehicle: VehicleFilter? = nil, fast: Bool = false) async -> PriceTier? {
+                         vehicle: VehicleFilter? = nil, fast: Bool = false,
+                         city: String? = nil) async -> PriceTier? {
         await EstimateCache.shared.estimate(category: category, description: description,
-                                            zip: zip, vehicle: vehicle, fast: fast)
+                                            zip: zip, vehicle: vehicle, fast: fast, city: city)
     }
 
     /// Reverse-geocode a coordinate to a "City, ST" locality string plus its
