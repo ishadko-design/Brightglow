@@ -11,20 +11,22 @@ fail=0
 # name | json body | min typical | max typical
 check() {
   local name="$1" body="$2" min="$3" max="$4"
-  local out
+  local out t0 secs
+  t0=$(date +%s.%N)
   out=$(curl -sS --max-time 90 -X POST "$SUPABASE_URL/functions/v1/pricing" \
     -H "Content-Type: application/json" \
     -H "apikey: $SUPABASE_ANON_KEY" \
     -H "Authorization: Bearer $SUPABASE_ANON_KEY" \
     ${APP_TOKEN:+-H "x-app-token: $APP_TOKEN"} \
     -d "$body") || { echo "FAIL $name: request error"; fail=1; return; }
+  secs=$(awk -v a="$t0" -v b="$(date +%s.%N)" 'BEGIN{printf "%.1f", b-a}')
   local grounded low typical high label
   grounded=$(jq -r '.range.grounded // false' <<<"$out")
   low=$(jq -r '.range.all_in_low // empty' <<<"$out")
   typical=$(jq -r '.range.all_in_typical // empty' <<<"$out")
   high=$(jq -r '.range.all_in_high // empty' <<<"$out")
   label=$(jq -r '.range.label // .display // ""' <<<"$out")
-  printf '%-28s grounded=%-5s $%s–$%s (typ $%s)  %s\n' "$name" "$grounded" "${low%.*}" "${high%.*}" "${typical%.*}" "$label"
+  printf '%-28s %5ss  grounded=%-5s $%s–$%s (typ $%s)  %s\n' "$name" "$secs" "$grounded" "${low%.*}" "${high%.*}" "${typical%.*}" "$label"
   if [[ "$grounded" != "true" ]]; then
     echo "  FAIL: answered by the formula, not the local AI estimate"; fail=1
   elif [[ -z "$typical" ]] || (( ${typical%.*} < min || ${typical%.*} > max )); then
@@ -39,6 +41,9 @@ check "sauna install (SF)" \
   '{"category":"Electrical","description":"Install sauna with electric 9kw heater, new circuit needed","zip":"94110","city":"San Francisco, CA"}' 3000 40000
 check "sauna circuit only (Daly City)" \
   '{"category":"Electrical","description":"New 50A circuit for my existing outdoor sauna, full circuit wiring","zip":"94015","city":"Daly City, CA"}' 1500 8000
+# The FIRST number a user sees comes from the fast phase — it must be quick.
+check "flat roof patch, fast (SF)" \
+  '{"category":"Roofing","description":"Patch my flat roof","zip":"94110","city":"San Francisco, CA","fast":true}' 250 3000
 check "flat roof patch (SF)" \
   '{"category":"Roofing","description":"Patch flat roof","zip":"94110","city":"San Francisco, CA"}' 250 3000
 
