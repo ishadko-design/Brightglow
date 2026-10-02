@@ -133,7 +133,7 @@ footer.site-foot a.logo{color:var(--ink);text-decoration:none}
       <div class="big">$350–$650</div>
       <div class="big-label">What most people pay for a standard tub, done by a pro</div>
       <p class="meta-line"><strong>Average job $483</strong> · replacing the tub instead runs about <strong>$5,700</strong></p>
-      <p class="meta-line">Bay Area: <strong>$346–$620</strong> (avg $473) — no big-city markup on this job.</p>
+      <p class="meta-line" id="regional-line">Bay Area: <strong>$346–$620</strong> (avg $473) — no big-city markup on this job.</p>
     </div>
   </div>
 
@@ -241,6 +241,33 @@ footer.site-foot a.logo{color:var(--ink);text-decoration:none}
       <div class="footer-copy">&copy; 2026 Brightglow LLC</div>
     </div>
   </footer>
+
+
+<script>
+(function(){
+  "use strict";
+  /* Per-visitor regional pricing. Static HTML always shows national + Bay Area
+     (crawler-safe); this only adds a "near you" label when the visitor's metro
+     matches a region with published data. Never invents a number. */
+  var REGIONS = [
+    { label:"Bay Area", cities:["San Francisco","San Jose","Oakland","Berkeley","Daly City","San Mateo","Fremont","Hayward","Palo Alto","Mountain View","Sunnyvale","Santa Clara","Redwood City","San Bruno","South San Francisco","Millbrae","Burlingame","San Carlos","Menlo Park","Cupertino","Los Altos","Los Gatos","Campbell","Milpitas","Union City","Newark","Alameda","San Leandro","Richmond","Concord","Walnut Creek","Pleasanton","Livermore","Dublin","San Ramon","Novato","San Rafael","Vallejo","Napa","Santa Rosa","Petaluma","Sausalito","Emeryville","Albany","El Cerrito","Pacifica","Half Moon Bay"] }
+  ];
+  function apply(geo){
+    if(!geo || !geo.city) return;
+    var city = String(geo.city).toLowerCase(), hit = null;
+    for (var i=0;i<REGIONS.length && !hit;i++){
+      var cs = REGIONS[i].cities;
+      for (var j=0;j<cs.length;j++){ if(cs[j].toLowerCase()===city){ hit=REGIONS[i]; break; } }
+    }
+    if(!hit) return;
+    var line = document.getElementById("regional-line");
+    if(!line || line.getAttribute("data-localized")) return;
+    line.setAttribute("data-localized","1");
+    line.innerHTML = "Near you ("+hit.label+"): " + line.innerHTML.replace(/^[^:]+:\\s*/, "");
+  }
+  try{ fetch("/api/geo",{cache:"no-store"}).then(function(r){return r.json();}).then(apply).catch(function(){}); }catch(e){}
+})();
+</script>
 
 </body>
 </html>

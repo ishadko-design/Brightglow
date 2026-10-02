@@ -102,6 +102,21 @@ async function proxy(request, url) {
 export default {
   async fetch(request, env) {
     const url = new URL(request.url);
+
+    // Visitor metro for cost-guide regional pricing. Cloudflare fills
+    // request.cf (city/region/country) at the edge — no permission prompt,
+    // no third-party API. Guide pages fetch this same-origin and highlight
+    // the matching regional line only when we have published metro data.
+    // The static HTML always carries national + Bay Area figures, so crawlers
+    // and no-JS visitors see the same content (no cloaking).
+    if (url.pathname === "/api/geo") {
+      const cf = request.cf || {};
+      return Response.json(
+        { city: cf.city || null, region: cf.region || null, country: cf.country || null },
+        { headers: { "Cache-Control": "no-store" } }
+      );
+    }
+
     if (isProxied(url.pathname)) return proxy(request, url);
 
     // Gate the analytics dashboard: no valid login → prompt. Then either return
