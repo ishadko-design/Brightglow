@@ -337,9 +337,12 @@ function validJobDetail(detail: string, description: string): boolean {
  *  nothing still gets a ballpark instead of a blank "get bids". */
 // ── AI-first itemized estimate ──────────────────────────────────────────────
 
-/** Kill switch: set AI_FIRST_HOME=false to send everything to the formula /
- *  older grounded path. */
+/** Kill switch: AI_FIRST_HOME=false turns the AI estimator off. With the
+ *  formula retired that means no prices at all, unless FORMULA_FALLBACK=true. */
 const AI_FIRST_HOME = (Deno.env.get("AI_FIRST_HOME") ?? "true") !== "false";
+/** Emergency switch only: FORMULA_FALLBACK=true lets the catalog formula answer
+ *  when the AI can't. Off by default — the formula is retired from serving. */
+const FORMULA_FALLBACK = (Deno.env.get("FORMULA_FALLBACK") ?? "false") === "true";
 const ITEMIZED_TTL_MS = 30 * 24 * 60 * 60 * 1000;   // searched bands
 const KNOWLEDGE_TTL_MS = 3 * 24 * 60 * 60 * 1000;   // until the search lands
 /** Budget for the searched pass on the request path (client waits 25s). */
@@ -664,6 +667,24 @@ Deno.serve(async (req) => {
   {
     const ai = await aiPrice();
     if (ai) return ai;
+  }
+
+  // The formula no longer answers users (2026-10-02, product decision: "one
+  // response like this and we lose the user forever"). It priced "Patch flat
+  // roof" as a $6.4k–17k replacement, a sauna circuit at $240–1.5k and a
+  // Thruxton oil change at $58–160 — every time the AI was not consulted. If
+  // the itemized AI can't answer, the web-search-grounded AI gets a second
+  // try; if that fails too, no price is shown ("Get 3 bids"), never a formula
+  // number. FORMULA_FALLBACK=true restores the old fallback as an emergency
+  // switch only; the code below stays for the accuracy harness.
+  if (!FORMULA_FALLBACK) {
+    if (ANTHROPIC_API_KEY && trimmedDesc.length >= 3) {
+      const grounded = await groundedResponse(zip, aiKind, trimmedDesc, city);
+      if (grounded) return grounded;
+    }
+    console.log("pricing: no AI price, declining (formula retired)", JSON.stringify({ category, description }));
+    const result: InsufficientDataResult = { error: "Insufficient data", fallback: "Get 3 bids" };
+    return json({ range: result, display: `${result.error}. ${result.fallback}.` });
   }
 
   // A multi-job LLM result stands on its own — the keyword layer finding
