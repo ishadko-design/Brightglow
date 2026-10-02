@@ -63,6 +63,7 @@ import {
 } from "./pricingEngine.ts";
 import { estimateInHouse, estimateJobsInHouse, type JobScope } from "./estimatePipeline.ts";
 import { canonicalJob, groundedBand, type GroundedKind } from "./groundedEstimate.ts";
+import { stateForZip } from "./zipState.ts";
 import { canonicalize, canonicalKey, type CanonicalJob, itemize, type ItemizedEstimate, type ItemizeKind } from "./itemizedEstimate.ts";
 
 const ANTHROPIC_API_KEY = Deno.env.get("ANTHROPIC_API_KEY") ?? "";
@@ -228,6 +229,7 @@ async function groundedCached(
   zip: string | undefined,
   kind: GroundedKind,
   description: string,
+  city?: string,
 ): Promise<{ low: number; typical: number; high: number; basis: string } | null> {
   const key = groundedCacheKey(zip, kind, description);
   if (db) {
@@ -245,7 +247,7 @@ async function groundedCached(
     } catch (_) { /* fall through to a live call */ }
   }
 
-  const locationLabel = zip ? `the ${zip} ZIP code area (US)` : "the United States";
+  const locationLabel = placeLabel(zip, city);
   const band = await groundedBand(description, locationLabel, ANTHROPIC_API_KEY, kind);
   if (!band) return null;
   console.log("pricing: grounded-estimated", JSON.stringify({ zip, description, ...band }));
@@ -343,6 +345,18 @@ const KNOWLEDGE_TTL_MS = 3 * 24 * 60 * 60 * 1000;   // until the search lands
 /** Budget for the searched pass on the request path (client waits 25s). */
 const SEARCH_BUDGET_MS = 20_000;
 
+/** Where the job is, for every AI price prompt. Always local: the city the
+ *  app shows (when sent), the ZIP and its state, plus an explicit instruction
+ *  not to fall back on national averages. A bare "the 94110 ZIP code area"
+ *  left the model to guess the market (2026-10-02). */
+function placeLabel(zip: string | undefined, city?: string): string {
+  const state = stateForZip(zip);
+  const where = [city, zip ? `ZIP ${zip}` : null, state].filter(Boolean).join(", ");
+  return where
+    ? `${where} (US) — use prices in THIS local market, not national averages`
+    : "the United States";
+}
+
 const area = (zip?: string) => (zip && /^\d{5}$/.test(zip) ? zip.slice(0, 3) : "us");
 
 /** description -> canonical job, cached forever by exact text so a repeated
@@ -418,14 +432,14 @@ function itemizedJson(e: ItemizedEstimate, cacheState: string): Response {
  *  the cache in the background). Full: cached SEARCHED band, else search now
  *  within budget, else the knowledge band. Null -> formula fallback. */
 async function itemizedResponse(
-  zip: string | undefined, description: string, fast: boolean, kind: ItemizeKind = "home",
+  zip: string | undefined, description: string, fast: boolean, kind: ItemizeKind = "home", city?: string,
 ): Promise<Response | null> {
-  const r = await itemizedEstimateFor(zip, description, fast, kind);
+  const r = await itemizedEstimateFor(zip, description, fast, kind, city);
   return r ? itemizedJson(r.estimate, r.cacheState) : null;
 }
 
 async function itemizedEstimateFor(
-  zip: string | undefined, description: string, fast: boolean, kind: ItemizeKind = "home",
+  zip: string | undefined, description: string, fast: boolean, kind: ItemizeKind = "home", city?: string,
 ): Promise<{ estimate: ItemizedEstimate; cacheState: string } | null> {
   const canon = await canonicalCached(description);
   if (!canon) return null;
@@ -434,7 +448,7 @@ async function itemizedEstimateFor(
   // The canonical form is what gets priced: stable across phrasings, and it
   // carries every price fact. The original text rides along for nuance.
   const priced = `${canon.job}${canon.facts.length ? ` (${canon.facts.join("; ")})` : ""}. Request: ${description}`;
-  const label = zip ? `the ${zip} ZIP code area (US)` : "the United States";
+  const label = placeLabel(zip, city);
   const cached = await readItemized(key);
   if (cached && (fast || cached.searched)) return { estimate: cached, cacheState: "it-hit" };
 
@@ -479,13 +493,14 @@ async function groundedResponse(
   zip: string | undefined,
   kind: GroundedKind,
   trimmedDesc: string,
+  city?: string,
 ): Promise<Response | null> {
   if (!ANTHROPIC_API_KEY) return null;
   // Gated to substantial descriptions (a short vague "fix my roof" would only
   // buy a useless wide band at real API cost) — EXCEPT broad-project phrasings
   // ("kitchen remodel"), which have a real ballpark even when terse.
   if (!(trimmedDesc.length >= 20 || isBroadProject(trimmedDesc))) return null;
-  const band = await groundedCached(zip, kind, trimmedDesc);
+  const band = await groundedCached(zip, kind, trimmedDesc, city);
   if (!band) return null;
   return json({
     range: {
@@ -518,6 +533,9 @@ Deno.serve(async (req) => {
   const category = payload.category;
   const description = typeof payload.description === "string" ? payload.description : "";
   const zip = typeof payload.zip === "string" ? payload.zip : undefined;
+  // The city the app shows ("San Francisco"); newer builds send it. Location
+  // context only — the cache stays keyed by zip3.
+  const city = typeof payload.city === "string" ? payload.city.trim().slice(0, 80) || undefined : undefined;
   // Auto & moto: the app's vehicle filter. "replace tires" is the same phrase
   // for a car (4 units) and a bike (2, different parts and labor), so this is
   // not recoverable from the description — see MOTO_VARIANTS in pricingEngine.
@@ -634,14 +652,16 @@ Deno.serve(async (req) => {
     : (isAutoRequest || llmVertical === "auto") ? "auto" : "home";
   const aiPrice = () =>
     ANTHROPIC_API_KEY && trimmedDesc.length >= 3 && AI_FIRST_HOME
-      ? itemizedResponse(zip, trimmedDesc, payload.fast === true, aiKind)
+      ? itemizedResponse(zip, trimmedDesc, payload.fast === true, aiKind, city)
       : Promise.resolve(null);
-  const specificTask = llmJobs.length > 1 ||
-    (!!entry && entry.keywords.length > 0 && !llmProject &&
-      !isWholeProject(trimmedDesc) && !hasProjectScope(trimmedDesc));
-  // force_ai: measurement-only (the accuracy harness compares both estimators
-  // on the same job); the app never sends it.
-  if (!specificTask || payload.force_ai === true) {
+  // AI first, for every job (2026-10-02, product decision). The formula was
+  // kept for "standard" jobs on a held-out score — but that set is national
+  // aggregator figures, the same family the formula is calibrated to, so the
+  // score was circular. In the field the formula kept shipping confident,
+  // wrong numbers (a sauna circuit at $240–1.5k, a Thruxton 1200R oil change
+  // at $58–160), and one wrong number costs the user's trust for good. The
+  // formula now answers only when the AI can't (no key, kill switch, failure).
+  {
     const ai = await aiPrice();
     if (ai) return ai;
   }
@@ -666,7 +686,7 @@ Deno.serve(async (req) => {
       : earlyVertical === "auto"
       ? "auto"
       : "home";
-    const grounded = await groundedResponse(zip, earlyKind, trimmedDesc);
+    const grounded = await groundedResponse(zip, earlyKind, trimmedDesc, city);
     if (grounded) return grounded;
     const result: InsufficientDataResult = { error: "Insufficient data", fallback: "Get 3 bids" };
     return json({ range: result, display: `${result.error}. ${result.fallback}.` });
@@ -698,7 +718,7 @@ Deno.serve(async (req) => {
       (llmProject || isWholeProject(trimmedDesc) || hasProjectScope(trimmedDesc))
     ) {
       console.log("pricing: whole-project override", JSON.stringify({ category, description, llmProject }));
-      const grounded = await groundedResponse(zip, "home", trimmedDesc);
+      const grounded = await groundedResponse(zip, "home", trimmedDesc, city);
       if (grounded) return grounded;
     }
 
@@ -740,7 +760,7 @@ Deno.serve(async (req) => {
         : "home";
       const aiFallback = await aiPrice();
       if (aiFallback) return aiFallback;
-      const grounded = await groundedResponse(zip, groundedKind, trimmedDesc);
+      const grounded = await groundedResponse(zip, groundedKind, trimmedDesc, city);
       if (grounded) return grounded;
       const result: InsufficientDataResult = { error: "Insufficient data", fallback: "Get 3 bids" };
       return json({ range: result, display: `${result.error}. ${result.fallback}.` });
@@ -763,24 +783,8 @@ Deno.serve(async (req) => {
         },
       }, 200, "inhouse");
     }
-    // Misclassification guard (full requests only — the fast phase answers
-    // instantly from the formula): the AI prices the same job, and when the
-    // two disagree by more than 3x the formula almost certainly matched the
-    // wrong catalog entry ("replace AC compressor" -> an AC recharge, $321 vs
-    // ~$1.3k, 2026-09-30) — serve the AI. On the held-out sets honest
-    // disagreements stayed under ~2.6x, so 3x leaves the formula's wins alone.
-    if (payload.fast !== true && ANTHROPIC_API_KEY && AI_FIRST_HOME && trimmedDesc.length >= 3) {
-      const ai = await itemizedEstimateFor(zip, trimmedDesc, false, aiKind);
-      if (ai && r.typical > 0) {
-        const ratio = ai.estimate.typical / r.typical;
-        if (ratio > 3 || ratio < 1 / 3) {
-          console.log("pricing: formula overruled", JSON.stringify({
-            description, job_type: r.entry.job_type, formula: r.typical, ai: ai.estimate.typical,
-          }));
-          return itemizedJson(ai.estimate, "it-overrule");
-        }
-      }
-    }
+    // (The >3x misclassification guard that used to sit here is gone: the AI
+    // now prices every job first, so reaching this line means it couldn't.)
     return json({
       range: {
         all_in_low: r.low,

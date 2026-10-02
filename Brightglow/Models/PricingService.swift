@@ -39,18 +39,23 @@ enum PricingService {
     ///   is the same phrase for both — and without it a motorcycle request was
     ///   priced as four car tires (~$890) instead of two moto tires (~$440).
     ///   Nil for home categories.
-    /// - Parameter fast: phase-1 request — the server answers instantly with the
-    ///   formula (plus any already-cached grounded number) and skips the web-search
-    ///   await, warming it in the background. The caller then requests again with
-    ///   `fast: false` to swap in the grounded number once it's ready.
+    /// - Parameter fast: phase-1 request — the server answers with the cached
+    ///   local AI estimate or a quick (no web search) one, and runs the web search
+    ///   in the background. The caller then requests again with `fast: false` to
+    ///   swap in the searched number once it's ready. The formula answers only
+    ///   when the AI can't (2026-10-02).
     static func estimate(category: String, description: String, zip: String?,
-                         vehicle: VehicleFilter? = nil, fast: Bool = false) async -> PriceTier? {
+                         vehicle: VehicleFilter? = nil, fast: Bool = false,
+                         city: String? = nil) async -> PriceTier? {
         guard isConfigured, !category.isEmpty || !description.isEmpty,
               let url = URL(string: "https://\(ref).supabase.co/functions/v1/pricing")
         else { return nil }
 
         var body: [String: Any] = ["category": category, "description": description]
         if let zip { body["zip"] = zip }
+        // "San Francisco, CA" — the AI prices in this named market instead of
+        // guessing it from the ZIP (2026-10-02: prices must always be local).
+        if let city, !city.isEmpty { body["city"] = city }
         if let vehicle { body["vehicle"] = vehicle == .moto ? "moto" : "auto" }
         if fast { body["fast"] = true }
         // Stable per-device id (Keychain-backed) for server-side request

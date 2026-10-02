@@ -31,7 +31,9 @@ actor EstimateCache {
     // shows its price with no network at all. Stored in UserDefaults as a small,
     // TTL-pruned, size-capped map.
     private let store = UserDefaults.standard
-    private let storeKey = "estimateCache.v1"
+    // v2 (2026-10-02): the server now prices every job with the local AI
+    // estimate first; v1 entries hold formula numbers that must not outlive it.
+    private let storeKey = "estimateCache.v2"
     private let ttl: TimeInterval = 7 * 24 * 60 * 60   // 7 days
     private let maxEntries = 200
     private var loadedFromDisk = false
@@ -81,7 +83,8 @@ actor EstimateCache {
     /// part of the signature so the phase-1 (formula) and phase-2 (grounded) calls
     /// are cached separately.
     func estimate(category: String, description: String,
-                  zip: String?, vehicle: VehicleFilter?, fast: Bool = false) async -> PriceTier? {
+                  zip: String?, vehicle: VehicleFilter?, fast: Bool = false,
+                  city: String? = nil) async -> PriceTier? {
         loadIfNeeded()
         let k = key(category, description, zip, vehicle, fast)
         if let cached = results[k] { return cached }
@@ -89,7 +92,7 @@ actor EstimateCache {
 
         let task = Task<PriceTier?, Never> {
             await PricingService.estimate(category: category, description: description,
-                                          zip: zip, vehicle: vehicle, fast: fast)
+                                          zip: zip, vehicle: vehicle, fast: fast, city: city)
         }
         inFlight[k] = task
         let value = await task.value
@@ -105,8 +108,9 @@ actor EstimateCache {
     /// capture, and again once the clarify chat refines it) so the slow parts are
     /// already done — or in flight — when the results header requests the estimate.
     nonisolated func prefetch(category: String, description: String,
-                              zip: String?, vehicle: VehicleFilter?, fast: Bool = false) {
+                              zip: String?, vehicle: VehicleFilter?, fast: Bool = false,
+                              city: String? = nil) {
         Task { _ = await estimate(category: category, description: description,
-                                  zip: zip, vehicle: vehicle, fast: fast) }
+                                  zip: zip, vehicle: vehicle, fast: fast, city: city) }
     }
 }

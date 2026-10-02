@@ -141,13 +141,14 @@ enum ContractorLoader {
         // otherwise send it empty — the server classifies the job from the
         // description, which the client can't do from a multi-word phrase.
         let resolvedCategory = category.isEmpty ? (Category.exactTerm(q)?.rawValue ?? "") : category
-        let (_, zip) = await EstimateService.geocode(for: coord)
+        let (locality, zip) = await EstimateService.geocode(for: coord)
         // An explicit filter wins; otherwise infer it, so a typed "motorcycle
         // tires" search prices as a bike even with no chip selected.
         let resolvedVehicle = vehicle
             ?? (isAutoService(category: category, searchQuery: q) ? VehicleFilter.auto : nil)
         return await EstimateService.estimate(category: resolvedCategory, description: description,
-                                              zip: zip, vehicle: resolvedVehicle, fast: fast)
+                                              zip: zip, vehicle: resolvedVehicle, fast: fast,
+                                              city: locality)
     }
 
     /// Start the estimate EARLY, fire-and-forget — typically the moment a photo is

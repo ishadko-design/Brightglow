@@ -27,7 +27,7 @@ enum EstimatePrewarmer {
     static func warmPopular(near coord: CLLocationCoordinate2D) {
         guard FeatureFlags.prewarmPopularEstimates else { return }
         Task.detached(priority: .background) {
-            let (_, zip) = await EstimateService.geocode(for: coord)
+            let (locality, zip) = await EstimateService.geocode(for: coord)
             guard let zip, zip.count >= 3 else { return }
             let zip3 = String(zip.prefix(3))
 
@@ -39,7 +39,7 @@ enum EstimatePrewarmer {
 
             for job in popularJobs {
                 EstimateCache.shared.prefetch(category: job.category, description: job.description,
-                                              zip: zip, vehicle: nil, fast: false)
+                                              zip: zip, vehicle: nil, fast: false, city: locality)
             }
         }
     }
