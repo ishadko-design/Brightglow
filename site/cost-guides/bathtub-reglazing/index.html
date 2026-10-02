@@ -243,6 +243,8 @@ footer.site-foot a.logo{color:var(--ink);text-decoration:none}
   </footer>
 
 
+
+
 <script>
 (function(){
   "use strict";
@@ -263,11 +265,10 @@ footer.site-foot a.logo{color:var(--ink);text-decoration:none}
     var line = document.getElementById("regional-line");
     if(!line || line.getAttribute("data-localized")) return;
     line.setAttribute("data-localized","1");
-    line.innerHTML = "Near you ("+hit.label+"): " + line.innerHTML.replace(/^[^:]+:\\s*/, "");
+    line.innerHTML = "Near you ("+hit.label+"): " + line.innerHTML.replace(/^[^:]+:\s*/, "");
   }
   try{ fetch("/api/geo",{cache:"no-store"}).then(function(r){return r.json();}).then(apply).catch(function(){}); }catch(e){}
 })();
 </script>
-
 </body>
 </html>
