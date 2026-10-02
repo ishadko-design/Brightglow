@@ -47,6 +47,9 @@
 @media(min-width:760px){.guides{grid-template-columns:1fr 1fr}}
 .guide{background:var(--card);border:1px solid var(--line);border-radius:var(--r);padding:24px 22px 20px;box-shadow:0 10px 30px rgba(19,19,21,.05);text-decoration:none;display:block;color:var(--ink)}
 .guide:hover{border-color:rgba(19,19,21,.18)}
+.guide{padding:0;overflow:hidden}
+.guide-img img{display:block;width:100%;height:190px;object-fit:cover}
+.guide-body{padding:24px 22px 20px}
 .guide-top{display:flex;justify-content:space-between;gap:16px;align-items:baseline}
 .cat{font-size:12px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:var(--bronze);white-space:nowrap}
 .guide .price{font-family:var(--headline);font-weight:700;font-size:17px;letter-spacing:-0.01em;white-space:nowrap}
@@ -132,10 +135,10 @@ footer{border-top:1px solid var(--line);padding:40px 0 48px;background:rgba(255,
 (function(){
   "use strict";
   var GUIDES = [
-    { cat:"Home", kind:"home", title:"Bathtub reglazing", price:"$350\u2013$650", time:"3\u20135 hours", note:"Sprayed-on coating over your existing tub. Lasts 10\u201315 years with gentle care. Replacing the tub runs about $5,700.", href:"https://brightglow.co/cost-guides/bathtub-reglazing" },
-    { cat:"Home", kind:"home", title:"Roof replacement", price:"$5,900\u2013$46,000", time:"1\u20133 days", note:"Tear-off and new roof. Material is the biggest lever: asphalt $7.5k\u2013$14k, tile or metal $20k\u2013$60k.", href:"https://brightglow.co/cost-guides/roof-replacement" },
-    { cat:"Home", kind:"home", title:"HVAC replacement", price:"$5,000\u2013$11,000", time:"1 day", note:"Full system swap. Bay Area runs roughly double the national average.", href:"https://brightglow.co/cost-guides/hvac-replacement" },
-    { cat:"Home", kind:"home", title:"Water heater replacement", price:"$882\u2013$1,826", time:"A few hours", note:"Tank swap. Tankless and heat-pump hybrids cost more upfront and last longer.", href:"https://brightglow.co/cost-guides/water-heater-replacement" }
+    { cat:"Home", kind:"home", title:"Bathtub reglazing", price:"$350\u2013$650", time:"3\u20135 hours", note:"Sprayed-on coating over your existing tub. Lasts 10\u201315 years with gentle care. Replacing the tub runs about $5,700.", href:"https://brightglow.co/cost-guides/bathtub-reglazing", img:"img/bathtub.jpg" },
+    { cat:"Home", kind:"home", title:"Roof replacement", price:"$5,900\u2013$46,000", time:"1\u20133 days", note:"Tear-off and new roof. Material is the biggest lever: asphalt $7.5k\u2013$14k, tile or metal $20k\u2013$60k.", href:"https://brightglow.co/cost-guides/roof-replacement", img:"img/roof.webp" },
+    { cat:"Home", kind:"home", title:"HVAC replacement", price:"$5,000\u2013$11,000", time:"1 day", note:"Full system swap. Bay Area runs roughly double the national average.", href:"https://brightglow.co/cost-guides/hvac-replacement", img:"img/hvac.webp" },
+    { cat:"Home", kind:"home", title:"Water heater replacement", price:"$882\u2013$1,826", time:"A few hours", note:"Tank swap. Tankless and heat-pump hybrids cost more upfront and last longer.", href:"https://brightglow.co/cost-guides/water-heater-replacement", img:"img/water-heater.webp" }
   ];
   var list = document.getElementById("list");
   var empty = document.getElementById("empty");
@@ -152,10 +155,11 @@ footer{border-top:1px solid var(--line);padding:40px 0 48px;background:rgba(255,
     });
     list.innerHTML = rows.map(function(g){
       return '<a class="guide" href="' + esc(g.href) + '">' +
-        '<div class="guide-top"><span class="cat">' + esc(g.cat) + '</span><span class="price">' + esc(g.price) + '</span></div>' +
+        '<div class="guide-img"><img src="' + esc(g.img) + '" alt="' + esc(g.title) + '" loading="lazy"></div>' +
+        '<div class="guide-body"><div class="guide-top"><span class="cat">' + esc(g.cat) + '</span><span class="price">' + esc(g.price) + '</span></div>' +
         '<h3>' + esc(g.title) + '</h3>' +
         '<p>' + esc(g.note) + '</p>' +
-        '<div class="guide-foot"><span class="meta">' + esc(g.time) + '</span><span class="go">See guide <span aria-hidden="true">\u2192</span></span></div>' +
+        '<div class="guide-foot"><span class="meta">' + esc(g.time) + '</span><span class="go">See guide <span aria-hidden="true">\u2192</span></span></div></div>' +
       '</a>';
     }).join("");
     empty.hidden = rows.length !== 0;
