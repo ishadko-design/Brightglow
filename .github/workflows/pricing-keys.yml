@@ -41,4 +41,4 @@ jobs:
             echo "::error::query API: $(jq -r '(.message // .error // .) | tostring' <<<"$resp" 2>/dev/null | head -c 300)"; exit 1
           fi
           echo "Most recent $n AI price cache entries (key | low–high, typical | searched | written):"
-          jq -r '.[] | "\(.cache_key)\t$\(.low|floor)–$\(.high|floor), typ $\(.typical|floor)\tsearched=\(.searched)\t\(.created_at)"' <<<"$resp"
+          jq -r '.[] | "\(.cache_key)\t$\(.low|tonumber|floor)–$\(.high|tonumber|floor), typ $\(.typical|tonumber|floor)\tsearched=\(.searched)\t\(.created_at)"' <<<"$resp"
