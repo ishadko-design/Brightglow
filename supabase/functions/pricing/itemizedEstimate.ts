@@ -161,12 +161,30 @@ export function factToken(fact: string): string {
   return `${name}:${value.replace(/\s+/g, "")}`;
 }
 
+/** For a taxonomy job, only these facts split the cache: the job type already
+ *  carries the descriptive part ("patch", "flat", the material), and letting
+ *  the model's optional extras into the key split "Patch flat roof" from
+ *  "Patch my flat roof" into two AI runs (2026-10-03). "other" jobs keep all
+ *  facts — there the facts are the only description of the job. */
+const KEY_FACTS_FOR_TAXONOMY = new Set([
+  "area_sqft", "length_ft", "run_ft", "count", "capacity", "stories",
+  "location", "tier", "unit_owned", "permit", "trench", "panel_upgrade",
+  "vehicle", "make_model",
+]);
+
 export function canonicalKey(c: CanonicalJob): string {
+  const isTaxonomy = !!c.jobType && c.jobType !== "other";
   // A taxonomy job keys on its id; an "other" job on its words, order-free.
-  const job = c.jobType && c.jobType !== "other"
-    ? c.jobType
+  const job = isTaxonomy
+    ? c.jobType!
     : [...new Set(c.job.toLowerCase().split(/[^a-z0-9]+/).filter(Boolean))].sort().join(" ");
-  const facts = [...new Set(c.facts.map(factToken).filter((t) => !t.endsWith(":")))].sort();
+  const facts = [...new Set(
+    c.facts
+      .map(factToken)
+      // "unknown" says nothing: it must not split from a request that omits it.
+      .filter((t) => !t.endsWith(":") && !t.endsWith(":unknown"))
+      .filter((t) => !isTaxonomy || KEY_FACTS_FOR_TAXONOMY.has(t.slice(0, t.indexOf(":")))),
+  )].sort();
   return [job, ...facts].join("|").slice(0, 280);
 }
 

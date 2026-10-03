@@ -47,4 +47,23 @@ check "flat roof patch, fast (SF)" \
 check "flat roof patch (SF)" \
   '{"category":"Roofing","description":"Patch flat roof","zip":"94110","city":"San Francisco, CA"}' 250 3000
 
+# Same job, different words -> ONE cached price (the cache keys on the
+# taxonomy job, not the phrasing; 2026-10-03).
+same_job() {
+  local a="$1" b="$2" ta tb
+  ta=$(curl -sS --max-time 90 -X POST "$SUPABASE_URL/functions/v1/pricing" -H "Content-Type: application/json" \
+    -H "apikey: $SUPABASE_ANON_KEY" -H "Authorization: Bearer $SUPABASE_ANON_KEY" ${APP_TOKEN:+-H "x-app-token: $APP_TOKEN"} \
+    -d "$a" | jq -r '.range.all_in_typical // empty')
+  tb=$(curl -sS --max-time 90 -X POST "$SUPABASE_URL/functions/v1/pricing" -H "Content-Type: application/json" \
+    -H "apikey: $SUPABASE_ANON_KEY" -H "Authorization: Bearer $SUPABASE_ANON_KEY" ${APP_TOKEN:+-H "x-app-token: $APP_TOKEN"} \
+    -d "$b" | jq -r '.range.all_in_typical // empty')
+  if [[ -n "$ta" && "$ta" == "$tb" ]]; then
+    echo "same job, same price: typ \$${ta%.*}"
+  else
+    echo "FAIL same job, different prices: \$${ta%.*} vs \$${tb%.*}"; fail=1
+  fi
+}
+same_job '{"category":"Roofing","description":"Patch flat roof","zip":"94110","city":"San Francisco, CA","fast":true}' \
+         '{"category":"Roofing","description":"Patch my flat roof","zip":"94110","city":"San Francisco, CA","fast":true}'
+
 exit $fail

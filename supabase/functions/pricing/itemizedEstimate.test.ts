@@ -50,3 +50,17 @@ Deno.test("factToken buckets numbers so nearby sizes share a price", () => {
   assertEquals(factToken("area_sqft 10"), factToken("area_sqft 20"));
   assertEquals(factToken("location Outdoor"), "location:outdoor");
 });
+
+Deno.test("canonicalKey: a taxonomy job ignores descriptive extras and unknowns", () => {
+  // "Patch flat roof" vs "Patch my flat roof" ran two AI estimates (2026-10-03).
+  assertEquals(
+    canonicalKey({ jobType: "roofing.repair", job: "patch flat roof", facts: ["scope patch", "material flat"] }),
+    canonicalKey({ jobType: "roofing.repair", job: "patch my flat roof", facts: ["permit unknown"] }),
+  );
+  // Real price drivers still split it.
+  assertEquals(
+    canonicalKey({ jobType: "roofing.repair", job: "patch flat roof", facts: ["area_sqft 10"] }) ===
+      canonicalKey({ jobType: "roofing.repair", job: "patch flat roof", facts: ["area_sqft 300"] }),
+    false,
+  );
+});

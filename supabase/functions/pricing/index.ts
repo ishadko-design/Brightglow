@@ -440,6 +440,13 @@ async function writeItemized(key: string, e: ItemizedEstimate): Promise<void> {
   } catch (_) { /* ignore */ }
 }
 
+/** One line per AI price: the cache key (taxonomy job + bucketed facts + metro
+ *  code) and how it was served. No request text or ZIP — the key is all the
+ *  pricing-keys workflow reads, and that workflow's log is public. */
+function logPriceKey(key: string, cacheState: string, ms: number): void {
+  console.log("pricing: price-key " + JSON.stringify({ key, cacheState, ms }));
+}
+
 function itemizedJson(e: ItemizedEstimate, cacheState: string): Response {
   return json({
     range: {
@@ -464,13 +471,15 @@ function itemizedJson(e: ItemizedEstimate, cacheState: string): Response {
 async function itemizedResponse(
   zip: string | undefined, description: string, fast: boolean, kind: ItemizeKind = "home", city?: string,
 ): Promise<Response | null> {
+  const t0 = Date.now();
   const r = await itemizedEstimateFor(zip, description, fast, kind, city);
+  if (r) logPriceKey(r.key ?? "", `${fast ? "fast" : "full"}:${r.cacheState}`, Date.now() - t0);
   return r ? itemizedJson(r.estimate, r.cacheState) : null;
 }
 
 async function itemizedEstimateFor(
   zip: string | undefined, description: string, fast: boolean, kind: ItemizeKind = "home", city?: string,
-): Promise<{ estimate: ItemizedEstimate; cacheState: string } | null> {
+): Promise<{ estimate: ItemizedEstimate; cacheState: string; key?: string } | null> {
   const label = placeLabel(zip, city);
   // A phrasing seen before resolves its canonical job from cache (no model
   // call). A new phrasing needs the canonicalize call — and on the fast path
@@ -494,7 +503,7 @@ async function itemizedEstimateFor(
   // carries every price fact. The original text rides along for nuance.
   const priced = `${canon.job}${canon.facts.length ? ` (${canon.facts.join("; ")})` : ""}. Request: ${description}`;
   const cached = await readItemized(key);
-  if (cached && (fast || cached.searched)) return { estimate: cached, cacheState: "it-hit" };
+  if (cached && (fast || cached.searched)) return { estimate: cached, cacheState: "it-hit", key };
 
   const searchAndStore = async () => {
     const s = await itemize(priced, label, ANTHROPIC_API_KEY, true, undefined, kind);
@@ -512,7 +521,7 @@ async function itemizedEstimateFor(
     const k = await (speculative ?? itemize(priced, label, ANTHROPIC_API_KEY, false, undefined, kind));
     if (!k) return null;
     await writeItemized(key, k);
-    return { estimate: k, cacheState: "it-knowledge" };
+    return { estimate: k, cacheState: "it-knowledge", key };
   }
 
   // Never make the user wait on the web search (2026-10-02: 10-23s, "24
@@ -524,11 +533,11 @@ async function itemizedEstimateFor(
     (globalThis as { EdgeRuntime?: { waitUntil?: (p: Promise<unknown>) => void } })
       .EdgeRuntime?.waitUntil?.(searchAndStore());
   }
-  if (cached) return { estimate: cached, cacheState: "it-hit" };
+  if (cached) return { estimate: cached, cacheState: "it-hit", key };
   const k = await (speculative ?? itemize(priced, label, ANTHROPIC_API_KEY, false, undefined, kind));
   if (!k) return null;
   await writeItemized(key, k);
-  return { estimate: k, cacheState: "it-knowledge" };
+  return { estimate: k, cacheState: "it-knowledge", key };
 }
 
 async function groundedResponse(
