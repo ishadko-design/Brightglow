@@ -1,0 +1,49 @@
+name: Pricing cache keys (read-only)
+
+# Prints which AI price cache key each recent request used and how it was
+# served (hit / knowledge / searched, fast / full, ms), from the Supabase
+# function logs. Read-only. This repo is PUBLIC, so it prints ONLY the
+# "pricing: price-key" lines the pricing function writes for this purpose:
+# taxonomy job + bucketed facts + metro code — never request text or ZIPs.
+# Run it from the Actions tab (Run workflow → brightglow-ios) or via the API.
+on:
+  workflow_dispatch:
+    inputs:
+      minutes:
+        description: How many minutes back to read
+        default: "60"
+  push:
+    branches: [brightglow-ios]
+    paths:
+      - .github/workflows/pricing-keys.yml
+
+jobs:
+  keys:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Read price-key lines from the pricing function logs
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          REF: qxoseyrlbvblpwqzwvvk
+          MINUTES: ${{ inputs.minutes || '60' }}
+        run: |
+          if [ -z "$SUPABASE_ACCESS_TOKEN" ]; then
+            echo "::warning::SUPABASE_ACCESS_TOKEN not set"; exit 0
+          fi
+          start=$(date -u -d "-${MINUTES} minutes" +%Y-%m-%dT%H:%M:%SZ)
+          end=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+          sql="select timestamp, event_message from function_logs where regexp_contains(event_message, 'pricing: price-key') order by timestamp desc limit 300"
+          resp=$(curl -sS -G "https://api.supabase.com/v1/projects/$REF/analytics/endpoints/logs.all" \
+            -H "Authorization: Bearer $SUPABASE_ACCESS_TOKEN" \
+            --data-urlencode "sql=$sql" \
+            --data-urlencode "iso_timestamp_start=$start" \
+            --data-urlencode "iso_timestamp_end=$end")
+          err=$(jq -r '.error // empty | tostring' <<<"$resp")
+          if [ -n "$err" ]; then echo "::error::logs API: ${err:0:300}"; exit 1; fi
+          # Only the JSON we wrote after "price-key " — nothing else leaves the API.
+          jq -r '.result[]? | .event_message | capture("price-key (?<j>\\{.*\\})").j' <<<"$resp" \
+            | jq -r '[.cacheState, (.ms|tostring)+"ms", .key] | @tsv' > keys.tsv || true
+          echo "Requests in the last ${MINUTES} min: $(wc -l < keys.tsv)"
+          echo; echo "== by key (count) =="; cut -f3 keys.tsv | sort | uniq -c | sort -rn | head -50
+          echo; echo "== by how served =="; cut -f1 keys.tsv | sort | uniq -c | sort -rn
+          echo; echo "== latest 40 =="; head -40 keys.tsv
