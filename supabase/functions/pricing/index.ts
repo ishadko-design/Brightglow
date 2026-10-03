@@ -381,9 +381,9 @@ const area = (zip?: string) => {
 };
 
 /** description -> canonical job, cached forever by exact text so a repeated
- *  description never re-rolls its key (search_cache table, "canon1:" rows). */
+ *  description never re-rolls its key (search_cache table, "canon2:" rows). */
 const canonKey = (description: string) =>
-  `canon1:${description.toLowerCase().replace(/\s+/g, " ")}`.slice(0, 300);
+  `canon2:${description.toLowerCase().replace(/\s+/g, " ")}`.slice(0, 300);
 
 /** Cache read only — a DB lookup, no model call. */
 async function readCanonical(description: string): Promise<CanonicalJob | null> {
@@ -408,7 +408,7 @@ async function computeCanonical(description: string): Promise<CanonicalJob | nul
   return c;
 }
 
-/** Itemized bands live in grounded_estimate_cache ("it1:" keys); the basis
+/** Itemized bands live in grounded_estimate_cache ("it2:" keys); the basis
  *  column carries {basis, components, searched} as JSON (no migration). */
 async function readItemized(key: string): Promise<(ItemizedEstimate & { ageMs: number }) | null> {
   if (!db) return null;
@@ -488,7 +488,8 @@ async function itemizedEstimateFor(
     return k ? { estimate: k, cacheState: "it-knowledge" } : null;
   }
   // Kind in the key: "replace tires" is 4 for a car and 2 for a motorcycle.
-  const key = `it1:${area(zip)}:${kind === "home" ? "" : `${kind}:`}${canonicalKey(canon)}`;
+  // it2: keys are taxonomy job + bucketed facts (see canonicalKey).
+  const key = `it2:${area(zip)}:${kind === "home" ? "" : `${kind}:`}${canonicalKey(canon)}`;
   // The canonical form is what gets priced: stable across phrasings, and it
   // carries every price fact. The original text rides along for nuance.
   const priced = `${canon.job}${canon.facts.length ? ` (${canon.facts.join("; ")})` : ""}. Request: ${description}`;

@@ -20,6 +20,7 @@
 // guardrail signal (logged divergence), never as the shown number.
 
 import Anthropic from "npm:@anthropic-ai/sdk";
+import { JOB_TYPE_TAXONOMY } from "./pricingEngine.ts";
 
 /** Last failure reason, for the debug probe in index.ts. */
 export let lastItemizeError = "";
@@ -44,7 +45,10 @@ export interface ItemizedEstimate {
 }
 
 export interface CanonicalJob {
+  /** Taxonomy job_type (e.g. "roofing.repair"), or "other" when none fits. */
+  jobType?: string;
   job: string;
+  /** "<name> <value>", name from FACT_NAMES. */
   facts: string[];
 }
 
@@ -68,53 +72,125 @@ const textOf = (r: Anthropic.Message) =>
 
 // ── 1. canonicalize ─────────────────────────────────────────────────────────
 
+// The cache key is the JOB, not the wording (2026-10-03: "install outdoor
+// sauna" and "install sauna outdoor" were priced as two separate AI runs, at
+// $2k–4.4k and $2.4k–10k). So the model picks the job from the fixed taxonomy
+// (an enum it cannot leave) and states facts from a fixed vocabulary; numbers
+// are bucketed in code. Free text survives only for "other" jobs, where word
+// order is ignored.
+
+/** Fact names the key may carry. A fixed list: "length 40 ft" and "run 40 ft"
+ *  must not split a cache entry. */
+export const FACT_NAMES = [
+  "area_sqft", "length_ft", "run_ft", "count", "capacity", "size",
+  "material", "location", "stories", "access", "scope", "condition",
+  "tier", "unit_owned", "permit", "trench", "panel_upgrade",
+  "vehicle", "make_model",
+] as const;
+
+const TAXONOMY_IDS = [...new Set(JOB_TYPE_TAXONOMY.map((e) => e.job_type))].sort();
+const TAXONOMY_LINES = JOB_TYPE_TAXONOMY
+  .map((e) => `- ${e.job_type}: ${e.keywords.slice(0, 4).join(", ")}`)
+  .join("\n");
+
 const CANON_SYSTEM = `Normalize a home-service or vehicle-service request into a stable key for a \
 price cache. Two requests for the same work with the same price-relevant facts \
-MUST produce the identical output.
+MUST produce the identical output, however they are worded or ordered.
 
-job: the work as a short lowercase noun phrase in a fixed form: \
-"<action> <item>" — action is one of install, replace, repair, remodel, \
-build, remove, paint, clean, inspect, service, detail, wrap; then the item with \
-only the qualifiers that change the price (e.g. "install owned outdoor sauna", \
-"replace 40 gal gas water heater", "repair leaking kitchen faucet", "remodel \
-bathroom", "replace front brake pads and rotors car", "repair motorcycle \
-clutch"). For a vehicle include car/truck/motorcycle and any stated make/model. \
-"Owned" when the customer already has the unit and it is not included.
-facts: only facts STATED in the request that move the price, each lowercase \
-"<name> <value>" with units normalized: sizes ("area 200 sq ft", "run 25-60 \
-ft"), capacities ("heater 9 kw", "panel 200a"), counts ("count 3"), \
-location ("outdoor"), scope flags ("trench maybe", "permit yes"), finish \
-tier ("tier mid-range"). Unknown/"not sure" items: "<name> unknown". Never \
-invent a fact. Sorted, no duplicates.`;
+job_type: the ONE taxonomy job below that is this work. A repair is a repair \
+job, never a replacement ("patch flat roof" is roofing.repair). Use "other" \
+only when no listed job is this work (e.g. installing a sauna or hot tub).
+job: the work as a short lowercase phrase "<action> <item>" with only \
+price-changing qualifiers ("install owned outdoor sauna"). "owned" when the \
+customer already has the unit and it is not included.
+facts: only facts STATED in the request that move the price, one per name:
+- area_sqft / length_ft / run_ft / count: a number ("40"); a range -> its midpoint.
+- capacity: number + unit, no spaces ("9kw", "40gal", "200a").
+- size, material, location (indoor / outdoor), stories, access, scope \
+(patch / partial / full), condition, tier (budget / mid / premium), \
+unit_owned (yes / no), permit / trench / panel_upgrade (yes / no / unknown), \
+vehicle (car / truck / motorcycle), make_model: one or two lowercase words.
+"Not sure" = "unknown". Never invent a fact.
+
+Taxonomy (job_type: example words):
+${TAXONOMY_LINES}`;
 
 const CANON_SCHEMA = {
   type: "object",
   properties: {
+    job_type: { type: "string", enum: [...TAXONOMY_IDS, "other"] },
     job: { type: "string" },
-    facts: { type: "array", items: { type: "string" } },
+    facts: {
+      type: "array",
+      items: {
+        type: "object",
+        properties: {
+          name: { type: "string", enum: [...FACT_NAMES] },
+          value: { type: "string" },
+        },
+        required: ["name", "value"],
+        additionalProperties: false,
+      },
+    },
   },
-  required: ["job", "facts"],
+  required: ["job_type", "job", "facts"],
   additionalProperties: false,
 } as const;
 
+/** Bucket edges for numeric facts: values inside one bucket share a price. */
+const BUCKETS: Record<string, number[]> = {
+  area_sqft: [25, 50, 100, 200, 400, 800, 1500, 3000],
+  length_ft: [5, 10, 25, 50, 100, 200],
+  run_ft: [10, 25, 50, 100, 200],
+  count: [1, 2, 3, 4, 5, 6, 8, 10, 15, 20, 40],
+};
+
+/** One fact as its key token: numeric facts bucketed, the rest normalized. */
+export function factToken(fact: string): string {
+  const f = fact.trim().toLowerCase().replace(/\s+/g, " ");
+  const sp = f.indexOf(" ");
+  const name = sp < 0 ? f : f.slice(0, sp);
+  const value = sp < 0 ? "" : f.slice(sp + 1);
+  const edges = BUCKETS[name];
+  const num = value.match(/\d+(?:\.\d+)?/);
+  if (edges && num) {
+    const n = Number(num[0]);
+    const i = edges.findIndex((e) => n <= e);
+    return `${name}:${i < 0 ? `>${edges[edges.length - 1]}` : `<=${edges[i]}`}`;
+  }
+  return `${name}:${value.replace(/\s+/g, "")}`;
+}
+
 export function canonicalKey(c: CanonicalJob): string {
-  const facts = [...new Set(c.facts.map((f) => f.trim().toLowerCase()).filter(Boolean))].sort();
-  return [c.job.trim().toLowerCase().replace(/\s+/g, " "), ...facts].join("|").slice(0, 280);
+  // A taxonomy job keys on its id; an "other" job on its words, order-free.
+  const job = c.jobType && c.jobType !== "other"
+    ? c.jobType
+    : [...new Set(c.job.toLowerCase().split(/[^a-z0-9]+/).filter(Boolean))].sort().join(" ");
+  const facts = [...new Set(c.facts.map(factToken).filter((t) => !t.endsWith(":")))].sort();
+  return [job, ...facts].join("|").slice(0, 280);
 }
 
 export async function canonicalize(description: string, apiKey: string): Promise<CanonicalJob | null> {
   try {
     const r = await client(apiKey, 8_000).messages.create({
       model: MODEL,
-      max_tokens: 200,
+      max_tokens: 300,
       thinking: { type: "disabled" },
       system: [{ type: "text", text: CANON_SYSTEM, cache_control: { type: "ephemeral" } }],
       output_config: { format: { type: "json_schema", schema: CANON_SCHEMA } },
       messages: [{ role: "user", content: description.slice(0, 1200) }],
     });
-    const o = JSON.parse(textOf(r)) as CanonicalJob;
+    const o = JSON.parse(textOf(r)) as {
+      job_type?: unknown; job?: unknown; facts?: Array<{ name?: unknown; value?: unknown }>;
+    };
     if (typeof o.job !== "string" || !o.job.trim() || !Array.isArray(o.facts)) return null;
-    return { job: o.job, facts: o.facts.filter((f) => typeof f === "string") };
+    const jobType = typeof o.job_type === "string" && (o.job_type === "other" || TAXONOMY_IDS.includes(o.job_type))
+      ? o.job_type
+      : "other";
+    const facts = o.facts
+      .filter((f) => typeof f?.name === "string" && typeof f?.value === "string" && String(f.value).trim())
+      .map((f) => `${String(f.name)} ${String(f.value).trim().toLowerCase()}`);
+    return { jobType, job: o.job, facts };
   } catch (err) {
     console.error("pricing: canonicalize failed", String(err).slice(0, 200));
     return null;
@@ -185,8 +261,10 @@ const ITEM_SCHEMA = {
   additionalProperties: false,
 } as const;
 
-/** Sum components into a band. Certain parts count fully; uncertain parts add
- *  to high and half to typical (they may not happen). Exported for tests. */
+/** Sum components into a band. Certain parts count fully. An uncertain part
+ *  (may not be needed) adds half its typical to typical and its TYPICAL — not
+ *  its worst case — to high: stacking every "maybe" at its worst case made an
+ *  outdoor sauna read $2.4k–10k (2026-10-03). Exported for tests. */
 export function sumComponents(components: Component[]): { low: number; typical: number; high: number } {
   let low = 0, typical = 0, high = 0;
   for (const c of components) {
@@ -196,10 +274,11 @@ export function sumComponents(components: Component[]): { low: number; typical: 
     if (c.certain) {
       low += lo;
       typical += ty;
+      high += hi;
     } else {
       typical += ty / 2;
+      high += ty;
     }
-    high += hi;
   }
   const round = (v: number) => (v >= 1000 ? Math.round(v / 50) * 50 : Math.round(v / 5) * 5);
   return { low: round(low), typical: round(typical), high: round(high) };
