@@ -13,15 +13,10 @@ enum ContractorLoader {
         location: LocationProvider
     ) async -> CLLocationCoordinate2D? {
         if let preset { return preset }
-        return await withTaskGroup(of: CLLocationCoordinate2D?.self) { group in
-            group.addTask { await location.currentCoordinate() }
-            group.addTask {
-                try? await Task.sleep(nanoseconds: 3_000_000_000)
-                return nil
-            }
-            let first = await group.next() ?? nil
-            group.cancelAll()
-            return first
+        // `withDeadline`, not a task-group race: the fix is a continuation that
+        // ignores cancellation, so the old group waited for GPS past its 3s cap.
+        return await withDeadline(3_000_000_000, fallback: nil) {
+            await location.currentCoordinate()
         }
     }
 

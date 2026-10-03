@@ -19,6 +19,11 @@ final class LocationProvider: NSObject, ObservableObject {
     func currentCoordinate() async -> CLLocationCoordinate2D? {
         switch manager.authorizationStatus {
         case .authorizedWhenInUse, .authorizedAlways:
+            // A recent fix is good enough at kilometer accuracy — skip the
+            // round trip to the GPS on every category tap.
+            if let last = manager.location, -last.timestamp.timeIntervalSinceNow < 10 * 60 {
+                return last.coordinate
+            }
             return await requestFix()
         case .notDetermined:
             // The same continuation is carried through: auth callback → fix.
