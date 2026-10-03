@@ -65,11 +65,17 @@ Deno.test("canonicalKey: a taxonomy job ignores descriptive extras and unknowns"
   );
 });
 
-Deno.test("settleJobType: a bigger job is never filed under a listed part of it", () => {
-  // Reported 2026-10-03: "install sauna ... new circuit" served the circuit-only price.
+Deno.test("settleJobType: a job type is kept only when the phrase names that job", () => {
+  // Reported 2026-10-03: a sauna install was filed as the circuit job and,
+  // once, as solar.
   const sauna = { jobType: "electrical.dedicated_circuit", job: "install owned outdoor sauna", facts: [] };
   assertEquals(settleJobType(sauna, false).jobType, "other");
-  const circuit = { jobType: "electrical.dedicated_circuit", job: "install 50a outdoor circuit", facts: [] };
+  assertEquals(settleJobType({ ...sauna, jobType: "electrical.solar" }, false).jobType, "other");
+  // A circuit for an existing sauna IS the circuit job — it must share that price.
+  const circuit = { jobType: "electrical.dedicated_circuit", job: "install dedicated circuit for owned outdoor sauna", facts: [] };
   assertEquals(settleJobType(circuit, false).jobType, "electrical.dedicated_circuit");
+  // A whole project is always its own job.
   assertEquals(settleJobType(circuit, true).jobType, "other");
+  // Synonyms and suffixes still match the job's own words.
+  assertEquals(settleJobType({ jobType: "roofing.repair", job: "patching flat roof", facts: [] }, false).jobType, "roofing.repair");
 });
