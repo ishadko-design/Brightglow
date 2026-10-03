@@ -353,8 +353,10 @@ const FORMULA_FALLBACK = (Deno.env.get("FORMULA_FALLBACK") ?? "false") === "true
 // "this price usually doesn't change much — cache everything".
 const ITEMIZED_TTL_MS = 180 * 24 * 60 * 60 * 1000;   // searched bands
 const KNOWLEDGE_TTL_MS = 3 * 24 * 60 * 60 * 1000;   // until the search lands
-/** Budget for the searched pass on the request path (client waits 25s). */
-const SEARCH_BUDGET_MS = 20_000;
+/** A knowledge band younger than this means its web search is already
+ *  running in the background (started by the request that wrote it); don't
+ *  start another. Older and still unsearched = that search failed; retry. */
+const SEARCH_INFLIGHT_MS = 2 * 60 * 1000;
 
 /** Where the job is, for every AI price prompt. Always local: the city the
  *  app shows (when sent), the ZIP and its state, plus an explicit instruction
@@ -408,7 +410,7 @@ async function computeCanonical(description: string): Promise<CanonicalJob | nul
 
 /** Itemized bands live in grounded_estimate_cache ("it1:" keys); the basis
  *  column carries {basis, components, searched} as JSON (no migration). */
-async function readItemized(key: string): Promise<ItemizedEstimate | null> {
+async function readItemized(key: string): Promise<(ItemizedEstimate & { ageMs: number }) | null> {
   if (!db) return null;
   try {
     const { data } = await db.from("grounded_estimate_cache")
@@ -420,6 +422,7 @@ async function readItemized(key: string): Promise<ItemizedEstimate | null> {
     return {
       low: Number(data.low), typical: Number(data.typical), high: Number(data.high),
       basis: meta.basis ?? "", components: meta.components ?? [], searched: !!meta.searched,
+      ageMs: age,
     };
   } catch (_) {
     return null;
@@ -477,7 +480,7 @@ async function itemizedEstimateFor(
   let canon = await readCanonical(description);
   let speculative: Promise<ItemizedEstimate | null> | null = null;
   if (!canon) {
-    if (fast) speculative = itemize(`Request: ${description}`, label, ANTHROPIC_API_KEY, false, undefined, kind);
+    speculative = itemize(`Request: ${description}`, label, ANTHROPIC_API_KEY, false, undefined, kind);
     canon = await computeCanonical(description);
   }
   if (!canon) {
@@ -502,28 +505,26 @@ async function itemizedEstimateFor(
   };
 
   if (fast) {
+    // The fast phase never starts a web search: the full request (sent with
+    // it, and by the chat-finish prefetch) owns that, so one job runs one
+    // search, not one per phase.
     const k = await (speculative ?? itemize(priced, label, ANTHROPIC_API_KEY, false, undefined, kind));
     if (!k) return null;
     await writeItemized(key, k);
-    (globalThis as { EdgeRuntime?: { waitUntil?: (p: Promise<unknown>) => void } })
-      .EdgeRuntime?.waitUntil?.(searchAndStore());
     return { estimate: k, cacheState: "it-knowledge" };
   }
 
-  // Keep the search alive past the response (it fills the cache even when it
-  // misses this request's budget).
-  const searchTask = searchAndStore();
-  (globalThis as { EdgeRuntime?: { waitUntil?: (p: Promise<unknown>) => void } })
-    .EdgeRuntime?.waitUntil?.(searchTask);
-  const searched = await Promise.race([
-    searchTask,
-    new Promise<null>((r) => setTimeout(() => r(null), SEARCH_BUDGET_MS)),
-  ]);
-  if (searched) return { estimate: searched, cacheState: "it-searched" };
-  // Search slow/failed: serve knowledge (cached or fresh); the search keeps
-  // running and fills the cache for the next request.
+  // Never make the user wait on the web search (2026-10-02: 10-23s, "24
+  // seconds is unacceptable"). Serve the cached band if any, else a quick
+  // knowledge itemization (~4s); the searched band is computed in the
+  // background and replaces it in the cache, so the next person asking for
+  // this job in this metro gets the searched number instantly.
+  if (!cached || cached.ageMs > SEARCH_INFLIGHT_MS) {
+    (globalThis as { EdgeRuntime?: { waitUntil?: (p: Promise<unknown>) => void } })
+      .EdgeRuntime?.waitUntil?.(searchAndStore());
+  }
   if (cached) return { estimate: cached, cacheState: "it-hit" };
-  const k = await itemize(priced, label, ANTHROPIC_API_KEY, false, undefined, kind);
+  const k = await (speculative ?? itemize(priced, label, ANTHROPIC_API_KEY, false, undefined, kind));
   if (!k) return null;
   await writeItemized(key, k);
   return { estimate: k, cacheState: "it-knowledge" };

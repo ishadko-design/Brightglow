@@ -1144,19 +1144,19 @@ struct ContractorListScreen: View {
                     // has a price now, vehicles included (2026-09-30).
                     HStack(alignment: .center, spacing: 12) {
                         vehicleFilter
+                        // No "estimating" placeholder: the user is looking at
+                        // the photos while the price loads; it fades in when
+                        // ready (2026-10-02 — a visible wait read as slow).
                         if let tier = estimate {
                             estimateLine(tier)
-                        } else if estimating {
-                            EstimatingLabel()
+                                .transition(.opacity)
                         }
                     }
                     .padding(.leading, 16)
                 } else if let tier = estimate {
                     estimateLine(tier)
                         .padding(.leading, 16)
-                } else if estimating {
-                    EstimatingLabel()
-                        .padding(.leading, 16)
+                        .transition(.opacity)
                 }
             }
         }
@@ -1522,14 +1522,17 @@ struct ContractorListScreen: View {
                 estimating = true
                 let priceVehicle = allowVehicles ? vehicle : nil
                 // Two-phase, so a number shows almost instantly.
-                // Phase 1 — fast: the formula (plus any already-cached grounded
-                // number), no web-search wait. Fills the header right away, unless
-                // phase 2 already won the race on a warm cache.
+                // Phase 1 — fast: the cached AI price, or a quick AI price (~4s
+                // on a job nobody in this metro has asked about). Phase 2 returns
+                // the same without waiting on the web search, which refreshes the
+                // server cache in the background (2026-10-02).
                 Task { @MainActor in
                     let fast = await ContractorLoader.estimate(
                         category: category, searchQuery: pricingDescription, near: coord,
                         photoDetails: photoDetails, vehicle: priceVehicle, fast: true)
-                    if estimate == nil, let fast { estimate = fast }
+                    if estimate == nil, let fast {
+                        withAnimation(.easeIn(duration: 0.4)) { estimate = fast }
+                    }
                 }
                 // Phase 2 — full: the grounded (web-searched) number; replaces the
                 // fast one when it arrives (kept if grounded comes back empty).
@@ -1537,7 +1540,9 @@ struct ContractorListScreen: View {
                     let full = await ContractorLoader.estimate(
                         category: category, searchQuery: pricingDescription, near: coord,
                         photoDetails: photoDetails, vehicle: priceVehicle)
-                    if let full { estimate = full }
+                    if let full, full.min != estimate?.min || full.max != estimate?.max {
+                        withAnimation(.easeIn(duration: 0.4)) { estimate = full }
+                    }
                     estimating = false
                 }
             }
