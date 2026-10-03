@@ -38,8 +38,17 @@ jobs:
             --data-urlencode "sql=$sql" \
             --data-urlencode "iso_timestamp_start=$start" \
             --data-urlencode "iso_timestamp_end=$end")
-          err=$(jq -r '.error // empty | tostring' <<<"$resp")
+          err=$(jq -r '(.error // .message // empty) | tostring' <<<"$resp" 2>/dev/null || echo "non-JSON response")
           if [ -n "$err" ]; then echo "::error::logs API: ${err:0:300}"; exit 1; fi
+          # Shape check without content: row count only (logs can lag ~1-5 min).
+          echo "logs API rows matched: $(jq -r '(.result // []) | length' <<<"$resp")"
+          # Sanity: are ANY pricing log lines visible in the window? (count only)
+          total=$(curl -sS -G "https://api.supabase.com/v1/projects/$REF/analytics/endpoints/logs.all" \
+            -H "Authorization: Bearer $SUPABASE_ACCESS_TOKEN" \
+            --data-urlencode "sql=select count(*) as n from function_logs where regexp_contains(event_message, 'pricing:')" \
+            --data-urlencode "iso_timestamp_start=$start" \
+            --data-urlencode "iso_timestamp_end=$end" | jq -r '(.result[0].n // .error // "?") | tostring')
+          echo "all 'pricing:' log lines in window: ${total:0:120}"
           # Only the JSON we wrote after "price-key " — nothing else leaves the API.
           jq -r '.result[]? | .event_message | capture("price-key (?<j>\\{.*\\})").j' <<<"$resp" \
             | jq -r '[.cacheState, (.ms|tostring)+"ms", .key] | @tsv' > keys.tsv || true
