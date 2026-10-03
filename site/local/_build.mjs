@@ -129,7 +129,7 @@ function pageHtml(trade, city) {
   <meta property="og:description" content="${esc(desc)}">
   <meta property="og:type" content="website">
   <meta property="og:url" content="${canonical}">
-  <link rel="icon" type="image/png" href="../favicon.png">
+  <link rel="icon" type="image/png" href="../favicon.png?v=2">
   <link rel="apple-touch-icon" href="../apple-touch-icon.png">
   <link rel="stylesheet" href="../styles.css?v=27">
   <script type="application/ld+json">${JSON.stringify(jsonld)}</script>
