@@ -1,5 +1,5 @@
 import { assertEquals } from "jsr:@std/assert@1";
-import { canonicalKey, factToken, parseComponents, sumComponents } from "./itemizedEstimate.ts";
+import { canonicalKey, factToken, parseComponents, settleJobType, sumComponents } from "./itemizedEstimate.ts";
 
 Deno.test("sumComponents: certain parts count fully; an uncertain part adds half its typical to typical and its typical (not worst case) to high", () => {
   const r = sumComponents([
@@ -63,4 +63,13 @@ Deno.test("canonicalKey: a taxonomy job ignores descriptive extras and unknowns"
       canonicalKey({ jobType: "roofing.repair", job: "patch flat roof", facts: ["area_sqft 300"] }),
     false,
   );
+});
+
+Deno.test("settleJobType: a bigger job is never filed under a listed part of it", () => {
+  // Reported 2026-10-03: "install sauna ... new circuit" served the circuit-only price.
+  const sauna = { jobType: "electrical.dedicated_circuit", job: "install owned outdoor sauna", facts: [] };
+  assertEquals(settleJobType(sauna, false).jobType, "other");
+  const circuit = { jobType: "electrical.dedicated_circuit", job: "install 50a outdoor circuit", facts: [] };
+  assertEquals(settleJobType(circuit, false).jobType, "electrical.dedicated_circuit");
+  assertEquals(settleJobType(circuit, true).jobType, "other");
 });

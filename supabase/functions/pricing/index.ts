@@ -65,7 +65,7 @@ import { estimateInHouse, estimateJobsInHouse, type JobScope } from "./estimateP
 import { canonicalJob, groundedBand, type GroundedKind } from "./groundedEstimate.ts";
 import { stateForZip } from "./zipState.ts";
 import { ZIP3_CBSA } from "./metroWages.generated.ts";
-import { canonicalize, canonicalKey, type CanonicalJob, itemize, type ItemizedEstimate, type ItemizeKind } from "./itemizedEstimate.ts";
+import { canonicalize, canonicalKey, settleJobType, type CanonicalJob, itemize, type ItemizedEstimate, type ItemizeKind } from "./itemizedEstimate.ts";
 
 const ANTHROPIC_API_KEY = Deno.env.get("ANTHROPIC_API_KEY") ?? "";
 const APP_TOKEN = Deno.env.get("APP_TOKEN") ?? "";
@@ -496,6 +496,7 @@ async function itemizedEstimateFor(
     const k = speculative ? await speculative : null;
     return k ? { estimate: k, cacheState: "it-knowledge" } : null;
   }
+  canon = settleJobType(canon, hasProjectScope(description) || isWholeProject(description));
   // Kind in the key: "replace tires" is 4 for a car and 2 for a motorcycle.
   // it2: keys are taxonomy job + bucketed facts (see canonicalKey).
   const key = `it2:${area(zip)}:${kind === "home" ? "" : `${kind}:`}${canonicalKey(canon)}`;

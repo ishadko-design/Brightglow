@@ -97,9 +97,11 @@ const CANON_SYSTEM = `Normalize a home-service or vehicle-service request into a
 price cache. Two requests for the same work with the same price-relevant facts \
 MUST produce the identical output, however they are worded or ordered.
 
-job_type: the ONE taxonomy job below that is this work. A repair is a repair \
-job, never a replacement ("patch flat roof" is roofing.repair). Use "other" \
-only when no listed job is this work (e.g. installing a sauna or hot tub).
+job_type: the ONE taxonomy job below that is ALL of this work. A repair is a \
+repair job, never a replacement ("patch flat roof" is roofing.repair). Use \
+"other" when no listed job covers the WHOLE request — including when a listed \
+job is only one part of it ("install sauna with 9kW heater and new circuit" is \
+"other", NOT the circuit job).
 job: the work as a short lowercase phrase "<action> <item>" with only \
 price-changing qualifiers ("install owned outdoor sauna"). "owned" when the \
 customer already has the unit and it is not included.
@@ -171,6 +173,22 @@ const KEY_FACTS_FOR_TAXONOMY = new Set([
   "location", "tier", "unit_owned", "permit", "trench", "panel_upgrade",
   "vehicle", "make_model",
 ]);
+
+/** Items the taxonomy has no whole-job entry for. A job naming one is never a
+ *  listed job — even when part of it is ("install sauna, new circuit" is not
+ *  electrical.dedicated_circuit; it served the circuit-only price, 2026-10-03). */
+const UNLISTED_ITEM =
+  /\b(sauna|hot ?tub|jacuzzi|swim ?spa|steam ?room|pool|adu|accessory dwelling|addition|garage conversion|outdoor kitchen|pergola|gazebo|shed|studio)\b/i;
+
+/** Force "other" when the work is bigger than any listed job: a whole project
+ *  (the caller knows from the chat's "project: …; includes: …" details) or an
+ *  unlisted item. Applied to cached canonical jobs too. */
+export function settleJobType(c: CanonicalJob, isProject: boolean): CanonicalJob {
+  if (c.jobType && c.jobType !== "other" && (isProject || UNLISTED_ITEM.test(c.job))) {
+    return { ...c, jobType: "other" };
+  }
+  return c;
+}
 
 export function canonicalKey(c: CanonicalJob): string {
   const isTaxonomy = !!c.jobType && c.jobType !== "other";
