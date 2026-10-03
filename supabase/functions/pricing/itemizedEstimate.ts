@@ -174,20 +174,39 @@ const KEY_FACTS_FOR_TAXONOMY = new Set([
   "vehicle", "make_model",
 ]);
 
-/** Items the taxonomy has no whole-job entry for. A job naming one is never a
- *  listed job — even when part of it is ("install sauna, new circuit" is not
- *  electrical.dedicated_circuit; it served the circuit-only price, 2026-10-03). */
-const UNLISTED_ITEM =
-  /\b(sauna|hot ?tub|jacuzzi|swim ?spa|steam ?room|pool|adu|accessory dwelling|addition|garage conversion|outdoor kitchen|pergola|gazebo|shed|studio)\b/i;
+/** Words that say what a listed job IS, per job type — its keywords split into
+ *  words, minus generic verbs. A job phrase that shares none of them is not
+ *  that job, whatever the model picked: "install owned outdoor sauna" was
+ *  filed under electrical.dedicated_circuit (circuit-only price) and, once,
+ *  electrical.solar ($8.3k–16.8k) (2026-10-03). */
+const GENERIC_WORDS = new Set(["new", "install", "installation", "replace", "replacement",
+  "the", "and", "for", "with", "my", "a", "an", "of", "to", "in", "on"]);
+const JOB_WORDS: Map<string, string[]> = new Map(
+  JOB_TYPE_TAXONOMY.map((e) => [
+    e.job_type,
+    [...new Set(e.keywords.flatMap((k) => k.toLowerCase().split(/[^a-z0-9]+/))
+      .filter((w) => w.length >= 3 && !GENERIC_WORDS.has(w)))],
+  ]),
+);
 
-/** Force "other" when the work is bigger than any listed job: a whole project
- *  (the caller knows from the chat's "project: …; includes: …" details) or an
- *  unlisted item. Applied to cached canonical jobs too. */
+/** Same word, allowing a suffix ("patch" / "patching", "circuit" / "circuits"). */
+const sameWord = (a: string, b: string) =>
+  a === b || (Math.min(a.length, b.length) >= 4 && (a.startsWith(b) || b.startsWith(a)));
+
+/** Keep a taxonomy job_type only when the job phrase names that job; force
+ *  "other" for a whole project (the caller knows from the chat's "project: …;
+ *  includes: …" details) or when the phrase shares no word with the job type.
+ *  So "new circuit for my existing sauna" stays the circuit job, while
+ *  "install owned outdoor sauna" becomes its own job. Applied to cached
+ *  canonical jobs too. */
 export function settleJobType(c: CanonicalJob, isProject: boolean): CanonicalJob {
-  if (c.jobType && c.jobType !== "other" && (isProject || UNLISTED_ITEM.test(c.job))) {
-    return { ...c, jobType: "other" };
-  }
-  return c;
+  if (!c.jobType || c.jobType === "other") return c;
+  if (isProject) return { ...c, jobType: "other" };
+  const words = JOB_WORDS.get(c.jobType);
+  if (!words || words.length === 0) return c;
+  const phrase = c.job.toLowerCase().split(/[^a-z0-9]+/).filter((w) => w.length >= 3);
+  const names = phrase.some((p) => words.some((w) => sameWord(p, w)));
+  return names ? c : { ...c, jobType: "other" };
 }
 
 export function canonicalKey(c: CanonicalJob): string {
