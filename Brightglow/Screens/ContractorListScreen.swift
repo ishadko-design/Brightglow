@@ -1346,6 +1346,37 @@ struct ContractorListScreen: View {
         return .standard
     }
 
+    /// Fill the header price in two phases, without blocking anything.
+    /// Uncovered categories never call this — the price line stays empty.
+    /// Auto & moto passes its vehicle filter so a bike isn't priced as a car.
+    @MainActor
+    private func startEstimate(near coord: CLLocationCoordinate2D, vehicle priceVehicle: VehicleFilter?) {
+        estimating = true
+        // Phase 1 — fast: the cached AI price, or a quick AI price (~4s on a
+        // job nobody in this metro has asked about). Phase 2 returns the same
+        // without waiting on the web search, which refreshes the server cache
+        // in the background (2026-10-02).
+        Task { @MainActor in
+            let fast = await ContractorLoader.estimate(
+                category: category, searchQuery: pricingDescription, near: coord,
+                photoDetails: photoDetails, vehicle: priceVehicle, fast: true)
+            if estimate == nil, let fast {
+                withAnimation(.easeIn(duration: 0.4)) { estimate = fast }
+            }
+        }
+        // Phase 2 — full: the grounded (web-searched) number; replaces the
+        // fast one when it arrives (kept if grounded comes back empty).
+        Task { @MainActor in
+            let full = await ContractorLoader.estimate(
+                category: category, searchQuery: pricingDescription, near: coord,
+                photoDetails: photoDetails, vehicle: priceVehicle)
+            if let full, full.min != estimate?.min || full.max != estimate?.max {
+                withAnimation(.easeIn(duration: 0.4)) { estimate = full }
+            }
+            estimating = false
+        }
+    }
+
     /// The clarified job, as the search gate's input — nil for a category browse
     /// or an unclarified search (searches stay ungated, as before).
     private var searchGate: PlacesService.JobGate? {
@@ -1389,17 +1420,27 @@ struct ContractorListScreen: View {
             // Refresh the OTA ranking config in the background — never blocks the
             // search; new weights apply to scoring live.
             Task { await RankingConfigStore.refresh() }
+            // Price fills in progressively: start it now, alongside the search,
+            // so the header shows it the moment the list does (or fades it in
+            // after) instead of starting only once photos are sorted.
+            if priceable { startEstimate(near: coord, vehicle: isAuto ? vehicle : nil) }
             // The job-size check prices the job (an AI call on a new job), so
-            // run it ALONGSIDE the business search instead of before it — it
-            // used to hold the loader for the whole estimate (2026-10-03).
-            // Only the handyman widening below needs it.
-            async let sizeLevel = smallJobLevel(near: coord, isAuto: isAuto)
+            // it runs ALONGSIDE the business search. It shares the header's
+            // in-flight request above (same inputs), so it costs nothing extra.
+            let sizeCheck = Task { await smallJobLevel(near: coord, isAuto: isAuto) }
             // The search is always the trade query — plumber jobs search
             // plumbers. Handyman preference is expressed in ranking (the
             // size-fit factor), never by rerouting the query.
             var page = await ContractorLoader.fetchLivePage(
                 category: category, searchQuery: query, near: coord, isAuto: isAuto)
-            jobSize = await sizeLevel
+            // Never hold the list for the price (2026-10-03: "even opening
+            // regular categories" was slow because every category tap waited on
+            // a cold AI price here). A cached price answers instantly; a cold
+            // one gets a short grace past the search, then this visit ranks as a
+            // standard-size job. The price lands in the cache for next time.
+            jobSize = await withDeadline(sizeCheckGraceNs, fallback: .standard) {
+                await sizeCheck.value
+            }
             // Small non-licensed job: widen the pool with handymen so the
             // size-fit factor has someone to score. Merged deduped, first page
             // only — pagination continues the trade query untouched.
@@ -1519,38 +1560,6 @@ struct ContractorListScreen: View {
             // the list is final. Background enrich will update tags, but the
             // business order stays stable.
             freezePhotoScores(for: contractors)
-            // Uncovered categories stay match-only — the price line shows the
-            // "coming soon" state (with a real business count) instead. Auto &
-            // moto is no longer among them; it passes its vehicle filter so a
-            // bike isn't priced as a car.
-            if !contractors.isEmpty && priceable {
-                estimating = true
-                let priceVehicle = allowVehicles ? vehicle : nil
-                // Two-phase, so a number shows almost instantly.
-                // Phase 1 — fast: the cached AI price, or a quick AI price (~4s
-                // on a job nobody in this metro has asked about). Phase 2 returns
-                // the same without waiting on the web search, which refreshes the
-                // server cache in the background (2026-10-02).
-                Task { @MainActor in
-                    let fast = await ContractorLoader.estimate(
-                        category: category, searchQuery: pricingDescription, near: coord,
-                        photoDetails: photoDetails, vehicle: priceVehicle, fast: true)
-                    if estimate == nil, let fast {
-                        withAnimation(.easeIn(duration: 0.4)) { estimate = fast }
-                    }
-                }
-                // Phase 2 — full: the grounded (web-searched) number; replaces the
-                // fast one when it arrives (kept if grounded comes back empty).
-                Task { @MainActor in
-                    let full = await ContractorLoader.estimate(
-                        category: category, searchQuery: pricingDescription, near: coord,
-                        photoDetails: photoDetails, vehicle: priceVehicle)
-                    if let full, full.min != estimate?.min || full.max != estimate?.max {
-                        withAnimation(.easeIn(duration: 0.4)) { estimate = full }
-                    }
-                    estimating = false
-                }
-            }
         } else {
             contractors = ContractorLoader.fallback(
                 category: category, searchQuery: query)
@@ -1610,19 +1619,10 @@ struct ContractorListScreen: View {
         // (stragglers finish in the background and promote as they land). A cap,
         // not a hang: an uncached area with many unscreened businesses must not
         // hold the user on the loader indefinitely.
-        await withTaskGroup(of: Bool.self) { group in
-            group.addTask {
-                await withTaskGroup(of: Void.self) { inner in
-                    for c in targets { inner.addTask { @MainActor in await screenIfNeeded(c) } }
-                }
-                return true
+        await withDeadline(eagerScreenTimeoutNs, fallback: ()) { @MainActor in
+            await withTaskGroup(of: Void.self) { inner in
+                for c in targets { inner.addTask { @MainActor in await screenIfNeeded(c) } }
             }
-            group.addTask {
-                try? await Task.sleep(nanoseconds: eagerScreenTimeoutNs)
-                return false
-            }
-            _ = await group.next()   // whichever wins: all-screened or the cap
-            group.cancelAll()
         }
     }
 
@@ -1641,26 +1641,19 @@ struct ContractorListScreen: View {
         let allowVehicles = allowsVehiclePhotos(effectiveSearchQuery)
         let targets = visibleContractors.filter { !(keptPhotos[$0.id]?.isEmpty ?? true) }
         guard !targets.isEmpty else { return }
-        await withTaskGroup(of: Void.self) { group in
-            group.addTask { @MainActor in
-                await withTaskGroup(of: Void.self) { inner in
-                    for c in targets {
-                        // The eager pass owns enrichment for this row — don't let
-                        // its reveal fire a second pass.
-                        needsEnrich.remove(c.id)
-                        guard let task = enrichInBackground(
-                            c.id, kept: keptPhotos[c.id] ?? [],
-                            scanned: scannedCount[c.id] ?? (keptPhotos[c.id]?.count ?? 0),
-                            allowVehicles: allowVehicles) else { continue }
-                        inner.addTask { await task.value }
-                    }
+        await withDeadline(eagerEnrichTimeoutNs, fallback: ()) { @MainActor in
+            await withTaskGroup(of: Void.self) { inner in
+                for c in targets {
+                    // The eager pass owns enrichment for this row — don't let
+                    // its reveal fire a second pass.
+                    needsEnrich.remove(c.id)
+                    guard let task = enrichInBackground(
+                        c.id, kept: keptPhotos[c.id] ?? [],
+                        scanned: scannedCount[c.id] ?? (keptPhotos[c.id]?.count ?? 0),
+                        allowVehicles: allowVehicles) else { continue }
+                    inner.addTask { await task.value }
                 }
             }
-            group.addTask {
-                try? await Task.sleep(nanoseconds: eagerEnrichTimeoutNs)
-            }
-            _ = await group.next()   // whichever wins: all-enriched or the cap
-            group.cancelAll()
         }
     }
 
@@ -1809,16 +1802,9 @@ struct ContractorListScreen: View {
                                      photos: keptPhotos[$0.id] ?? [],
                                      reviews: $0.reviews.map(\.text))
         }
-        let verdicts: [String: PhotoFitService.Verdict]? = await withTaskGroup(
-            of: [String: PhotoFitService.Verdict]?.self) { group in
-            group.addTask { await PhotoFitService.judge(job: job, businesses: businesses) }
-            group.addTask {
-                try? await Task.sleep(nanoseconds: photoFitTimeoutNs)
-                return nil
-            }
-            let first = await group.next() ?? nil
-            group.cancelAll()
-            return first
+        let verdicts: [String: PhotoFitService.Verdict]? = await withDeadline(
+            photoFitTimeoutNs, fallback: nil) {
+            await PhotoFitService.judge(job: job, businesses: businesses)
         }
         guard let verdicts else { return }
         for (id, v) in verdicts { photoFit[id] = v }
@@ -1864,36 +1850,26 @@ struct ContractorListScreen: View {
         guard !targets.isEmpty else { return }
         let allowVehicles = allowsVehiclePhotos(effectiveSearchQuery)
         // 1. Screen (cached/shared verdicts return instantly).
-        await withTaskGroup(of: Void.self) { group in
-            group.addTask { @MainActor in
-                await withTaskGroup(of: Void.self) { inner in
-                    for c in targets where scannedCount[c.id] == nil {
-                        inner.addTask { @MainActor in await screenIfNeeded(c) }
-                    }
+        await withDeadline(eagerScreenTimeoutNs, fallback: ()) { @MainActor in
+            await withTaskGroup(of: Void.self) { inner in
+                for c in targets where scannedCount[c.id] == nil {
+                    inner.addTask { @MainActor in await screenIfNeeded(c) }
                 }
             }
-            group.addTask { try? await Task.sleep(nanoseconds: eagerScreenTimeoutNs) }
-            _ = await group.next()
-            group.cancelAll()
         }
         // 2. Rich tags — the judge can't tell jobs apart from generic labels.
         let alive = targets.filter { c in contractors.contains { $0.id == c.id } }
-        await withTaskGroup(of: Void.self) { group in
-            group.addTask { @MainActor in
-                await withTaskGroup(of: Void.self) { inner in
-                    for c in alive where !(keptPhotos[c.id]?.isEmpty ?? true) {
-                        needsEnrich.remove(c.id)
-                        guard let task = enrichInBackground(
-                            c.id, kept: keptPhotos[c.id] ?? [],
-                            scanned: scannedCount[c.id] ?? (keptPhotos[c.id]?.count ?? 0),
-                            allowVehicles: allowVehicles) else { continue }
-                        inner.addTask { await task.value }
-                    }
+        await withDeadline(eagerEnrichTimeoutNs, fallback: ()) { @MainActor in
+            await withTaskGroup(of: Void.self) { inner in
+                for c in alive where !(keptPhotos[c.id]?.isEmpty ?? true) {
+                    needsEnrich.remove(c.id)
+                    guard let task = enrichInBackground(
+                        c.id, kept: keptPhotos[c.id] ?? [],
+                        scanned: scannedCount[c.id] ?? (keptPhotos[c.id]?.count ?? 0),
+                        allowVehicles: allowVehicles) else { continue }
+                    inner.addTask { await task.value }
                 }
             }
-            group.addTask { try? await Task.sleep(nanoseconds: eagerEnrichTimeoutNs) }
-            _ = await group.next()
-            group.cancelAll()
         }
         // 3. Judge, then re-freeze these rows' scores on the verdict.
         await judgePhotoFit(alive)
@@ -2224,6 +2200,10 @@ private let eagerEnrichTimeoutNs: UInt64 = 3_000_000_000
 /// Cap on the job check (`judgePhotoFit`) behind the loader. The call runs
 /// ~4s; past the cap the list lands on its keyword ordering.
 private let photoFitTimeoutNs: UInt64 = 7_000_000_000
+/// How long the list waits for the job-size price check AFTER the business
+/// search returns. A cached price answers well inside this; a cold AI price
+/// doesn't, and the list shows without it rather than waiting seconds.
+private let sizeCheckGraceNs: UInt64 = 500_000_000
 
 /// Screening budget per row: scan `stripBatchScan` source photos at a time,
 /// deeper into the pool only if early shots are rejected, keeping up to
