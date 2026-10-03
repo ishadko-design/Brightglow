@@ -33,7 +33,7 @@ jobs:
           start=$(date -u -d "-${MINUTES} minutes" +%Y-%m-%dT%H:%M:%SZ)
           end=$(date -u +%Y-%m-%dT%H:%M:%SZ)
           sql="select timestamp, event_message from function_logs where regexp_contains(event_message, 'pricing: price-key') order by timestamp desc limit 300"
-          resp=$(curl -sS -G "https://api.supabase.com/v1/projects/$REF/analytics/endpoints/logs.all" \
+          resp=$(curl -sS -G "https://api.supabase.com/v1/projects/$REF/analytics/endpoints/logs" \
             -H "Authorization: Bearer $SUPABASE_ACCESS_TOKEN" \
             --data-urlencode "sql=$sql" \
             --data-urlencode "iso_timestamp_start=$start" \
@@ -43,7 +43,7 @@ jobs:
           # Shape check without content: row count only (logs can lag ~1-5 min).
           echo "logs API rows matched: $(jq -r '(.result // []) | length' <<<"$resp")"
           # Sanity: are ANY pricing log lines visible in the window? (count only)
-          total=$(curl -sS -G "https://api.supabase.com/v1/projects/$REF/analytics/endpoints/logs.all" \
+          total=$(curl -sS -G "https://api.supabase.com/v1/projects/$REF/analytics/endpoints/logs" \
             -H "Authorization: Bearer $SUPABASE_ACCESS_TOKEN" \
             --data-urlencode "sql=select count(*) as n from function_logs where regexp_contains(event_message, 'pricing:')" \
             --data-urlencode "iso_timestamp_start=$start" \
