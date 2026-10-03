@@ -1389,12 +1389,17 @@ struct ContractorListScreen: View {
             // Refresh the OTA ranking config in the background — never blocks the
             // search; new weights apply to scoring live.
             Task { await RankingConfigStore.refresh() }
-            jobSize = await smallJobLevel(near: coord, isAuto: isAuto)
+            // The job-size check prices the job (an AI call on a new job), so
+            // run it ALONGSIDE the business search instead of before it — it
+            // used to hold the loader for the whole estimate (2026-10-03).
+            // Only the handyman widening below needs it.
+            async let sizeLevel = smallJobLevel(near: coord, isAuto: isAuto)
             // The search is always the trade query — plumber jobs search
             // plumbers. Handyman preference is expressed in ranking (the
             // size-fit factor), never by rerouting the query.
             var page = await ContractorLoader.fetchLivePage(
                 category: category, searchQuery: query, near: coord, isAuto: isAuto)
+            jobSize = await sizeLevel
             // Small non-licensed job: widen the pool with handymen so the
             // size-fit factor has someone to score. Merged deduped, first page
             // only — pagination continues the trade query untouched.
