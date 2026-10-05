@@ -143,6 +143,11 @@ struct ContractorListScreen: View {
     @State private var isLoading   = false
     /// Set when the first-screen evidence (verdicts, photos, job fit) is in.
     @State private var settleDone  = false
+    /// Photos a row has already shown, by business. Once a row paints a strip it
+    /// never swaps or re-shimmers (2026-10-05, "images keep changing and
+    /// reloading inside already rendered businesses"). A reference type so the
+    /// render path can record into it without triggering another render.
+    @State private var shownStrips = ShownStrips()
     @State private var estimate: PriceTier? = nil
     /// True while the (web-grounded) estimate is still being fetched — drives the
     /// subtle "Estimating price…" placeholder so the header isn't blank during the
@@ -1390,6 +1395,12 @@ struct ContractorListScreen: View {
     @MainActor
     private func settleList(_ landedQuery: String, widen: Task<Void, Never>?) async {
         let allowVehicles = allowsVehiclePhotos(landedQuery)
+        // Rows the judge will look at hold their placeholder from the start, so
+        // a row can't paint unjudged photos and then flip to a shimmer.
+        let heldIDs = jobCheckActive ? Set(contractors.prefix(eagerScreenDepth).map(\.id)) : []
+        photoFitPending.formUnion(heldIDs)
+        // Whatever the judge skipped (no photos, failure) must not stay a shimmer.
+        defer { photoFitPending.subtract(heldIDs) }
         async let owner: Void = loadOwnerPhotos(for: contractors)
         // Pull shared verdicts for anything not already known locally, so a
         // place screened by ANY other user is reused here without re-screening.
@@ -1777,18 +1788,27 @@ struct ContractorListScreen: View {
     /// no tags to judge). Untouched when the business has no verdict. A render-
     /// time filter, so every `screenedByID` write path stays exactly as it was.
     private func stripPhotos(_ id: String) -> [String]? {
+        // Already painted: keep exactly those photos (minus any that turned out
+        // to be unusable). No swap, no shimmer.
+        if let shown = shownStrips.byID[id] {
+            let live = Set(screenedByID[id] ?? []).union(ownerPhotosByID[id] ?? [])
+            return shown.filter { live.contains($0) }
+        }
         if photoFitPending.contains(id) { return nil }
         guard let urls = screenedByID[id] else { return nil }
-        guard let v = photoFit[id] else { return urls }
-        let owner = Set(ownerPhotosByID[id] ?? [])
-        let shown = urls.filter { v.relevant.contains($0) || owner.contains($0) }
-        // Rank, don't drop: a right-kind business (fit >= 2) whose photos the
-        // judge was merely unsure about still shows its best screened work
-        // photos — a 103-review window shop rendered with no photos at all
-        // (2026-10-05). Only a business with no verdict-relevant AND no
-        // screened photo stays blank.
-        if shown.isEmpty, v.fit >= 2 { return Array(urls.prefix(2)) }
-        return shown
+        var out = urls
+        if let v = photoFit[id] {
+            let owner = Set(ownerPhotosByID[id] ?? [])
+            let shown = urls.filter { v.relevant.contains($0) || owner.contains($0) }
+            // Rank, don't drop: a right-kind business (fit >= 2) whose photos the
+            // judge was merely unsure about still shows its best screened work
+            // photos — a 103-review window shop rendered with no photos at all
+            // (2026-10-05). Only a business with no verdict-relevant AND no
+            // screened photo stays blank.
+            out = (shown.isEmpty && v.fit >= 2) ? Array(urls.prefix(2)) : shown
+        }
+        if !out.isEmpty { shownStrips.byID[id] = out }
+        return out
     }
 
     /// Gallery hand-off: the strip's photos FIRST, in strip order, then the rest
@@ -2242,6 +2262,11 @@ private let photoFitTimeoutNs: UInt64 = 7_000_000_000
 /// How long the skeleton waits for first-screen evidence before showing the list
 /// in the best order it has. The list shows ONCE and never reorders.
 private let settleCapNs: UInt64 = 4_000_000_000
+
+/// Strips already painted, by business id (see `ContractorListScreen.shownStrips`).
+final class ShownStrips {
+    var byID: [String: [String]] = [:]
+}
 
 /// Screening budget per row: scan `stripBatchScan` source photos at a time,
 /// deeper into the pool only if early shots are rejected, keeping up to
