@@ -259,8 +259,13 @@ struct ContractorListScreen: View {
         // "Body & Paint") so the header matches the grid card and stays stable
         // when the Auto ⇄ Moto toggle is flipped. The toggle communicates the
         // vehicle; never surface the raw Places query.
+        // A typed or chat-refined request wins over the category name: "rear
+        // quarter panel dent" read as "Body & Paint" (2026-10-05). A bare grid
+        // tap carries only the synthetic Places query, which `typedQuery`
+        // suppresses, so it still shows the category.
         if let auto = autoCategory {
-            return auto.name
+            let typed = typedQuery
+            return typed.isEmpty ? auto.name : typed
         }
         let q = searchQuery.trimmingCharacters(in: .whitespacesAndNewlines)
         return q.isEmpty ? category : q
@@ -1560,19 +1565,20 @@ struct ContractorListScreen: View {
         // screening (3.5s cap), rich tagging (3s) and the job check (7s) — up
         // to ~15s on a cold search. Now names, ratings and reviews show at
         // once, photo tiles shimmer, and each row's photos fill in as they
-        // land. Only the first screenful is locked in place; rows below keep
-        // ranking as photo evidence arrives, so best matches still lead where
-        // the user hasn't looked yet, and nothing the user has seen jumps.
+        // land. The order settles once (animated) when the photo evidence and
+        // job check are in — within the first few seconds — and then locks, so
+        // best matches lead and nothing moves after that.
         freezePhotoScores(for: contractors)
-        commitDisplayOrder(limit: landingCommitRows)
         isLoading = false
         Task { @MainActor in
             await eagerlyScreenTopMatches()
             await eagerlyEnrichTopMatches()
             await judgePhotoFit()
-            // Re-rank only rows the user hasn't been shown yet.
-            let committed = Set(displayOrder)
-            freezePhotoScores(for: contractors.filter { !committed.contains($0.id) })
+            // Settle once, with the photo evidence in, then lock. Locking the
+            // first screenful in Google's order before any evidence put a shop
+            // with an engine photo above the one with dent photos (2026-10-05).
+            freezePhotoScores(for: contractors)
+            withAnimation(.easeInOut(duration: 0.35)) { commitDisplayOrder() }
         }
         await loadLicenses(for: contractors)
         await loadLogos(for: contractors)
@@ -2203,9 +2209,6 @@ private let initialVisibleCount = 5
 // adds cost; the extra cost is only businesses screened but never scrolled to,
 // and every screen is cached + shared so it's one-time per business globally.
 private let eagerScreenDepth = 10
-/// Rows locked in place when the list first appears — about one screenful.
-/// Rows below keep ranking until they're revealed (progressive landing).
-private let landingCommitRows = 3
 /// Wall-clock cap on the pre-reveal eager screen (nanoseconds). Past this the
 /// list reveals with whatever screened in time; the rest promote in background.
 private let eagerScreenTimeoutNs: UInt64 = 3_500_000_000
