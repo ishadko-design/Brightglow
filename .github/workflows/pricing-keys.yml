@@ -16,6 +16,13 @@ on:
     branches: [brightglow-ios]
     paths:
       - .github/workflows/pricing-keys.yml
+      - scripts/audit-price-cache.sh
+  # After every function deploy, and daily: a failed run emails the owner.
+  workflow_run:
+    workflows: ["Deploy Supabase functions"]
+    types: [completed]
+  schedule:
+    - cron: "17 14 * * *"
 
 jobs:
   keys:
@@ -42,3 +49,18 @@ jobs:
           fi
           echo "Most recent $n AI price cache entries (key | low–high, typical | searched | written):"
           jq -r '.[] | "\(.cache_key)\t$\(.low|tonumber|floor)–$\(.high|tonumber|floor), typ $\(.typical|tonumber|floor)\tsearched=\(.searched)\t\(.created_at)"' <<<"$resp"
+
+      - name: Audit the cache (kind/job mismatch, same job split, odd bands)
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          REF: qxoseyrlbvblpwqzwvvk
+        run: |
+          [ -n "$SUPABASE_ACCESS_TOKEN" ] || exit 0
+          q="select cache_key, low, typical, high, created_at from grounded_estimate_cache
+             where cache_key like 'it2:%' and created_at > now() - interval '14 days'
+             order by created_at desc limit 500"
+          resp=$(curl -sS -X POST "https://api.supabase.com/v1/projects/$REF/database/query" \
+            -H "Authorization: Bearer $SUPABASE_ACCESS_TOKEN" -H "Content-Type: application/json" \
+            -d "$(jq -n --arg q "$q" '{query: $q}')")
+          jq -e 'type == "array"' >/dev/null 2>&1 <<<"$resp" || { echo "::error::query API failed"; exit 1; }
+          bash scripts/audit-price-cache.sh <<<"$resp"

@@ -75,4 +75,27 @@ same_job() {
 same_job '{"category":"Roofing","description":"Patch flat roof","zip":"94110","city":"San Francisco, CA","fast":true}' \
          '{"category":"Roofing","description":"Patch my flat roof","zip":"94110","city":"San Francisco, CA","fast":true}'
 
+# Chain checks: what the chat adds must move the price, and the quick (fast)
+# and full phases of one job must agree — the two bugs of 2026-10-05, where
+# chat answers never reached the price and the fast/full phases cached the
+# same job under different keys ($700 vs $230).
+typ() {
+  curl -sS --max-time 90 -X POST "$SUPABASE_URL/functions/v1/pricing" -H "Content-Type: application/json" \
+    -H "apikey: $SUPABASE_ANON_KEY" -H "Authorization: Bearer $SUPABASE_ANON_KEY" ${APP_TOKEN:+-H "x-app-token: $APP_TOKEN"} \
+    -d "$1" | jq -r '.range.all_in_typical // empty'
+}
+oil=$(typ '{"category":"Repair","description":"Oil change on triumph thruxton 1200r","zip":"94015","vehicle":"moto","city":"Daly City, CA"}')
+svc=$(typ '{"category":"Repair","description":"Triumph thruxton 1200r regular maintenance for 16k miles, full inspection, oil and filter change","zip":"94015","vehicle":"moto","city":"Daly City, CA"}')
+if [[ -n "$oil" && -n "$svc" ]] && awk -v a="${oil%.*}" -v b="${svc%.*}" 'BEGIN{exit !(b > 1.5*a)}'; then
+  echo "service costs more than oil only: \$${svc%.*} vs \$${oil%.*}"
+else
+  echo "FAIL a 16k service (\$${svc%.*}) should cost >1.5x an oil change (\$${oil%.*})"; fail=1
+fi
+fastp=$(typ '{"category":"Repair","description":"Triumph thruxton 1200r regular maintenance for 16k miles, full inspection, oil and filter change","zip":"94015","vehicle":"moto","city":"Daly City, CA","fast":true}')
+if [[ -n "$fastp" && -n "$svc" ]] && awk -v a="${fastp%.*}" -v b="${svc%.*}" 'BEGIN{exit !(a < 2*b && b < 2*a)}'; then
+  echo "fast and full phases agree: \$${fastp%.*} vs \$${svc%.*}"
+else
+  echo "FAIL fast (\$${fastp%.*}) and full (\$${svc%.*}) phases disagree by >2x"; fail=1
+fi
+
 exit $fail
