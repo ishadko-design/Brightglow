@@ -230,6 +230,10 @@ struct ContractorListScreen: View {
     /// fits it. Judged once behind the loader for the landing window; a business
     /// with no verdict keeps the keyword ordering exactly as before.
     @State private var photoFit: [String: PhotoFitService.Verdict] = [:]
+    /// Rows whose job check is in flight: they show shimmering placeholders,
+    /// not photos that may be about to be judged off-job (a breaker panel on a
+    /// sauna search), and fill in when the verdict lands (progressive landing).
+    @State private var photoFitPending: Set<String> = []
     /// Businesses whose OWN WEBSITE photos we've already fetched this session (once
     /// per business — the `business-photos` function caches across users). Google
     /// Places caps at 10 photos, mostly storefront; a contractor's site portfolio is
@@ -428,8 +432,9 @@ struct ContractorListScreen: View {
     /// rank until they too are revealed and committed. Idempotent: re-freezing an
     /// unchanged window is a no-op.
     @MainActor
-    private func commitDisplayOrder() {
-        displayOrder = visibleContractors.map(\.id)
+    private func commitDisplayOrder(limit: Int? = nil) {
+        let ids = visibleContractors.map(\.id)
+        displayOrder = limit.map { Array(ids.prefix($0)) } ?? ids
     }
 
     /// Licensed-work check for this job, driven by the OTA config. Electrical
@@ -1172,21 +1177,16 @@ struct ContractorListScreen: View {
     /// wait explains itself (Igor 2026-09-19 — "so people understand why it takes
     /// time"). The phrases name the actual pipeline: search → estimate → reviews →
     /// photos.
+    /// While the business search is in flight (~1–2s): shimmering skeleton rows
+    /// shaped like the real ones, instead of a full-screen loader.
     private var loadingView: some View {
-        ZStack {
-            AppColors.bg.ignoresSafeArea()
-            VStack(spacing: 16) {
-                ThinkingOrb(size: 52, color: .white)
-                CyclingStatusText(phrases: [
-                    "Finding matching businesses",
-                    "Estimating price",
-                    "Digging through reviews",
-                    "Sorting photos",
-                ])
-                .padding(.horizontal, 24)
+        ScrollView(.vertical, showsIndicators: false) {
+            VStack(spacing: 24) {
+                ForEach(0..<3, id: \.self) { _ in SkeletonRow() }
             }
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .padding(.top, 96 + 12)
         }
+        .scrollDisabled(true)
     }
 
     private var notFoundView: some View {
@@ -1555,40 +1555,25 @@ struct ContractorListScreen: View {
             contractors = ContractorLoader.fallback(
                 category: category, searchQuery: query)
         }
-        // Screen the top slice BEFORE revealing the list, and AWAIT it — so the
-        // very first render already shows the true similar-job order in the top
-        // 5. Previously this was fire-and-forget over just the top 5 AFTER the
-        // reveal, so a stronger match at position 6+ had no photo-evidence to
-        // rank on and only surfaced once "See more" scrolled it into view and
-        // screened it (Igor 2026-09-19 — this defeats the core matching idea).
-        // Bounded by a timeout inside, so a slow/uncached pool never hangs the
-        // loader; any stragglers keep screening in the background as before. The
-        // loading animation + "Sorting photos" line cover this wait.
-        await eagerlyScreenTopMatches()
-        // Then rich-tag (and embed) the rows the user is about to land on, still
-        // behind the spinner, so the matching order + strip photos settle now
-        // instead of churning a beat after landing (Igor 2026-09-19: both the
-        // pictures and the businesses shifting under the user is the confusing
-        // bug). Cost-neutral — these rows enrich anyway on reveal; this just
-        // front-loads and awaits it. Bounded by a cap so a slow tagger never
-        // hangs the loader.
-        await eagerlyEnrichTopMatches()
-        // The LLM's final check on the window the user lands on: which photos
-        // show THIS job, and who fits it — needs the rich tags above, and must
-        // land before the freeze below so nothing moves after landing.
-        await judgePhotoFit()
-        // Freeze scores AFTER the eager enrich, so the snapshot reflects the
-        // richer Claude tags rather than the on-device labels (covers the
-        // fallback path too, where contractors were set without photos).
+        // Progressive landing (2026-10-05): the list appears as soon as the
+        // businesses are found. It used to wait behind the loader for photo
+        // screening (3.5s cap), rich tagging (3s) and the job check (7s) — up
+        // to ~15s on a cold search. Now names, ratings and reviews show at
+        // once, photo tiles shimmer, and each row's photos fill in as they
+        // land. Only the first screenful is locked in place; rows below keep
+        // ranking as photo evidence arrives, so best matches still lead where
+        // the user hasn't looked yet, and nothing the user has seen jumps.
         freezePhotoScores(for: contractors)
-        // Lock the order the user lands on: resorting is done while the loader is
-        // up; once the list appears it stays put. Later refinements (enrichment
-        // of rows below the fold, website photos, stragglers) still feed
-        // keptPhotos / the gallery / shared verdicts, but they no longer move a
-        // visible row (Igor 2026-09-19). Must run after freezePhotoScores, since
-        // the committed order is computed from the frozen scores.
-        commitDisplayOrder()
+        commitDisplayOrder(limit: landingCommitRows)
         isLoading = false
+        Task { @MainActor in
+            await eagerlyScreenTopMatches()
+            await eagerlyEnrichTopMatches()
+            await judgePhotoFit()
+            // Re-rank only rows the user hasn't been shown yet.
+            let committed = Set(displayOrder)
+            freezePhotoScores(for: contractors.filter { !committed.contains($0.id) })
+        }
         await loadLicenses(for: contractors)
         await loadLogos(for: contractors)
     }
@@ -1773,6 +1758,7 @@ struct ContractorListScreen: View {
     /// no tags to judge). Untouched when the business has no verdict. A render-
     /// time filter, so every `screenedByID` write path stays exactly as it was.
     private func stripPhotos(_ id: String) -> [String]? {
+        if photoFitPending.contains(id) { return nil }
         guard let urls = screenedByID[id] else { return nil }
         guard let v = photoFit[id] else { return urls }
         let owner = Set(ownerPhotosByID[id] ?? [])
@@ -1804,6 +1790,9 @@ struct ContractorListScreen: View {
         let targets = (candidates ?? Array(contractors.prefix(eagerScreenDepth)))
             .filter { !(keptPhotos[$0.id]?.isEmpty ?? true) && photoFit[$0.id] == nil }
         guard !targets.isEmpty else { return }
+        let pendingIDs = Set(targets.map(\.id))
+        photoFitPending.formUnion(pendingIDs)
+        defer { photoFitPending.subtract(pendingIDs) }
         let businesses = targets.map {
             PhotoFitService.Business(id: $0.id, name: $0.name,
                                      photos: keptPhotos[$0.id] ?? [],
@@ -2214,6 +2203,9 @@ private let initialVisibleCount = 5
 // adds cost; the extra cost is only businesses screened but never scrolled to,
 // and every screen is cached + shared so it's one-time per business globally.
 private let eagerScreenDepth = 10
+/// Rows locked in place when the list first appears — about one screenful.
+/// Rows below keep ranking until they're revealed (progressive landing).
+private let landingCommitRows = 3
 /// Wall-clock cap on the pre-reveal eager screen (nanoseconds). Past this the
 /// list reveals with whatever screened in time; the rest promote in background.
 private let eagerScreenTimeoutNs: UInt64 = 3_500_000_000
@@ -2581,7 +2573,7 @@ private struct ContractorListRow: View {
     }
 
     // Gray placeholder fill (20% white) shown until a photo resolves.
-    private var placeholderFill: some View { Color.white.opacity(0.2) }
+    private var placeholderFill: some View { Color.white.opacity(0.2).shimmer() }
 }
 
 /// $-figure for the header estimate: "800", "2k", "1.5k" (Figma shows the
@@ -2712,4 +2704,61 @@ private struct ContractorLogoView: View {
         let hue = Double(abs(hash) % 360) / 360.0
         return Color(hue: hue, saturation: 0.5, brightness: 0.65)
     }
+}
+
+// MARK: - Progressive loading placeholders
+
+/// A business row's shape — logo, name, rating line, photo mosaic — in
+/// shimmering gray, shown while the search is in flight.
+private struct SkeletonRow: View {
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(spacing: 12) {
+                RoundedRectangle(cornerRadius: 10).frame(width: 40, height: 40)
+                RoundedRectangle(cornerRadius: 6).frame(width: 190, height: 22)
+                Spacer(minLength: 0)
+            }
+            RoundedRectangle(cornerRadius: 6).frame(width: 150, height: 14)
+            HStack(spacing: 8) {
+                RoundedRectangle(cornerRadius: 16)
+                VStack(spacing: 8) {
+                    RoundedRectangle(cornerRadius: 16)
+                    RoundedRectangle(cornerRadius: 16)
+                }
+            }
+            .frame(height: 234)
+        }
+        .foregroundStyle(Color.white.opacity(0.12))
+        .shimmer()
+        .padding(.horizontal, 16)
+    }
+}
+
+/// A soft highlight sweeping left to right across the view — the "loading"
+/// shimmer for skeleton rows and photo tiles still on their way.
+private struct Shimmer: ViewModifier {
+    @State private var phase: CGFloat = -1
+
+    func body(content: Content) -> some View {
+        content
+            .overlay(
+                GeometryReader { geo in
+                    LinearGradient(colors: [.clear, .white.opacity(0.16), .clear],
+                                   startPoint: .leading, endPoint: .trailing)
+                        .frame(width: geo.size.width * 0.6)
+                        .offset(x: phase * geo.size.width * 1.6)
+                }
+                .mask(content)
+                .allowsHitTesting(false)
+            )
+            .onAppear {
+                withAnimation(.linear(duration: 1.2).repeatForever(autoreverses: false)) {
+                    phase = 1
+                }
+            }
+    }
+}
+
+private extension View {
+    func shimmer() -> some View { modifier(Shimmer()) }
 }
