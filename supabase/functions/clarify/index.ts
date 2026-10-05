@@ -40,7 +40,7 @@ import {
 } from "../pricing/pricingEngine.ts";
 import { GENERIC_REPLIES, normalizeQuickReplies } from "./quickReplies.ts";
 import { repeatsPriorQuestion } from "./repeatsPriorQuestion.ts";
-import { minHomeQuestions } from "./priceFloor.ts";
+import { minHomeQuestions, minQuestions } from "./priceFloor.ts";
 import { buildModelMessages, sanitizePhoto } from "./photoMessage.ts";
 import { asksOwnership, impliesOwned, projectDetails } from "./ownership.ts";
 
@@ -186,7 +186,10 @@ Per-vertical priorities:
   kind of vehicle — car, SUV, or truck?" unless the request or photo already
   says; put the answer in details as one of "compact sedan", "SUV", or
   "full-size vehicle". For mechanical repairs (brakes, alternator, oil) size
-  doesn't matter — don't ask. Once service and vehicle are known, finish.
+  doesn't matter — don't ask. For BODY & PAINT, ask the cost driver the request
+  leaves open: which panel(s), dent/damage size, and whether the paint is
+  broken (a small dent without paint damage is PDR, far cheaper than a respray).
+  For GLASS ask which window and chip vs crack vs full replacement. Then finish.
 - Home: after the business type is clear, ask the cost driver that also sharpens
   the photo match — the item's material/type and (for per-area jobs) size.
   For size-driven work (windows, flooring, painting, roofing, siding) ALWAYS pin the
@@ -313,7 +316,7 @@ Auto: one of ${AUTO_SERVICES.join(", ")}. Use "" only if nothing fits.
 - photo_terms: 2-6 words describing what a matching WORK PHOTO shows, used to
   rank each business's photos. E.g. "tankless water heater wall", "motorcycle
   brake caliper disc", "dented car bumper", "hardwood floor living room".
-- details: HOME ONLY — a short comma-separated summary of the cost-relevant
+- details: a short comma-separated summary of the cost-relevant
   facts the user confirmed, phrased canonically so the pricing engine can parse
   them: areas as "N sq ft", lengths as "N linear ft", counts as "N <thing>"
   where <thing> is one of: ${COUNTABLE_NOUNS.join(", ")} (these are the ONLY
@@ -333,7 +336,8 @@ Auto: one of ${AUTO_SERVICES.join(", ")}. Use "" only if nothing fits.
   engine reads the first number it sees, so "100-300 sq ft" silently prices the
   bottom end. If the user answered with a range, record its midpoint ("200 sq ft").
   Only facts the user explicitly stated or confirmed — never guess.
-  Use "" for auto/moto, or if no cost fact was pinned down.
+  For auto/moto use the same idea: "rear quarter panel", "small dent no paint
+  damage", "windshield chip". Use "" if no cost fact was pinned down.
 - summary: a plain-English overview of the job written in the FIRST PERSON, as
   the customer themselves. The message is sent from the customer's own phone, so
   it must read in their voice — "I need…", "my…" — never "the homeowner", "the
@@ -672,14 +676,15 @@ along the house / indoors; the panel's capacity; the equipment's load). Never re
   // confirm-style question at most once per floor step; the dup guard below
   // still applies.
   if (
-    path === "normal" && parsed.action === "done" && parsed.vertical === "home" &&
+    path === "normal" && parsed.action === "done" &&
+    (parsed.vertical === "home" || parsed.vertical === "auto_moto") &&
     parsed.job_spec?.complexity !== "project" &&
-    asked < minHomeQuestions(parsed.category) && remaining > 0
+    asked < minQuestions(parsed.vertical, parsed.category) && remaining > 0
   ) {
     try {
       const more = await runModel(false, `
 
-PRICE FLOOR: you tried to finish a home job after only ${asked} question${asked === 1 ? "" : "s"}.
+PRICE FLOOR: you tried to finish a job before its price drivers were asked, after only ${asked} question${asked === 1 ? "" : "s"}.
 Ask ONE more question now — the cost driver the request and answers above
 leave most open: the size or area, the material, the scope (patch/repair vs
 replace, how much), or the count. Never re-ask or reword anything already

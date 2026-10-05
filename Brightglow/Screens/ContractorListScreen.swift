@@ -335,12 +335,12 @@ struct ContractorListScreen: View {
     /// figure. Home is untouched — there `effectiveSearchQuery` is already
     /// either the chat's refined phrase or the raw typed text.
     private var pricingDescription: String {
-        guard let auto = autoCategory else { return effectiveSearchQuery }
-        let typed = searchQuery.trimmingCharacters(in: .whitespacesAndNewlines)
-        // A grid-card tap puts the synthetic phrase in `searchQuery`; a search
-        // puts the user's request there. Only the latter describes a job.
-        let synthetic = [auto.searchQuery.lowercased(), auto.motoSearchQuery.lowercased()]
-        return synthetic.contains(typed.lowercased()) ? "" : typed
+        // One job phrase for home and auto: the chat's refined phrase when
+        // there is one, else the user's own words. A synthetic grid-card query
+        // is already stripped by `typedQuery` (empty = bare category browse).
+        let override = businessSearchOverride.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !override.isEmpty { return override }
+        return autoCategory == nil ? effectiveSearchQuery : typedQuery
     }
 
     /// What the user actually typed, if anything.
@@ -385,7 +385,7 @@ struct ContractorListScreen: View {
         let terms = photoMatchTerms.trimmingCharacters(in: .whitespacesAndNewlines)
         if !terms.isEmpty { return terms }
         let override = businessSearchOverride.trimmingCharacters(in: .whitespacesAndNewlines)
-        if autoCategory == nil, !override.isEmpty { return override }
+        if !override.isEmpty { return override }
         return typedQuery
     }
 
