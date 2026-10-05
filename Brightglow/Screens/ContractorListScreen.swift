@@ -112,6 +112,7 @@ struct ContractorListScreen: View {
             resolved = motoTerms.contains(where: hay.contains) ? .moto : .auto
         }
         _vehicle = State(initialValue: resolved)
+        vehicleGiven = initialVehicle != nil
     }
 
     @Environment(\.dismiss) var dismiss
@@ -191,6 +192,14 @@ struct ContractorListScreen: View {
     @State private var lastViewedID: String? = nil
     /// Auto & moto only: which vehicle type to show (defaults to cars).
     @State private var vehicle: VehicleFilter = .auto
+    /// A photo capture identified the vehicle (set in `init`).
+    private let vehicleGiven: Bool
+    /// Whether the car/motorcycle question is already answered, so the Auto ⇄
+    /// Moto switch has nothing left to ask: the capture identified the vehicle,
+    /// or the clarify chat ran (it asks car-vs-bike whenever the request and
+    /// photo don't say). Only a bare category tap — where we know nothing yet —
+    /// keeps the switch (2026-10-05).
+    private var vehicleKnown: Bool { vehicleGiven || jobCheckActive }
     /// Contractors whose rows have actually scrolled into view — gates photo
     /// loading so an off-screen business costs nothing until the user reaches it.
     @State private var revealedIDs: Set<String> = []
@@ -1164,7 +1173,7 @@ struct ContractorListScreen: View {
                     // Car/Moto toggle + the price on the same row: every job
                     // has a price now, vehicles included (2026-09-30).
                     HStack(alignment: .center, spacing: 12) {
-                        vehicleFilter
+                        if !vehicleKnown { vehicleFilter }
                         // No "estimating" placeholder: the user is looking at
                         // the photos while the price loads; it fades in when
                         // ready (2026-10-02 — a visible wait read as slow).
