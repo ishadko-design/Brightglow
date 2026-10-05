@@ -141,6 +141,8 @@ struct ContractorListScreen: View {
     @State private var jobSize: JobSize = .standard
     @State private var resolvedCoord: CLLocationCoordinate2D? = nil
     @State private var isLoading   = false
+    /// Set when the first-screen evidence (verdicts, photos, job fit) is in.
+    @State private var settleDone  = false
     @State private var estimate: PriceTier? = nil
     /// True while the (web-grounded) estimate is still being fetched — drives the
     /// subtle "Estimating price…" placeholder so the header isn't blank during the
@@ -1382,6 +1384,48 @@ struct ContractorListScreen: View {
         await PlacesService.$jobGate.withValue(searchGate) { await loadGated() }
     }
 
+    /// Everything that decides the first screenful, run in parallel with the
+    /// skeleton showing: shared verdicts, owner photos, the no-photo drop, the
+    /// small-job widening, photo screening / tagging and the job-fit judge.
+    @MainActor
+    private func settleList(_ landedQuery: String, widen: Task<Void, Never>?) async {
+        let allowVehicles = allowsVehiclePhotos(landedQuery)
+        async let owner: Void = loadOwnerPhotos(for: contractors)
+        // Pull shared verdicts for anything not already known locally, so a
+        // place screened by ANY other user is reused here without re-screening.
+        let unknownIDs = contractors.map(\.id).filter { scannedCount[$0] == nil }
+        let remote = await VerdictService.fetch(ids: unknownIDs, allowVehicles: allowVehicles)
+        for (id, v) in remote {
+            scannedCount[id] = v.scanned
+            if !v.kept.isEmpty {
+                keptPhotos[id] = v.kept
+                setStripPhotos(id, PhotoFilter.order(v.kept, query: orderQuery, category: category,
+                                                     capPremises: stripMaxPremises, vehicle: photoVehicle))
+                if !v.enriched { needsEnrich.insert(id) }
+            }
+            ScreeningStore.shared.save(id, allowVehicles: allowVehicles,
+                                       kept: v.kept, scanned: v.scanned, enriched: v.enriched)
+        }
+        await owner
+        // Drop businesses confirmed to have no work photos in their whole pool
+        // (a business with its own uploads, or a website portfolio to pull, is
+        // exempt). Only while the list is still hidden: a row never vanishes
+        // from a list the user is looking at.
+        if isLoading {
+            contractors.removeAll { c in
+                ownerPhotosByID[c.id] == nil
+                    && (c.website == nil || !c.photos.isEmpty)
+                    && (scannedCount[c.id] ?? 0) >= c.photos.count
+                    && (screenedByID[c.id]?.isEmpty ?? true)
+            }
+        }
+        freezePhotoScores(for: contractors)
+        await eagerlyScreenTopMatches()
+        await eagerlyEnrichTopMatches()
+        await judgePhotoFit()
+        await widen?.value
+    }
+
     /// Job-size check + handyman / trade-repair supplements, run AFTER the list
     /// is on screen: a small non-licensed job widens the pool with the people
     /// who actually do small jobs, merged in (deduped) and ranked.
@@ -1402,7 +1446,6 @@ struct ContractorListScreen: View {
         guard !fresh.isEmpty else { return }
         contractors += fresh
         freezePhotoScores(for: contractors)
-        withAnimation(.easeInOut(duration: 0.35)) { commitDisplayOrder() }
     }
 
     @MainActor
@@ -1414,6 +1457,7 @@ struct ContractorListScreen: View {
             preset: presetCoordinate, location: location)
 
         var query = effectiveSearchQuery
+        var widenTask: Task<Void, Never>? = nil
         let isAuto = allowsVehiclePhotos(query)
         if let coord = resolved {
             // The estimate reuses the header's inputs, so the clarify chat's
@@ -1435,7 +1479,7 @@ struct ContractorListScreen: View {
             // to hold the list behind the whole price estimate (seconds on a new
             // job). They now run after the list is on screen and merge in
             // (2026-10-05, "7 to 10 seconds").
-            Task { @MainActor in await widenForSmallJob(sizeTask, near: coord) }
+            widenTask = Task { @MainActor in await widenForSmallJob(sizeTask, near: coord) }
             // Zero-result safeguard: a chat-refined query that finds nothing
             // falls back to the user's raw query, so narrowing the search can
             // never blank the results.
@@ -1529,66 +1573,26 @@ struct ContractorListScreen: View {
             contractors = ContractorLoader.fallback(
                 category: category, searchQuery: query)
         }
-        // Progressive landing (2026-10-05): the list appears as soon as the
-        // businesses are found. It used to wait behind the loader for photo
-        // screening (3.5s cap), rich tagging (3s) and the job check (7s) — up
-        // to ~15s on a cold search. Now names, ratings and reviews show at
-        // once, photo tiles shimmer, and each row's photos fill in as they
-        // land. The order settles once (animated) when the photo evidence and
-        // job check are in — within the first few seconds — and then locks, so
-        // best matches lead and nothing moves after that.
-        freezePhotoScores(for: contractors)
-        isLoading = false
-        let landedQuery = query  // a `let` copy: the Task below can't capture the `var`
+        // Settle, then show ONCE (2026-10-05). Showing the list at once and
+        // streaming evidence in made rows reshuffle and photos keep swapping
+        // ("terrible"). The skeleton now stays up while the evidence arrives —
+        // in parallel, for at most `settleCapNs` — and the list appears in its
+        // final order and never reorders. Slow stragglers only fill photo tiles
+        // that are still showing a placeholder.
+        let landedQuery = query
+        let widen = widenTask
+        settleDone = false
         Task { @MainActor in
-            // Shared verdicts, owner uploads and the no-photo drop used to run
-            // BEFORE the list showed (a network round trip each). They land
-            // right after, with rows filling in and any empty row leaving.
-            let allowVehicles = allowsVehiclePhotos(landedQuery)
-                // Pull shared verdicts for anything not already known locally, so a
-                // place screened by ANY other user is reused here without re-screening.
-                let unknownIDs = contractors.map(\.id).filter { scannedCount[$0] == nil }
-                let remote = await VerdictService.fetch(ids: unknownIDs, allowVehicles: allowVehicles)
-                for (id, v) in remote {
-                    scannedCount[id] = v.scanned
-                    if !v.kept.isEmpty {
-                        keptPhotos[id] = v.kept
-                        setStripPhotos(id, PhotoFilter.order(v.kept, query: orderQuery, category: category,
-                                                             capPremises: stripMaxPremises, vehicle: photoVehicle))
-                        if !v.enriched { needsEnrich.insert(id) }
-                    }
-                    ScreeningStore.shared.save(id, allowVehicles: allowVehicles,
-                                               kept: v.kept, scanned: v.scanned, enriched: v.enriched)
-                }
-
-                // Lead each business with its OWN uploaded photos (cheap: one query,
-                // and only claimed businesses come back). Done before the drop below so
-                // a business that uploaded photos stays even when Google gives us none.
-                await loadOwnerPhotos(for: contractors)
-
-                // Drop businesses confirmed to have no work photos in their whole pool,
-                // so they don't reappear as blank rows on a later visit. A business with
-                // its own uploaded photos is exempt — it has something real to show.
-                // So is a business with no Google photos but a website: its row reveal
-                // pulls the site's portfolio, which drops the business itself when
-                // nothing usable comes back. (Businesses WITH Google photos keep
-                // today's behavior exactly.)
-                withAnimation(.easeInOut(duration: 0.3)) { contractors.removeAll { c in
-                    ownerPhotosByID[c.id] == nil
-                        && (c.website == nil || !c.photos.isEmpty)
-                        && (scannedCount[c.id] ?? 0) >= c.photos.count
-                        && (screenedByID[c.id]?.isEmpty ?? true)
-                } }
-            freezePhotoScores(for: contractors)
-            await eagerlyScreenTopMatches()
-            await eagerlyEnrichTopMatches()
-            await judgePhotoFit()
-            // Settle once, with the photo evidence in, then lock. Locking the
-            // first screenful in Google's order before any evidence put a shop
-            // with an engine photo above the one with dent photos (2026-10-05).
-            freezePhotoScores(for: contractors)
-            withAnimation(.easeInOut(duration: 0.35)) { commitDisplayOrder() }
+            await settleList(landedQuery, widen: widen)
+            settleDone = true
         }
+        let deadline = Date().addingTimeInterval(Double(settleCapNs) / 1_000_000_000)
+        while !settleDone && Date() < deadline {
+            try? await Task.sleep(nanoseconds: 100_000_000)
+        }
+        freezePhotoScores(for: contractors)
+        commitDisplayOrder()
+        isLoading = false
         await loadLicenses(for: contractors)
         await loadLogos(for: contractors)
     }
@@ -2235,6 +2239,9 @@ private let eagerEnrichTimeoutNs: UInt64 = 3_000_000_000
 /// Cap on the job check (`judgePhotoFit`) behind the loader. The call runs
 /// ~4s; past the cap the list lands on its keyword ordering.
 private let photoFitTimeoutNs: UInt64 = 7_000_000_000
+/// How long the skeleton waits for first-screen evidence before showing the list
+/// in the best order it has. The list shows ONCE and never reorders.
+private let settleCapNs: UInt64 = 4_000_000_000
 
 /// Screening budget per row: scan `stripBatchScan` source photos at a time,
 /// deeper into the pool only if early shots are rejected, keeping up to
