@@ -28,6 +28,7 @@ jobs:
   keys:
     runs-on: ubuntu-latest
     steps:
+      - uses: actions/checkout@v4
       - name: List recent AI price cache entries
         env:
           SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
