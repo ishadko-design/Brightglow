@@ -1,4 +1,4 @@
-# Brightglow 1.2.0 (build 8) — release notes
+# Brightglow 1.1.2 (build 8) — release notes
 
 ## What's New (App Store, paste as-is)
 - Prices now come from a local estimate for your area, the same every time you ask for the same job.
