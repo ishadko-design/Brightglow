@@ -139,6 +139,8 @@ struct FigmaFooterScrim: View {
     /// Figma list footer: 38 (the Footer group extends 38pt past the frame).
     /// Figma gallery footer: 0 (ends at the frame edge).
     var belowExtend: CGFloat = 0
+    /// Solid overflow below the visible scrim (> 2x the blur radius).
+    private static let bleed: CGFloat = 48
 
     /// BlurredHeaderBackground(.dark) stops, mirrored vertically
     /// (location -> 1 - location): the header holds 0.8 black across the top
@@ -158,11 +160,20 @@ struct FigmaFooterScrim: View {
             .frame(maxWidth: .infinity)
             .frame(height: height)
             .overlay(alignment: .bottom) {
-                LinearGradient(stops: stops, startPoint: .top, endPoint: .bottom)
-                    .frame(height: height + belowExtend)
-                    .padding(.horizontal, -45)
-                    .blur(radius: 16)
-                    .offset(y: belowExtend)
+                // The blur samples nothing beyond the layer's edge, so the last
+                // ~16pt of a blurred gradient fade to clear — a see-through band
+                // at the very bottom of the screen (2026-10-05). A solid tail in
+                // the gradient's final color sits BELOW the visible footprint, so
+                // the faded edge is off-screen and the visible part is unchanged.
+                VStack(spacing: 0) {
+                    LinearGradient(stops: stops, startPoint: .top, endPoint: .bottom)
+                        .frame(height: height + belowExtend)
+                    Color.black.opacity(0.8)
+                        .frame(height: Self.bleed)
+                }
+                .padding(.horizontal, -45)
+                .blur(radius: 16)
+                .offset(y: belowExtend + Self.bleed)
             }
             .allowsHitTesting(false)
     }
