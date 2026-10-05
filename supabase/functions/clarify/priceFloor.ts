@@ -10,3 +10,11 @@ const SIZE_DRIVEN_CATEGORIES = new Set([
 export function minHomeQuestions(category: string | undefined): number {
   return category && SIZE_DRIVEN_CATEGORIES.has(category) ? 2 : 1;
 }
+
+/** Auto/moto: a body-panel job swings from PDR to respray on damage size and
+ *  paint state, so it needs a cost question beyond the vehicle; glass and
+ *  routine service price fine from the service itself. */
+export function minQuestions(vertical: string | undefined, category: string | undefined): number {
+  if (vertical === "auto_moto") return category === "Body & Paint" ? 2 : 0;
+  return minHomeQuestions(category);
+}

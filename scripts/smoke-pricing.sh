@@ -48,6 +48,11 @@ check "flat roof patch, fast (SF)" \
   '{"category":"Roofing","description":"Patch my flat roof","zip":"94110","city":"San Francisco, CA","fast":true}' 250 3000
 check "flat roof patch (SF)" \
   '{"category":"Roofing","description":"Patch flat roof","zip":"94110","city":"San Francisco, CA"}' 250 3000
+# Auto jobs go through the same one-job path (rear quarter panel, glass).
+check "rear quarter panel dent (SF)" \
+  '{"category":"Body & Paint","description":"Rear quarter panel dent repair","zip":"94110","vehicle":"car","city":"San Francisco, CA"}' 300 4500
+check "windshield chip (SF)" \
+  '{"category":"Glass","description":"Windshield chip repair","zip":"94110","vehicle":"car","city":"San Francisco, CA"}' 50 600
 
 # Same job, different words -> ONE cached price (the cache keys on the
 # taxonomy job, not the phrasing; 2026-10-03).
