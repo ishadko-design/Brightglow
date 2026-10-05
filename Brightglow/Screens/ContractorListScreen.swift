@@ -263,12 +263,14 @@ struct ContractorListScreen: View {
         // quarter panel dent" read as "Body & Paint" (2026-10-05). A bare grid
         // tap carries only the synthetic Places query, which `typedQuery`
         // suppresses, so it still shows the category.
-        if let auto = autoCategory {
-            let typed = typedQuery
-            return typed.isEmpty ? auto.name : typed
-        }
-        let q = searchQuery.trimmingCharacters(in: .whitespacesAndNewlines)
-        return q.isEmpty ? category : q
+        // One rule for home and auto. A photo/chat flow submits no typed text,
+        // so the request lives in the chat's refined phrase — use it before
+        // falling back to the bare category name (2026-10-05, still "Body &
+        // Paint" after the typed-only fix).
+        let override = businessSearchOverride.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !typedQuery.isEmpty { return typedQuery }
+        if !override.isEmpty { return override }
+        return autoCategory?.name ?? category
     }
 
     /// The Auto & moto category being viewed, if any (drives the vehicle filter).
