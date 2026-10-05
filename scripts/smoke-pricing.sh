@@ -51,6 +51,8 @@ check "flat roof patch (SF)" \
 # Auto jobs go through the same one-job path (rear quarter panel, glass).
 check "rear quarter panel dent (SF)" \
   '{"category":"Body & Paint","description":"Rear quarter panel dent repair","zip":"94110","vehicle":"car","city":"San Francisco, CA"}' 300 4500
+check "moto 16k service (Daly City)" \
+  '{"category":"Repair","description":"Triumph thruxton 1200r regular maintenance for 16k miles, full inspection, oil and filter change","zip":"94015","vehicle":"moto","city":"Daly City, CA"}' 350 1500
 check "windshield chip (SF)" \
   '{"category":"Glass","description":"Windshield chip repair","zip":"94110","vehicle":"car","city":"San Francisco, CA"}' 50 600
 

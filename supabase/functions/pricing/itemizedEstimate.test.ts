@@ -79,3 +79,9 @@ Deno.test("settleJobType: a job type is kept only when the phrase names that job
   // Synonyms and suffixes still match the job's own words.
   assertEquals(settleJobType({ jobType: "roofing.repair", job: "patching flat roof", facts: [] }, false).jobType, "roofing.repair");
 });
+
+Deno.test("canonicalKey: a vehicle service's scope splits the price", () => {
+  const oil = canonicalKey({ jobType: "moto.tune_up", job: "oil change", facts: ["scope oil"] });
+  const svc = canonicalKey({ jobType: "moto.tune_up", job: "16k service", facts: ["scope interval"] });
+  assertEquals(oil === svc, false);
+});
