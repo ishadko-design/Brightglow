@@ -73,19 +73,14 @@ const TAXONOMY_LINES = [
     .map((e) => `- ${e!.job_type} (${e!.category}, per ${e!.unit} — generic fallback)`),
 ].join("\n");
 
-function systemPrompt(remaining: number): string {
-  const mustFinish = remaining === 0;
-  return `You help a user find a LOCAL BUSINESS that can fix their problem — \
+/** The long, unchanging instructions — one cached block (prompt caching: ~8-10k
+ *  tokens that were re-sent at full price every chat turn). Anything that
+ *  varies per turn lives in `turnNote`, AFTER this block, so the prefix stays
+ *  byte-identical and cacheable. */
+const STATIC_PROMPT = `You help a user find a LOCAL BUSINESS that can fix their problem — \
 either a home-trade contractor or an auto/moto shop. Your job is to ask the \
 fewest questions needed to (1) identify the right kind of business and (2) \
 describe what a matching work photo looks like. A price is a bonus, never the goal.
-
-You may ask at most ${remaining} more question${remaining === 1 ? "" : "s"}\
-${mustFinish ? ' — you MUST finish now with action "done"' : ""}.
-${mustFinish ? `FINISH NOW — this beats every "keep asking" rule below, including the
-PROJECT rules: return action "done" with EVERY field filled from what is known.
-Any component still unanswered goes under "unknown:" in details. Never ask.
-` : ""}
 
 Ask a question (action "ask") ONLY if its answer changes one of:
 - which KIND of business matches (the biggest lever, ask this first),
@@ -383,6 +378,16 @@ with empty fields (complexity "task", empty lists).
 The pricing engine covers these home jobs — for home requests, aim toward them
 and note each one's pricing unit (the quantity worth clarifying):
 ${TAXONOMY_LINES}`;
+
+/** Per-turn instruction: how many questions remain (or "finish now"). */
+function turnNote(remaining: number): string {
+  const mustFinish = remaining === 0;
+  return `You may ask at most ${remaining} more question${remaining === 1 ? "" : "s"}\
+${mustFinish ? ' — you MUST finish now with action "done"' : ""}.
+${mustFinish ? `FINISH NOW — this beats every "keep asking" rule above, including the
+PROJECT rules: return action "done" with EVERY field filled from what is known.
+Any component still unanswered goes under "unknown:" in details. Never ask.
+` : ""}`;
 }
 
 const SCHEMA = {
@@ -620,7 +625,10 @@ Deno.serve(async (req) => {
       // Sonnet 5 runs adaptive thinking when `thinking` is omitted — off here:
       // a quick schema-bound routing call, thinking only adds latency and cost.
       thinking: { type: "disabled" },
-      system: systemPrompt(mustFinish ? 0 : remaining) + mustAskNote,
+      system: [
+        { type: "text", text: STATIC_PROMPT, cache_control: { type: "ephemeral" } },
+        { type: "text", text: turnNote(mustFinish ? 0 : remaining) + mustAskNote },
+      ],
       // A forced finish constrains `action` to "done" in the schema itself: the
       // prompt alone lost to the PROJECT "keep asking" rules and the retry came
       // back "ask", shipping a done with every field empty (seen 2026-09-30).
