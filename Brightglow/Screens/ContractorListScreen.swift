@@ -1382,6 +1382,29 @@ struct ContractorListScreen: View {
         await PlacesService.$jobGate.withValue(searchGate) { await loadGated() }
     }
 
+    /// Job-size check + handyman / trade-repair supplements, run AFTER the list
+    /// is on screen: a small non-licensed job widens the pool with the people
+    /// who actually do small jobs, merged in (deduped) and ranked.
+    @MainActor
+    private func widenForSmallJob(_ sizeTask: Task<JobSize, Never>,
+                                  near coord: CLLocationCoordinate2D) async {
+        jobSize = await sizeTask.value
+        guard smallJobActive else { return }
+        var extra = await ContractorLoader.fetchHandymanSupplement(
+            near: coord, count: RankingConfigStore.current.smallJob.supplementCount)
+        if let cat = jobCategory, let repairQ = cat.repairQuery {
+            extra += await ContractorLoader.fetchTradeRepairSupplement(
+                near: coord, count: RankingConfigStore.current.smallJob.supplementCount, repairQuery: repairQ)
+        }
+        let existing = Set(contractors.map(\.id))
+        var seen = existing
+        let fresh = extra.filter { seen.insert($0.id).inserted }
+        guard !fresh.isEmpty else { return }
+        contractors += fresh
+        freezePhotoScores(for: contractors)
+        withAnimation(.easeInOut(duration: 0.35)) { commitDisplayOrder() }
+    }
+
     @MainActor
     private func loadGated() async {
         guard contractors.isEmpty else { return }
@@ -1402,41 +1425,17 @@ struct ContractorListScreen: View {
             // run it ALONGSIDE the business search instead of before it — it
             // used to hold the loader for the whole estimate (2026-10-03).
             // Only the handyman widening below needs it.
-            async let sizeLevel = smallJobLevel(near: coord, isAuto: isAuto)
+            let sizeTask = Task { @MainActor in await smallJobLevel(near: coord, isAuto: isAuto) }
             // The search is always the trade query — plumber jobs search
             // plumbers. Handyman preference is expressed in ranking (the
             // size-fit factor), never by rerouting the query.
             var page = await ContractorLoader.fetchLivePage(
                 category: category, searchQuery: query, near: coord, isAuto: isAuto)
-            jobSize = await sizeLevel
-            // Small non-licensed job: widen the pool with handymen so the
-            // size-fit factor has someone to score. Merged deduped, first page
-            // only — pagination continues the trade query untouched.
-            if smallJobActive {
-                let extra = await ContractorLoader.fetchHandymanSupplement(
-                    near: coord, count: RankingConfigStore.current.smallJob.supplementCount)
-                let existing = Set(page.contractors.map(\.id))
-                let fresh = extra.filter { !existing.contains($0.id) }
-                if !fresh.isEmpty {
-                    page = PlacesService.Page(contractors: page.contractors + fresh,
-                                              nextPageToken: page.nextPageToken)
-                }
-            }
-            // Small non-licensed job: also widen with "{trade} repair" pros —
-            // the missing middle between full-trade contractors and generic
-            // handymen. A roofer who does flashing fixes is found by
-            // "roof repair", not by "roofing contractor". Merged deduped,
-            // first page only — pagination continues the trade query untouched.
-            if smallJobActive, let cat = jobCategory, let repairQ = cat.repairQuery {
-                let extra = await ContractorLoader.fetchTradeRepairSupplement(
-                    near: coord, count: RankingConfigStore.current.smallJob.supplementCount, repairQuery: repairQ)
-                let existing = Set(page.contractors.map(\.id))
-                let fresh = extra.filter { !existing.contains($0.id) }
-                if !fresh.isEmpty {
-                    page = PlacesService.Page(contractors: page.contractors + fresh,
-                                              nextPageToken: page.nextPageToken)
-                }
-            }
+            // The job-size check and the handyman / trade-repair supplements used
+            // to hold the list behind the whole price estimate (seconds on a new
+            // job). They now run after the list is on screen and merge in
+            // (2026-10-05, "7 to 10 seconds").
+            Task { @MainActor in await widenForSmallJob(sizeTask, near: coord) }
             // Zero-result safeguard: a chat-refined query that finds nothing
             // falls back to the user's raw query, so narrowing the search can
             // never blank the results.
@@ -1490,40 +1489,6 @@ struct ContractorListScreen: View {
                     scannedCount[c.id] = v.scanned
                 }
             }
-            // Pull shared verdicts for anything not already known locally, so a
-            // place screened by ANY other user is reused here without re-screening.
-            let unknownIDs = contractors.map(\.id).filter { scannedCount[$0] == nil }
-            let remote = await VerdictService.fetch(ids: unknownIDs, allowVehicles: allowVehicles)
-            for (id, v) in remote {
-                scannedCount[id] = v.scanned
-                if !v.kept.isEmpty {
-                    keptPhotos[id] = v.kept
-                    setStripPhotos(id, PhotoFilter.order(v.kept, query: orderQuery, category: category,
-                                                         capPremises: stripMaxPremises, vehicle: photoVehicle))
-                    if !v.enriched { needsEnrich.insert(id) }
-                }
-                ScreeningStore.shared.save(id, allowVehicles: allowVehicles,
-                                           kept: v.kept, scanned: v.scanned, enriched: v.enriched)
-            }
-
-            // Lead each business with its OWN uploaded photos (cheap: one query,
-            // and only claimed businesses come back). Done before the drop below so
-            // a business that uploaded photos stays even when Google gives us none.
-            await loadOwnerPhotos(for: contractors)
-
-            // Drop businesses confirmed to have no work photos in their whole pool,
-            // so they don't reappear as blank rows on a later visit. A business with
-            // its own uploaded photos is exempt — it has something real to show.
-            // So is a business with no Google photos but a website: its row reveal
-            // pulls the site's portfolio, which drops the business itself when
-            // nothing usable comes back. (Businesses WITH Google photos keep
-            // today's behavior exactly.)
-            contractors.removeAll { c in
-                ownerPhotosByID[c.id] == nil
-                    && (c.website == nil || !c.photos.isEmpty)
-                    && (scannedCount[c.id] ?? 0) >= c.photos.count
-                    && (screenedByID[c.id]?.isEmpty ?? true)
-            }
             // Freeze photo-relevance scores now that keptPhotos is populated and
             // the list is final. Background enrich will update tags, but the
             // business order stays stable.
@@ -1574,7 +1539,47 @@ struct ContractorListScreen: View {
         // best matches lead and nothing moves after that.
         freezePhotoScores(for: contractors)
         isLoading = false
+        let landedQuery = query  // a `let` copy: the Task below can't capture the `var`
         Task { @MainActor in
+            // Shared verdicts, owner uploads and the no-photo drop used to run
+            // BEFORE the list showed (a network round trip each). They land
+            // right after, with rows filling in and any empty row leaving.
+            let allowVehicles = allowsVehiclePhotos(landedQuery)
+                // Pull shared verdicts for anything not already known locally, so a
+                // place screened by ANY other user is reused here without re-screening.
+                let unknownIDs = contractors.map(\.id).filter { scannedCount[$0] == nil }
+                let remote = await VerdictService.fetch(ids: unknownIDs, allowVehicles: allowVehicles)
+                for (id, v) in remote {
+                    scannedCount[id] = v.scanned
+                    if !v.kept.isEmpty {
+                        keptPhotos[id] = v.kept
+                        setStripPhotos(id, PhotoFilter.order(v.kept, query: orderQuery, category: category,
+                                                             capPremises: stripMaxPremises, vehicle: photoVehicle))
+                        if !v.enriched { needsEnrich.insert(id) }
+                    }
+                    ScreeningStore.shared.save(id, allowVehicles: allowVehicles,
+                                               kept: v.kept, scanned: v.scanned, enriched: v.enriched)
+                }
+
+                // Lead each business with its OWN uploaded photos (cheap: one query,
+                // and only claimed businesses come back). Done before the drop below so
+                // a business that uploaded photos stays even when Google gives us none.
+                await loadOwnerPhotos(for: contractors)
+
+                // Drop businesses confirmed to have no work photos in their whole pool,
+                // so they don't reappear as blank rows on a later visit. A business with
+                // its own uploaded photos is exempt — it has something real to show.
+                // So is a business with no Google photos but a website: its row reveal
+                // pulls the site's portfolio, which drops the business itself when
+                // nothing usable comes back. (Businesses WITH Google photos keep
+                // today's behavior exactly.)
+                withAnimation(.easeInOut(duration: 0.3)) { contractors.removeAll { c in
+                    ownerPhotosByID[c.id] == nil
+                        && (c.website == nil || !c.photos.isEmpty)
+                        && (scannedCount[c.id] ?? 0) >= c.photos.count
+                        && (screenedByID[c.id]?.isEmpty ?? true)
+                } }
+            freezePhotoScores(for: contractors)
             await eagerlyScreenTopMatches()
             await eagerlyEnrichTopMatches()
             await judgePhotoFit()
@@ -1772,7 +1777,14 @@ struct ContractorListScreen: View {
         guard let urls = screenedByID[id] else { return nil }
         guard let v = photoFit[id] else { return urls }
         let owner = Set(ownerPhotosByID[id] ?? [])
-        return urls.filter { v.relevant.contains($0) || owner.contains($0) }
+        let shown = urls.filter { v.relevant.contains($0) || owner.contains($0) }
+        // Rank, don't drop: a right-kind business (fit >= 2) whose photos the
+        // judge was merely unsure about still shows its best screened work
+        // photos — a 103-review window shop rendered with no photos at all
+        // (2026-10-05). Only a business with no verdict-relevant AND no
+        // screened photo stays blank.
+        if shown.isEmpty, v.fit >= 2 { return Array(urls.prefix(2)) }
+        return shown
     }
 
     /// Gallery hand-off: the strip's photos FIRST, in strip order, then the rest

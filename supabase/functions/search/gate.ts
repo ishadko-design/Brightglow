@@ -119,6 +119,9 @@ export function describePlace(p: Record<string, unknown>, i: number): string {
 /** The business-type query the gate suggested for a job (memoized per job) —
  *  the caller re-searches with it when the gate leaves too few places. */
 const betterQueries = new Map<string, string>();
+export function rememberBetterQuery(job: GateJob, q: string): void {
+  if (q) betterQueries.set(jobKey(job), q);
+}
 export function betterQueryFor(job: GateJob): string {
   return betterQueries.get(jobKey(job)) ?? "";
 }

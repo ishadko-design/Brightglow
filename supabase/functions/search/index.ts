@@ -18,7 +18,7 @@
 
 import { createClient } from "jsr:@supabase/supabase-js@2";
 import { collapseFranchises } from "./franchise.ts";
-import { betterQueryFor, deriveJob, type DerivedJob, gatePlaces, type GateJob } from "./gate.ts";
+import { betterQueryFor, deriveJob, type DerivedJob, gatePlaces, type GateJob, rememberBetterQuery } from "./gate.ts";
 
 const GOOGLE_KEY = Deno.env.get("GOOGLE_PLACES_KEY") ?? "";
 // Shared-token gate (Phase 4). Enforced only when APP_TOKEN is set as a secret,
@@ -176,11 +176,45 @@ async function derivedCached(text: string): Promise<DerivedJob | null> {
  *  (see gate.ts). Runs per request on a structuredClone so the cached raw
  *  Google response is never mutated. No job / no key / gate failure -> the
  *  response passes through untouched (fail open: today's behavior). */
+async function gateCacheKey(job: unknown, ids: string[]): Promise<string> {
+  const data = new TextEncoder().encode(JSON.stringify(job) + "|" + ids.join(","));
+  const h = await crypto.subtle.digest("SHA-256", data);
+  return "gate2:" + [...new Uint8Array(h)].map((b) => b.toString(16).padStart(2, "0")).join("").slice(0, 40);
+}
+
 async function gate(responseObj: unknown, job: unknown): Promise<unknown> {
   if (!job || typeof job !== "object" || !ANTHROPIC_API_KEY) return responseObj;
   const obj = structuredClone(responseObj) as { places?: Array<Record<string, unknown>> };
   if (!Array.isArray(obj?.places) || obj.places.length === 0) return responseObj;
-  const keep = await gatePlaces(job as GateJob, obj.places, ANTHROPIC_API_KEY);
+  // The gate is an LLM call (seconds) and its memo is per-isolate, so a cold
+  // isolate re-ran it for a job + result list someone had already gated. Persist
+  // the verdict by job + place ids (2026-10-05, "7 to 10 seconds" to results).
+  const ids = obj.places.map((p) => String(p.id ?? "")).sort();
+  const gkey = await gateCacheKey(job, ids);
+  let keep: Set<string> | null = null;
+  if (db) {
+    try {
+      const { data } = await db.from("search_cache").select("response, created_at").eq("cache_key", gkey).maybeSingle();
+      const r = data?.response as { keep?: string[]; better?: string } | undefined;
+      const fresh = data ? Date.now() - new Date(data.created_at as string).getTime() < 30 * 24 * 3600_000 : false;
+      if (fresh && Array.isArray(r?.keep)) {
+        keep = new Set(r!.keep);
+        if (r!.better) rememberBetterQuery(job as GateJob, r!.better);
+      }
+    } catch (_) { /* fall through to the model */ }
+  }
+  if (!keep) {
+    keep = await gatePlaces(job as GateJob, obj.places, ANTHROPIC_API_KEY);
+    if (keep && db) {
+      try {
+        await db.from("search_cache").upsert({
+          cache_key: gkey,
+          response: { keep: [...keep], better: betterQueryFor(job as GateJob) },
+          created_at: new Date().toISOString(),
+        });
+      } catch (_) { /* ignore */ }
+    }
+  }
   if (!keep) return responseObj;
   const before = obj.places.length;
   obj.places = obj.places.filter((p) => keep.has(p.id as string));
