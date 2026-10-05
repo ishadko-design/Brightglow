@@ -1439,6 +1439,17 @@ struct MainScreen: View {
 
     private func finishChat(_ outcome: ClarifyService.ClarifyOutcome?) {
         chatDetails = outcome?.details.isEmpty == false ? outcome?.details : nil
+        // The chat's `details` can come back empty (the model skipped it, or an
+        // older server): the price must still see what the user confirmed —
+        // "full inspection", "oil change too" priced as a bare oil change
+        // (2026-10-05). Fall back to the user's own answers.
+        if chatDetails == nil {
+            let answers = chatMessages.dropFirst()
+                .filter { $0.role == "user" }
+                .map { $0.content.trimmingCharacters(in: .whitespacesAndNewlines) }
+                .filter { !$0.isEmpty }
+            if !answers.isEmpty { chatDetails = answers.joined(separator: ", ") }
+        }
         // A nil/blank category means the chat ended without resolving one — Skip,
         // the ✕, or an API failure. Falling through to "" routes the search as a
         // home trade, which is how photographing a motorcycle and abandoning the

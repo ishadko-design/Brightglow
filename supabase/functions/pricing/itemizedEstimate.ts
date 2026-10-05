@@ -112,6 +112,10 @@ facts: only facts STATED in the request that move the price, one per name:
 (patch / partial / full), condition, tier (budget / mid / premium), \
 unit_owned (yes / no), permit / trench / panel_upgrade (yes / no / unknown), \
 vehicle (car / truck / motorcycle), make_model: one or two lowercase words.
+For scheduled vehicle maintenance, scope is "oil" (oil and filter only), \
+"interval" (a mileage-interval service with inspection and fluids), or "major" \
+(valves, timing, or other big-ticket items) — a "16k mile service" with an \
+oil change is "interval", never "oil".
 "Not sure" = "unknown". Never invent a fact.
 
 Taxonomy (job_type: example words):
@@ -220,7 +224,14 @@ export function canonicalKey(c: CanonicalJob): string {
       .map(factToken)
       // "unknown" says nothing: it must not split from a request that omits it.
       .filter((t) => !t.endsWith(":") && !t.endsWith(":unknown"))
-      .filter((t) => !isTaxonomy || KEY_FACTS_FOR_TAXONOMY.has(t.slice(0, t.indexOf(":")))),
+      .filter((t) => {
+        if (!isTaxonomy) return true;
+        const name = t.slice(0, t.indexOf(":"));
+        // A vehicle service's scope is its price ("oil" vs a 16k-mile
+        // "interval" service); for home jobs it is phrasing ("patch").
+        return KEY_FACTS_FOR_TAXONOMY.has(name) ||
+          (name === "scope" && /^(moto|auto)\./.test(c.jobType!));
+      }),
   )].sort();
   return [job, ...facts].join("|").slice(0, 280);
 }

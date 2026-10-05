@@ -269,6 +269,8 @@ struct ContractorListScreen: View {
         // Paint" after the typed-only fix).
         let override = businessSearchOverride.trimmingCharacters(in: .whitespacesAndNewlines)
         if !typedQuery.isEmpty { return typedQuery }
+        let title = clarifyTranscript.jobTitle.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !title.isEmpty { return title.prefix(1).uppercased() + title.dropFirst() }
         if !override.isEmpty { return override }
         return autoCategory?.name ?? category
     }

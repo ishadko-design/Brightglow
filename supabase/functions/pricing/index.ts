@@ -497,6 +497,12 @@ async function itemizedEstimateFor(
     return k ? { estimate: k, cacheState: "it-knowledge" } : null;
   }
   canon = settleJobType(canon, hasProjectScope(description) || isWholeProject(description));
+  // The job type knows the vehicle better than the request's flags: a
+  // motorcycle job filed under kind "auto" (no vehicle on that phase's request)
+  // got a second, wrong cache row and a car prompt (2026-10-05, $140–330 for a
+  // 16k-mile bike service).
+  if (canon.jobType?.startsWith("moto.")) kind = "moto";
+  else if (canon.jobType?.startsWith("auto.") && kind === "home") kind = "auto";
   // Kind in the key: "replace tires" is 4 for a car and 2 for a motorcycle.
   // it2: keys are taxonomy job + bucketed facts (see canonicalKey).
   const key = `it2:${area(zip)}:${kind === "home" ? "" : `${kind}:`}${canonicalKey(canon)}`;
