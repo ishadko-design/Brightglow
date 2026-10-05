@@ -58,18 +58,17 @@ match is literal: for "replace a breaker" a breaker panel IS the job.
 on-trade photos that do NOT count.
    - A storefront, office, logo, team photo, empty room, or the business's own \
 work van is never relevant.
-   - VEHICLE SERVICE (any car or motorcycle shop job — repair, tires, glass, \
-body & paint, detailing): the vehicle IS the work item. A photo of that kind of \
-vehicle on a lift or stand, in the service bay, mid-repair, or showing the \
-part the job is about (a windshield or window for glass, a panel or bumper \
-for body work, a wheel for tires) is relevant — no shop photographs every \
-job, and that is the evidence a customer looks for. Only the OTHER vehicle \
-type (a car for a motorcycle job, a bike for a car job), storefronts, logos, \
-people and showroom / for-sale shots are out. Shown with no photos, these \
-shops looked empty (oil change 2026-10-02; windshield 2026-10-04).
+   - VEHICLE SERVICE (car or motorcycle shops): relevant = a photo of the PART \
+or KIND of work this job is about — body damage, dents, panels, bumpers and \
+paint for body & paint; a windshield or window for glass; wheels and tires \
+for tires; the engine bay or the named component for a mechanical repair. \
+For ROUTINE service whose work isn't visible (oil change, tune-up, \
+inspection), that kind of vehicle on a lift or stand or in the service bay \
+also counts. NOT relevant: work on a different system (an engine photo for a \
+body-dent job — reported 2026-10-05), the other vehicle type, storefronts, \
+logos, people, and branded showroom / marketing shots of a clean car.
    - When unsure whether a photo shows this job, leave it OUT. An empty list is \
-a correct answer for a specialized home job — the business is then shown \
-without photos — but not for vehicle service, per the rule above.
+a correct answer — the business is then shown without photos.
 
 2. fit (0-3): how well this business fits THIS job.
    3 = clear evidence they do this job (relevant photos and/or reviews naming it).
