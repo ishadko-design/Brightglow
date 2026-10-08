@@ -103,6 +103,15 @@ export default {
   async fetch(request, env) {
     const url = new URL(request.url);
 
+    // Canonical host: www.brightglow.co → brightglow.co (301, path + query
+    // preserved). The edge's "Always Use HTTPS" already forces https, so this
+    // only needs to fix the host — but belt-and-braces on the protocol too.
+    if (url.hostname === "www.brightglow.co" || url.protocol === "http:") {
+      url.hostname = "brightglow.co";
+      url.protocol = "https:";
+      return Response.redirect(url.toString(), 301);
+    }
+
     // Visitor metro for cost-guide regional pricing. Cloudflare fills
     // request.cf (city/region/country) at the edge — no permission prompt,
     // no third-party API. Guide pages fetch this same-origin and highlight
