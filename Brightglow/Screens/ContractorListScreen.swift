@@ -1809,12 +1809,11 @@ struct ContractorListScreen: View {
         if let v = photoFit[id] {
             let owner = Set(ownerPhotosByID[id] ?? [])
             let shown = urls.filter { v.relevant.contains($0) || owner.contains($0) }
-            // Rank, don't drop: a right-kind business (fit >= 2) whose photos the
-            // judge was merely unsure about still shows its best screened work
-            // photos — a 103-review window shop rendered with no photos at all
-            // (2026-10-05). Only a business with no verdict-relevant AND no
-            // screened photo stays blank.
-            out = (shown.isEmpty && v.fit >= 2) ? Array(urls.prefix(2)) : shown
+            // No fallback to rejected photos: a business the judge found nothing
+            // of THIS job in shows without a photo strip. A "best two screened
+            // photos" fallback put kitchens and bathrooms above a platform job
+            // (2026-10-13) — a wrong photo costs more trust than a missing one.
+            out = shown
         }
         if !out.isEmpty { shownStrips.byID[id] = out }
         return out
