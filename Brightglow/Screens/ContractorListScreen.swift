@@ -218,6 +218,13 @@ struct ContractorListScreen: View {
     /// rows brought in below the fold are ranked among themselves and appended —
     /// never inserted above an already-shown row.
     @State private var displayOrder: [String] = []
+    /// `visibleLimit` as of the last commit. Rows past the committed ones only
+    /// join the list when the limit grows (See more) — a late supplement or page
+    /// can never fill a free slot and "appear after" (2026-10-13).
+    @State private var committedLimit = 0
+    /// Businesses already on screen that turned out to have no usable photos:
+    /// they keep their row (nothing shifts) and just lose the photo strip.
+    @State private var noPhotoIDs: Set<String> = []
     /// Places loaded from a cached/shared verdict that wasn't rich-tagged yet —
     /// enriched once when their row is first revealed (consumed on use), so we
     /// pay the vision cost lazily per scrolled row, not for the whole list at once.
@@ -423,8 +430,10 @@ struct ContractorListScreen: View {
         // live and appended below, so they can settle while loading and never
         // jump above a row the user has already seen.
         var rows = displayOrder.compactMap { byID[$0] }
-        let committed = Set(displayOrder)
-        rows += rankedContractors().filter { !committed.contains($0.id) }
+        if displayOrder.isEmpty || visibleLimit > committedLimit {
+            let committed = Set(displayOrder)
+            rows += rankedContractors().filter { !committed.contains($0.id) }
+        }
         return Array(rows.prefix(visibleLimit))
     }
 
@@ -460,6 +469,7 @@ struct ContractorListScreen: View {
     private func commitDisplayOrder(limit: Int? = nil) {
         let ids = visibleContractors.map(\.id)
         displayOrder = limit.map { Array(ids.prefix($0)) } ?? ids
+        committedLimit = visibleLimit
     }
 
     /// Licensed-work check for this job, driven by the OTA config. Electrical
@@ -840,8 +850,9 @@ struct ContractorListScreen: View {
                             // The job check found nothing of THIS job → no mosaic at
                             // all. A wrong photo (breaker panels for a sauna hookup)
                             // throws the user off; no photo doesn't.
-                            hidesPhotos: stripPhotos(contractor.id)?.isEmpty == true
-                                && photoFit[contractor.id] != nil,
+                            hidesPhotos: noPhotoIDs.contains(contractor.id)
+                                || (stripPhotos(contractor.id)?.isEmpty == true
+                                    && photoFit[contractor.id] != nil),
                             licenseNo: licenseByID[contractor.id]?.licenseNo,
                             takesSmallJobs: takesSmallJobs(contractor, category: jobCategory),
                             // The customer's own words about this job — shown as
@@ -1868,7 +1879,7 @@ struct ContractorListScreen: View {
         // Fit 0 = the wrong KIND of business for this job (the search gate's
         // second line of defense — e.g. a showroom whose reviews gave it away).
         // Never shown: one wrong business costs trust in every result.
-        contractors.removeAll { photoFit[$0.id]?.fit == 0 }
+        removeBusinesses { photoFit[$0.id]?.fit == 0 }
     }
 
     /// A website's brand domain ("https://www.miraclemethod.com/sf" ->
@@ -1984,6 +1995,8 @@ struct ContractorListScreen: View {
         revealedIDs = []
         stripFrozenIDs = []
         displayOrder = []
+        committedLimit = 0
+        noPhotoIDs = []
         enrichTasks.values.forEach { $0.cancel() }
         enrichTasks = [:]
         needsEnrich = []
@@ -2028,6 +2041,18 @@ struct ContractorListScreen: View {
         dropPhotolessBusiness(c.id)
     }
 
+    /// Remove businesses from the pool — but never one that is already on
+    /// screen: a row that has been shown stays exactly where it is (no shift, no
+    /// gap closing). A shown row that loses its photos just hides the strip.
+    @MainActor
+    private func removeBusinesses(where shouldRemove: (Contractor) -> Bool) {
+        let shown = isLoading ? Set<String>() : Set(displayOrder)
+        for c in contractors where shouldRemove(c) && shown.contains(c.id) {
+            noPhotoIDs.insert(c.id)
+        }
+        contractors.removeAll { shouldRemove($0) && !shown.contains($0.id) }
+    }
+
     /// Every photo for this business failed to load — drop it from the list so a
     /// listed contractor always shows a real picture. The verdict is reset to
     /// "unprimed" (not "no work photos"), so a later fresh screen — a relaunch or
@@ -2035,7 +2060,7 @@ struct ContractorListScreen: View {
     /// rather than the failure being cached permanently.
     @MainActor
     private func dropPhotolessBusiness(_ id: String) {
-        contractors.removeAll { $0.id == id }
+        removeBusinesses { $0.id == id }
         screenedByID[id] = nil
         keptPhotos[id] = nil
         scannedCount[id] = nil
@@ -2103,7 +2128,7 @@ struct ContractorListScreen: View {
                 // Whole pool was non-work imagery (Google + the website fetch
                 // above both yielded nothing) → drop the business rather than
                 // show a blank strip (mirrors the gallery).
-                contractors.removeAll { $0.id == c.id }
+                removeBusinesses { $0.id == c.id }
                 stripFrozenIDs.remove(c.id)
                 revealedIDs.remove(c.id)
             }
@@ -2201,7 +2226,7 @@ struct ContractorListScreen: View {
                 if enriched.isEmpty && ownerPhotosByID[id] == nil {
                     // Its whole pool was non-photos → nothing real to show, drop it
                     // (mirrors dropPhotolessBusiness).
-                    contractors.removeAll { $0.id == id }
+                    removeBusinesses { $0.id == id }
                     screenedByID[id] = nil
                     keptPhotos[id] = nil
                     stripFrozenIDs.remove(id)
@@ -2269,7 +2294,7 @@ private let eagerEnrichTimeoutNs: UInt64 = 3_000_000_000
 private let photoFitTimeoutNs: UInt64 = 7_000_000_000
 /// How long the skeleton waits for first-screen evidence before showing the list
 /// in the best order it has. The list shows ONCE and never reorders.
-private let settleCapNs: UInt64 = 4_000_000_000
+private let settleCapNs: UInt64 = 5_000_000_000
 
 /// Strips already painted, by business id (see `ContractorListScreen.shownStrips`).
 final class ShownStrips {
