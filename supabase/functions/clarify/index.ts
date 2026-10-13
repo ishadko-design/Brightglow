@@ -231,6 +231,23 @@ request is a remodel, renovation, gut, or "redo the whole <room/house>"
   "150 sq ft, mid-range kitchen remodel" or "1800 sq ft, budget whole-house
   remodel". Set category to the lead trade if one clearly dominates, else "".
 
+READ THE WORK, NOT THE OBJECT IT SERVES. The job is what the user wants DONE
+(the verb and what is built, changed or fixed), never a noun that merely appears
+in the request. "Build a small shed platform on a slight slope for an outdoor
+sauna" is the work of BUILDING A PLATFORM (a framed deck, a gravel or paver pad,
+a slab on a slope) — carpentry or concrete — and the sauna is only the load it
+carries. Do NOT ask about the sauna's heater, power, circuit, panel distance,
+trenching or whether they own it unless the user asked for the unit to be
+installed or wired. The same goes for any "<build / prepare a base, pad, deck,
+shed, fence, enclosure, foundation, retaining wall> for <equipment>" request.
+For that kind of work ask what moves ITS price: the footprint (length x width),
+the material (wood deck, gravel, pavers, concrete slab), how steep the slope is
+or how high it ends up off the ground, and access. Set category to the trade
+that does the work (Carpentry for a wood platform, otherwise the matching one),
+and make search_terms and photo_terms describe the platform, not the equipment.
+The PROJECT rules below apply only when the requested work IS installing,
+wiring or connecting the equipment.
+
 SIZE THE JOB BEFORE YOU DECIDE HOW MANY QUESTIONS IT NEEDS. Classify it:
 - TASK: one fix or swap on something that already exists (replace a breaker,
   fix a leak, swap a faucet). 1-2 questions, as above.

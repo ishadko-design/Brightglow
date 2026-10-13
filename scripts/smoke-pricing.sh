@@ -98,4 +98,23 @@ else
   echo "FAIL fast (\$${fastp%.*}) and full (\$${svc%.*}) phases disagree by >2x"; fail=1
 fi
 
+# The chat must follow the WORK, not a noun in the request: a platform for a
+# sauna is carpentry, and its first question must not be about electricity
+# (2026-10-13, "keeps asking about the sauna").
+chat_first_question() {
+  curl -sS --max-time 60 -X POST "$SUPABASE_URL/functions/v1/clarify" -H "Content-Type: application/json" \
+    -H "apikey: $SUPABASE_ANON_KEY" -H "Authorization: Bearer $SUPABASE_ANON_KEY" ${APP_TOKEN:+-H "x-app-token: $APP_TOKEN"} \
+    -d '{"messages":[{"role":"user","content":"Build a small shed platform on slight slope for out door sauna"}]}'
+}
+chat=$(chat_first_question)
+q=$(jq -r '.question // ""' <<<"$chat")
+cat=$(jq -r '.category // ""' <<<"$chat")
+if grep -Eiq 'electric|panel|breaker|circuit|wir(e|ing)|power|trench|volt|\bamps?\b|heater|already have the sauna' <<<"$q"; then
+  echo "FAIL chat asked about the sauna's electrics for a platform job: $q"; fail=1
+elif [[ "$cat" == "Electrical" ]]; then
+  echo "FAIL chat filed a platform job under Electrical"; fail=1
+else
+  echo "chat follows the work (platform): category=${cat:-?} first question: ${q:-<done>}"
+fi
+
 exit $fail
