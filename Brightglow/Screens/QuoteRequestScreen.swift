@@ -2,6 +2,7 @@ import SwiftUI
 import PhotosUI
 import Supabase
 import MessageUI
+import StoreKit
 
 /// Consent / review step before a request is sent to a contractor. Figma node
 /// 646:12952 ("Confirmation screen"): contractor avatar + reassurance line,
@@ -44,6 +45,7 @@ struct QuoteRequestScreen: View {
     var userCity: String? = nil
 
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.requestReview) private var requestReview
     @EnvironmentObject private var auth: AuthService
 
     @State private var email: String = ""
@@ -165,7 +167,17 @@ struct QuoteRequestScreen: View {
     var body: some View {
         ZStack {
             AppColors.bg.ignoresSafeArea()
-            if sent { sentState } else { reviewState }
+            if sent {
+                sentState.onAppear {
+                    // Happiest moment: the request just reached a business. Pause so
+                    // the confirmation lands first; ReviewPrompter + Apple cap this.
+                    guard ReviewPrompter.recordSuccessfulSend() else { return }
+                    Task {
+                        try? await Task.sleep(nanoseconds: 1_500_000_000)
+                        requestReview()
+                    }
+                }
+            } else { reviewState }
             // The lead save runs in the background; no blocking overlay.
             // savingLead only disables the Continue button while the save is in flight.
             // Multi-send progress cue between composer turns, so the sheet
