@@ -1,0 +1,174 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Brightglow — Preview V1: Proof Feed</title>
+<meta name="robots" content="noindex">
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500..800&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#faf1df; --ink:#131315; --ink-70:rgba(19,19,21,.7); --ink-40:rgba(19,19,21,.4);
+  --line:rgba(19,19,21,.12); --blue:#0039F5; --gold:#D4A600; --r:22px;
+  --headline:"Bricolage Grotesque",sans-serif; --sans:"Inter",sans-serif;
+  --ease:cubic-bezier(.2,.75,.2,1);
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--sans);font-size:16px;line-height:1.6;-webkit-font-smoothing:antialiased}
+h1,h2{font-family:var(--headline);letter-spacing:-.02em;line-height:1.02;margin:0}
+a{color:inherit}
+/* preview switcher */
+.preview-bar{position:sticky;top:0;z-index:50;display:flex;align-items:center;justify-content:center;gap:14px;
+  background:#131315;color:#faf1df;font-size:12.5px;padding:9px 16px}
+.preview-bar b{font-weight:700;letter-spacing:.08em;text-transform:uppercase;font-size:11px}
+.preview-bar a{color:#faf1df;text-decoration:none;opacity:.65;padding:2px 6px;border-radius:6px}
+.preview-bar a.on{opacity:1;background:rgba(255,255,255,.16);font-weight:700}
+.wrap{width:min(680px,92vw);margin:0 auto}
+/* topbar */
+.topbar{display:flex;align-items:center;justify-content:space-between;padding:16px min(4vw,40px)}
+.logo{display:flex;align-items:center;gap:10px;text-decoration:none}
+.logo img{width:36px;height:36px;border-radius:9px;display:block}
+.wordmark{font-family:var(--headline);font-weight:800;font-size:20px}
+.biz-link{font-size:13.5px;font-weight:600;color:var(--ink-70);text-decoration:none;padding:9px 16px;
+  border:1px solid var(--line);border-radius:999px;background:rgba(255,255,255,.5)}
+/* flat button — no shadows */
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:9px;height:54px;padding:0 28px;
+  border:0;border-radius:999px;font-weight:700;font-size:16.5px;color:#fff;white-space:nowrap;text-decoration:none;
+  background:var(--blue);box-shadow:none;transition:transform .2s var(--ease),background .2s}
+.btn:hover{transform:translateY(-1px);background:#0a48ff}
+.btn svg{flex:none}
+/* masthead */
+.masthead{text-align:center;padding:64px 0 30px}
+.kicker{font-size:12px;font-weight:700;letter-spacing:.16em;text-transform:uppercase;color:#9a7300;margin:0 0 14px}
+.masthead h1{font-size:clamp(40px,8vw,64px);font-weight:800;max-width:16ch;margin:0 auto}
+.masthead .sub{margin:18px auto 0;max-width:36em;color:var(--ink-70);font-size:16.5px}
+.masthead .btn{margin-top:26px}
+/* feed */
+.feed{padding:26px 0 10px;display:grid;gap:22px}
+.job{background:#fff;border:1px solid var(--line);border-radius:var(--r);overflow:hidden}
+.job .ph{aspect-ratio:16/10;overflow:hidden;background:#e8e0cd}
+.job .ph img{width:100%;height:100%;object-fit:cover;display:block}
+.job .body{padding:20px 22px 22px}
+.job .tag{display:inline-block;font-size:11.5px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;
+  color:#9a7300;margin-bottom:8px}
+.job h2{font-size:24px;font-weight:800;margin-bottom:6px}
+.job .price{font-size:17px;margin:8px 0 2px}
+.job .price b{font-weight:700}
+.job .src{font-size:13px;color:var(--ink-40)}
+.job .src a{color:var(--ink-40)}
+.job .meta{margin-top:12px;padding-top:12px;border-top:1px solid var(--line);font-size:13.5px;color:var(--ink-70)}
+/* finale */
+.finale{text-align:center;padding:70px 0 110px}
+.finale h2{font-size:clamp(32px,6vw,52px);font-weight:800}
+.finale p{color:var(--ink-70);margin:14px auto 0;max-width:34em}
+.finale .btn{margin-top:26px}
+/* sticky cta */
+.sticky{position:fixed;left:0;right:0;bottom:0;z-index:40;display:flex;align-items:center;justify-content:space-between;
+  gap:12px;padding:12px 18px calc(12px + env(safe-area-inset-bottom));
+  background:rgba(19,19,21,.94);color:#fff;backdrop-filter:blur(8px);
+  transform:translateY(110%);transition:transform .35s var(--ease)}
+.sticky.show{transform:none}
+.sticky span{font-size:14px;font-weight:600}
+.sticky .btn{height:44px;padding:0 20px;font-size:14.5px}
+footer{border-top:1px solid var(--line);padding:28px 0 90px;text-align:center;font-size:13px;color:var(--ink-40)}
+</style>
+</head>
+<body>
+<div class="preview-bar"><b>Preview</b><a class="on" href="../proof-feed/">V1 Feed</a><a href="../workshop-ledger/">V2 Ledger</a><a href="../price-first/">V3 Prices</a></div>
+
+<header class="topbar">
+  <a class="logo" href="https://brightglow.co/"><img src="../../../media/appicon.png" alt=""><span class="wordmark">Brightglow</span></a>
+  <a class="biz-link" href="https://brightglow.co/biz/">For businesses</a>
+</header>
+
+<main>
+  <section class="masthead"><div class="wrap">
+    <p class="kicker">Home &amp; auto</p>
+    <h1>See the work before you hire.</h1>
+    <p class="sub">Real photos of local pros' actual jobs, with Bay Area price ranges. Pick the one you want — one spam-free chat.</p>
+    <a class="btn" href="https://apps.apple.com/us/app/brightglow-home-auto-repair/id6796186438">
+      <svg width="16" height="19" viewBox="0 0 20 24" fill="currentColor" aria-hidden="true"><path d="M16.36 12.77c-.03-2.9 2.37-4.29 2.48-4.36-1.35-1.97-3.45-2.24-4.2-2.27-1.79-.18-3.49 1.05-4.4 1.05-.9 0-2.3-1.02-3.79-1-1.95.03-3.74 1.13-4.74 2.87-2.02 3.5-.52 8.69 1.45 11.53.96 1.39 2.11 2.95 3.62 2.9 1.45-.06 2-.94 3.76-.94 1.75 0 2.25.94 3.79.91 1.57-.03 2.56-1.42 3.52-2.82 1.11-1.61 1.56-3.17 1.59-3.25-.04-.02-3.05-1.17-3.08-4.62zM13.46 4.25c.8-.97 1.34-2.32 1.19-3.66-1.15.05-2.55.77-3.38 1.74-.74.85-1.39 2.22-1.22 3.53 1.29.1 2.6-.65 3.41-1.61z"/></svg>
+      Download the app</a>
+  </div></section>
+
+  <section class="feed"><div class="wrap">
+
+    <article class="job">
+      <div class="ph"><img src="../../../media/slides/slide-13-roofing.jpg" alt="Roof replacement" loading="lazy"></div>
+      <div class="body">
+        <span class="tag">Roofing</span>
+        <h2>Roof replacement</h2>
+        <p class="price">Bay Area <b>$10,239–$22,586</b></p>
+        <p class="src">Source: <a href="https://brightglow.co/cost-guides/roof-replacement">brightglow.co/cost-guides/roof-replacement</a></p>
+        <p class="meta">Pros with photos of this exact job · message one directly, no bidding war</p>
+      </div>
+    </article>
+
+    <article class="job">
+      <div class="ph"><img src="../../../media/slides/slide-01-plumbing.jpg" alt="Water heater replacement" loading="lazy"></div>
+      <div class="body">
+        <span class="tag">Plumbing</span>
+        <h2>Water heater replacement</h2>
+        <p class="price">Bay Area <b>$1,246–$2,342</b></p>
+        <p class="src">Source: <a href="https://brightglow.co/cost-guides/water-heater-replacement">brightglow.co/cost-guides/water-heater-replacement</a></p>
+        <p class="meta">Pros with photos of this exact job · message one directly, no bidding war</p>
+      </div>
+    </article>
+
+    <article class="job">
+      <div class="ph"><img src="../../../media/slides/slide-11-painting.jpg" alt="Interior painting" loading="lazy"></div>
+      <div class="body">
+        <span class="tag">Painting</span>
+        <h2>Interior painting</h2>
+        <p class="price">Bay Area <b>$1,340–$3,935</b></p>
+        <p class="src">Source: <a href="https://brightglow.co/cost-guides/interior-painting">brightglow.co/cost-guides/interior-painting</a></p>
+        <p class="meta">Pros with photos of this exact job · message one directly, no bidding war</p>
+      </div>
+    </article>
+
+    <article class="job">
+      <div class="ph"><img src="../../../media/slides/slide-04-hvac.jpg" alt="HVAC replacement" loading="lazy"></div>
+      <div class="body">
+        <span class="tag">HVAC</span>
+        <h2>HVAC replacement</h2>
+        <p class="price">Bay Area <b>$18,500–$26,000</b></p>
+        <p class="src">Source: <a href="https://brightglow.co/cost-guides/hvac-replacement">brightglow.co/cost-guides/hvac-replacement</a></p>
+        <p class="meta">Pros with photos of this exact job · message one directly, no bidding war</p>
+      </div>
+    </article>
+
+    <article class="job">
+      <div class="ph"><img src="../../../media/slides/slide-08-appliances.jpg" alt="Bathtub reglazing" loading="lazy"></div>
+      <div class="body">
+        <span class="tag">Bathroom</span>
+        <h2>Bathtub reglazing</h2>
+        <p class="price">Bay Area <b>$346–$620</b></p>
+        <p class="src">Source: <a href="https://brightglow.co/cost-guides/bathtub-reglazing">brightglow.co/cost-guides/bathtub-reglazing</a></p>
+        <p class="meta">Pros with photos of this exact job · message one directly, no bidding war</p>
+      </div>
+    </article>
+
+  </div></section>
+
+  <section class="finale"><div class="wrap">
+    <h2>Get your job done right.</h2>
+    <p>Snap a photo of the problem. See who's actually done it. Message the one you pick.</p>
+    <a class="btn" href="https://apps.apple.com/us/app/brightglow-home-auto-repair/id6796186438">
+      <svg width="16" height="19" viewBox="0 0 20 24" fill="currentColor" aria-hidden="true"><path d="M16.36 12.77c-.03-2.9 2.37-4.29 2.48-4.36-1.35-1.97-3.45-2.24-4.2-2.27-1.79-.18-3.49 1.05-4.4 1.05-.9 0-2.3-1.02-3.79-1-1.95.03-3.74 1.13-4.74 2.87-2.02 3.5-.52 8.69 1.45 11.53.96 1.39 2.11 2.95 3.62 2.9 1.45-.06 2-.94 3.76-.94 1.75 0 2.25.94 3.79.91 1.57-.03 2.56-1.42 3.52-2.82 1.11-1.61 1.56-3.17 1.59-3.25-.04-.02-3.05-1.17-3.08-4.62zM13.46 4.25c.8-.97 1.34-2.32 1.19-3.66-1.15.05-2.55.77-3.38 1.74-.74.85-1.39 2.22-1.22 3.53 1.29.1 2.6-.65 3.41-1.61z"/></svg>
+      Download the app</a>
+  </div></section>
+</main>
+
+<div class="sticky" id="sticky">
+  <span>See your job's price range</span>
+  <a class="btn" href="https://apps.apple.com/us/app/brightglow-home-auto-repair/id6796186438">Get the app</a>
+</div>
+
+<footer>© 2026 Brightglow LLC · Design preview V1</footer>
+
+<script>
+var s=document.getElementById('sticky');
+addEventListener('scroll',function(){s.classList.toggle('show',scrollY>520)},{passive:true});
+</script>
+</body>
+</html>

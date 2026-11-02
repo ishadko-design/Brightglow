@@ -1,0 +1,148 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Brightglow — Preview V3: Price First</title>
+<meta name="robots" content="noindex">
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500..800&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#faf1df; --ink:#131315; --ink-70:rgba(19,19,21,.7); --ink-40:rgba(19,19,21,.4);
+  --line:rgba(19,19,21,.12); --blue:#0039F5; --r:22px;
+  --headline:"Bricolage Grotesque",sans-serif; --sans:"Inter",sans-serif;
+  --ease:cubic-bezier(.2,.75,.2,1);
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--sans);font-size:16px;line-height:1.6;-webkit-font-smoothing:antialiased}
+h1,h2{font-family:var(--headline);letter-spacing:-.02em;line-height:1.05;margin:0}
+a{color:inherit}
+.preview-bar{position:sticky;top:0;z-index:50;display:flex;align-items:center;justify-content:center;gap:14px;
+  background:#131315;color:#faf1df;font-size:12.5px;padding:9px 16px}
+.preview-bar b{font-weight:700;letter-spacing:.08em;text-transform:uppercase;font-size:11px}
+.preview-bar a{color:#faf1df;text-decoration:none;opacity:.65;padding:2px 6px;border-radius:6px}
+.preview-bar a.on{opacity:1;background:rgba(255,255,255,.16);font-weight:700}
+.wrap{width:min(720px,92vw);margin:0 auto}
+.topbar{display:flex;align-items:center;justify-content:space-between;padding:16px min(4vw,40px)}
+.logo{display:flex;align-items:center;gap:10px;text-decoration:none}
+.logo img{width:36px;height:36px;border-radius:9px;display:block}
+.wordmark{font-family:var(--headline);font-weight:800;font-size:20px}
+.biz-link{font-size:13.5px;font-weight:600;color:var(--ink-70);text-decoration:none;padding:9px 16px;
+  border:1px solid var(--line);border-radius:999px;background:rgba(255,255,255,.5)}
+/* flat button */
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:9px;height:54px;padding:0 28px;
+  border:0;border-radius:999px;font-weight:700;font-size:16.5px;color:#fff;white-space:nowrap;text-decoration:none;
+  background:var(--blue);box-shadow:none;transition:transform .2s var(--ease),background .2s}
+.btn:hover{transform:translateY(-1px);background:#0a48ff}
+.btn svg{flex:none}
+/* hero */
+.hero{text-align:center;padding:56px 0 10px}
+.kicker{font-size:12px;font-weight:700;letter-spacing:.16em;text-transform:uppercase;color:#9a7300;margin:0 0 14px}
+.hero h1{font-size:clamp(38px,8vw,60px);font-weight:800}
+.hero .sub{margin:16px auto 0;max-width:34em;color:var(--ink-70);font-size:16.5px}
+/* chips */
+.chips{display:flex;flex-wrap:wrap;gap:10px;justify-content:center;padding:26px 0 6px}
+.chip{font-family:var(--sans);font-size:15px;font-weight:600;padding:11px 20px;border-radius:999px;cursor:pointer;
+  border:1.5px solid var(--line);background:rgba(255,255,255,.6);color:var(--ink);
+  transition:border-color .2s,background .2s}
+.chip[aria-selected="true"]{background:var(--ink);color:#fff;border-color:var(--ink)}
+/* price panel */
+.panel{margin:22px 0 0;background:#fff;border:1px solid var(--line);border-radius:var(--r);overflow:hidden}
+.panel .phs{display:grid;grid-template-columns:1fr 1fr;gap:0}
+.panel .phs img{width:100%;aspect-ratio:4/3;object-fit:cover;display:block}
+.panel .body{padding:22px 24px 24px}
+.panel .trade{font-size:11.5px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:#9a7300}
+.panel h2{font-size:26px;font-weight:800;margin:6px 0 4px}
+.panel .range{font-size:20px;margin:10px 0 2px}
+.panel .range b{font-weight:800}
+.panel .src{font-size:13px;color:var(--ink-40);margin:0 0 16px}
+.panel .btn{width:100%}
+/* how strip */
+.strip{margin:54px 0 0;padding:22px 4px;border-top:1px solid var(--line);border-bottom:1px solid var(--line);
+  display:flex;gap:8px;justify-content:space-between;flex-wrap:wrap}
+.strip div{font-size:14px;color:var(--ink-70);flex:1;min-width:150px}
+.strip b{display:block;font-family:var(--headline);font-size:16px;color:var(--ink);margin-bottom:2px}
+/* finale */
+.finale{text-align:center;padding:64px 0 100px}
+.finale h2{font-size:clamp(32px,6vw,50px);font-weight:800}
+.finale p{color:var(--ink-70);margin:14px auto 0;max-width:34em}
+.finale .btn{margin-top:26px}
+footer{border-top:1px solid var(--line);padding:28px 0 60px;text-align:center;font-size:13px;color:var(--ink-40)}
+</style>
+</head>
+<body>
+<div class="preview-bar"><b>Preview</b><a href="../proof-feed/">V1 Feed</a><a href="../workshop-ledger/">V2 Ledger</a><a class="on" href="../price-first/">V3 Prices</a></div>
+
+<header class="topbar">
+  <a class="logo" href="https://brightglow.co/"><img src="../../../media/appicon.png" alt=""><span class="wordmark">Brightglow</span></a>
+  <a class="biz-link" href="https://brightglow.co/biz/">For businesses</a>
+</header>
+
+<main><div class="wrap">
+  <section class="hero">
+    <p class="kicker">Home &amp; auto</p>
+    <h1>What does it cost?</h1>
+    <p class="sub">Honest Bay Area ranges, each traceable to a published source — then the pros who've done your exact job.</p>
+  </section>
+
+  <div class="chips" role="tablist" id="chips"></div>
+
+  <section class="panel" id="panel" aria-live="polite"></section>
+
+  <section class="strip">
+    <div><b>Snap it.</b>Photo of the problem.</div>
+    <div><b>See the price.</b>A range, not a guess.</div>
+    <div><b>Message one pro.</b>No bidding war.</div>
+  </section>
+
+  <section class="finale">
+    <h2>Get your exact price.</h2>
+    <p>Your job, your photos, your match — one spam-free chat.</p>
+    <a class="btn" href="https://apps.apple.com/us/app/brightglow-home-auto-repair/id6796186438">
+      <svg width="16" height="19" viewBox="0 0 20 24" fill="currentColor" aria-hidden="true"><path d="M16.36 12.77c-.03-2.9 2.37-4.29 2.48-4.36-1.35-1.97-3.45-2.24-4.2-2.27-1.79-.18-3.49 1.05-4.4 1.05-.9 0-2.3-1.02-3.79-1-1.95.03-3.74 1.13-4.74 2.87-2.02 3.5-.52 8.69 1.45 11.53.96 1.39 2.11 2.95 3.62 2.9 1.45-.06 2-.94 3.76-.94 1.75 0 2.25.94 3.79.91 1.57-.03 2.56-1.42 3.52-2.82 1.11-1.61 1.56-3.17 1.59-3.25-.04-.02-3.05-1.17-3.08-4.62zM13.46 4.25c.8-.97 1.34-2.32 1.19-3.66-1.15.05-2.55.77-3.38 1.74-.74.85-1.39 2.22-1.22 3.53 1.29.1 2.6-.65 3.41-1.61z"/></svg>
+      Download the app</a>
+  </div></section>
+</div></main>
+
+<footer>© 2026 Brightglow LLC · Design preview V3</footer>
+
+<script>
+var JOBS=[
+ {id:"water-heater",label:"Water heater",trade:"Plumbing",title:"Water heater replacement",
+  range:"$1,246–$2,342",guide:"water-heater-replacement",
+  imgs:["slide-01-plumbing.jpg","slide-08-appliances.jpg"]},
+ {id:"hvac",label:"HVAC",trade:"HVAC",title:"HVAC replacement",
+  range:"$18,500–$26,000",guide:"hvac-replacement",
+  imgs:["slide-04-hvac.jpg","slide-02-electrical.jpg"]},
+ {id:"painting",label:"Interior painting",trade:"Painting",title:"Interior painting",
+  range:"$1,340–$3,935",guide:"interior-painting",
+  imgs:["slide-11-painting.jpg","slide-10-carpentry.jpg"]},
+ {id:"roof",label:"Roof",trade:"Roofing",title:"Roof replacement",
+  range:"$10,239–$22,586",guide:"roof-replacement",
+  imgs:["slide-13-roofing.jpg","slide-16-windows.jpg"]},
+ {id:"tub",label:"Bathtub reglazing",trade:"Bathroom",title:"Bathtub reglazing",
+  range:"$346–$620",guide:"bathtub-reglazing",
+  imgs:["slide-14-flooring.jpg","slide-01-plumbing.jpg"]}
+];
+var APPLE='<svg width="16" height="19" viewBox="0 0 20 24" fill="currentColor" aria-hidden="true"><path d="M16.36 12.77c-.03-2.9 2.37-4.29 2.48-4.36-1.35-1.97-3.45-2.24-4.2-2.27-1.79-.18-3.49 1.05-4.4 1.05-.9 0-2.3-1.02-3.79-1-1.95.03-3.74 1.13-4.74 2.87-2.02 3.5-.52 8.69 1.45 11.53.96 1.39 2.11 2.95 3.62 2.9 1.45-.06 2-.94 3.76-.94 1.75 0 2.25.94 3.79.91 1.57-.03 2.56-1.42 3.52-2.82 1.11-1.61 1.56-3.17 1.59-3.25-.04-.02-3.05-1.17-3.08-4.62zM13.46 4.25c.8-.97 1.34-2.32 1.19-3.66-1.15.05-2.55.77-3.38 1.74-.74.85-1.39 2.22-1.22 3.53 1.29.1 2.6-.65 3.41-1.61z"/></svg>';
+var chipsEl=document.getElementById('chips'),panel=document.getElementById('panel');
+function render(i){
+  var j=JOBS[i];
+  chipsEl.innerHTML=JOBS.map(function(x,k){
+    return '<button class="chip" role="tab" aria-selected="'+(k===i)+'" data-i="'+k+'">'+x.label+'</button>';
+  }).join('');
+  panel.innerHTML=
+    '<div class="phs"><img src="../../../media/slides/'+j.imgs[0]+'" alt="" loading="lazy">'+
+    '<img src="../../../media/slides/'+j.imgs[1]+'" alt="" loading="lazy"></div>'+
+    '<div class="body"><span class="trade">'+j.trade+'</span><h2>'+j.title+'</h2>'+
+    '<p class="range">Bay Area <b>'+j.range+'</b></p>'+
+    '<p class="src">Source: <a href="https://brightglow.co/cost-guides/'+j.guide+'">brightglow.co/cost-guides/'+j.guide+'</a></p>'+
+    '<a class="btn" href="https://apps.apple.com/us/app/brightglow-home-auto-repair/id6796186438">'+APPLE+'Get my exact price</a></div>';
+  chipsEl.querySelectorAll('.chip').forEach(function(c){
+    c.addEventListener('click',function(){render(+c.dataset.i)});
+  });
+}
+render(0);
+</script>
+</body>
+</html>

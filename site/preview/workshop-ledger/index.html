@@ -1,0 +1,166 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Brightglow — Preview V2: Workshop Ledger</title>
+<meta name="robots" content="noindex">
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500..800&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#faf1df; --ink:#131315; --ink-70:rgba(19,19,21,.7); --ink-40:rgba(19,19,21,.4);
+  --line:rgba(19,19,21,.14); --blue:#0039F5; --r:22px;
+  --headline:"Bricolage Grotesque",sans-serif; --sans:"Inter",sans-serif;
+  --ease:cubic-bezier(.2,.75,.2,1);
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--sans);font-size:16.5px;line-height:1.65;-webkit-font-smoothing:antialiased}
+h1,h2,h3{font-family:var(--headline);letter-spacing:-.02em;line-height:1.05;margin:0}
+a{color:inherit}
+.preview-bar{position:sticky;top:0;z-index:50;display:flex;align-items:center;justify-content:center;gap:14px;
+  background:#131315;color:#faf1df;font-size:12.5px;padding:9px 16px}
+.preview-bar b{font-weight:700;letter-spacing:.08em;text-transform:uppercase;font-size:11px}
+.preview-bar a{color:#faf1df;text-decoration:none;opacity:.65;padding:2px 6px;border-radius:6px}
+.preview-bar a.on{opacity:1;background:rgba(255,255,255,.16);font-weight:700}
+.wrap{width:min(720px,92vw);margin:0 auto}
+.topbar{display:flex;align-items:center;justify-content:space-between;padding:18px min(4vw,40px)}
+.logo{display:flex;align-items:center;gap:10px;text-decoration:none}
+.logo img{width:36px;height:36px;border-radius:9px;display:block}
+.wordmark{font-family:var(--headline);font-weight:800;font-size:20px}
+.biz-link{font-size:13.5px;font-weight:600;color:var(--ink-70);text-decoration:none}
+/* flat button */
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:9px;height:54px;padding:0 28px;
+  border:0;border-radius:999px;font-weight:700;font-size:16.5px;color:#fff;white-space:nowrap;text-decoration:none;
+  background:var(--blue);box-shadow:none;transition:transform .2s var(--ease),background .2s}
+.btn:hover{transform:translateY(-1px);background:#0a48ff}
+.btn svg{flex:none}
+/* hero — editorial split */
+.hero{padding:40px 0 30px}
+.hero .kicker{font-size:12px;font-weight:700;letter-spacing:.16em;text-transform:uppercase;color:#9a7300;margin:0 0 16px}
+.hero h1{font-size:clamp(44px,9vw,72px);font-weight:800;max-width:12ch}
+.hero figure{margin:30px 0 0}
+.hero figure img{width:100%;aspect-ratio:4/3;object-fit:cover;border-radius:var(--r);display:block}
+.hero figcaption{font-size:13px;color:var(--ink-40);margin-top:10px}
+.hero .lede{margin:26px 0 0;font-size:18px;color:var(--ink-70);max-width:34em}
+.hero .lede strong{color:var(--ink);font-weight:600}
+.hero .btn{margin-top:24px}
+.rule{border:0;border-top:1px solid var(--line);margin:0}
+/* stories */
+.stories{padding:64px 0 20px}
+.stories .sec-label{font-size:12px;font-weight:700;letter-spacing:.16em;text-transform:uppercase;color:#9a7300;margin:0 0 8px}
+.stories h2{font-size:clamp(30px,6vw,44px);font-weight:800;margin-bottom:10px}
+.story{display:grid;gap:0;margin:44px 0;padding:0 0 44px;border-bottom:1px solid var(--line)}
+.story:last-child{border-bottom:0}
+.story img{width:100%;aspect-ratio:16/10;object-fit:cover;border-radius:16px;display:block}
+.story .trade{font-size:11.5px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:#9a7300;margin:18px 0 6px}
+.story h3{font-size:26px;font-weight:800}
+.story .price{font-size:16.5px;margin:10px 0 4px}
+.story .quote{margin:14px 0 0;padding-left:18px;border-left:2px solid var(--gold,#D4A600);font-size:16px;color:var(--ink-70);font-style:italic}
+.story .src{font-size:13px;color:var(--ink-40);margin-top:8px}
+/* how it works — hairline list */
+.how{padding:30px 0 20px}
+.how .sec-label{font-size:12px;font-weight:700;letter-spacing:.16em;text-transform:uppercase;color:#9a7300;margin:0 0 6px}
+.how h2{font-size:clamp(30px,6vw,44px);font-weight:800;margin-bottom:6px}
+.how ol{list-style:none;margin:26px 0 0;padding:0}
+.how li{display:grid;grid-template-columns:1fr;gap:2px;padding:20px 0;border-top:1px solid var(--line)}
+.how li:last-child{border-bottom:1px solid var(--line)}
+.how li b{font-family:var(--headline);font-size:21px;font-weight:800}
+.how li span{color:var(--ink-70);font-size:15.5px}
+/* mid cta */
+.mid-cta{text-align:center;padding:56px 0}
+.mid-cta p{color:var(--ink-70);margin:0 0 20px;font-size:17px}
+/* finale */
+.finale{text-align:center;padding:30px 0 100px}
+.finale h2{font-size:clamp(34px,7vw,54px);font-weight:800}
+.finale p{color:var(--ink-70);margin:14px auto 0;max-width:32em}
+.finale .btn{margin-top:26px}
+footer{border-top:1px solid var(--line);padding:28px 0 60px;text-align:center;font-size:13px;color:var(--ink-40)}
+</style>
+</head>
+<body>
+<div class="preview-bar"><b>Preview</b><a href="../proof-feed/">V1 Feed</a><a class="on" href="../workshop-ledger/">V2 Ledger</a><a href="../price-first/">V3 Prices</a></div>
+
+<header class="topbar">
+  <a class="logo" href="https://brightglow.co/"><img src="../../../media/appicon.png" alt=""><span class="wordmark">Brightglow</span></a>
+  <a class="biz-link" href="https://brightglow.co/biz/">For businesses</a>
+</header>
+
+<main>
+  <section class="hero"><div class="wrap">
+    <p class="kicker">Home &amp; auto</p>
+    <h1>Get your job done right.</h1>
+    <figure>
+      <img src="../../../media/slides/slide-10-carpentry.jpg" alt="A pro at work">
+      <figcaption>Real work, photographed on the job — not a stock photo.</figcaption>
+    </figure>
+    <p class="lede">See <strong>real photos of local pros' work</strong> before you hire. Get a price range, then start a spam-free chat with the ones that fit.</p>
+    <a class="btn" href="https://apps.apple.com/us/app/brightglow-home-auto-repair/id6796186438">
+      <svg width="16" height="19" viewBox="0 0 20 24" fill="currentColor" aria-hidden="true"><path d="M16.36 12.77c-.03-2.9 2.37-4.29 2.48-4.36-1.35-1.97-3.45-2.24-4.2-2.27-1.79-.18-3.49 1.05-4.4 1.05-.9 0-2.3-1.02-3.79-1-1.95.03-3.74 1.13-4.74 2.87-2.02 3.5-.52 8.69 1.45 11.53.96 1.39 2.11 2.95 3.62 2.9 1.45-.06 2-.94 3.76-.94 1.75 0 2.25.94 3.79.91 1.57-.03 2.56-1.42 3.52-2.82 1.11-1.61 1.56-3.17 1.59-3.25-.04-.02-3.05-1.17-3.08-4.62zM13.46 4.25c.8-.97 1.34-2.32 1.19-3.66-1.15.05-2.55.77-3.38 1.74-.74.85-1.39 2.22-1.22 3.53 1.29.1 2.6-.65 3.41-1.61z"/></svg>
+      Download the app</a>
+  </div></section>
+
+  <div class="wrap"><hr class="rule"></div>
+
+  <section class="stories"><div class="wrap">
+    <p class="sec-label">Recent jobs</p>
+    <h2>Proof, not promises.</h2>
+
+    <article class="story">
+      <img src="../../../media/slides/slide-13-roofing.jpg" alt="Roof replacement" loading="lazy">
+      <p class="trade">Roofing</p>
+      <h3>Roof replacement</h3>
+      <p class="price">Bay Area <b>$10,239–$22,586</b></p>
+      <p class="quote">"We picked him because we'd already seen three of his roofs. No surprises on price day."</p>
+      <p class="src">Sample quote · Price: <a href="https://brightglow.co/cost-guides/roof-replacement">cost guide</a></p>
+    </article>
+
+    <article class="story">
+      <img src="../../../media/slides/slide-01-plumbing.jpg" alt="Water heater replacement" loading="lazy">
+      <p class="trade">Plumbing</p>
+      <h3>Water heater replacement</h3>
+      <p class="price">Bay Area <b>$1,246–$2,342</b></p>
+      <p class="quote">"One message, one visit, hot water by dinner. I never talked to a call center."</p>
+      <p class="src">Sample quote · Price: <a href="https://brightglow.co/cost-guides/water-heater-replacement">cost guide</a></p>
+    </article>
+
+    <article class="story">
+      <img src="../../../media/slides/slide-11-painting.jpg" alt="Interior painting" loading="lazy">
+      <p class="trade">Painting</p>
+      <h3>Interior painting</h3>
+      <p class="price">Bay Area <b>$1,340–$3,935</b></p>
+      <p class="quote">"Her portfolio was all living rooms like ours. The estimate matched the final bill."</p>
+      <p class="src">Sample quote · Price: <a href="https://brightglow.co/cost-guides/interior-painting">cost guide</a></p>
+    </article>
+  </div></section>
+
+  <section class="mid-cta"><div class="wrap">
+    <p>Three steps. No wall of forms, no spam.</p>
+    <a class="btn" href="https://apps.apple.com/us/app/brightglow-home-auto-repair/id6796186438">
+      <svg width="16" height="19" viewBox="0 0 20 24" fill="currentColor" aria-hidden="true"><path d="M16.36 12.77c-.03-2.9 2.37-4.29 2.48-4.36-1.35-1.97-3.45-2.24-4.2-2.27-1.79-.18-3.49 1.05-4.4 1.05-.9 0-2.3-1.02-3.79-1-1.95.03-3.74 1.13-4.74 2.87-2.02 3.5-.52 8.69 1.45 11.53.96 1.39 2.11 2.95 3.62 2.9 1.45-.06 2-.94 3.76-.94 1.75 0 2.25.94 3.79.91 1.57-.03 2.56-1.42 3.52-2.82 1.11-1.61 1.56-3.17 1.59-3.25-.04-.02-3.05-1.17-3.08-4.62zM13.46 4.25c.8-.97 1.34-2.32 1.19-3.66-1.15.05-2.55.77-3.38 1.74-.74.85-1.39 2.22-1.22 3.53 1.29.1 2.6-.65 3.41-1.61z"/></svg>
+      Download the app</a>
+  </div></section>
+
+  <div class="wrap"><hr class="rule"></div>
+
+  <section class="how"><div class="wrap">
+    <p class="sec-label">How it works</p>
+    <h2>Three lines, that's all.</h2>
+    <ol>
+      <li><b>Snap it.</b><span>Photo of the problem — Brightglow reads what's wrong, you add a few details.</span></li>
+      <li><b>See the price.</b><span>A range plus a short ranked set of pros who've done your exact job.</span></li>
+      <li><b>Message one pro.</b><span>One conversation with the business you choose. No bidding war.</span></li>
+    </ol>
+  </div></section>
+
+  <section class="finale"><div class="wrap">
+    <h2>Hire like you've seen the work. Because you have.</h2>
+    <p>That's the whole thing.</p>
+    <a class="btn" href="https://apps.apple.com/us/app/brightglow-home-auto-repair/id6796186438">
+      <svg width="16" height="19" viewBox="0 0 20 24" fill="currentColor" aria-hidden="true"><path d="M16.36 12.77c-.03-2.9 2.37-4.29 2.48-4.36-1.35-1.97-3.45-2.24-4.2-2.27-1.79-.18-3.49 1.05-4.4 1.05-.9 0-2.3-1.02-3.79-1-1.95.03-3.74 1.13-4.74 2.87-2.02 3.5-.52 8.69 1.45 11.53.96 1.39 2.11 2.95 3.62 2.9 1.45-.06 2-.94 3.76-.94 1.75 0 2.25.94 3.79.91 1.57-.03 2.56-1.42 3.52-2.82 1.11-1.61 1.56-3.17 1.59-3.25-.04-.02-3.05-1.17-3.08-4.62zM13.46 4.25c.8-.97 1.34-2.32 1.19-3.66-1.15.05-2.55.77-3.38 1.74-.74.85-1.39 2.22-1.22 3.53 1.29.1 2.6-.65 3.41-1.61z"/></svg>
+      Download the app</a>
+  </div></section>
+</main>
+
+<footer>© 2026 Brightglow LLC · Design preview V2</footer>
+</body>
+</html>
