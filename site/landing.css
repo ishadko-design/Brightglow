@@ -152,7 +152,7 @@ html.has-gl .bg-fallback { opacity: 0; }
   border-radius: var(--r-pill); font-family: var(--cta); font-weight: 700; font-size: 17px;
   color: #fff; white-space: nowrap;
   background: var(--grad-blue);
-  box-shadow: 0 10px 34px rgba(0,57,245,0.30), inset 0 1px 0 rgba(255,255,255,0.25);
+  box-shadow: none;
   transition: transform .2s var(--ease), box-shadow .35s var(--ease);
   overflow: hidden;
 }
@@ -161,7 +161,7 @@ html.has-gl .bg-fallback { opacity: 0; }
   background: linear-gradient(100deg, transparent 20%, rgba(255,255,255,0.35) 50%, transparent 80%);
   transform: translateX(-120%); transition: transform .7s var(--ease);
 }
-.btn:hover { transform: translateY(-2px); box-shadow: 0 16px 48px rgba(0,57,245,0.42), inset 0 1px 0 rgba(255,255,255,0.3); }
+.btn:hover { transform: translateY(-2px); }
 .btn:hover::after { transform: translateX(120%); }
 .btn:active { transform: translateY(0); }
 .btn svg { flex: none; }
