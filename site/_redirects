@@ -1,3 +1,6 @@
-/claim   /biz          302
-/business /biz          301
-/business/* /biz/:splat 301
+# /business/* wildcard removed: it mapped every unknown path to /biz/<path>,
+# which 404s — Google Search Console flagged those as redirect errors.
+# Unknown /business/* paths now 404 directly. Add explicit rules for real pages.
+/claim            /biz/        301
+/business         /biz/        301
+/business/signin  /biz/signin/ 301
