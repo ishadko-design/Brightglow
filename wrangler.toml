@@ -21,21 +21,18 @@ compatibility_date = "2026-07-16"
 # the /api/* and /chat proxy the portal depends on. "none" lets a non-asset
 # request fall through to the Worker.
 #
-# run_worker_first: the private analytics page IS a real asset (analytics.html),
-# so by default the asset router would serve it directly and skip the Worker —
-# leaving the Basic-Auth gate in worker.js unreachable for the page itself. List
-# its paths here so the Worker runs FIRST and can enforce the login before the
-# HTML is served.
-#
-# "/*" is here for the same reason at site scale: without it, assets-first
-# routing skips worker.js for every static page, so the www.brightglow.co →
-# brightglow.co 301 at the top of worker.js never fires (verified Oct 7 and
-# Nov 10: www served 200 duplicates). With "/*" every request runs the Worker
-# first; worker.js falls through to env.ASSETS.fetch for normal paths, so
-# static serving is unchanged apart from the host check. Do NOT remove "/*"
-# without a dashboard Redirect Rule in place — www duplicates come back.
+# run_worker_first: by default the asset router serves real assets directly and
+# skips the Worker — which left the Basic-Auth gate in worker.js unreachable
+# for the analytics page, and the www.brightglow.co → brightglow.co 301 at the
+# top of worker.js never firing for any static page (verified Oct 7 and Nov 10:
+# www served 200 duplicates). "/*" makes the Worker run FIRST for every
+# request; worker.js falls through to env.ASSETS.fetch for normal paths, so
+# static serving is unchanged apart from the host check. (Wrangler rejects
+# listing specific paths alongside "/*" as redundant, so "/*" stands alone.)
+# Do NOT remove "/*" without a dashboard Redirect Rule in place — www
+# duplicates come back.
 [assets]
 directory = "./site"
 binding = "ASSETS"
 not_found_handling = "none"
-run_worker_first = ["/analytics", "/analytics.html", "/analytics/data", "/*"]
+run_worker_first = ["/*"]
